@@ -4,6 +4,7 @@ CREATE DATABASE catasto_storico
   ENCODING = 'UTF8'
   LC_COLLATE = 'Italian_Italy.1252'
   LC_CTYPE = 'Italian_Italy.1252'
+  template=template0
   TABLESPACE = pg_default
   CONNECTION LIMIT = -1;
 

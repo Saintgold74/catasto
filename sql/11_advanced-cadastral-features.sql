@@ -220,11 +220,27 @@ RETURNS TABLE (
     possessori TEXT,
     data_variazione DATE
 ) AS $$
-WITH RECURSIVE albero AS (
-    -- Caso base: partita corrente
+BEGIN
+    -- Crea una tabella temporanea per archiviare i risultati
+    CREATE TEMPORARY TABLE IF NOT EXISTS temp_albero (
+        livello INTEGER,
+        tipo_relazione VARCHAR,
+        partita_id INTEGER,
+        comune_nome VARCHAR,
+        numero_partita INTEGER,
+        tipo VARCHAR,
+        possessori TEXT,
+        data_variazione DATE
+    ) ON COMMIT DROP;
+    
+    -- Pulisci la tabella temporanea
+    DELETE FROM temp_albero;
+    
+    -- Inserisci la partita corrente (radice)
+    INSERT INTO temp_albero
     SELECT 
         0 AS livello,
-        'corrente' AS tipo_relazione,
+        'corrente'::VARCHAR AS tipo_relazione,
         p.id AS partita_id,
         p.comune_nome,
         p.numero_partita,
@@ -235,51 +251,58 @@ WITH RECURSIVE albero AS (
     LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
     LEFT JOIN possessore pos ON pp.possessore_id = pos.id
     WHERE p.id = p_partita_id
-    GROUP BY p.id, p.comune_nome, p.numero_partita, p.tipo
+    GROUP BY p.id, p.comune_nome, p.numero_partita, p.tipo;
     
-    UNION ALL
+    -- Ricorsione manuale per i predecessori (livelli negativi)
+    FOR i IN 1..5 LOOP
+        -- Aggiungi i predecessori al livello corrente
+        INSERT INTO temp_albero
+        SELECT 
+            -i AS livello,
+            'predecessore'::VARCHAR,
+            p.id,
+            p.comune_nome,
+            p.numero_partita,
+            p.tipo,
+            string_agg(DISTINCT pos.nome_completo, ', '),
+            v.data_variazione
+        FROM partita p
+        JOIN variazione v ON p.id = v.partita_origine_id
+        JOIN temp_albero a ON v.partita_destinazione_id = a.partita_id
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        WHERE a.livello = -(i-1)
+        GROUP BY p.id, p.comune_nome, p.numero_partita, p.tipo, v.data_variazione;
+    END LOOP;
     
-    -- Predecessori (partite di origine)
-    SELECT 
-        a.livello - 1,
-        'predecessore',
-        p_orig.id,
-        p_orig.comune_nome,
-        p_orig.numero_partita,
-        p_orig.tipo,
-        string_agg(DISTINCT pos.nome_completo, ', '),
-        v.data_variazione
-    FROM albero a
-    JOIN variazione v ON a.partita_id = v.partita_destinazione_id
-    JOIN partita p_orig ON v.partita_origine_id = p_orig.id
-    LEFT JOIN partita_possessore pp ON p_orig.id = pp.partita_id
-    LEFT JOIN possessore pos ON pp.possessore_id = pos.id
-    WHERE a.livello >= -5 -- Limite di profondità per evitare cicli infiniti
-    GROUP BY a.livello, p_orig.id, p_orig.comune_nome, p_orig.numero_partita, p_orig.tipo, v.data_variazione
+    -- Ricorsione manuale per i successori (livelli positivi)
+    FOR i IN 1..5 LOOP
+        -- Aggiungi i successori al livello corrente
+        INSERT INTO temp_albero
+        SELECT 
+            i AS livello,
+            'successore'::VARCHAR,
+            p.id,
+            p.comune_nome,
+            p.numero_partita,
+            p.tipo,
+            string_agg(DISTINCT pos.nome_completo, ', '),
+            v.data_variazione
+        FROM partita p
+        JOIN variazione v ON p.id = v.partita_destinazione_id
+        JOIN temp_albero a ON v.partita_origine_id = a.partita_id
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        WHERE a.livello = (i-1)
+        GROUP BY p.id, p.comune_nome, p.numero_partita, p.tipo, v.data_variazione;
+    END LOOP;
     
-    UNION ALL
-    
-    -- Successori (partite di destinazione)
-    SELECT 
-        a.livello + 1,
-        'successore',
-        p_dest.id,
-        p_dest.comune_nome,
-        p_dest.numero_partita,
-        p_dest.tipo,
-        string_agg(DISTINCT pos.nome_completo, ', '),
-        v.data_variazione
-    FROM albero a
-    JOIN variazione v ON a.partita_id = v.partita_origine_id
-    JOIN partita p_dest ON v.partita_destinazione_id = p_dest.id
-    LEFT JOIN partita_possessore pp ON p_dest.id = pp.partita_id
-    LEFT JOIN possessore pos ON pp.possessore_id = pos.id
-    WHERE a.livello <= 5 -- Limite di profondità per evitare cicli infiniti
-    GROUP BY a.livello, p_dest.id, p_dest.comune_nome, p_dest.numero_partita, p_dest.tipo, v.data_variazione
-)
-SELECT * FROM albero
-ORDER BY livello, comune_nome, numero_partita;
-$$ LANGUAGE SQL;
+    -- Restituisci i risultati dalla tabella temporanea
+    RETURN QUERY
+    SELECT * FROM temp_albero
+    ORDER BY livello, comune_nome, numero_partita;
+END;
+$$ LANGUAGE plpgsql;
 
 -- 10. Funzione per calcolare le statistiche catastali per periodo
 CREATE OR REPLACE FUNCTION statistiche_catastali_periodo(

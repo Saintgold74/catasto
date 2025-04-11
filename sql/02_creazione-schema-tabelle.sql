@@ -185,7 +185,7 @@ COMMENT ON TABLE immobile IS 'Immobili registrati nel catasto';
 COMMENT ON TABLE partita_relazione IS 'Relazioni tra partite principali e secondarie';
 COMMENT ON TABLE variazione IS 'Variazioni di proprietà o modifiche alle partite';
 COMMENT ON TABLE contratto IS 'Contratti che documentano le variazioni';
-COMMENT ON TABLE consultazione IS 'Registro delle consultazioni dell\'archivio';
+COMMENT ON TABLE consultazione IS 'Registro delle consultazioni dello archivio';
 
 -- Inserimento primo comune come esempio
 INSERT INTO comune (nome, provincia, regione) VALUES ('Carcare', 'Savona', 'Liguria');

@@ -74,7 +74,7 @@ FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 CREATE OR REPLACE FUNCTION get_record_history(p_tabella VARCHAR, p_record_id INTEGER)
 RETURNS TABLE (
     operazione CHAR(1),
-    timestamp TIMESTAMP,
+    "timestamp" TIMESTAMP,
     utente VARCHAR,
     dati_prima JSONB,
     dati_dopo JSONB

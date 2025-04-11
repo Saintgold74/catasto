@@ -179,9 +179,9 @@ BEGIN
     EXECUTE v_sql;
     
     FOR v_record IN SELECT * FROM index_stats WHERE bloat_ratio > 30 LOOP
-        RAISE NOTICE 'Indice frammentato: %.% (%.%. Frammentazione: %%, Dimensione: %)',
-            v_record.schema_name, v_record.index_name, v_record.schema_name, v_record.table_name,
-            v_record.bloat_ratio, v_record.bloat_size;
+        RAISE NOTICE 'Indice frammentato: %.% (%.%). Frammentazione: %, Dimensione: %',
+    		v_record.schema_name, v_record.index_name, v_record.schema_name, v_record.table_name,
+    		v_record.bloat_ratio, v_record.bloat_size;
     END LOOP;
     
     DROP TABLE IF EXISTS index_stats;

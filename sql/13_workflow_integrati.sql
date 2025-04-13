@@ -678,13 +678,13 @@ BEGIN
     
     RETURN v_report;
 END;
-$;
+$$;
 
 -- Funzione per generare un report storico delle proprietà di un possessore
 CREATE OR REPLACE FUNCTION genera_report_possessore(
     p_possessore_id INTEGER
 )
-RETURNS TEXT AS $
+RETURNS TEXT AS $$
 DECLARE
     v_possessore possessore%ROWTYPE;
     v_report TEXT;
@@ -823,7 +823,7 @@ BEGIN
     
     RETURN v_report;
 END;
-$;
+$$;
 
 ------------------------------------------------------------------------------
 -- SEZIONE 3: WORKFLOW PER LA MANUTENZIONE DEL SISTEMA
@@ -834,7 +834,7 @@ CREATE OR REPLACE PROCEDURE verifica_integrita_database(
     OUT p_problemi_trovati BOOLEAN
 )
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     v_count INTEGER;
     v_problemi TEXT := '';
@@ -927,14 +927,14 @@ BEGIN
         END IF;
     END IF;
 END;
-$;
+$$;
 
 -- Procedura per la correzione automatica di problemi comuni
 CREATE OR REPLACE PROCEDURE ripara_problemi_database(
     p_correzione_automatica BOOLEAN DEFAULT FALSE
 )
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     v_problemi_trovati BOOLEAN;
     v_partita_record RECORD;
@@ -1023,7 +1023,7 @@ BEGIN
         RAISE WARNING 'Correzione automatica completata, ma alcuni problemi richiedono intervento manuale.';
     END IF;
 END;
-$;
+$$;
 
 -- Procedura per eseguire un backup logico dei dati
 CREATE OR REPLACE PROCEDURE backup_logico_dati(
@@ -1031,7 +1031,7 @@ CREATE OR REPLACE PROCEDURE backup_logico_dati(
     p_prefisso_file VARCHAR DEFAULT 'catasto_backup'
 )
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     v_timestamp VARCHAR := TO_CHAR(CURRENT_TIMESTAMP, 'YYYYMMDD_HH24MISS');
     v_filename VARCHAR;
@@ -1068,7 +1068,7 @@ BEGIN
     RAISE NOTICE 'Dopo l''esecuzione, aggiornare il registro con:';
     RAISE NOTICE 'UPDATE backup_registro SET esito = TRUE, dimensione_bytes = ... WHERE nome_file = ''%'';', v_filename;
 END;
-$;
+$$;
 
 -- Procedura per importare dati da un backup
 CREATE OR REPLACE PROCEDURE importa_backup(
@@ -1076,12 +1076,12 @@ CREATE OR REPLACE PROCEDURE importa_backup(
     p_solo_verifica BOOLEAN DEFAULT TRUE
 )
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     v_command VARCHAR;
 BEGIN
     -- Controllo preliminare
-    IF NOT p_file_path ~ '\.sql THEN
+    IF NOT p_file_path ~ '\.sql' THEN
         RAISE EXCEPTION 'Il file deve avere estensione .sql';
     END IF;
     
@@ -1103,7 +1103,7 @@ BEGIN
     RAISE NOTICE 'ATTENZIONE: L''importazione sovrascriverà i dati esistenti!';
     RAISE NOTICE 'Si consiglia di eseguire un backup prima dell''importazione.';
 END;
-$;
+$$;
 
 ------------------------------------------------------------------------------
 -- SEZIONE 4: WORKFLOW PER INTEGRAZIONE CON ARCHIVIO DI STATO
@@ -1117,7 +1117,7 @@ CREATE OR REPLACE PROCEDURE sincronizza_con_archivio_stato(
     p_data_sincronizzazione DATE DEFAULT CURRENT_DATE
 )
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     v_partita partita%ROWTYPE;
     v_partita_json JSON;
@@ -1131,8 +1131,15 @@ BEGIN
     END IF;
     
     -- Genera il JSON con tutti i dati della partita
-    SELECT esporta_partita_json(p_partita_id) INTO v_partita_json;
-    
+    --SELECT esporta_partita_json(p_partita_id) INTO v_partita_json;
+
+	-- Genera un JSON semplice con dati base della partita
+		SELECT json_build_object(
+		    'id', v_partita.id,
+		    'comune_nome', v_partita.comune_nome,
+		    'numero_partita', v_partita.numero_partita
+		) INTO v_partita_json;
+		    
     -- In una implementazione reale, qui ci sarebbe una chiamata API
     -- all'Archivio di Stato per inviare i dati. 
     -- Simuliamo il processo:
@@ -1155,4 +1162,4 @@ BEGIN
     RAISE NOTICE 'Sincronizzazione con l''Archivio di Stato completata simulando l''invio di % byte di dati.', 
                  LENGTH(v_partita_json::TEXT);
 END;
-$;
+$$;

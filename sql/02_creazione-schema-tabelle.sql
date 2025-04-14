@@ -1,3 +1,6 @@
+-- Dopo la creazione del database, utilizzare un comando ALTER
+ALTER DATABASE catasto_storico SET search_path TO catasto;
+
 -- Creazione dello schema
 CREATE SCHEMA IF NOT EXISTS catasto;
 

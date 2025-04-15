@@ -276,10 +276,11 @@ CREATE OR REPLACE PROCEDURE registra_frazionamento(
     -- Dati del contratto
     p_tipo_contratto VARCHAR(50),
     p_data_contratto DATE,
-    p_notaio VARCHAR(255) DEFAULT NULL,
-    p_repertorio VARCHAR(100) DEFAULT NULL,
     -- Nuove partite da creare con i rispettivi immobili
     p_nuove_partite JSON, -- [{"numero_partita": 123, "comune":"...", "possessori":[{"id":1}], "immobili":[1,2,3]}]
+    -- Parametri opzionali
+    p_notaio VARCHAR(255) DEFAULT NULL,
+    p_repertorio VARCHAR(100) DEFAULT NULL,
     -- Note
     p_note TEXT DEFAULT NULL
 )
@@ -382,10 +383,11 @@ $$;
 -- SEZIONE 2: WORKFLOW PER RICERCA E REPORT
 ------------------------------------------------------------------------------
 
--- Procedura per generare un certificato di proprietà immobiliare
+/*-- Procedura per generare un certificato di proprietà immobiliare
 CREATE OR REPLACE FUNCTION genera_certificato_proprieta(
     p_partita_id INTEGER
 )
+
 RETURNS TEXT AS $$
 DECLARE
     v_partita partita%ROWTYPE;
@@ -531,6 +533,7 @@ BEGIN
     
     RETURN v_certificato;
 END;
+
 $$;
 
 -- Funzione per generare un report genealogico di una proprietà
@@ -684,7 +687,9 @@ $$;
 CREATE OR REPLACE FUNCTION genera_report_possessore(
     p_possessore_id INTEGER
 )
-RETURNS TEXT AS $$
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
 DECLARE
     v_possessore possessore%ROWTYPE;
     v_report TEXT;
@@ -824,7 +829,7 @@ BEGIN
     RETURN v_report;
 END;
 $$;
-
+*/
 ------------------------------------------------------------------------------
 -- SEZIONE 3: WORKFLOW PER LA MANUTENZIONE DEL SISTEMA
 ------------------------------------------------------------------------------
@@ -1133,13 +1138,13 @@ BEGIN
     -- Genera il JSON con tutti i dati della partita
     --SELECT esporta_partita_json(p_partita_id) INTO v_partita_json;
 
-	-- Genera un JSON semplice con dati base della partita
-		SELECT json_build_object(
-		    'id', v_partita.id,
-		    'comune_nome', v_partita.comune_nome,
-		    'numero_partita', v_partita.numero_partita
-		) INTO v_partita_json;
-		    
+    -- Genera un JSON semplice con dati base della partita
+    SELECT json_build_object(
+        'id', v_partita.id,
+        'comune_nome', v_partita.comune_nome,
+        'numero_partita', v_partita.numero_partita
+    ) INTO v_partita_json;
+        
     -- In una implementazione reale, qui ci sarebbe una chiamata API
     -- all'Archivio di Stato per inviare i dati. 
     -- Simuliamo il processo:

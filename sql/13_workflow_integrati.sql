@@ -378,17 +378,16 @@ BEGIN
     RAISE NOTICE 'Frazionamento della partita % registrato con successo', v_partita_origine.numero_partita;
 END;
 $$;
-
-------------------------------------------------------------------------------
 -- SEZIONE 2: WORKFLOW PER RICERCA E REPORT
 ------------------------------------------------------------------------------
 
-/*-- Procedura per generare un certificato di proprietà immobiliare
+-- Procedura per generare un certificato di proprietà immobiliare
 CREATE OR REPLACE FUNCTION genera_certificato_proprieta(
     p_partita_id INTEGER
 )
-
-RETURNS TEXT AS $$
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
 DECLARE
     v_partita partita%ROWTYPE;
     v_certificato TEXT;
@@ -533,14 +532,15 @@ BEGIN
     
     RETURN v_certificato;
 END;
-
 $$;
 
 -- Funzione per generare un report genealogico di una proprietà
 CREATE OR REPLACE FUNCTION genera_report_genealogico(
     p_partita_id INTEGER
 )
-RETURNS TEXT AS $$
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
 DECLARE
     v_partita partita%ROWTYPE;
     v_report TEXT;
@@ -829,7 +829,7 @@ BEGIN
     RETURN v_report;
 END;
 $$;
-*/
+
 ------------------------------------------------------------------------------
 -- SEZIONE 3: WORKFLOW PER LA MANUTENZIONE DEL SISTEMA
 ------------------------------------------------------------------------------

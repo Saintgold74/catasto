@@ -25,7 +25,7 @@ echo Script 01_creazione-database.sql eseguito con successo
 echo ---------------------------------
 
 :: Step 2: Eseguiamo gli altri script sul nuovo database (escluso il 13)
-set "scripts=02_creazione-schema-tabelle.sql 03_funzioni-procedure.sql 04_dati-esempio.sql 05_query-test.sql 06_audit-system.sql 07_user-management.sql 08_advanced-reporting.sql 09_backup-system.sql 10_performance-optimization.sql 11_advanced-cadastral-features.sql 12_procedure_crud.sql 13_workflow_integrati.sql"
+set "scripts=02_creazione-schema-tabelle.sql 03_funzioni-procedure.sql 04_dati-esempio_modificato.sql 05_query-test.sql 06_audit-system.sql 07_user-management.sql 08_advanced-reporting.sql 09_backup-system.sql 10_performance-optimization.sql 11_advanced-cadastral-features.sql 12_procedure_crud.sql 13_workflow_integrati.sql"
 
 for %%s in (%scripts%) do (
     echo Esecuzione di %%s...

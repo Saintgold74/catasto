@@ -1,0 +1,231 @@
+Inserisci la password per l'utente PostgreSQL: Esecuzione di 01_creazione-database.sql...
+COMMENT
+Script 01_creazione-database.sql eseguito con successo
+---------------------------------
+Esecuzione di 02_creazione-schema-tabelle.sql...
+ALTER DATABASE
+CREATE SCHEMA
+SET
+CREATE EXTENSION
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+Script 02_creazione-schema-tabelle.sql eseguito con successo
+---------------------------------
+Esecuzione di 03_funzioni-procedure.sql...
+SET
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+Script 03_funzioni-procedure.sql eseguito con successo
+---------------------------------
+Esecuzione di 04_dati-esempio_modificato.sql...
+SET
+INSERT 0 0
+INSERT 0 0
+INSERT 0 0
+INSERT 0 6
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 0
+INSERT 0 6
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+Script 04_dati-esempio_modificato.sql eseguito con successo
+---------------------------------
+Esecuzione di 05_query-test.sql...
+SET
+DO
+ id | cognome_nome | paternita  |     nome_completo      
+----+--------------+------------+------------------------
+  7 | Rossi Marco  | fu Antonio | Rossi Marco fu Antonio
+(1 riga)
+
+DO
+ id |    data    | richiedente |     motivazione     
+----+------------+-------------+---------------------
+  3 | 2025-04-16 | Lucia Neri  | Ricerca genealogica
+(1 riga)
+
+DO
+ id | comune_nome | numero_partita |    tipo    | data_impianto | data_chiusura | numero_provenienza | stato  |       data_creazione       |       data_modifica        
+----+-------------+----------------+------------+---------------+---------------+--------------------+--------+----------------------------+----------------------------
+  7 | Carcare     |            302 | principale | 2025-04-16    |               |                    | attiva | 2025-04-16 10:44:14.363607 | 2025-04-16 10:44:14.363607
+(1 riga)
+
+ id | comune_nome | numero_partita |    tipo    | stato  | possessore_id |       nome_completo       
+----+-------------+----------------+------------+--------+---------------+---------------------------
+  7 | Carcare     |            302 | principale | attiva |             1 | Fossati Angelo fu Roberto
+  7 | Carcare     |            302 | principale | attiva |             7 | Rossi Marco fu Antonio
+(2 righe)
+
+ id | comune_nome | numero_partita |    tipo    | stato  |        possessori         
+----+-------------+----------------+------------+--------+---------------------------
+  1 | Carcare     |            221 | principale | attiva | Fossati Angelo fu Roberto
+(1 riga)
+
+ id | natura | consistenza |  classificazione  |      localita      | comune_nome | numero_partita |         possessori         
+----+--------+-------------+-------------------+--------------------+-------------+----------------+----------------------------
+  2 | Casa   | 210 mq      | Abitazione civile | Via Giuseppe Verdi | Carcare     |            219 | Caviglia Maria fu Giuseppe
+  8 | Casa   | 210 mq      | Abitazione civile | Via Giuseppe Verdi | Carcare     |            219 | Caviglia Maria fu Giuseppe
+(2 righe)
+
+ id |       nome_completo        |   comune_nome    |  partite  | numero_immobili 
+----+----------------------------+------------------+-----------+-----------------
+  3 | Barberis Giovanni fu Paolo | Carcare          | {245}     |               2
+ 10 | Barberis Giovanni fu Paolo | Carcare          |           |               0
+ 11 | Berruti Antonio fu Luigi   | Cairo Montenotte |           |               0
+  4 | Berruti Antonio fu Luigi   | Cairo Montenotte | {112}     |               2
+  6 | Bormioli Pietro fu Carlo   | Altare           | {87}      |               2
+ 13 | Bormioli Pietro fu Carlo   | Altare           |           |               0
+  2 | Caviglia Maria fu Giuseppe | Carcare          | {219,245} |               4
+  9 | Caviglia Maria fu Giuseppe | Carcare          |           |               0
+  5 | Ferraro Caterina fu Marco  | Cairo Montenotte | {118}     |               2
+ 12 | Ferraro Caterina fu Marco  | Cairo Montenotte |           |               0
+  1 | Fossati Angelo fu Roberto  | Carcare          | {221,302} |               2
+  8 | Fossati Angelo fu Roberto  | Carcare          |           |               0
+  7 | Rossi Marco fu Antonio     | Carcare          | {302}     |               0
+(13 righe)
+
+ id |       nome_completo       | comune_nome | num_partite 
+----+---------------------------+-------------+-------------
+  1 | Fossati Angelo fu Roberto | Carcare     |           2
+  8 | Fossati Angelo fu Roberto | Carcare     |           0
+(2 righe)
+
+DO
+ immobile_id |      natura       | localita_nome | comune  | partita_numero | tipo_partita 
+-------------+-------------------+---------------+---------+----------------+--------------
+           1 | Molino da cereali | Regione Vista | Carcare |            221 | principale
+           7 | Molino da cereali | Regione Vista | Carcare |            221 | principale
+(2 righe)
+
+DO
+ id | comune_nome | numero_partita |    tipo    | stato  |                       possessori                       | num_immobili 
+----+-------------+----------------+------------+--------+--------------------------------------------------------+--------------
+  1 | Carcare     |            221 | principale | attiva | Fossati Angelo fu Roberto                              |            2
+  2 | Carcare     |            219 | principale | attiva | Caviglia Maria fu Giuseppe                             |            2
+  3 | Carcare     |            245 | secondaria | attiva | Barberis Giovanni fu Paolo, Caviglia Maria fu Giuseppe |            2
+  7 | Carcare     |            302 | principale | attiva | Fossati Angelo fu Roberto, Rossi Marco fu Antonio      |            0
+(4 righe)
+
+DO
+ variazione_id | tipo_variazione | data_variazione | partita_origine_numero | partita_origine_comune | partita_dest_numero | partita_dest_comune | tipo_contratto | data_contratto |    notaio    | repertorio 
+---------------+-----------------+-----------------+------------------------+------------------------+---------------------+---------------------+----------------+----------------+--------------+------------
+             2 | Successione     | 1952-08-15      |                    118 | Cairo Montenotte       |                     |                     |                |                |              | 
+             1 | Successione     | 1952-08-15      |                    118 | Cairo Montenotte       |                     |                     | Successione    | 1952-08-10     | Notaio Rossi | 1234/52
+             1 | Successione     | 1952-08-15      |                    118 | Cairo Montenotte       |                     |                     | Successione    | 1952-08-10     | Notaio Rossi | 1234/52
+(3 righe)
+
+Script 05_query-test.sql eseguito con successo
+---------------------------------
+Esecuzione di 06_audit-system.sql...
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Script 06_audit-system.sql eseguito con successo
+---------------------------------
+Esecuzione di 07_user-management.sql...
+SET
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+Script 07_user-management.sql eseguito con successo
+---------------------------------
+Esecuzione di 08_advanced-reporting.sql...
+SET
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE PROCEDURE
+COMMENT
+CALL
+Script 08_advanced-reporting.sql eseguito con successo
+---------------------------------
+Esecuzione di 09_backup-system.sql...
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE FUNCTION
+Script 09_backup-system.sql eseguito con successo
+---------------------------------
+Esecuzione di 10_performance-optimization.sql...
+SET
+CREATE EXTENSION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE FUNCTION
+Script 10_performance-optimization.sql eseguito con successo
+---------------------------------
+Esecuzione di 11_advanced-cadastral-features.sql...
+SET
+INSERT 0 3
+UPDATE 3
+UPDATE 8
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Script 11_advanced-cadastral-features.sql eseguito con successo
+---------------------------------
+Esecuzione di 12_procedure_crud.sql...
+SET
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Script 12_procedure_crud.sql eseguito con successo
+---------------------------------
+Esecuzione di 13_workflow_integrati.sql...
+SET
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+CREATE PROCEDURE
+Script 13_workflow_integrati.sql eseguito con successo
+---------------------------------
+Tutti gli script sono stati eseguiti con successo

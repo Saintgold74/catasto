@@ -4,15 +4,29 @@
 ============================================================
 
 COMUNE: Carcare
-PARTITA N.: 302
+PARTITA N.: 221
 TIPO: principale
-DATA IMPIANTO: 2025-04-16
+DATA IMPIANTO: 1950-05-10
 STATO: attiva
 
 -------------------- INTESTATARI --------------------
 - Rossi Marco fu Antonio
 
 -------------------- IMMOBILI --------------------
+Immobile ID: 1
+  Natura: Molino da cereali
+  LocalitÃ : Regione Vista (regione)
+  Piani: 2
+  Consistenza: 150 mq
+  Classificazione: Artigianale
+
+Immobile ID: 7
+  Natura: Molino da cereali
+  LocalitÃ : Regione Vista (regione)
+  Piani: 2
+  Consistenza: 150 mq
+  Classificazione: Artigianale
+
 -------------------- VARIAZIONI --------------------
 ============================================================
 Certificato generato il: 2025-04-17

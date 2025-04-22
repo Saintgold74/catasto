@@ -153,9 +153,14 @@ class CatastoDBManager:
             List[Dict]: Lista di comuni
         """
         if search_term:
+            # Assicuriamoci di aggiungere i wildcards % esplicitamente per la ricerca parziale
+            pattern = f"%{search_term}%"
             query = "SELECT nome, provincia, regione FROM comune WHERE nome ILIKE %s ORDER BY nome"
-            if self.execute_query(query, (f'%{search_term}%',)):
-                return self.fetchall()
+            logger.info(f"Ricerca comuni con pattern: {pattern}")
+            if self.execute_query(query, (pattern,)):
+                result = self.fetchall()
+                logger.info(f"Trovati {len(result)} comuni")
+                return result
         else:
             query = "SELECT nome, provincia, regione FROM comune ORDER BY nome"
             if self.execute_query(query):
@@ -202,18 +207,21 @@ class CatastoDBManager:
     
     def get_partite_by_comune(self, comune_nome: str) -> List[Dict]:
         """
-        Recupera tutte le partite di un comune.
+        Recupera tutte le partite di un comune, con ricerca parziale e case-insensitive.
         
         Args:
-            comune_nome: Nome del comune
+            comune_nome: Nome del comune (anche parziale)
             
         Returns:
             List[Dict]: Lista di partite
         """
+        # Assicuriamoci di aggiungere i wildcards % esplicitamente per la ricerca parziale
+        pattern = f"%{comune_nome}%"
+        
         query = """
         SELECT p.*, 
-               string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-               COUNT(DISTINCT i.id) as num_immobili
+            string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
+            COUNT(DISTINCT i.id) as num_immobili
         FROM partita p
         LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
         LEFT JOIN possessore pos ON pp.possessore_id = pos.id
@@ -222,8 +230,14 @@ class CatastoDBManager:
         GROUP BY p.id
         ORDER BY p.numero_partita
         """
-        if self.execute_query(query, (comune_nome,)):
-            return self.fetchall()
+        
+        logger.info(f"Ricerca partite per comune con pattern: {pattern}")
+        if self.execute_query(query, (pattern,)):
+            result = self.fetchall()
+            logger.info(f"Trovate {len(result)} partite")
+            return result
+        
+        logger.info("Nessuna partita trovata o errore nella query")
         return []
     
     def get_partita_details(self, partita_id: int) -> Dict[str, Any]:

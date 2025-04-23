@@ -1,0 +1,23 @@
+============================================================
+              REPORT GENEALOGICO DELLA PROPRIETA
+                   CATASTO STORICO ANNI '50
+============================================================
+
+COMUNE: Carcare
+PARTITA N.: 221
+TIPO: principale
+DATA IMPIANTO: 1950-05-10
+STATO: attiva
+
+-------------------- INTESTATARI --------------------
+- Fossati Angelo fu Roberto
+
+-------------------- PREDECESSORI --------------------
+Nessun predecessore trovato. Partita originale.
+
+-------------------- SUCCESSORI --------------------
+Nessun successore trovato. La partita e'' ancora attiva.
+
+============================================================
+Report generato il: 2025-04-23
+============================================================

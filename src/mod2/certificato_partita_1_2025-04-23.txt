@@ -1,0 +1,27 @@
+============================================================
+                CERTIFICATO DI PROPRIETA IMMOBILIARE
+                     CATASTO STORICO ANNI '50
+============================================================
+
+COMUNE: Carcare
+PARTITA N.: 221
+TIPO: principale
+DATA IMPIANTO: 1950-05-10
+STATO: attiva
+
+-------------------- INTESTATARI --------------------
+- Fossati Angelo fu Roberto
+
+-------------------- IMMOBILI --------------------
+Immobile ID: 1
+  Natura: Molino da cereali
+  Localita: Regione Vista (regione)
+  Piani: 2
+  Consistenza: 150 mq
+  Classificazione: Artigianale
+
+-------------------- VARIAZIONI --------------------
+============================================================
+Certificato generato il: 2025-04-23
+Il presente certificato ha valore puramente storico e documentale.
+============================================================

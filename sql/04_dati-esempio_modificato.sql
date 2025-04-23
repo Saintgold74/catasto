@@ -32,7 +32,7 @@ INSERT INTO possessore (comune_nome, cognome_nome, paternita, nome_completo, att
 ('Altare', 'Bormioli Pietro', 'fu Carlo', 'Bormioli Pietro fu Carlo', true)
 ON CONFLICT DO NOTHING;
 
--- Inserimento Località
+-- Inserimento Localita
 INSERT INTO localita (comune_nome, nome, tipo, civico) VALUES
 ('Carcare', 'Regione Vista', 'regione', NULL),
 ('Carcare', 'Via Giuseppe Verdi', 'via', 12),
@@ -54,13 +54,13 @@ ON CONFLICT DO NOTHING;
 
 -- Associazione Partite-Possessori
 INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES
-(1, 1, 'principale', 'proprietà esclusiva', NULL),
-(2, 2, 'principale', 'proprietà esclusiva', NULL),
-(3, 3, 'secondaria', 'comproprietà', '1/2'),
-(3, 2, 'secondaria', 'comproprietà', '1/2'),
-(4, 4, 'principale', 'proprietà esclusiva', NULL),
-(5, 5, 'principale', 'proprietà esclusiva', NULL),
-(6, 6, 'principale', 'proprietà esclusiva', NULL)
+(1, 1, 'principale', 'proprieta esclusiva', NULL),
+(2, 2, 'principale', 'proprieta esclusiva', NULL),
+(3, 3, 'secondaria', 'comproprieta', '1/2'),
+(3, 2, 'secondaria', 'comproprieta', '1/2'),
+(4, 4, 'principale', 'proprieta esclusiva', NULL),
+(5, 5, 'principale', 'proprieta esclusiva', NULL),
+(6, 6, 'principale', 'proprieta esclusiva', NULL)
 ON CONFLICT DO NOTHING;
 
 -- Relazioni tra partite (principale-secondaria)
@@ -91,5 +91,5 @@ ON CONFLICT DO NOTHING;
 -- Inserimento Consultazioni
 INSERT INTO consultazione (data, richiedente, documento_identita, motivazione, materiale_consultato, funzionario_autorizzante) VALUES
 ('2025-04-01', 'Mario Bianchi', 'CI AB1234567', 'Ricerca storica', 'Registro partite Carcare 1950', 'Dott. Verdi'),
-('2025-04-05', 'Studio Legale Rossi', 'Tessera Ordine 55213', 'Verifica proprietà', 'Partite 221 e 219 Carcare', 'Dott. Verdi')
+('2025-04-05', 'Studio Legale Rossi', 'Tessera Ordine 55213', 'Verifica proprieta', 'Partite 221 e 219 Carcare', 'Dott. Verdi')
 ON CONFLICT DO NOTHING;

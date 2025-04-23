@@ -24,7 +24,7 @@ BEGIN
     
     -- Intestazione report
     v_report := '============================================================' || E'\n';
-    v_report := v_report || '              REPORT GENEALOGICO DELLA PROPRIETÀ' || E'\n';
+    v_report := v_report || '              REPORT GENEALOGICO DELLA PROPRIETA' || E'\n';
     v_report := v_report || '                   CATASTO STORICO ANNI ''50' || E'\n';
     v_report := v_report || '============================================================' || E'\n\n';
     
@@ -51,7 +51,7 @@ BEGIN
         WHERE pp.partita_id = p_partita_id
     LOOP
         v_report := v_report || '- ' || v_record.nome_completo;
-        IF v_record.titolo = 'comproprietà' AND v_record.quota IS NOT NULL THEN
+        IF v_record.titolo = 'comproprieta' AND v_record.quota IS NOT NULL THEN
             v_report := v_report || ' (quota: ' || v_record.quota || ')';
         END IF;
         v_report := v_report || E'\n';
@@ -135,7 +135,7 @@ BEGIN
     
     IF NOT v_successori_trovati THEN
         IF v_partita.stato = 'attiva' THEN
-            v_report := v_report || 'Nessun successore trovato. La partita è ancora attiva.' || E'\n\n';
+            v_report := v_report || 'Nessun successore trovato. La partita e'''' ancora attiva.' || E'\n\n';
         ELSE
             v_report := v_report || 'Nessun successore trovato nonostante la partita sia chiusa.' || E'\n\n';
         END IF;
@@ -152,7 +152,7 @@ $$ LANGUAGE plpgsql;
 
 -- ========================================================================
 -- Funzione: genera_certificato_proprieta
--- Genera un certificato di proprietà immobiliare
+-- Genera un certificato di proprieta immobiliare
 -- ========================================================================
 CREATE OR REPLACE FUNCTION genera_certificato_proprieta(p_partita_id INTEGER)
 RETURNS TEXT AS $$
@@ -173,7 +173,7 @@ BEGIN
     
     -- Intestazione certificato
     v_certificato := '============================================================' || E'\n';
-    v_certificato := v_certificato || '                CERTIFICATO DI PROPRIETÀ IMMOBILIARE' || E'\n';
+    v_certificato := v_certificato || '                CERTIFICATO DI PROPRIETA IMMOBILIARE' || E'\n';
     v_certificato := v_certificato || '                     CATASTO STORICO ANNI ''50' || E'\n';
     v_certificato := v_certificato || '============================================================' || E'\n\n';
     
@@ -204,7 +204,7 @@ BEGIN
         ORDER BY pos.nome_completo
     LOOP
         v_certificato := v_certificato || '- ' || v_record.nome_completo;
-        IF v_record.titolo = 'comproprietà' AND v_record.quota IS NOT NULL THEN
+        IF v_record.titolo = 'comproprieta' AND v_record.quota IS NOT NULL THEN
             v_certificato := v_certificato || ' (quota: ' || v_record.quota || ')';
         END IF;
         v_certificato := v_certificato || E'\n';
@@ -231,7 +231,7 @@ BEGIN
     LOOP
         v_certificato := v_certificato || 'Immobile ID: ' || v_immobile.id || E'\n';
         v_certificato := v_certificato || '  Natura: ' || v_immobile.natura || E'\n';
-        v_certificato := v_certificato || '  Località: ' || v_immobile.nome_localita;
+        v_certificato := v_certificato || '  Localita: ' || v_immobile.nome_localita;
         IF v_immobile.civico IS NOT NULL THEN
             v_certificato := v_certificato || ', ' || v_immobile.civico;
         END IF;
@@ -304,7 +304,7 @@ $$ LANGUAGE plpgsql;
 
 -- ========================================================================
 -- Funzione: genera_report_possessore
--- Genera un report storico delle proprietà di un possessore
+-- Genera un report storico delle proprieta di un possessore
 -- ========================================================================
 CREATE OR REPLACE FUNCTION genera_report_possessore(p_possessore_id INTEGER)
 RETURNS TEXT AS $$
@@ -330,7 +330,7 @@ BEGIN
     -- Dati generali del possessore
     v_report := v_report || 'POSSESSORE: ' || v_possessore.nome_completo || E'\n';
     IF v_possessore.paternita IS NOT NULL THEN
-        v_report := v_report || 'PATERNITÀ: ' || v_possessore.paternita || E'\n';
+        v_report := v_report || 'PATERNITA: ' || v_possessore.paternita || E'\n';
     END IF;
     v_report := v_report || 'COMUNE: ' || v_possessore.comune_nome || E'\n';
     v_report := v_report || 'STATO: ' || CASE WHEN v_possessore.attivo THEN 'Attivo' ELSE 'Non attivo' END || E'\n\n';

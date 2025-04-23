@@ -191,19 +191,27 @@ class CatastoDBManager:
         return None
     
     def get_possessori_by_comune(self, comune_nome: str) -> List[Dict]:
-        """
-        Recupera tutti i possessori di un comune.
-        
-        Args:
-            comune_nome: Nome del comune
+            """
+            Recupera tutti i possessori di un comune, con ricerca parziale e case-insensitive.
             
-        Returns:
-            List[Dict]: Lista di possessori
-        """
-        query = "SELECT * FROM possessore WHERE comune_nome = %s ORDER BY nome_completo"
-        if self.execute_query(query, (comune_nome,)):
-            return self.fetchall()
-        return []
+            Args:
+                comune_nome: Nome del comune (anche parziale)
+                
+            Returns:
+                List[Dict]: Lista di possessori
+            """
+            # Assicuriamoci di aggiungere i wildcards % esplicitamente per la ricerca parziale
+            pattern = f"%{comune_nome}%"
+            
+            query = "SELECT * FROM possessore WHERE comune_nome ILIKE %s ORDER BY nome_completo"
+            logger.info(f"Ricerca possessori per comune con pattern: {pattern}")
+            if self.execute_query(query, (pattern,)):
+                result = self.fetchall()
+                logger.info(f"Trovati {len(result)} possessori")
+                return result
+            
+            logger.info("Nessun possessore trovato o errore nella query")
+            return []
     
     def get_partite_by_comune(self, comune_nome: str) -> List[Dict]:
         """

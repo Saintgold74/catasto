@@ -847,6 +847,45 @@ class CatastoDBManager:
             return result.get('report', '') if result else ''
         return ''
     
+    def genera_report_consultazioni(self, data_inizio=None, data_fine=None, richiedente=None) -> str:
+        """
+        Genera un report delle consultazioni filtrato per data e/o richiedente
+        
+        Args:
+            data_inizio: Data inizio filtro (opzionale)
+            data_fine: Data fine filtro (opzionale)
+            richiedente: Nome richiedente per filtro (opzionale)
+            
+        Returns:
+            str: Report formattato
+        """
+        # Costruisci i parametri
+        params = []
+        
+        if data_inizio is not None:
+            params.append(data_inizio)
+        else:
+            params.append(None)
+            
+        if data_fine is not None:
+            params.append(data_fine)
+        else:
+            params.append(None)
+            
+        if richiedente is not None:
+            params.append(richiedente)
+        else:
+            params.append(None)
+        
+        # Chiama la funzione SQL
+        query = """
+        SELECT genera_report_consultazioni(%s, %s, %s) AS report
+        """
+        
+        if self.execute_query(query, tuple(params)):
+            result = self.fetchone()
+            return result.get('report', '') if result else ''
+        return ''
     def verifica_integrita_database(self) -> Tuple[bool, str]:
         """
         Verifica l'integrità del database utilizzando la procedura.

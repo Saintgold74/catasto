@@ -155,6 +155,66 @@ def menu_principale(db):
         else:
             print("Opzione non valida!")
 
+def aggiungi_comune(db):
+    """Funzione per l'inserimento di un nuovo comune"""
+    stampa_intestazione("AGGIUNGI NUOVO COMUNE")
+    nome = input("Nome comune: ")
+    provincia = input("Provincia: ")
+    regione = input("Regione: ")
+    
+    if nome and provincia and regione:
+        # Recupera periodi storici disponibili dal database
+        if db.execute_query("SELECT id, nome, anno_inizio, anno_fine FROM periodo_storico ORDER BY anno_inizio"):
+            periodi = db.fetchall()
+            
+            if periodi:
+                print("\nSeleziona il periodo storico:")
+                for i, periodo in enumerate(periodi, 1):
+                    anno_fine = periodo['anno_fine'] if periodo['anno_fine'] else 'presente'
+                    print(f"{i}. {periodo['nome']} ({periodo['anno_inizio']}-{anno_fine})")
+                
+                scelta = input("\nNumero periodo (default: Repubblica Italiana): ")
+                
+                # Imposta il periodo predefinito (Repubblica Italiana)
+                periodo_id = next((p['id'] for p in periodi if p['nome'] == 'Repubblica Italiana'), periodi[-1]['id'])
+                
+                # Se l'utente ha scelto un periodo
+                if scelta.isdigit() and 1 <= int(scelta) <= len(periodi):
+                    periodo_id = periodi[int(scelta)-1]['id']
+                
+                # Esegui l'inserimento con il periodo
+                if db.execute_query(
+                    "INSERT INTO comune (nome, provincia, regione, periodo_id) VALUES (%s, %s, %s, %s) ON CONFLICT (nome) DO NOTHING",
+                    (nome, provincia, regione, periodo_id)
+                ):
+                    db.commit()
+                    print(f"Comune {nome} inserito con successo o già esistente")
+                else:
+                    print("Errore durante l'inserimento")
+            else:
+                print("Impossibile recuperare i periodi storici, verrà usato il periodo predefinito")
+                # Inserimento senza periodo (usa default)
+                if db.execute_query(
+                    "INSERT INTO comune (nome, provincia, regione) VALUES (%s, %s, %s) ON CONFLICT (nome) DO NOTHING",
+                    (nome, provincia, regione)
+                ):
+                    db.commit()
+                    print(f"Comune {nome} inserito con successo o già esistente")
+                else:
+                    print("Errore durante l'inserimento")
+        else:
+            print("Errore nel recupero dei periodi storici, verrà usato il periodo predefinito")
+            # Inserimento senza periodo (usa default)
+            if db.execute_query(
+                "INSERT INTO comune (nome, provincia, regione) VALUES (%s, %s, %s) ON CONFLICT (nome) DO NOTHING",
+                (nome, provincia, regione)
+            ):
+                db.commit()
+                print(f"Comune {nome} inserito con successo o già esistente")
+            else:
+                print("Errore durante l'inserimento")
+    else:
+        print("Dati incompleti, operazione annullata")
 def menu_consultazione(db):
     """Menu per operazioni di consultazione"""
     while True:
@@ -313,23 +373,7 @@ def menu_inserimento(db):
         
         if scelta == "1":
             # Aggiungi comune
-            stampa_intestazione("AGGIUNGI NUOVO COMUNE")
-            nome = input("Nome comune: ")
-            provincia = input("Provincia: ")
-            regione = input("Regione: ")
-            
-            if nome and provincia and regione:
-                # Esegui l'inserimento
-                if db.execute_query(
-                    "INSERT INTO comune (nome, provincia, regione) VALUES (%s, %s, %s) ON CONFLICT (nome) DO NOTHING",
-                    (nome, provincia, regione)
-                ):
-                    db.commit()
-                    print(f"Comune {nome} inserito con successo o gia esistente")
-                else:
-                    print("Errore durante l'inserimento")
-            else:
-                print("Dati incompleti, operazione annullata")
+            aggiungi_comune(db)
         
         elif scelta == "2":
             # Aggiungi possessore
@@ -652,9 +696,10 @@ def menu_report(db):
         print("1. Certificato di proprieta")
         print("2. Report genealogico")
         print("3. Report possessore")
-        print("4. Torna al menu principale")
+        print("4. Report consultazioni")
+        print("5. Torna al menu principale")
         
-        scelta = input("\nSeleziona un'opzione (1-4): ")
+        scelta = input("\nSeleziona un'opzione (1-5): ")
         
         if scelta == "1":
             # Certificato di proprietà
@@ -723,6 +768,53 @@ def menu_report(db):
                 print("ID non valido!")
         
         elif scelta == "4":
+            # Report consultazioni
+            stampa_intestazione("REPORT CONSULTAZIONI")
+            
+            # Chiedi i parametri di filtro
+            print("Inserisci i parametri per filtrare (lascia vuoto per non applicare filtro)")
+            data_inizio_str = input("Data inizio (YYYY-MM-DD): ")
+            data_fine_str = input("Data fine (YYYY-MM-DD): ")
+            richiedente = input("Richiedente: ")
+            
+            # Converti le date
+            data_inizio = None
+            data_fine = None
+            
+            if data_inizio_str:
+                try:
+                    data_inizio = datetime.strptime(data_inizio_str, "%Y-%m-%d").date()
+                except ValueError:
+                    print("Formato data non valido, filtro non applicato")
+            
+            if data_fine_str:
+                try:
+                    data_fine = datetime.strptime(data_fine_str, "%Y-%m-%d").date()
+                except ValueError:
+                    print("Formato data non valido, filtro non applicato")
+            
+            # Verifica se specificare richiedente
+            richiedente = richiedente if richiedente.strip() else None
+            
+            # Genera il report
+            report = db.genera_report_consultazioni(data_inizio, data_fine, richiedente)
+            
+            if report:
+                # Visualizza il report
+                stampa_intestazione("REPORT CONSULTAZIONI")
+                print(report)
+                
+                # Salvataggio su file
+                if input("\nSalvare su file? (s/n): ").lower() == 's':
+                    oggi = date.today().strftime("%Y%m%d")
+                    filename = f"report_consultazioni_{oggi}.txt"
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(report)
+                    print(f"Report salvato nel file: {filename}")
+            else:
+                print("Nessun dato disponibile o errore durante la generazione del report")
+        
+        elif scelta == "5":
             break
         else:
             print("Opzione non valida!")

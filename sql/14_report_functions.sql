@@ -447,3 +447,81 @@ BEGIN
     RETURN v_report;
 END;
 $$ LANGUAGE plpgsql;
+-- Funzione: genera_report_consultazioni
+-- Genera un report delle consultazioni in un determinato periodo
+CREATE OR REPLACE FUNCTION genera_report_consultazioni(
+    p_data_inizio DATE DEFAULT NULL,
+    p_data_fine DATE DEFAULT NULL,
+    p_richiedente VARCHAR DEFAULT NULL
+)
+RETURNS TEXT AS $$
+DECLARE
+    v_report TEXT;
+    v_record RECORD;
+    v_count INTEGER := 0;
+BEGIN
+    -- Intestazione report
+    v_report := '============================================================' || E'\n';
+    v_report := v_report || '              REPORT DELLE CONSULTAZIONI' || E'\n';
+    v_report := v_report || '                CATASTO STORICO ANNI ''50' || E'\n';
+    v_report := v_report || '============================================================' || E'\n\n';
+    
+    -- Parametri di ricerca
+    v_report := v_report || 'PARAMETRI DI RICERCA:' || E'\n';
+    IF p_data_inizio IS NOT NULL THEN
+        v_report := v_report || 'Data inizio: ' || p_data_inizio || E'\n';
+    END IF;
+    IF p_data_fine IS NOT NULL THEN
+        v_report := v_report || 'Data fine: ' || p_data_fine || E'\n';
+    END IF;
+    IF p_richiedente IS NOT NULL THEN
+        v_report := v_report || 'Richiedente: ' || p_richiedente || E'\n';
+    END IF;
+    v_report := v_report || E'\n';
+    
+    -- Elenco delle consultazioni
+    v_report := v_report || '-------------------- CONSULTAZIONI --------------------' || E'\n';
+    
+    FOR v_record IN 
+        SELECT 
+            c.id,
+            c.data,
+            c.richiedente,
+            c.documento_identita,
+            c.motivazione,
+            c.materiale_consultato,
+            c.funzionario_autorizzante
+        FROM consultazione c
+        WHERE (p_data_inizio IS NULL OR c.data >= p_data_inizio)
+          AND (p_data_fine IS NULL OR c.data <= p_data_fine)
+          AND (p_richiedente IS NULL OR c.richiedente ILIKE '%' || p_richiedente || '%')
+        ORDER BY c.data DESC, c.richiedente
+    LOOP
+        v_count := v_count + 1;
+        v_report := v_report || 'Consultazione ID: ' || v_record.id || ' - ' || v_record.data || E'\n';
+        v_report := v_report || '  Richiedente: ' || v_record.richiedente || E'\n';
+        IF v_record.documento_identita IS NOT NULL THEN
+            v_report := v_report || '  Documento: ' || v_record.documento_identita || E'\n';
+        END IF;
+        IF v_record.motivazione IS NOT NULL THEN
+            v_report := v_report || '  Motivazione: ' || v_record.motivazione || E'\n';
+        END IF;
+        v_report := v_report || '  Materiale consultato: ' || v_record.materiale_consultato || E'\n';
+        v_report := v_report || '  Funzionario autorizzante: ' || v_record.funzionario_autorizzante || E'\n';
+        v_report := v_report || E'\n';
+    END LOOP;
+    
+    IF v_count = 0 THEN
+        v_report := v_report || 'Nessuna consultazione trovata per i parametri specificati.' || E'\n\n';
+    ELSE
+        v_report := v_report || 'Totale consultazioni: ' || v_count || E'\n\n';
+    END IF;
+    
+    -- Piè di pagina report
+    v_report := v_report || '============================================================' || E'\n';
+    v_report := v_report || 'Report generato il: ' || CURRENT_DATE || E'\n';
+    v_report := v_report || '============================================================' || E'\n';
+    
+    RETURN v_report;
+END;
+$$ LANGUAGE plpgsql;

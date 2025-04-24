@@ -921,6 +921,207 @@ class CatastoDBManager:
         
         return 'true' in message.lower(), message
 
+    def get_audit_log(self, tabella=None, operazione=None, record_id=None, 
+                    data_inizio=None, data_fine=None, utente=None, limit=100) -> List[Dict]:
+        """
+        Recupera i log di audit dal database con varie opzioni di filtro.
+        
+        Args:
+            tabella: Filtra per nome tabella
+            operazione: Filtra per tipo operazione (I=insert, U=update, D=delete)
+            record_id: Filtra per ID record
+            data_inizio: Filtra per data inizio
+            data_fine: Filtra per data fine
+            utente: Filtra per nome utente
+            limit: Limite numero risultati
+            
+        Returns:
+            List[Dict]: Lista di log di audit
+        """
+        conditions = []
+        params = []
+        
+        query = """
+        SELECT id, tabella, operazione, record_id, 
+            dati_prima, dati_dopo, utente, ip_address, timestamp
+        FROM audit_log
+        """
+        
+        if tabella:
+            conditions.append("tabella = %s")
+            params.append(tabella)
+        
+        if operazione:
+            conditions.append("operazione = %s")
+            params.append(operazione)
+        
+        if record_id:
+            conditions.append("record_id = %s")
+            params.append(record_id)
+        
+        if data_inizio:
+            conditions.append("timestamp >= %s")
+            params.append(data_inizio)
+        
+        if data_fine:
+            conditions.append("timestamp <= %s")
+            params.append(data_fine)
+        
+        if utente:
+            conditions.append("utente ILIKE %s")
+            params.append(f"%{utente}%")
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        query += " ORDER BY timestamp DESC LIMIT %s"
+        params.append(limit)
+        
+        if self.execute_query(query, tuple(params)):
+            return self.fetchall()
+        return []
+
+    def get_record_history(self, tabella: str, record_id: int) -> List[Dict]:
+        """
+        Ottiene la cronologia delle modifiche di un record specifico.
+        
+        Args:
+            tabella: Nome della tabella
+            record_id: ID del record
+            
+        Returns:
+            List[Dict]: Lista di modifiche in ordine cronologico
+        """
+        query = """
+        SELECT * FROM get_record_history(%s, %s)
+        """
+        
+        if self.execute_query(query, (tabella, record_id)):
+            return self.fetchall()
+        return []
+
+    def genera_report_audit(self, tabella=None, data_inizio=None, data_fine=None, 
+                        operazione=None, utente=None) -> str:
+        """
+        Genera un report formattato dei log di audit.
+        
+        Args:
+            tabella: Filtra per tabella
+            data_inizio: Data inizio del periodo
+            data_fine: Data fine del periodo
+            operazione: Tipo di operazione (I, U, D)
+            utente: Nome utente
+            
+        Returns:
+            str: Report formattato
+        """
+        # Recupera i dati di audit
+        logs = self.get_audit_log(
+            tabella=tabella,
+            operazione=operazione,
+            data_inizio=data_inizio,
+            data_fine=data_fine,
+            utente=utente,
+            limit=1000  # Limite più alto per il report
+        )
+        
+        if not logs:
+            return "Nessun log di audit trovato per i criteri specificati."
+        
+        # Costruisci il report
+        report = "============================================================\n"
+        report += "                REPORT DI AUDIT DEL DATABASE                \n"
+        report += "                 CATASTO STORICO ANNI '50                   \n"
+        report += "============================================================\n\n"
+        
+        # Aggiungi parametri di filtro al report
+        report += "PARAMETRI DI RICERCA:\n"
+        if tabella:
+            report += f"Tabella: {tabella}\n"
+        if data_inizio:
+            report += f"Data inizio: {data_inizio}\n"
+        if data_fine:
+            report += f"Data fine: {data_fine}\n"
+        if operazione:
+            op_desc = {"I": "Inserimento", "U": "Aggiornamento", "D": "Cancellazione"}
+            report += f"Operazione: {op_desc.get(operazione, operazione)}\n"
+        if utente:
+            report += f"Utente: {utente}\n"
+        report += "\n"
+        
+        # Aggiungi i log al report
+        report += f"TROVATI {len(logs)} LOG:\n"
+        report += "----------------------------------------------------------\n\n"
+        
+        for log in logs:
+            op_desc = {
+                "I": "INSERIMENTO",
+                "U": "AGGIORNAMENTO",
+                "D": "CANCELLAZIONE"
+            }
+            
+            report += f"ID Log: {log['id']}\n"
+            report += f"Operazione: {op_desc.get(log['operazione'], log['operazione'])}\n"
+            report += f"Tabella: {log['tabella']}\n"
+            report += f"Record ID: {log['record_id']}\n"
+            report += f"Timestamp: {log['timestamp']}\n"
+            report += f"Utente: {log['utente']}\n"
+            
+            if log['ip_address']:
+                report += f"Indirizzo IP: {log['ip_address']}\n"
+            
+            # Confronto dati prima/dopo per aggiornamenti
+            if log['operazione'] == 'U' and log['dati_prima'] and log['dati_dopo']:
+                report += "\nModifiche:\n"
+                try:
+                    import json
+                    dati_prima = json.loads(log['dati_prima'])
+                    dati_dopo = json.loads(log['dati_dopo'])
+                    
+                    # Trova le differenze
+                    for chiave in dati_prima:
+                        if chiave in dati_dopo and dati_prima[chiave] != dati_dopo[chiave]:
+                            report += f"  - {chiave}: {dati_prima[chiave]} -> {dati_dopo[chiave]}\n"
+                except:
+                    report += "  Impossibile elaborare i dati di modifica\n"
+            
+            # Per inserimenti, mostra i dati inseriti
+            elif log['operazione'] == 'I' and log['dati_dopo']:
+                report += "\nDati inseriti:\n"
+                try:
+                    import json
+                    dati = json.loads(log['dati_dopo'])
+                    for chiave, valore in dati.items():
+                        if valore is not None:
+                            report += f"  - {chiave}: {valore}\n"
+                except:
+                    report += "  Impossibile elaborare i dati inseriti\n"
+            
+            # Per cancellazioni, mostra i dati cancellati
+            elif log['operazione'] == 'D' and log['dati_prima']:
+                report += "\nDati cancellati:\n"
+                try:
+                    import json
+                    dati = json.loads(log['dati_prima'])
+                    for chiave, valore in dati.items():
+                        if valore is not None:
+                            report += f"  - {chiave}: {valore}\n"
+                except:
+                    report += "  Impossibile elaborare i dati cancellati\n"
+            
+            report += "----------------------------------------------------------\n\n"
+        
+        # Piè di pagina
+        report += "============================================================\n"
+        report += f"Report generato il: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        report += f"Totale record: {len(logs)}\n"
+        report += "============================================================\n"
+        
+        return report
+
+
+
+
 
 # Esempio di utilizzo
 if __name__ == "__main__":
@@ -928,7 +1129,7 @@ if __name__ == "__main__":
     db = CatastoDBManager(
         dbname="catasto_storico", 
         user="postgres", 
-        password="password",  # Sostituisci con la tua password
+        password="Markus74",  # Sostituisci con la tua password
         host="localhost"
     )
     

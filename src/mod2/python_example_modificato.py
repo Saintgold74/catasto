@@ -138,9 +138,10 @@ def menu_principale(db):
         print("2. Inserimento e gestione dati")
         print("3. Generazione report")
         print("4. Manutenzione database")
-        print("5. Esci")
+        print("5. Sistema di audit")  # Nuova opzione
+        print("6. Esci")  # Cambiato da 5 a 6
         
-        scelta = input("\nSeleziona un'opzione (1-5): ")
+        scelta = input("\nSeleziona un'opzione (1-6): ")  # Cambiato da 1-5 a 1-6
         
         if scelta == "1":
             menu_consultazione(db)
@@ -150,7 +151,9 @@ def menu_principale(db):
             menu_report(db)
         elif scelta == "4":
             menu_manutenzione(db)
-        elif scelta == "5":
+        elif scelta == "5":  # Nuova opzione
+            menu_audit(db)
+        elif scelta == "6":  # Cambiato da 5 a 6
             break
         else:
             print("Opzione non valida!")
@@ -862,6 +865,203 @@ def menu_manutenzione(db):
             print("Opzione non valida!")
         
         input("\nPremi INVIO per continuare...")
+
+
+def menu_audit(db):
+    """Menu per la gestione e consultazione del sistema di audit"""
+    while True:
+        stampa_intestazione("SISTEMA DI AUDIT")
+        print("1. Consulta log di audit")
+        print("2. Visualizza cronologia di un record")
+        print("3. Genera report di audit")
+        print("4. Torna al menu principale")
+        
+        scelta = input("\nSeleziona un'opzione (1-4): ")
+        
+        if scelta == "1":
+            # Consultazione log di audit
+            stampa_intestazione("CONSULTA LOG DI AUDIT")
+            
+            # Raccogli i parametri di ricerca
+            print("Inserisci i parametri di ricerca (lascia vuoto per non filtrare)")
+            tabella = input("Nome tabella (es. partita, possessore): ")
+            
+            operazione = None
+            op_scelta = input("Tipo operazione (1=Inserimento, 2=Aggiornamento, 3=Cancellazione, vuoto=tutte): ")
+            if op_scelta == "1":
+                operazione = "I"
+            elif op_scelta == "2":
+                operazione = "U"
+            elif op_scelta == "3":
+                operazione = "D"
+            
+            record_id = input("ID record: ")
+            record_id = int(record_id) if record_id and record_id.isdigit() else None
+            
+            data_inizio_str = input("Data inizio (YYYY-MM-DD): ")
+            data_fine_str = input("Data fine (YYYY-MM-DD): ")
+            
+            utente = input("Utente: ")
+            
+            # Converti le date
+            data_inizio = None
+            data_fine = None
+            
+            try:
+                if data_inizio_str:
+                    data_inizio = datetime.strptime(data_inizio_str, "%Y-%m-%d").date()
+                if data_fine_str:
+                    data_fine = datetime.strptime(data_fine_str, "%Y-%m-%d").date()
+            except ValueError:
+                print("Formato data non valido!")
+                continue
+            
+            # Esegui la ricerca
+            logs = db.get_audit_log(
+                tabella=tabella if tabella else None,
+                operazione=operazione,
+                record_id=record_id,
+                data_inizio=data_inizio,
+                data_fine=data_fine,
+                utente=utente if utente else None
+            )
+            
+            # Visualizza i risultati
+            stampa_intestazione(f"RISULTATI LOG AUDIT ({len(logs)})")
+            
+            if not logs:
+                print("Nessun log trovato per i criteri specificati")
+            else:
+                for log in logs:
+                    op_map = {"I": "Inserimento", "U": "Aggiornamento", "D": "Cancellazione"}
+                    print(f"ID: {log['id']} - {op_map.get(log['operazione'], log['operazione'])} - {log['tabella']} - Record {log['record_id']}")
+                    print(f"  Timestamp: {log['timestamp']} - Utente: {log['utente']}")
+                    
+                    # Mostra dettagli aggiuntivi per alcuni log
+                    # Limitiamo la visualizzazione in linea per non sovraccaricare l'output
+                    if input("\nVisualizzare dettagli delle modifiche? (s/n): ").lower() == 's':
+                        if log['operazione'] == 'U' and log['dati_prima'] and log['dati_dopo']:
+                            try:
+                                import json
+                                dati_prima = json.loads(log['dati_prima'])
+                                dati_dopo = json.loads(log['dati_dopo'])
+                                
+                                print("\nModifiche:")
+                                for chiave in dati_prima:
+                                    if chiave in dati_dopo and dati_prima[chiave] != dati_dopo[chiave]:
+                                        print(f"  - {chiave}: {dati_prima[chiave]} -> {dati_dopo[chiave]}")
+                            except:
+                                print("  Impossibile elaborare i dettagli delle modifiche")
+                        elif log['operazione'] == 'I':
+                            print("  Inserimento di un nuovo record")
+                        elif log['operazione'] == 'D':
+                            print("  Cancellazione di un record esistente")
+        
+        elif scelta == "2":
+            # Visualizza cronologia di un record
+            stampa_intestazione("CRONOLOGIA RECORD")
+            
+            tabella = input("Nome tabella (es. partita, possessore): ")
+            record_id = input("ID record: ")
+            
+            if not tabella or not record_id.isdigit():
+                print("Tabella e ID record sono richiesti!")
+                continue
+            
+            record_id = int(record_id)
+            
+            # Ottieni la cronologia
+            history = db.get_record_history(tabella, record_id)
+            
+            stampa_intestazione(f"CRONOLOGIA {tabella.upper()} ID {record_id} ({len(history)} modifiche)")
+            
+            if not history:
+                print(f"Nessuna modifica registrata per {tabella} con ID {record_id}")
+            else:
+                for i, record in enumerate(history, 1):
+                    op_map = {"I": "Inserimento", "U": "Aggiornamento", "D": "Cancellazione"}
+                    print(f"{i}. {op_map.get(record['operazione'], record['operazione'])} - {record['timestamp']} - {record['utente']}")
+                    
+                    if record['operazione'] == 'U':
+                        print("  Modifiche:")
+                        try:
+                            import json
+                            dati_prima = json.loads(record['dati_prima']) if record['dati_prima'] else {}
+                            dati_dopo = json.loads(record['dati_dopo']) if record['dati_dopo'] else {}
+                            
+                            for chiave in dati_prima:
+                                if chiave in dati_dopo and dati_prima[chiave] != dati_dopo[chiave]:
+                                    val_prima = "NULL" if dati_prima[chiave] is None else dati_prima[chiave]
+                                    val_dopo = "NULL" if dati_dopo[chiave] is None else dati_dopo[chiave]
+                                    print(f"    - {chiave}: {val_prima} -> {val_dopo}")
+                        except Exception as e:
+                            print(f"    Impossibile elaborare i dettagli: {e}")
+                    
+                    print()
+        
+        elif scelta == "3":
+            # Genera report di audit
+            stampa_intestazione("GENERA REPORT DI AUDIT")
+            
+            # Raccogli i parametri di ricerca
+            print("Inserisci i parametri per il report (lascia vuoto per non filtrare)")
+            tabella = input("Nome tabella (es. partita, possessore): ")
+            
+            operazione = None
+            op_scelta = input("Tipo operazione (1=Inserimento, 2=Aggiornamento, 3=Cancellazione, vuoto=tutte): ")
+            if op_scelta == "1":
+                operazione = "I"
+            elif op_scelta == "2":
+                operazione = "U"
+            elif op_scelta == "3":
+                operazione = "D"
+            
+            data_inizio_str = input("Data inizio (YYYY-MM-DD): ")
+            data_fine_str = input("Data fine (YYYY-MM-DD): ")
+            
+            utente = input("Utente: ")
+            
+            # Converti le date
+            data_inizio = None
+            data_fine = None
+            
+            try:
+                if data_inizio_str:
+                    data_inizio = datetime.strptime(data_inizio_str, "%Y-%m-%d").date()
+                if data_fine_str:
+                    data_fine = datetime.strptime(data_fine_str, "%Y-%m-%d").date()
+            except ValueError:
+                print("Formato data non valido!")
+                continue
+            
+            # Genera il report
+            report = db.genera_report_audit(
+                tabella=tabella if tabella else None,
+                operazione=operazione,
+                data_inizio=data_inizio,
+                data_fine=data_fine,
+                utente=utente if utente else None
+            )
+            
+            # Visualizza il report
+            stampa_intestazione("REPORT DI AUDIT")
+            print(report)
+            
+            # Salvataggio su file
+            if input("\nSalvare su file? (s/n): ").lower() == 's':
+                oggi = date.today().strftime("%Y%m%d")
+                filename = f"report_audit_{oggi}.txt"
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(report)
+                print(f"Report salvato nel file: {filename}")
+        
+        elif scelta == "4":
+            break
+        else:
+            print("Opzione non valida!")
+        
+        input("\nPremi INVIO per continuare...")
+
 
 def main():
     # Configura la connessione

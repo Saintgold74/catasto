@@ -33,7 +33,7 @@ class CatastoDBManager:
     """Classe per la gestione delle operazioni sul database catastale."""
     
     def __init__(self, dbname: str = "catasto_storico", user: str = "postgres", 
-                 password: str = "", host: str = "localhost", port: int = 5432, 
+                 password: str = "Markus74", host: str = "localhost", port: int = 5432, 
                  schema: str = "catasto"):
         """
         Inizializza la connessione al database.

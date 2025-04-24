@@ -1,0 +1,34 @@
+============================================================
+              REPORT DELLE CONSULTAZIONI
+                CATASTO STORICO ANNI '50
+============================================================
+
+PARAMETRI DI RICERCA:
+
+-------------------- CONSULTAZIONI --------------------
+Consultazione ID: 3 - 2025-04-24
+  Richiedente: Lucia Neri
+  Documento: CI XY9876543
+  Motivazione: Ricerca genealogica
+  Materiale consultato: Partite di Carcare
+  Funzionario autorizzante: Dott. Bianchi
+
+Consultazione ID: 2 - 2025-04-05
+  Richiedente: Studio Legale Rossi
+  Documento: Tessera Ordine 55213
+  Motivazione: Verifica proprieta
+  Materiale consultato: Partite 221 e 219 Carcare
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 1 - 2025-04-01
+  Richiedente: Mario Bianchi
+  Documento: CI AB1234567
+  Motivazione: Ricerca storica
+  Materiale consultato: Registro partite Carcare 1950
+  Funzionario autorizzante: Dott. Verdi
+
+Totale consultazioni: 3
+
+============================================================
+Report generato il: 2025-04-24
+============================================================

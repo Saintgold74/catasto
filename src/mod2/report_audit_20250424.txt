@@ -1,0 +1,47 @@
+============================================================
+                REPORT DI AUDIT DEL DATABASE                
+                 CATASTO STORICO ANNI '50                   
+============================================================
+
+PARAMETRI DI RICERCA:
+
+TROVATI 3 LOG:
+----------------------------------------------------------
+
+ID Log: 1
+Operazione: INSERIMENTO
+Tabella: partita
+Record ID: 8
+Timestamp: 2025-04-24 02:16:39.736004
+Utente: postgres
+
+Dati inseriti:
+  Impossibile elaborare i dati inseriti
+----------------------------------------------------------
+
+ID Log: 2
+Operazione: INSERIMENTO
+Tabella: possessore
+Record ID: 8
+Timestamp: 2025-04-24 02:16:39.736004
+Utente: postgres
+
+Dati inseriti:
+  Impossibile elaborare i dati inseriti
+----------------------------------------------------------
+
+ID Log: 3
+Operazione: INSERIMENTO
+Tabella: immobile
+Record ID: 7
+Timestamp: 2025-04-24 02:16:39.736004
+Utente: postgres
+
+Dati inseriti:
+  Impossibile elaborare i dati inseriti
+----------------------------------------------------------
+
+============================================================
+Report generato il: 2025-04-24 02:17:28
+Totale record: 3
+============================================================

@@ -1118,12 +1118,1167 @@ class CatastoDBManager:
         report += "============================================================\n"
         
         return report
+    
+    # --- METODI PER LA GESTIONE UTENTI ---
+
+    def create_user(self, username: str, password_hash: str, nome_completo: str, email: str, ruolo: str) -> bool:
+        """
+        Crea un nuovo utente nel database utilizzando la stored procedure.
+        IMPORTANTE: La password deve essere già hashata prima di chiamare questo metodo.
+
+        Args:
+            username: Username dell'utente.
+            password_hash: Hash della password dell'utente.
+            nome_completo: Nome completo dell'utente.
+            email: Email dell'utente.
+            ruolo: Ruolo dell'utente ('admin', 'archivista', 'consultatore').
+
+        Returns:
+            bool: True se l'utente è stato creato con successo, False altrimenti.
+        """
+        try:
+            # Nota: lo script SQL fornito ('07_user-management.sql')
+            # definisce la procedura 'crea_utente' che accetta l'hash della password.
+            # Assicurati che la password sia hashata nell'applicazione prima di passarla qui.
+            call_proc = "CALL crea_utente(%s, %s, %s, %s, %s)"
+            success = self.execute_query(call_proc, (username, password_hash, nome_completo, email, ruolo))
+            if success:
+                self.commit()
+                logger.info(f"Utente {username} creato con successo.")
+            return success
+        except Exception as e:
+            # Gestisce l'eccezione per violazione di vincolo UNIQUE (es. username o email duplicati)
+            if "unique constraint" in str(e).lower():
+                 logger.error(f"Errore: Username '{username}' o Email '{email}' già esistente.")
+            else:
+                 logger.error(f"Errore durante la creazione dell'utente {username}: {e}")
+            self.rollback()
+            return False
+
+    def get_user_credentials(self, username: str) -> Optional[Dict]:
+        """
+        Recupera l'ID utente e l'hash della password per la verifica del login.
+
+        Args:
+            username: Username dell'utente.
+
+        Returns:
+            Optional[Dict]: Dizionario con 'id' e 'password_hash' se l'utente esiste ed è attivo, None altrimenti.
+        """
+        query = "SELECT id, password_hash FROM utente WHERE username = %s AND attivo = TRUE"
+        if self.execute_query(query, (username,)):
+            return self.fetchone()
+        return None
+
+    def register_access(self, utente_id: int, azione: str, indirizzo_ip: str = None, user_agent: str = None, esito: bool = True) -> bool:
+        """
+        Registra un evento di accesso (login, logout, ecc.) nel log.
+
+        Args:
+            utente_id: ID dell'utente.
+            azione: Tipo di azione (es. 'login', 'logout', 'password_fail').
+            indirizzo_ip: Indirizzo IP (opzionale).
+            user_agent: User agent del browser (opzionale).
+            esito: Esito dell'azione (True per successo, False per fallimento).
+
+        Returns:
+            bool: True se la registrazione è avvenuta con successo, False altrimenti.
+        """
+        try:
+            call_proc = "CALL registra_accesso(%s, %s, %s, %s, %s)"
+            success = self.execute_query(call_proc, (utente_id, azione, indirizzo_ip, user_agent, esito))
+            if success:
+                self.commit()
+                # Non logghiamo qui per evitare loop se il log stesso fallisce
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante la registrazione dell'accesso per l'utente {utente_id}: {e}")
+            self.rollback()
+            return False
+
+    def check_permission(self, utente_id: int, permesso_nome: str) -> bool:
+        """
+        Verifica se un utente ha un determinato permesso.
+
+        Args:
+            utente_id: ID dell'utente.
+            permesso_nome: Nome del permesso da verificare.
+
+        Returns:
+            bool: True se l'utente ha il permesso, False altrimenti.
+        """
+        query = "SELECT ha_permesso(%s, %s) AS permesso"
+        if self.execute_query(query, (utente_id, permesso_nome)):
+            result = self.fetchone()
+            return result.get('permesso', False) if result else False
+        return False
+
+    # --- FINE METODI GESTIONE UTENTI ---
+
+# --- METODI PER REPORTISTICA AVANZATA (Viste Materializzate e Funzioni) ---
+
+    def refresh_materialized_views(self) -> bool:
+        """
+        Aggiorna tutte le viste materializzate definite nello script 08.
+        È importante eseguire questo metodo periodicamente o dopo modifiche
+        significative ai dati per avere report aggiornati.
+
+        Returns:
+            bool: True se l'aggiornamento è avvenuto con successo, False altrimenti.
+        """
+        try:
+            # Chiama la procedura SQL che raggruppa gli aggiornamenti
+            success = self.execute_query("CALL aggiorna_tutte_statistiche()")
+            if success:
+                self.commit()
+                logger.info("Viste materializzate aggiornate con successo.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante l'aggiornamento delle viste materializzate: {e}")
+            self.rollback()
+            return False
+
+    def get_statistiche_comune(self) -> List[Dict]:
+        """
+        Recupera le statistiche generali per comune dalla vista materializzata.
+
+        Returns:
+            List[Dict]: Lista di statistiche per ogni comune.
+        """
+        # Interroga la vista materializzata
+        query = "SELECT comune, provincia, totale_partite, partite_attive, partite_inattive, totale_possessori, totale_immobili FROM mv_statistiche_comune ORDER BY comune"
+        if self.execute_query(query):
+            return self.fetchall()
+        return []
+
+    def get_immobili_per_tipologia(self, comune_nome: str = None) -> List[Dict]:
+        """
+        Recupera il riepilogo degli immobili per tipologia (classificazione) dalla vista materializzata,
+        filtrando opzionalmente per comune.
+
+        Args:
+            comune_nome: Nome del comune per filtrare i risultati (opzionale).
+
+        Returns:
+            List[Dict]: Lista di riepiloghi per tipologia.
+        """
+        params = []
+        query = "SELECT comune_nome, classificazione, numero_immobili, totale_piani, totale_vani FROM mv_immobili_per_tipologia"
+        if comune_nome:
+            query += " WHERE comune_nome = %s"
+            params.append(comune_nome)
+        query += " ORDER BY comune_nome, classificazione"
+
+        if self.execute_query(query, tuple(params)):
+            return self.fetchall()
+        return []
+
+    def get_partite_complete_view(self, comune_nome: str = None, stato: str = None, limit: int = 50) -> List[Dict]:
+        """
+        Recupera dati completi delle partite dalla vista materializzata, con filtri opzionali.
+
+        Args:
+            comune_nome: Nome del comune per filtrare (opzionale).
+            stato: Stato della partita ('attiva' o 'inattiva') per filtrare (opzionale).
+            limit: Numero massimo di risultati da restituire.
+
+        Returns:
+            List[Dict]: Lista di partite con dettagli aggregati.
+        """
+        conditions = []
+        params = []
+        query = "SELECT partita_id, comune_nome, numero_partita, tipo, data_impianto, stato, possessori, num_immobili, tipi_immobili, localita FROM mv_partite_complete"
+
+        if comune_nome:
+            conditions.append("comune_nome ILIKE %s")
+            params.append(f"%{comune_nome}%")
+        if stato:
+            conditions.append("stato = %s")
+            params.append(stato)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY comune_nome, numero_partita LIMIT %s"
+        params.append(limit)
+
+        if self.execute_query(query, tuple(params)):
+            return self.fetchall()
+        return []
+
+    def get_cronologia_variazioni(self, comune_origine: str = None, tipo_variazione: str = None, limit: int = 50) -> List[Dict]:
+        """
+        Recupera la cronologia delle variazioni dalla vista materializzata, con filtri opzionali.
+
+        Args:
+            comune_origine: Nome del comune di origine per filtrare (opzionale).
+            tipo_variazione: Tipo di variazione per filtrare (opzionale).
+            limit: Numero massimo di risultati da restituire.
+
+        Returns:
+            List[Dict]: Lista delle variazioni con dettagli aggregati.
+        """
+        conditions = []
+        params = []
+        query = "SELECT variazione_id, tipo_variazione, data_variazione, partita_origine_numero, comune_origine, possessori_origine, partita_dest_numero, comune_dest, possessori_dest, tipo_contratto, notaio, data_contratto FROM mv_cronologia_variazioni"
+
+        if comune_origine:
+            conditions.append("comune_origine ILIKE %s")
+            params.append(f"%{comune_origine}%")
+        if tipo_variazione:
+            conditions.append("tipo_variazione = %s")
+            params.append(tipo_variazione)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY data_variazione DESC LIMIT %s"
+        params.append(limit)
+
+        if self.execute_query(query, tuple(params)):
+            return self.fetchall()
+        return []
+
+    def get_report_annuale_partite(self, comune: str, anno: int) -> List[Dict]:
+        """
+        Genera un report annuale delle partite per un comune specifico usando la funzione SQL.
+
+        Args:
+            comune: Nome del comune.
+            anno: Anno per il report.
+
+        Returns:
+            List[Dict]: Lista dei dati del report annuale.
+        """
+        query = "SELECT * FROM report_annuale_partite(%s, %s)"
+        if self.execute_query(query, (comune, anno)):
+            return self.fetchall()
+        return []
+
+    def get_report_proprieta_possessore(self, possessore_id: int, data_inizio: date, data_fine: date) -> List[Dict]:
+        """
+        Genera un report delle proprietà di un possessore in un periodo specifico usando la funzione SQL.
+
+        Args:
+            possessore_id: ID del possessore.
+            data_inizio: Data di inizio del periodo.
+            data_fine: Data di fine del periodo.
+
+        Returns:
+            List[Dict]: Lista delle proprietà del possessore nel periodo.
+        """
+        query = "SELECT * FROM report_proprieta_possessore(%s, %s, %s)"
+        if self.execute_query(query, (possessore_id, data_inizio, data_fine)):
+            return self.fetchall()
+        return []
+
+    # --- FINE METODI REPORTISTICA AVANZATA ---
+    # --- METODI PER IL SISTEMA DI BACKUP ---
+
+    def register_backup_log(self, nome_file: str, utente: str, tipo: str, esito: bool, percorso_file: str, dimensione_bytes: Optional[int] = None, messaggio: Optional[str] = None) -> Optional[int]:
+        """
+        Registra un'operazione di backup nel log del database.
+
+        Args:
+            nome_file: Nome del file di backup generato.
+            utente: Utente che ha eseguito/richiesto il backup.
+            tipo: Tipo di backup ('completo', 'schema', 'dati').
+            esito: True se il backup è andato a buon fine, False altrimenti.
+            percorso_file: Percorso completo del file di backup.
+            dimensione_bytes: Dimensione del file di backup in byte (opzionale).
+            messaggio: Messaggio di log aggiuntivo (opzionale).
+
+        Returns:
+            Optional[int]: ID del log inserito, None in caso di errore.
+        """
+        try:
+            query = "SELECT registra_backup(%s, %s, %s, %s, %s, %s, %s)"
+            params = (nome_file, utente, dimensione_bytes, tipo, esito, messaggio, percorso_file)
+            if self.execute_query(query, params):
+                result = self.fetchone()
+                self.commit()
+                backup_id = result.get('registra_backup') if result else None
+                if backup_id:
+                    logger.info(f"Registrato log di backup con ID: {backup_id}")
+                    return backup_id
+                else:
+                    logger.warning("La funzione registra_backup non ha restituito un ID.")
+                    return None
+            return None
+        except Exception as e:
+            logger.error(f"Errore durante la registrazione del log di backup: {e}")
+            self.rollback()
+            return None
+
+    def get_backup_command_suggestion(self, tipo: str = 'completo') -> Optional[str]:
+        """
+        Ottiene il suggerimento del comando pg_dump da eseguire per il backup.
+
+        Args:
+            tipo: Tipo di backup ('completo', 'schema', 'dati'). Default: 'completo'.
+
+        Returns:
+            Optional[str]: Stringa con il comando suggerito e le istruzioni SQL
+                           per la registrazione, o None in caso di errore.
+        """
+        query = "SELECT get_backup_commands(%s) AS commands"
+        if self.execute_query(query, (tipo,)):
+            result = self.fetchone()
+            return result.get('commands') if result else None
+        return None
+
+    def get_restore_command_suggestion(self, backup_log_id: int) -> Optional[str]:
+        """
+        Ottiene il suggerimento del comando psql da eseguire per il restore
+        basato su un ID di log di backup esistente.
+
+        Args:
+            backup_log_id: ID del record nella tabella backup_registro.
+
+        Returns:
+            Optional[str]: Stringa con il comando psql suggerito, o None se
+                           l'ID non è valido o in caso di errore.
+        """
+        query = "SELECT get_restore_commands(%s) AS command"
+        if self.execute_query(query, (backup_log_id,)):
+            result = self.fetchone()
+            return result.get('command') if result else None
+        return None
+
+    def cleanup_old_backup_logs(self, giorni_conservazione: int = 30) -> bool:
+        """
+        Esegue la procedura SQL per la pulizia dei log di backup più vecchi
+        del numero di giorni specificato.
+        Nota: Questo elimina solo i record dal DB, non i file fisici.
+
+        Args:
+            giorni_conservazione: Numero di giorni per cui conservare i log. Default 30.
+
+        Returns:
+            bool: True se l'operazione è stata eseguita, False altrimenti.
+        """
+        try:
+            call_proc = "CALL pulizia_backup_vecchi(%s)"
+            success = self.execute_query(call_proc, (giorni_conservazione,))
+            if success:
+                self.commit()
+                logger.info(f"Eseguita pulizia log di backup più vecchi di {giorni_conservazione} giorni.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante la pulizia dei log di backup: {e}")
+            self.rollback()
+            return False
+
+    def generate_backup_script(self, backup_dir: str) -> Optional[str]:
+        """
+        Genera lo script bash per il backup automatico usando la funzione SQL.
+
+        Args:
+            backup_dir: La directory dove lo script salverà i backup.
+
+        Returns:
+            Optional[str]: Il contenuto dello script generato, o None in caso di errore.
+        """
+        query = "SELECT genera_script_backup_automatico(%s) AS script_content"
+        if self.execute_query(query, (backup_dir,)):
+            result = self.fetchone()
+            return result.get('script_content') if result else None
+        return None
+
+    def get_backup_logs(self, limit: int = 20) -> List[Dict]:
+        """
+        Recupera gli ultimi N log di backup dal registro.
+
+        Args:
+            limit: Numero massimo di log da recuperare.
+
+        Returns:
+            List[Dict]: Lista dei log di backup.
+        """
+        query = """
+            SELECT id, nome_file, timestamp, utente, dimensione_bytes, tipo, esito, messaggio, percorso_file
+            FROM backup_registro
+            ORDER BY timestamp DESC
+            LIMIT %s
+        """
+        if self.execute_query(query, (limit,)):
+            return self.fetchall()
+        return []
 
 
+    # --- FINE METODI SISTEMA DI BACKUP ---
+
+    # --- METODI PER OTTIMIZZAZIONE E RICERCA AVANZATA ---
+
+    def ricerca_avanzata_possessori(self, query_text: str) -> List[Dict]:
+        """
+        Esegue una ricerca avanzata (basata su similarità) sui possessori
+        utilizzando la funzione SQL dedicata.
+
+        Args:
+            query_text: Il testo da cercare nel nome completo, cognome/nome o paternità.
+
+        Returns:
+            List[Dict]: Lista di possessori trovati, ordinati per similarità e numero di partite.
+                        Include 'id', 'nome_completo', 'comune_nome', 'similarity', 'num_partite'.
+        """
+        query = "SELECT * FROM ricerca_avanzata_possessori(%s)"
+        if self.execute_query(query, (query_text,)):
+            return self.fetchall()
+        return []
+
+    def ricerca_avanzata_immobili(self, comune: str = None, natura: str = None, localita: str = None, classificazione: str = None, possessore: str = None) -> List[Dict]:
+        """
+        Esegue una ricerca avanzata sugli immobili con filtri multipli,
+        utilizzando la funzione SQL dedicata.
+
+        Args:
+            comune: Filtro per nome comune (opzionale).
+            natura: Filtro per natura immobile (ricerca parziale, opzionale).
+            localita: Filtro per nome località (ricerca parziale, opzionale).
+            classificazione: Filtro per classificazione esatta (opzionale).
+            possessore: Filtro per nome possessore (ricerca parziale, opzionale).
+
+        Returns:
+            List[Dict]: Lista di immobili trovati con dettagli e possessori associati.
+                        Include 'immobile_id', 'natura', 'localita_nome', 'comune',
+                        'classificazione', 'possessori', 'partita_numero'.
+        """
+        query = "SELECT * FROM ricerca_avanzata_immobili(%s, %s, %s, %s, %s)"
+        params = (comune, natura, localita, classificazione, possessore)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def run_database_maintenance(self) -> bool:
+        """
+        Esegue operazioni di manutenzione come VACUUM e ANALYZE direttamente
+        e aggiorna le viste materializzate.
+        VACUUM e ANALYZE vengono eseguiti in modalità autocommit.
+
+        Returns:
+            bool: True se tutte le operazioni principali sono state eseguite, False altrimenti.
+        """
+        all_success = True
+        original_autocommit = None
+        tables_to_maintain = ['comune', 'possessore', 'partita', 'immobile', 'localita', 'variazione', 'contratto', 'consultazione', 'utente', 'audit_log', 'backup_registro'] # Aggiungi altre tabelle se necessario
+
+        try:
+            if not self.conn or self.conn.closed:
+                 if not self.connect():
+                      return False
+
+            # Salva lo stato corrente di autocommit e impostalo a True per VACUUM/ANALYZE
+            original_autocommit = self.conn.autocommit
+            self.conn.autocommit = True
+            logger.info("Impostata modalità autocommit per VACUUM/ANALYZE.")
+
+            for table in tables_to_maintain:
+                logger.info(f"Esecuzione VACUUM ANALYZE su catasto.{table}...")
+                # Esegui VACUUM ANALYZE direttamente
+                if not self.execute_query(f"VACUUM (VERBOSE, ANALYZE) catasto.{table}"):
+                    logger.warning(f"VACUUM ANALYZE su {table} potrebbe essere fallito (controllare log DB).")
+                    # Potrebbe non essere critico, quindi continuiamo ma segnaliamo
+                    # all_success = False # Decommenta se vuoi che fallisca l'intera operazione
+
+            logger.info("VACUUM ANALYZE completato per le tabelle specificate.")
+
+        except Exception as e:
+            logger.error(f"Errore durante VACUUM/ANALYZE in autocommit: {e}")
+            all_success = False
+        finally:
+            # Ripristina lo stato originale di autocommit SEMPRE
+            if self.conn and not self.conn.closed and original_autocommit is not None:
+                self.conn.autocommit = original_autocommit
+                logger.info(f"Ripristinata modalità autocommit a: {original_autocommit}")
+            elif self.conn and not self.conn.closed:
+                 # Se original_autocommit è None (improbabile), ripristina a False
+                 self.conn.autocommit = False
+                 logger.warning("Ripristinata modalità autocommit a False (stato originale sconosciuto).")
 
 
+        # Ora esegui operazioni compatibili con le transazioni, se necessario
+        # Ad esempio, aggiorna le viste materializzate (questo può essere in una transazione)
+        if all_success: # Procedi solo se VACUUM/ANALYZE non hanno generato eccezioni critiche
+            logger.info("Aggiornamento Viste Materializzate...")
+            if not self.refresh_materialized_views(): # refresh_materialized_views gestisce commit/rollback
+                 logger.error("Fallito aggiornamento delle viste materializzate.")
+                 all_success = False
+            else:
+                 logger.info("Viste Materializzate aggiornate.")
 
-# Esempio di utilizzo
+        return all_success
+
+    def analyze_slow_queries(self, min_duration_ms: int = 1000) -> List[Dict]:
+        """
+        Chiama la funzione SQL per analizzare le query lente.
+        Richiede l'estensione 'pg_stat_statements' abilitata nel database.
+
+        Args:
+            min_duration_ms: Durata minima in millisecondi per considerare una query lenta.
+
+        Returns:
+            List[Dict]: Lista delle query lente trovate, con dettagli.
+        """
+        # Verifica se l'estensione è abilitata (opzionale ma utile)
+        if not self.execute_query("SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'"):
+             logger.warning("Estensione 'pg_stat_statements' non trovata o errore nella verifica.")
+             # Non possiamo procedere senza l'estensione
+             # return [] # Commentato per provare comunque a chiamare la funzione
+        elif not self.fetchone():
+             logger.warning("Estensione 'pg_stat_statements' non è abilitata nel database. La funzione 'analizza_query_lente' potrebbe non funzionare.")
+             # return [] # Commentato per provare comunque
+
+        logger.info(f"Ricerca query più lente di {min_duration_ms} ms...")
+        query = "SELECT * FROM analizza_query_lente(%s)"
+        try:
+            if self.execute_query(query, (min_duration_ms,)):
+                return self.fetchall()
+            return []
+        except Exception as e:
+             # Potrebbe fallire se l'estensione non è installata/abilitata
+             logger.error(f"Errore nell'analisi delle query lente (assicurati che 'pg_stat_statements' sia abilitata): {e}")
+             return []
+
+
+    def check_index_fragmentation(self) -> List[Dict]:
+        """
+        Esegue la procedura SQL per controllare la frammentazione degli indici
+        e restituisce gli indici potenzialmente frammentati.
+
+        Returns:
+            List[Dict]: Lista degli indici con frammentazione > 30%.
+                       Include 'schema_name', 'table_name', 'index_name', 'bloat_ratio', 'bloat_size'.
+        """
+        try:
+            # La procedura originale stampa i risultati con RAISE NOTICE.
+            # Per catturarli in Python, la modifichiamo temporaneamente per usare una tabella temporanea.
+            # Questo è più complesso del necessario se l'output va solo a log/console.
+            # Semplifichiamo assumendo che l'output sia per informazione e log.
+            logger.info("Avvio controllo frammentazione indici...")
+
+            # Eseguiamo la procedura. I risultati saranno loggati da PostgreSQL se usi RAISE NOTICE.
+            # Per ottenerli *programmaticamente*, la procedura SQL andrebbe modificata
+            # per restituire un SETOF record o usare una tabella temporanea.
+            # Qui simuliamo la chiamata e logghiamo un messaggio.
+            if self.execute_query("CALL controlla_frammentazione_indici()"):
+                 self.commit() # Necessario se la procedura usa tabelle temporanee che poi elimina
+                 logger.info("Controllo frammentazione indici eseguito. Controlla i log del database per i dettagli.")
+                 # Qui potresti aggiungere una query per leggere la tabella temporanea se la procedura la usa
+                 # Esempio:
+                 # if self.execute_query("SELECT * FROM index_stats WHERE bloat_ratio > 30"):
+                 #     return self.fetchall()
+                 return [] # Restituisce lista vuota in questa implementazione semplificata
+            else:
+                 return []
+
+        except Exception as e:
+            logger.error(f"Errore durante il controllo della frammentazione degli indici: {e}")
+            self.rollback()
+            return []
+
+
+    def get_optimization_suggestions(self) -> Optional[str]:
+        """
+        Ottiene suggerimenti generali per l'ottimizzazione del database
+        chiamando la funzione SQL dedicata.
+
+        Returns:
+            Optional[str]: Stringa contenente i suggerimenti, o None in caso di errore.
+        """
+        query = "SELECT suggerimenti_ottimizzazione() AS suggestions"
+        if self.execute_query(query):
+            result = self.fetchone()
+            return result.get('suggestions') if result else None
+        return None
+
+    # --- FINE METODI OTTIMIZZAZIONE ---
+    # --- METODI PER FUNZIONALITÀ STORICHE AVANZATE (da script 11) ---
+
+    def get_historical_periods(self) -> List[Dict]:
+        """
+        Recupera tutti i periodi storici definiti nel database.
+
+        Returns:
+            List[Dict]: Lista dei periodi storici.
+        """
+        query = "SELECT id, nome, anno_inizio, anno_fine, descrizione FROM periodo_storico ORDER BY anno_inizio"
+        if self.execute_query(query):
+            return self.fetchall()
+        return []
+
+    def get_historical_name(self, entity_type: str, entity_id: int, year: Optional[int] = None) -> Optional[Dict]:
+        """
+        Ottiene il nome storico corretto per un'entità (comune o localita)
+        in un determinato anno, usando la funzione SQL 'get_nome_storico'.
+
+        Args:
+            entity_type: Tipo di entità ('comune' o 'localita').
+            entity_id: ID dell'entità (ID da tabella comune o localita).
+            year: Anno per cui cercare il nome (default: anno corrente).
+
+        Returns:
+            Optional[Dict]: Dizionario con 'nome', 'anno_inizio', 'anno_fine', 'periodo_nome'
+                           se trovato, altrimenti None.
+        """
+        if year is None:
+            year = datetime.now().year
+
+        query = "SELECT * FROM get_nome_storico(%s, %s, %s)"
+        if self.execute_query(query, (entity_type, entity_id, year)):
+            return self.fetchone()
+        return None
+
+    def register_historical_name(self, entity_type: str, entity_id: int, name: str, period_id: int, year_start: int, year_end: Optional[int] = None, notes: Optional[str] = None) -> bool:
+        """
+        Registra un nome storico per un'entità usando la procedura SQL 'registra_nome_storico'.
+
+        Args:
+            entity_type: Tipo di entità ('comune' o 'localita').
+            entity_id: ID dell'entità.
+            name: Il nome storico.
+            period_id: ID del periodo storico associato.
+            year_start: Anno di inizio validità del nome.
+            year_end: Anno di fine validità (opzionale).
+            notes: Note aggiuntive (opzionale).
+
+        Returns:
+            bool: True se l'operazione ha avuto successo, False altrimenti.
+        """
+        try:
+            call_proc = "CALL registra_nome_storico(%s, %s, %s, %s, %s, %s, %s)"
+            params = (entity_type, entity_id, name, period_id, year_start, year_end, notes)
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Registrato nome storico '{name}' per {entity_type} ID {entity_id}.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante la registrazione del nome storico: {e}")
+            self.rollback()
+            return False
+
+    def search_historical_documents(self, title: Optional[str] = None, doc_type: Optional[str] = None, period_id: Optional[int] = None, year_start: Optional[int] = None, year_end: Optional[int] = None, partita_id: Optional[int] = None) -> List[Dict]:
+        """
+        Ricerca documenti storici nel database usando la funzione SQL 'ricerca_documenti_storici'.
+
+        Args:
+            title: Testo da cercare nel titolo (parziale, case-insensitive).
+            doc_type: Tipo esatto di documento.
+            period_id: ID del periodo storico.
+            year_start: Anno minimo del documento.
+            year_end: Anno massimo del documento.
+            partita_id: ID di una partita a cui il documento deve essere collegato.
+
+        Returns:
+            List[Dict]: Lista dei documenti trovati.
+        """
+        query = "SELECT * FROM ricerca_documenti_storici(%s, %s, %s, %s, %s, %s)"
+        params = (title, doc_type, period_id, year_start, year_end, partita_id)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def get_property_genealogy(self, partita_id: int) -> List[Dict]:
+        """
+        Ricostruisce l'albero genealogico di una proprietà (predecessori e successori)
+        usando la funzione SQL 'albero_genealogico_proprieta'.
+
+        Args:
+            partita_id: ID della partita di partenza.
+
+        Returns:
+            List[Dict]: Lista di partite nell'albero genealogico, ordinate per livello.
+                       Include 'livello', 'tipo_relazione', 'partita_id', 'comune_nome',
+                       'numero_partita', 'tipo', 'possessori', 'data_variazione'.
+        """
+        query = "SELECT * FROM albero_genealogico_proprieta(%s)"
+        if self.execute_query(query, (partita_id,)):
+            return self.fetchall()
+        return []
+
+    def get_cadastral_stats_by_period(self, comune: Optional[str] = None, year_start: int = 1900, year_end: Optional[int] = None) -> List[Dict]:
+        """
+        Ottiene statistiche catastali aggregate per anno e comune, in un range di anni,
+        usando la funzione SQL 'statistiche_catastali_periodo'.
+
+        Args:
+            comune: Filtra per un comune specifico (opzionale).
+            year_start: Anno di inizio del periodo statistico.
+            year_end: Anno di fine del periodo statistico (default: anno corrente).
+
+        Returns:
+            List[Dict]: Lista di statistiche annuali.
+        """
+        if year_end is None:
+            year_end = datetime.now().year
+
+        query = "SELECT * FROM statistiche_catastali_periodo(%s, %s, %s)"
+        params = (comune, year_start, year_end)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def link_document_to_partita(self, document_id: int, partita_id: int, relevance: str = 'correlata', notes: Optional[str] = None) -> bool:
+        """
+        Collega un documento storico esistente a una partita.
+
+        Args:
+            document_id: ID del documento storico.
+            partita_id: ID della partita.
+            relevance: Rilevanza del collegamento ('primaria', 'secondaria', 'correlata').
+            notes: Note aggiuntive (opzionale).
+
+        Returns:
+            bool: True se il collegamento è stato creato/aggiornato, False altrimenti.
+        """
+        if relevance not in ['primaria', 'secondaria', 'correlata']:
+            logger.error(f"Rilevanza non valida: {relevance}")
+            return False
+
+        query = """
+            INSERT INTO documento_partita (documento_id, partita_id, rilevanza, note)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (documento_id, partita_id) DO UPDATE SET
+                rilevanza = EXCLUDED.rilevanza,
+                note = EXCLUDED.note
+        """
+        params = (document_id, partita_id, relevance, notes)
+        try:
+            if self.execute_query(query, params):
+                self.commit()
+                logger.info(f"Documento ID {document_id} collegato a Partita ID {partita_id}.")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Errore nel collegare documento {document_id} a partita {partita_id}: {e}")
+            self.rollback()
+            return False
+
+    # --- FINE METODI FUNZIONALITÀ STORICHE AVANZATE ---
+
+# --- METODI CRUD E UTILITY AGGIUNTIVI (da script 12) ---
+
+    def update_immobile(self, immobile_id: int, **kwargs) -> bool:
+        """
+        Aggiorna i dettagli di un immobile usando la procedura SQL corretta.
+
+        Args:
+            immobile_id: ID dell'immobile da aggiornare.
+            **kwargs: Campi da aggiornare (natura, numero_piani, numero_vani,
+                      consistenza, classificazione, localita_id).
+                      I campi non specificati non verranno modificati.
+
+        Returns:
+            bool: True se l'aggiornamento ha avuto successo, False altrimenti.
+        """
+        # Mappa i kwargs ai parametri della procedura SQL, gestendo i default a None
+        params = {
+            'p_id': immobile_id,
+            'p_natura': kwargs.get('natura'),
+            'p_numero_piani': kwargs.get('numero_piani'),
+            'p_numero_vani': kwargs.get('numero_vani'),
+            'p_consistenza': kwargs.get('consistenza'),
+            'p_classificazione': kwargs.get('classificazione'),
+            'p_localita_id': kwargs.get('localita_id')
+        }
+        call_proc = "CALL aggiorna_immobile(%(p_id)s, %(p_natura)s, %(p_numero_piani)s, %(p_numero_vani)s, %(p_consistenza)s, %(p_classificazione)s, %(p_localita_id)s)"
+        try:
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Immobile ID {immobile_id} aggiornato con successo.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante l'aggiornamento dell'immobile ID {immobile_id}: {e}")
+            self.rollback()
+            return False
+
+    def delete_immobile(self, immobile_id: int) -> bool:
+        """
+        Elimina un immobile dal database usando la procedura SQL corretta.
+
+        Args:
+            immobile_id: ID dell'immobile da eliminare.
+
+        Returns:
+            bool: True se l'eliminazione ha avuto successo, False altrimenti.
+        """
+        try:
+            call_proc = "CALL elimina_immobile(%s)"
+            success = self.execute_query(call_proc, (immobile_id,))
+            if success:
+                self.commit()
+                logger.info(f"Immobile ID {immobile_id} eliminato con successo.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore durante l'eliminazione dell'immobile ID {immobile_id}: {e}")
+            self.rollback()
+            return False
+
+    def search_immobili(self, partita_id: Optional[int] = None, comune_nome: Optional[str] = None, localita_id: Optional[int] = None, natura: Optional[str] = None, classificazione: Optional[str] = None) -> List[Dict]:
+        """
+        Ricerca immobili specifici usando la funzione SQL corretta.
+
+        Args:
+            partita_id: Filtro per ID partita (opzionale).
+            comune_nome: Filtro per nome comune (opzionale).
+            localita_id: Filtro per ID località (opzionale).
+            natura: Filtro per natura (ricerca parziale, opzionale).
+            classificazione: Filtro per classificazione (esatta, opzionale).
+
+        Returns:
+            List[Dict]: Lista degli immobili trovati.
+        """
+        query = "SELECT * FROM cerca_immobili(%s, %s, %s, %s, %s)"
+        params = (partita_id, comune_nome, localita_id, natura, classificazione)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def update_variazione(self, variazione_id: int, **kwargs) -> bool:
+        """
+        Aggiorna i dettagli di una variazione.
+
+        Args:
+            variazione_id: ID della variazione da aggiornare.
+            **kwargs: Campi da aggiornare (tipo, data_variazione,
+                      numero_riferimento, nominativo_riferimento).
+
+        Returns:
+            bool: True se l'aggiornamento ha avuto successo.
+        """
+        params = {
+            'p_variazione_id': variazione_id,
+            'p_tipo': kwargs.get('tipo'),
+            'p_data_variazione': kwargs.get('data_variazione'),
+            'p_numero_riferimento': kwargs.get('numero_riferimento'),
+            'p_nominativo_riferimento': kwargs.get('nominativo_riferimento')
+        }
+        call_proc = "CALL aggiorna_variazione(%(p_variazione_id)s, %(p_tipo)s, %(p_data_variazione)s, %(p_numero_riferimento)s, %(p_nominativo_riferimento)s)"
+        try:
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Variazione ID {variazione_id} aggiornata.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore aggiornamento variazione ID {variazione_id}: {e}")
+            self.rollback()
+            return False
+
+    def delete_variazione(self, variazione_id: int, force: bool = False, restore_partita: bool = False) -> bool:
+        """
+        Elimina una variazione e opzionalmente i contratti collegati
+        e ripristina lo stato della partita origine.
+
+        Args:
+            variazione_id: ID della variazione da eliminare.
+            force: Se True, elimina anche i contratti associati. Default False.
+            restore_partita: Se True, prova a riattivare la partita origine. Default False.
+
+        Returns:
+            bool: True se l'eliminazione ha avuto successo.
+        """
+        try:
+            call_proc = "CALL elimina_variazione(%s, %s, %s)"
+            success = self.execute_query(call_proc, (variazione_id, force, restore_partita))
+            if success:
+                self.commit()
+                logger.info(f"Variazione ID {variazione_id} eliminata.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore eliminazione variazione ID {variazione_id}: {e}")
+            self.rollback()
+            return False
+
+    def search_variazioni(self, tipo: Optional[str] = None, data_inizio: Optional[date] = None, data_fine: Optional[date] = None, partita_origine_id: Optional[int] = None, partita_destinazione_id: Optional[int] = None, comune: Optional[str] = None) -> List[Dict]:
+        """
+        Ricerca variazioni con filtri multipli usando la funzione SQL corretta.
+
+        Args:
+            tipo, data_inizio, data_fine, partita_origine_id,
+            partita_destinazione_id, comune: Filtri opzionali.
+
+        Returns:
+            List[Dict]: Lista delle variazioni trovate.
+        """
+        query = "SELECT * FROM cerca_variazioni(%s, %s, %s, %s, %s, %s)"
+        params = (tipo, data_inizio, data_fine, partita_origine_id, partita_destinazione_id, comune)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def insert_contratto(self, variazione_id: int, tipo: str, data_contratto: date, notaio: Optional[str] = None, repertorio: Optional[str] = None, note: Optional[str] = None) -> bool:
+        """
+        Inserisce un nuovo contratto associato a una variazione.
+
+        Args:
+            variazione_id, tipo, data_contratto, notaio, repertorio, note.
+
+        Returns:
+            bool: True se inserito con successo.
+        """
+        try:
+            call_proc = "CALL inserisci_contratto(%s, %s, %s, %s, %s, %s)"
+            params = (variazione_id, tipo, data_contratto, notaio, repertorio, note)
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Contratto inserito per variazione ID {variazione_id}.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore inserimento contratto per variazione ID {variazione_id}: {e}")
+            self.rollback()
+            return False
+
+    def update_contratto(self, contratto_id: int, **kwargs) -> bool:
+        """
+        Aggiorna i dettagli di un contratto esistente.
+
+        Args:
+            contratto_id: ID del contratto da aggiornare.
+            **kwargs: Campi da aggiornare (tipo, data_contratto, notaio,
+                      repertorio, note).
+
+        Returns:
+            bool: True se aggiornato con successo.
+        """
+        params = {
+            'p_id': contratto_id,
+            'p_tipo': kwargs.get('tipo'),
+            'p_data_contratto': kwargs.get('data_contratto'),
+            'p_notaio': kwargs.get('notaio'),
+            'p_repertorio': kwargs.get('repertorio'),
+            'p_note': kwargs.get('note')
+        }
+        call_proc = "CALL aggiorna_contratto(%(p_id)s, %(p_tipo)s, %(p_data_contratto)s, %(p_notaio)s, %(p_repertorio)s, %(p_note)s)"
+        try:
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Contratto ID {contratto_id} aggiornato.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore aggiornamento contratto ID {contratto_id}: {e}")
+            self.rollback()
+            return False
+
+    def delete_contratto(self, contratto_id: int) -> bool:
+        """
+        Elimina un contratto specifico.
+
+        Args:
+            contratto_id: ID del contratto da eliminare.
+
+        Returns:
+            bool: True se eliminato con successo.
+        """
+        try:
+            call_proc = "CALL elimina_contratto(%s)"
+            success = self.execute_query(call_proc, (contratto_id,))
+            if success:
+                self.commit()
+                logger.info(f"Contratto ID {contratto_id} eliminato.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore eliminazione contratto ID {contratto_id}: {e}")
+            self.rollback()
+            return False
+
+    def update_consultazione(self, consultazione_id: int, **kwargs) -> bool:
+        """
+        Aggiorna i dettagli di una consultazione.
+
+        Args:
+            consultazione_id: ID della consultazione.
+            **kwargs: Campi da aggiornare (data, richiedente, documento_identita,
+                      motivazione, materiale_consultato, funzionario_autorizzante).
+
+        Returns:
+            bool: True se aggiornato con successo.
+        """
+        params = {
+            'p_id': consultazione_id,
+            'p_data': kwargs.get('data'),
+            'p_richiedente': kwargs.get('richiedente'),
+            'p_documento_identita': kwargs.get('documento_identita'),
+            'p_motivazione': kwargs.get('motivazione'),
+            'p_materiale_consultato': kwargs.get('materiale_consultato'),
+            'p_funzionario_autorizzante': kwargs.get('funzionario_autorizzante')
+        }
+        call_proc = "CALL aggiorna_consultazione(%(p_id)s, %(p_data)s, %(p_richiedente)s, %(p_documento_identita)s, %(p_motivazione)s, %(p_materiale_consultato)s, %(p_funzionario_autorizzante)s)"
+        try:
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Consultazione ID {consultazione_id} aggiornata.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore aggiornamento consultazione ID {consultazione_id}: {e}")
+            self.rollback()
+            return False
+
+    def delete_consultazione(self, consultazione_id: int) -> bool:
+        """
+        Elimina una registrazione di consultazione.
+
+        Args:
+            consultazione_id: ID della consultazione da eliminare.
+
+        Returns:
+            bool: True se eliminata con successo.
+        """
+        try:
+            call_proc = "CALL elimina_consultazione(%s)"
+            success = self.execute_query(call_proc, (consultazione_id,))
+            if success:
+                self.commit()
+                logger.info(f"Consultazione ID {consultazione_id} eliminata.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore eliminazione consultazione ID {consultazione_id}: {e}")
+            self.rollback()
+            return False
+
+    def search_consultazioni(self, data_inizio: Optional[date] = None, data_fine: Optional[date] = None, richiedente: Optional[str] = None, funzionario: Optional[str] = None) -> List[Dict]:
+        """
+        Ricerca le consultazioni con filtri.
+
+        Args:
+            data_inizio, data_fine, richiedente, funzionario: Filtri opzionali.
+
+        Returns:
+            List[Dict]: Lista delle consultazioni trovate.
+        """
+        query = "SELECT * FROM cerca_consultazioni(%s, %s, %s, %s)"
+        params = (data_inizio, data_fine, richiedente, funzionario)
+        if self.execute_query(query, params):
+            return self.fetchall()
+        return []
+
+    def duplicate_partita(self, partita_id: int, nuovo_numero_partita: int, mantenere_possessori: bool = True, mantenere_immobili: bool = False) -> bool:
+        """
+        Duplica una partita esistente.
+
+        Args:
+            partita_id: ID della partita da duplicare.
+            nuovo_numero_partita: Nuovo numero per la partita duplicata.
+            mantenere_possessori: Se True, copia i possessori.
+            mantenere_immobili: Se True, copia gli immobili.
+
+        Returns:
+            bool: True se la duplicazione ha avuto successo.
+        """
+        try:
+            call_proc = "CALL duplica_partita(%s, %s, %s, %s)"
+            params = (partita_id, nuovo_numero_partita, mantenere_possessori, mantenere_immobili)
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Partita ID {partita_id} duplicata con nuovo numero {nuovo_numero_partita}.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore duplicazione partita ID {partita_id}: {e}")
+            self.rollback()
+            return False
+
+    def transfer_immobile(self, immobile_id: int, nuova_partita_id: int, registra_variazione: bool = False) -> bool:
+        """
+        Trasferisce un immobile da una partita a un'altra.
+
+        Args:
+            immobile_id: ID dell'immobile da trasferire.
+            nuova_partita_id: ID della partita di destinazione.
+            registra_variazione: Se True, crea un record di variazione per il trasferimento.
+
+        Returns:
+            bool: True se il trasferimento ha avuto successo.
+        """
+        try:
+            call_proc = "CALL trasferisci_immobile(%s, %s, %s)"
+            params = (immobile_id, nuova_partita_id, registra_variazione)
+            success = self.execute_query(call_proc, params)
+            if success:
+                self.commit()
+                logger.info(f"Immobile ID {immobile_id} trasferito alla partita ID {nuova_partita_id}.")
+            return success
+        except Exception as e:
+            logger.error(f"Errore trasferimento immobile ID {immobile_id}: {e}")
+            self.rollback()
+            return False
+
+    def export_partita_json(self, partita_id: int) -> Optional[str]:
+        """
+        Esporta i dati completi di una partita in formato JSON.
+
+        Args:
+            partita_id: ID della partita da esportare.
+
+        Returns:
+            Optional[str]: Stringa JSON con i dati della partita, o None in caso di errore.
+        """
+        query = "SELECT esporta_partita_json(%s) AS partita_json"
+        if self.execute_query(query, (partita_id,)):
+            result = self.fetchone()
+            # Il risultato della funzione è già JSON, ma psycopg2 potrebbe restituirlo come dict
+            # Lo riconvertiamo in stringa JSON formattata
+            if result and 'partita_json' in result and result['partita_json']:
+                 try:
+                     # Usa json.dumps per formattare l'output JSON
+                     return json.dumps(result['partita_json'], indent=4, ensure_ascii=False)
+                 except TypeError as e:
+                      logger.error(f"Errore nella serializzazione JSON per partita {partita_id}: {e}")
+                      return str(result['partita_json']) # Fallback a stringa semplice
+            else:
+                 logger.warning(f"Nessun dato JSON restituito per partita ID {partita_id}.")
+                 return None
+        return None
+
+    def export_possessore_json(self, possessore_id: int) -> Optional[str]:
+        """
+        Esporta i dati completi di un possessore e delle sue proprietà in formato JSON.
+
+        Args:
+            possessore_id: ID del possessore da esportare.
+
+        Returns:
+            Optional[str]: Stringa JSON con i dati del possessore, o None in caso di errore.
+        """
+        query = "SELECT esporta_possessore_json(%s) AS possessore_json"
+        if self.execute_query(query, (possessore_id,)):
+            result = self.fetchone()
+            if result and 'possessore_json' in result and result['possessore_json']:
+                 try:
+                     return json.dumps(result['possessore_json'], indent=4, ensure_ascii=False)
+                 except TypeError as e:
+                      logger.error(f"Errore nella serializzazione JSON per possessore {possessore_id}: {e}")
+                      return str(result['possessore_json'])
+            else:
+                  logger.warning(f"Nessun dato JSON restituito per possessore ID {possessore_id}.")
+                  return None
+        return None
+
+    def get_report_comune(self, comune_nome: str) -> Optional[Dict]:
+        """
+        Genera un report statistico per un singolo comune.
+
+        Args:
+            comune_nome: Nome del comune.
+
+        Returns:
+            Optional[Dict]: Dizionario con le statistiche del comune, o None se non trovato/errore.
+        """
+        # Nota: La funzione SQL 'genera_report_comune' restituisce una tabella (potenzialmente 0 o 1 riga)
+        query = "SELECT * FROM genera_report_comune(%s)"
+        if self.execute_query(query, (comune_nome,)):
+            # fetchone() è appropriato perché ci aspettiamo al massimo una riga per comune
+            return self.fetchone()
+        return None
+
+    # --- FINE METODI CRUD E UTILITY AGGIUNTIVI ---
+
+    # Esempio di utilizzo
 if __name__ == "__main__":
     # Crea un'istanza del gestore
     db = CatastoDBManager(

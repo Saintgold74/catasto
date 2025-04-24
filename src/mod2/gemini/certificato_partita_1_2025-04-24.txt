@@ -1,0 +1,34 @@
+============================================================
+                CERTIFICATO DI PROPRIETA IMMOBILIARE
+                     CATASTO STORICO ANNI '50
+============================================================
+
+COMUNE: Carcare
+PARTITA N.: 302
+TIPO: principale
+DATA IMPIANTO: 2025-04-16
+STATO: attiva
+
+-------------------- INTESTATARI --------------------
+- Rossi Marco fu Antonio
+
+-------------------- IMMOBILI --------------------
+Immobile ID: 1
+  Natura: Molino da cereali
+  Localita: Regione Vista (regione)
+  Piani: 2
+  Consistenza: 150 mq
+  Classificazione: Artigianale
+
+Immobile ID: 7
+  Natura: Molino da cereali
+  Localita: Regione Vista (regione)
+  Piani: 2
+  Consistenza: 150 mq
+  Classificazione: Artigianale
+
+-------------------- VARIAZIONI --------------------
+============================================================
+Certificato generato il: 2025-04-24
+Il presente certificato ha valore puramente storico e documentale.
+============================================================

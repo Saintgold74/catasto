@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gestore Database Catasto Storico
-================================
-Script per la gestione del database catastale con supporto 
+Gestore Database Catasto Storico - Versione Migliorata
+=====================================================
+Script per la gestione del database catastale con supporto
 per operazioni CRUD e chiamate alle stored procedure.
 
+Include miglioramenti per sicurezza (bcrypt) e gestione errori.
+
 Autore: Marco Santoro
-Data: 17/04/2025
+Data: 24/04/2025
 """
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.errors # +++ ADDED +++ Per errori specifici
 from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
 import sys
 import logging
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
+import bcrypt # +++ ADDED +++ Per hashing password
+import json # Necessario per export JSON
 
-# Configurazione logging
+# Configurazione logging (invariata)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -31,45 +36,63 @@ logger = logging.getLogger("CatastoDB")
 
 class CatastoDBManager:
     """Classe per la gestione delle operazioni sul database catastale."""
-    
-    def __init__(self, dbname: str = "catasto_storico", user: str = "postgres", 
-                 password: str = "Markus74", host: str = "localhost", port: int = 5432, 
-                 schema: str = "catasto"):
+
+    # --- MODIFIED __init__ ---
+    # Rimuovi i valori di default hardcoded per le credenziali
+    def __init__(self, dbname: str, user: str, password: str,
+                 host: str, port: int, schema: str = "catasto"):
         """
         Inizializza la connessione al database.
-        
-        Args:
-            dbname: Nome del database
-            user: Nome utente
-            password: Password
-            host: Hostname del server
-            port: Porta TCP
-            schema: Schema da utilizzare
+        Le credenziali ora sono passate obbligatoriamente.
         """
-        self.conn_params = {
-            "dbname": dbname,
-            "user": user,
-            "password": password,
-            "host": host,
-            "port": port
-        }
+        self.dbname = dbname
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.schema = schema
         self.conn = None
-        self.cur = None
+        self.cursor = None
         logger.info(f"Inizializzato gestore per database {dbname} schema {schema}")
     
-    def connect(self):
-        """Stabilisce una connessione al database."""
+    # --- MODIFIED connect ---
+    def connect(self) -> bool:
+        """Stabilisce la connessione al database utilizzando gli attributi della classe."""
+        if self.conn is not None and not self.conn.closed:
+            # logger.debug("Connessione già attiva.") # Debug opzionale
+            return True
         try:
-            self.conn = psycopg2.connect(**self.conn_params)
+            logger.info(f"Tentativo di connessione a {self.dbname} su {self.host}:{self.port}...")
+            # Usa gli attributi individuali per la connessione
+            self.conn = psycopg2.connect(
+                dbname=self.dbname,
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port
+            )
             self.conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
-            self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-            self.cur.execute(f"SET search_path TO {self.schema}")
+            self.conn.autocommit = False # Assicurati che autocommit sia False di default
+            # Imposta lo schema di ricerca (opzionale ma buona pratica)
+            with self.conn.cursor() as cur:
+                 cur.execute(f"SET search_path TO {self.schema}, public;")
+
+            # Crea un cursore predefinito (opzionale, si può creare al bisogno)
+            # self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
             logger.info("Connessione stabilita con successo")
             return True
-        except Exception as e:
-            logger.error(f"Errore durante la connessione: {e}")
+        except psycopg2.OperationalError as e:
+            logger.error(f"Errore operativo durante la connessione: {e}")
+            self.conn = None
+            # self.cursor = None
             return False
+        except Exception as e:
+            logger.error(f"Errore generico durante la connessione: {e}")
+            self.conn = None
+            # self.cursor = None
+            return False
+    # --- FINE MODIFIED connect ---
     
     def disconnect(self):
         """Chiude la connessione al database."""
@@ -1121,14 +1144,14 @@ class CatastoDBManager:
     
     # --- METODI PER LA GESTIONE UTENTI ---
 
-    def create_user(self, username: str, password_hash: str, nome_completo: str, email: str, ruolo: str) -> bool:
+    def create_user(self, username: str, plain_password: str, nome_completo: str, email: str, ruolo: str) -> bool:
         """
         Crea un nuovo utente nel database utilizzando la stored procedure.
-        IMPORTANTE: La password deve essere già hashata prima di chiamare questo metodo.
+        Esegue l'hashing della password usando bcrypt prima di chiamare la procedura.
 
         Args:
             username: Username dell'utente.
-            password_hash: Hash della password dell'utente.
+            plain_password: Password in chiaro fornita dall'utente.
             nome_completo: Nome completo dell'utente.
             email: Email dell'utente.
             ruolo: Ruolo dell'utente ('admin', 'archivista', 'consultatore').
@@ -1137,38 +1160,44 @@ class CatastoDBManager:
             bool: True se l'utente è stato creato con successo, False altrimenti.
         """
         try:
-            # Nota: lo script SQL fornito ('07_user-management.sql')
-            # definisce la procedura 'crea_utente' che accetta l'hash della password.
-            # Assicurati che la password sia hashata nell'applicazione prima di passarla qui.
+            # Hash della password con bcrypt (più sicuro)
+            password_hash_bytes = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
+            password_hash = password_hash_bytes.decode('utf-8') # Memorizza come stringa
+
             call_proc = "CALL crea_utente(%s, %s, %s, %s, %s)"
             success = self.execute_query(call_proc, (username, password_hash, nome_completo, email, ruolo))
             if success:
                 self.commit()
                 logger.info(f"Utente {username} creato con successo.")
             return success
-        except Exception as e:
-            # Gestisce l'eccezione per violazione di vincolo UNIQUE (es. username o email duplicati)
-            if "unique constraint" in str(e).lower():
-                 logger.error(f"Errore: Username '{username}' o Email '{email}' già esistente.")
-            else:
-                 logger.error(f"Errore durante la creazione dell'utente {username}: {e}")
+        # +++ MODIFIED ERROR HANDLING +++
+        except psycopg2.errors.UniqueViolation as uve:
+             logger.error(f"Errore: Username '{username}' o Email '{email}' già esistente. {uve}")
+             self.rollback()
+             return False
+        except psycopg2.Error as db_err: # Cattura altri errori DB specifici
+             logger.error(f"Errore DB durante la creazione dell'utente {username}: {db_err}")
+             self.rollback()
+             return False
+        except Exception as e: # Errore generico
+            logger.error(f"Errore generico durante la creazione dell'utente {username}: {e}")
             self.rollback()
             return False
-
     def get_user_credentials(self, username: str) -> Optional[Dict]:
         """
-        Recupera l'ID utente e l'hash della password per la verifica del login.
-
-        Args:
-            username: Username dell'utente.
-
-        Returns:
-            Optional[Dict]: Dizionario con 'id' e 'password_hash' se l'utente esiste ed è attivo, None altrimenti.
+        Recupera l'ID utente e l'hash della password (bcrypt) per la verifica del login.
         """
         query = "SELECT id, password_hash FROM utente WHERE username = %s AND attivo = TRUE"
-        if self.execute_query(query, (username,)):
-            return self.fetchone()
-        return None
+        try: # Aggiungi try-except anche qui per robustezza
+            if self.execute_query(query, (username,)):
+                return self.fetchone()
+            return None
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB nel recuperare credenziali per {username}: {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore generico nel recuperare credenziali per {username}: {e}")
+            return None
 
     def register_access(self, utente_id: int, azione: str, indirizzo_ip: str = None, user_agent: str = None, esito: bool = True) -> bool:
         """

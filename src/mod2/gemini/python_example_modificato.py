@@ -1,21 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Esempio di utilizzo del gestore database catastale
-=================================================
+Esempio di utilizzo del gestore database catastale - Versione Migliorata
+=======================================================================
 Questo script mostra esempi pratici di come utilizzare
 la classe CatastoDBManager per interagire con il database.
 
+Include miglioramenti per:
+- Configurazione esterna
+- Validazione input
+- Sicurezza password (bcrypt, getpass)
+- Formattazione output (tabulate)
+
 Autore: Marco Santoro
-Data: 17/04/2025
+Data: 24/04/2025
 """
 
-from catasto_db_manager import CatastoDBManager
+from catasto_db_manager import CatastoDBManager # Assumendo che sia nello stesso folder o path
 from datetime import date, datetime
 import json
 import os
 import sys
-import hashlib
+import hashlib # Mantenuto per hash file backup se necessario, NON per password
+import bcrypt # +++ ADDED +++
+import getpass # +++ ADDED +++ Per nascondere input password
+from tabulate import tabulate # +++ ADDED +++ Per tabelle
+from typing import Optional, List, Dict, Any # +++ ADDED +++ Per type hints helper
+
+# +++ ADDED +++ Import per configurazione
+# Scegli una delle due opzioni:
+# Opzione 1: python-dotenv
+from dotenv import load_dotenv
+# Opzione 2: configparser
+# import configparser
+
+# +++ ADDED HELPER FUNCTIONS +++
 
 def stampa_intestazione(titolo):
     """Stampa un'intestazione formattata"""
@@ -23,47 +42,128 @@ def stampa_intestazione(titolo):
     print(f" {titolo} ".center(80, "="))
     print("=" * 80)
 
-def inserisci_possessore(db, comune_preselezionato=None):
+def get_validated_input(prompt: str, validation_type: str = 'text', required: bool = True, choices: Optional[List[str]] = None) -> Optional[str]:
     """
-    Funzione per l'inserimento di un nuovo possessore
-    
+    Richiede input all'utente con validazione.
+
     Args:
-        db: Istanza del database manager
-        comune_preselezionato: Nome del comune (opzionale)
-        
+        prompt: Il messaggio da mostrare all'utente.
+        validation_type: 'text', 'int', 'date', 'choice', 'password'.
+        required: Se True, l'input non può essere vuoto.
+        choices: Lista di scelte valide se validation_type è 'choice' (case-insensitive).
+
     Returns:
-        Optional[int]: ID del possessore inserito, None in caso di errore
+        L'input validato come stringa, o None se non richiesto e lasciato vuoto.
+        Restituisce None anche in caso di errore di validazione irrecuperabile (improbabile qui).
     """
+    while True:
+        if validation_type == 'password':
+            user_input = getpass.getpass(prompt + (" (obbligatorio): " if required else " (opzionale): "))
+        else:
+            user_input = input(prompt + (" (obbligatorio): " if required else " (opzionale, INVIO per saltare): "))
+
+        user_input = user_input.strip()
+
+        if not user_input:
+            if required:
+                print("Errore: Questo campo è obbligatorio.")
+                continue
+            else:
+                return None # Input vuoto e non richiesto
+
+        if validation_type == 'int':
+            if not user_input.isdigit():
+                print("Errore: Inserire un numero intero valido.")
+                continue
+            # Restituisce come stringa, la conversione avverrà dove serve
+            return user_input
+
+        elif validation_type == 'date':
+            try:
+                datetime.strptime(user_input, "%Y-%m-%d")
+                return user_input # Restituisce la stringa valida
+            except ValueError:
+                print("Errore: Inserire una data valida nel formato YYYY-MM-DD.")
+                continue
+
+        elif validation_type == 'choice':
+            if choices and user_input.lower() not in [c.lower() for c in choices]:
+                print(f"Errore: Scelta non valida. Opzioni: {', '.join(choices)}")
+                continue
+            return user_input # Restituisce la scelta (case originale)
+
+        elif validation_type in ['text', 'password']:
+             # Per 'text' e 'password' la validazione base è solo se richiesto (già fatta)
+             return user_input
+
+        else:
+            # Tipo di validazione non riconosciuto (errore di programmazione)
+            print(f"Errore interno: tipo di validazione '{validation_type}' non gestito.")
+            return None # O solleva eccezione
+
+def display_table(data: List[Dict[str, Any]], headers: Optional[List[str]] = None):
+    """Visualizza una lista di dizionari come tabella formattata."""
+    if not data:
+        print("Nessun dato da visualizzare.")
+        return
+
+    if not headers:
+        # Usa le chiavi del primo dizionario come header se non forniti
+        headers = list(data[0].keys())
+
+    # Estrai i dati in formato lista di liste per tabulate
+    table_data = [[item.get(header, 'N/D') for header in headers] for item in data]
+
+    # Stampa la tabella
+    print(tabulate(table_data, headers=headers, tablefmt="grid"))
+
+# --- FINE HELPER FUNCTIONS ---
+def inserisci_possessore(db, comune_preselezionato=None):
+    """Funzione per l'inserimento di un nuovo possessore"""
     stampa_intestazione("AGGIUNGI NUOVO POSSESSORE")
-    
-    # Se il comune non è preselezionato, chiedilo all'utente
-    if comune_preselezionato:
+
+    # Usa gli helper per l'input
+    if not comune_preselezionato:
+        comune = get_validated_input("Comune di residenza", required=True)
+        if not comune: return None # Se l'utente interrompe o errore
+    else:
         comune = comune_preselezionato
         print(f"Comune: {comune}")
-    else:
-        comune = input("Comune: ")
-    
-    cognome_nome = input("Cognome e nome: ")
-    paternita = input("Paternita (es. 'fu Roberto'): ")
-    
-    # Calcola automaticamente il nome completo
-    nome_completo = f"{cognome_nome} {paternita}"
-    conferma = input(f"Nome completo: [{nome_completo}] (premi INVIO per confermare o inserisci un valore diverso): ")
-    if conferma:
-        nome_completo = conferma
-    
-    if comune and cognome_nome:
-        # Esegui l'inserimento tramite procedura
-        possessore_id = db.insert_possessore(comune, cognome_nome, paternita, nome_completo, True)
+
+    nome_completo = get_validated_input("Nome completo", required=True)
+    codice_fiscale = get_validated_input("Codice Fiscale (opzionale)", required=False)
+    paternita = get_validated_input("Paternità (opzionale)", required=False)
+    data_nascita_str = get_validated_input("Data di nascita (YYYY-MM-DD, opzionale)", validation_type='date', required=False)
+    luogo_nascita = get_validated_input("Luogo di nascita (opzionale)", required=False)
+    note = get_validated_input("Note (opzionale)", required=False)
+
+    # Converti data se fornita
+    data_nascita = datetime.strptime(data_nascita_str, "%Y-%m-%d").date() if data_nascita_str else None
+
+    # Chiama il metodo del DB manager (assumendo esista e funzioni come prima)
+    # Assicurati che `db.inserisci_possessore` esista e accetti questi parametri
+    try:
+        possessore_id = db.inserisci_possessore(
+            nome_completo=nome_completo,
+            codice_fiscale=codice_fiscale,
+            comune_residenza=comune,
+            paternita=paternita,
+            data_nascita=data_nascita,
+            luogo_nascita=luogo_nascita,
+            note=note
+        )
         if possessore_id:
-            print(f"Possessore {nome_completo} inserito con successo (ID: {possessore_id})")
+            print(f"Possessore '{nome_completo}' inserito con ID: {possessore_id}")
             return possessore_id
         else:
-            print("Errore durante l'inserimento")
-    else:
-        print("Dati incompleti, operazione annullata")
-    
-    return None
+            print("Errore durante l'inserimento del possessore.")
+            return None
+    except AttributeError:
+         print("ERRORE: Metodo 'inserisci_possessore' non trovato in CatastoDBManager.")
+         return None
+    except Exception as e:
+        print(f"Errore imprevisto: {e}")
+        return None
 
 def inserisci_localita(db):
     """
@@ -1559,77 +1659,76 @@ def menu_utenti(db):
         scelta = input("\nSeleziona un'opzione (1-4): ")
 
         if scelta == "1":
-            # Crea nuovo utente
             stampa_intestazione("CREA NUOVO UTENTE")
-            username = input("Username: ")
-            password = input("Password: ")
-            nome_completo = input("Nome completo: ")
-            email = input("Email: ")
-            print("Ruoli disponibili: admin, archivista, consultatore")
-            ruolo = input("Ruolo: ")
+            username = get_validated_input("Username", required=True)
+            # +++ Usa getpass e passa password in chiaro +++
+            password = get_validated_input("Password", validation_type='password', required=True)
+            nome_completo = get_validated_input("Nome completo", required=True)
+            email = get_validated_input("Email", required=True) # Potrebbe servire validazione formato email
+            ruolo = get_validated_input("Ruolo", required=True, choices=['admin', 'archivista', 'consultatore'])
 
             if not all([username, password, nome_completo, email, ruolo]):
-                print("Tutti i campi sono obbligatori.")
+                print("Errore: alcuni campi obbligatori non sono stati inseriti correttamente.")
                 continue
 
-            if ruolo not in ['admin', 'archivista', 'consultatore']:
-                print("Ruolo non valido.")
-                continue
-
-            # Hash della password (IMPORTANTE: usare un metodo più sicuro in produzione!)
-            # Questo è solo un esempio dimostrativo con SHA256.
-            # In un'app reale, usare librerie come bcrypt o Argon2.
-            password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-            if db.create_user(username, password_hash, nome_completo, email, ruolo):
+            # Chiama create_user passando la password in chiaro
+            if db.create_user(username, password, nome_completo, email, ruolo):
                 print(f"Utente '{username}' creato con successo.")
-            else:
-                print(f"Errore durante la creazione dell'utente '{username}'.")
+            # L'errore specifico (es. utente duplicato) viene loggato da CatastoDBManager
+            # else: # Non serve più stampare errore generico qui
+            #     print(f"Errore durante la creazione dell'utente '{username}'.")
 
         elif scelta == "2":
-            # Simula Login
             stampa_intestazione("SIMULA LOGIN UTENTE")
-            username = input("Username: ")
-            password = input("Password: ")
+            username = get_validated_input("Username", required=True)
+            # +++ Usa getpass +++
+            password = get_validated_input("Password", validation_type='password', required=True)
+
+            if not username or not password: continue # Se l'input fallisce
 
             credentials = db.get_user_credentials(username)
 
-            if credentials:
-                # Verifica password (IMPORTANTE: confrontare gli hash!)
-                # Di nuovo, questo è un esempio con SHA256. Usare la stessa funzione di hashing
-                # utilizzata durante la creazione dell'utente.
-                entered_password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            if credentials and 'id' in credentials and 'password_hash' in credentials:
+                stored_hash = credentials['password_hash']
+                user_id = credentials['id']
+                # +++ Usa bcrypt per verificare +++
+                try:
+                    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                        print(f"Login riuscito per l'utente ID: {user_id}")
+                        # Registra l'accesso riuscito
+                        db.register_access(user_id, 'login', esito=True)
+                        # Qui potresti salvare l'ID utente per operazioni successive
+                    else:
+                        print("Password errata.")
+                        # Registra il tentativo di login fallito
+                        db.register_access(user_id, 'login', esito=False)
+                except ValueError as bve:
+                     # Questo può accadere se l'hash nel DB non è un hash bcrypt valido
+                     print(f"Errore nella verifica password: hash non valido nel DB? {bve}")
+                     logger.error(f"Tentativo di login per {username} fallito - hash DB non valido?")
+                except Exception as e:
+                     print(f"Errore imprevisto durante verifica password: {e}")
 
-                if entered_password_hash == credentials['password_hash']:
-                    print(f"Login riuscito per l'utente ID: {credentials['id']}")
-                    # Registra l'accesso riuscito
-                    db.register_access(credentials['id'], 'login', esito=True)
-                    # Qui potresti salvare l'ID utente per operazioni successive
-                else:
-                    print("Password errata.")
-                    # Registra il tentativo di login fallito
-                    db.register_access(credentials['id'], 'login', esito=False)
             else:
                 print("Utente non trovato o non attivo.")
-                # Opzionalmente, potresti registrare un tentativo di login per un utente inesistente
-                # ma richiederebbe una logica diversa (es. utente_id = 0 o NULL).
+                # Potresti loggare tentativo fallito per utente inesistente
+                # (richiede logica per gestire user_id=None in register_access o un ID fittizio)
+
 
         elif scelta == "3":
-            # Verifica Permesso
             stampa_intestazione("VERIFICA PERMESSO UTENTE")
-            try:
-                utente_id = int(input("ID Utente: "))
-                permesso = input("Nome del permesso (es. 'modifica_partite'): ")
+            utente_id_str = get_validated_input("ID Utente", validation_type='int', required=True)
+            permesso = get_validated_input("Nome del permesso (es. 'modifica_partite')", required=True)
 
-                if db.check_permission(utente_id, permesso):
-                    print(f"L'utente {utente_id} HA il permesso '{permesso}'.")
-                else:
-                    print(f"L'utente {utente_id} NON HA il permesso '{permesso}'.")
-            except ValueError:
-                print("ID Utente non valido.")
-            except Exception as e:
-                print(f"Errore durante la verifica del permesso: {e}")
-
+            if utente_id_str and permesso:
+                try:
+                    utente_id = int(utente_id_str)
+                    if db.check_permission(utente_id, permesso):
+                        print(f"L'utente {utente_id} HA il permesso '{permesso}'.")
+                    else:
+                        print(f"L'utente {utente_id} NON HA il permesso '{permesso}'.")
+                except Exception as e:
+                    print(f"Errore durante la verifica del permesso: {e}")
 
         elif scelta == "4":
             break
@@ -1965,35 +2064,40 @@ def menu_storico_avanzato(db):
 
 
 def main():
-    # Configura la connessione
+    # Carica configurazione
+    # Opzione 1: .env
+    load_dotenv()
     db_config = {
-        "dbname": "catasto_storico",
-        "user": "postgres",
-        "password": "Markus74",  # Sostituisci con la tua password
-        "host": "localhost",
-        "port": 5432,
-        "schema": "catasto"
+        "dbname": os.getenv("DB_NAME", "catasto_storico"), # Default se non trova nel .env
+        "user": os.getenv("DB_USER", "postgres"),
+        "password": os.getenv("DB_PASSWORD"), # Nessun default per password!
+        "host": os.getenv("DB_HOST", "localhost"),
+        "port": int(os.getenv("DB_PORT", 5432)),
+        "schema": os.getenv("DB_SCHEMA", "catasto")
     }
-    
-    # Inizializza il gestore
+     # Verifica che la password sia stata caricata
+    if not db_config["password"]:
+        print("ERRORE: Password del database non trovata nel file di configurazione (.env o config.ini).")
+        sys.exit(1)
+
+    # Inizializza il gestore con la configurazione caricata
     db = CatastoDBManager(**db_config)
-    
+
     # Verifica la connessione
     if not db.connect():
-        print("ERRORE: Impossibile connettersi al database. Verifica i parametri.")
+        print("ERRORE: Impossibile connettersi al database. Verifica i parametri nel file di configurazione e lo stato del server DB.")
         sys.exit(1)
-    
+
     try:
-        # Esempi di operazioni
         menu_principale(db)
     except KeyboardInterrupt:
         print("\nOperazione interrotta dall'utente.")
-    except Exception as e:
-        print(f"ERRORE: {e}")
     finally:
-        # Chiudi sempre la connessione
+        # Assicurati che la connessione sia chiusa all'uscita
         db.disconnect()
-        print("\nConnessione al database chiusa.")
 
 if __name__ == "__main__":
+    # Importa json solo qui se non l'hai già fatto globalmente
+    #import json
     main()
+# --- FINE MODIFIED main ---

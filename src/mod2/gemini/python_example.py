@@ -17,6 +17,31 @@ import os
 import sys
 import hashlib
 
+
+# +++ NUOVA FUNZIONE LOCANDINA +++
+def stampa_locandina_introduzione():
+    """Stampa una locandina di introduzione testuale."""
+    larghezza = 80
+    oggi = date.today().strftime("%d/%m/%Y") # Formato data italiano
+    versione = "1.1" # Puoi aggiornare la versione qui
+    titolo = "Applicazione Gestione Catasto Storico"
+    autore = "Marco Santoro"
+    ente = "Archivio di Stato di Savona"
+    realizzato_per = f"Realizzato da {autore} per conto dell'{ente}"
+
+    print("+" + "-" * (larghezza - 2) + "+")
+    print("|" + " " * (larghezza - 2) + "|")
+    print("|" + titolo.center(larghezza - 2) + "|")
+    print("|" + ("Versione " + versione).center(larghezza - 2) + "|")
+    print("|" + ("Data: " + oggi).center(larghezza - 2) + "|")
+    print("|" + " " * (larghezza - 2) + "|")
+    print("|" + realizzato_per.center(larghezza - 2) + "|")
+    print("|" + " " * (larghezza - 2) + "|")
+    print("+" + "-" * (larghezza - 2) + "+")
+    print("\n") # Aggiunge uno spazio dopo la locandina
+
+# +++ FINE NUOVA FUNZIONE LOCANDINA +++
+
 def stampa_intestazione(titolo):
     """Stampa un'intestazione formattata"""
     print("\n" + "=" * 80)
@@ -1974,7 +1999,9 @@ def main():
         "port": 5432,
         "schema": "catasto"
     }
-    
+      # +++ CHIAMA LA LOCANDINA ALL'INIZIO +++
+    stampa_locandina_introduzione()
+    # +++++++++++++++++++++++++++++++++++++++
     # Inizializza il gestore
     db = CatastoDBManager(**db_config)
     

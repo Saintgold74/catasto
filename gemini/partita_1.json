@@ -1,0 +1,91 @@
+{
+    "partita": {
+        "id": 1,
+        "comune_nome": "Carcare",
+        "numero_partita": 221,
+        "tipo": "principale",
+        "data_impianto": "1950-05-10",
+        "data_chiusura": null,
+        "numero_provenienza": null,
+        "stato": "attiva",
+        "data_creazione": "2025-04-24T01:06:59.595869",
+        "data_modifica": "2025-04-24T01:06:59.595869"
+    },
+    "possessori": [
+        {
+            "id": 1,
+            "comune_nome": "Carcare",
+            "cognome_nome": "Fossati Angelo",
+            "paternita": "fu Roberto",
+            "nome_completo": "Fossati Angelo fu Roberto",
+            "attivo": true,
+            "data_creazione": "2025-04-24T01:06:59.589751",
+            "data_modifica": "2025-04-24T01:06:59.589751",
+            "titolo": "proprieta esclusiva",
+            "quota": null
+        }
+    ],
+    "immobili": [
+        {
+            "id": 20,
+            "partita_id": 1,
+            "localita_id": 1,
+            "natura": "Molino da cereali",
+            "numero_piani": 2,
+            "numero_vani": null,
+            "consistenza": "150 mq",
+            "classificazione": "Artigianale",
+            "data_creazione": "2025-04-25T17:57:32.347396",
+            "data_modifica": "2025-04-25T17:57:32.347396",
+            "localita_nome": "Regione Vista",
+            "comune_nome": "Carcare",
+            "localita_tipo": "regione"
+        },
+        {
+            "id": 14,
+            "partita_id": 1,
+            "localita_id": 1,
+            "natura": "Molino da cereali",
+            "numero_piani": 2,
+            "numero_vani": null,
+            "consistenza": "150 mq",
+            "classificazione": "Artigianale",
+            "data_creazione": "2025-04-25T17:08:22.066189",
+            "data_modifica": "2025-04-25T17:08:22.066189",
+            "localita_nome": "Regione Vista",
+            "comune_nome": "Carcare",
+            "localita_tipo": "regione"
+        },
+        {
+            "id": 8,
+            "partita_id": 1,
+            "localita_id": 1,
+            "natura": "Molino da cereali",
+            "numero_piani": 2,
+            "numero_vani": null,
+            "consistenza": "150 mq",
+            "classificazione": "Artigianale",
+            "data_creazione": "2025-04-25T17:06:57.090757",
+            "data_modifica": "2025-04-25T17:06:57.090757",
+            "localita_nome": "Regione Vista",
+            "comune_nome": "Carcare",
+            "localita_tipo": "regione"
+        },
+        {
+            "id": 1,
+            "partita_id": 1,
+            "localita_id": 1,
+            "natura": "Molino da cereali",
+            "numero_piani": 2,
+            "numero_vani": null,
+            "consistenza": "150 mq",
+            "classificazione": "Artigianale",
+            "data_creazione": "2025-04-24T01:06:59.605937",
+            "data_modifica": "2025-04-24T01:06:59.605937",
+            "localita_nome": "Regione Vista",
+            "comune_nome": "Carcare",
+            "localita_tipo": "regione"
+        }
+    ],
+    "variazioni": null
+}

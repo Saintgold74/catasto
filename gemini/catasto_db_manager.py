@@ -405,6 +405,131 @@ class CatastoDBManager:
     def get_report_comune(self, comune_nome: str) -> Optional[Dict]:
         # ... implementazione con try/except ...
         return None
+    # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_partite_complete_view(self, comune_nome: Optional[str] = None, stato: Optional[str] = None, limit: int = 100) -> List[Dict]:
+        """Recupera le partite dalla vista materializzata mv_partite_complete, con filtri opzionali."""
+        try:
+            conditions = []
+            params = []
+            query = "SELECT * FROM mv_partite_complete" # Usa la vista materializzata
+
+            if comune_nome:
+                conditions.append("comune_nome ILIKE %s")
+                params.append(f"%{comune_nome}%")
+            if stato:
+                # Assicura che lo stato sia uno dei valori validi (o aggiungi gestione errori se necessario)
+                if stato.lower() in ['attiva', 'inattiva']:
+                    conditions.append("stato = %s")
+                    params.append(stato.lower())
+                else:
+                    logger.warning(f"Stato non valido '{stato}' ignorato nel filtro.")
+
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY comune_nome, numero_partita LIMIT %s"
+            params.append(limit)
+
+            if self.execute_query(query, tuple(params)):
+                return self.fetchall()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_partite_complete_view: {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_partite_complete_view: {e}")
+            # Nessun rollback necessario per SELECT
+            return []
+        # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_immobili_per_tipologia(self, comune_nome: Optional[str] = None, limit: int = 100) -> List[Dict]:
+        """Recupera il riepilogo immobili per tipologia dalla vista materializzata, con filtro opzionale per comune."""
+        try:
+            params = []
+            query = "SELECT * FROM mv_immobili_per_tipologia" # Usa la vista materializzata
+
+            if comune_nome:
+                query += " WHERE comune_nome ILIKE %s"
+                params.append(f"%{comune_nome}%")
+
+            query += " ORDER BY comune_nome, classificazione LIMIT %s"
+            params.append(limit)
+
+            if self.execute_query(query, tuple(params)):
+                return self.fetchall()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_immobili_per_tipologia: {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_immobili_per_tipologia: {e}")
+            # Nessun rollback necessario per SELECT
+            return []
+        # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_report_annuale_partite(self, comune_nome: str, anno: int) -> List[Dict]:
+        """Chiama la funzione SQL report_annuale_partite per ottenere il report."""
+        try:
+            # La funzione SQL si chiama 'report_annuale_partite'
+            query = "SELECT * FROM report_annuale_partite(%s, %s)"
+            if self.execute_query(query, (comune_nome, anno)):
+                return self.fetchall()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_report_annuale_partite (Comune: {comune_nome}, Anno: {anno}): {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_report_annuale_partite (Comune: {comune_nome}, Anno: {anno}): {e}")
+            # Nessun rollback necessario per SELECT (chiamata a funzione che legge)
+            return []
+        # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_report_proprieta_possessore(self, possessore_id: int, data_inizio: date, data_fine: date) -> List[Dict]:
+        """Chiama la funzione SQL report_proprieta_possessore per ottenere il report."""
+        try:
+            # La funzione SQL si chiama 'report_proprieta_possessore'
+            query = "SELECT * FROM report_proprieta_possessore(%s, %s, %s)"
+            if self.execute_query(query, (possessore_id, data_inizio, data_fine)):
+                return self.fetchall()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_report_proprieta_possessore (ID: {possessore_id}, Periodo: {data_inizio}-{data_fine}): {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_report_proprieta_possessore (ID: {possessore_id}, Periodo: {data_inizio}-{data_fine}): {e}")
+            # Nessun rollback necessario per SELECT (chiamata a funzione che legge)
+            return []
+        
+        # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_report_comune(self, comune_nome: str) -> Optional[Dict]:
+        """Chiama la funzione SQL genera_report_comune per ottenere le statistiche."""
+        try:
+            # La funzione SQL si chiama 'genera_report_comune'
+            query = "SELECT * FROM genera_report_comune(%s)"
+            if self.execute_query(query, (comune_nome,)):
+                # Questa funzione SQL restituisce una sola riga
+                return self.fetchone()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return None
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_report_comune (Comune: {comune_nome}): {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python in get_report_comune (Comune: {comune_nome}): {e}")
+            # Nessun rollback necessario per SELECT (chiamata a funzione che legge)
+            return None
 
     # ========================================
     # METODI MANUTENZIONE E INTEGRITÀ (script 13)

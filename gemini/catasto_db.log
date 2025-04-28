@@ -230,3 +230,51 @@ AttributeError: 'CatastoDBManager' object has no attribute 'get_partite_complete
 2025-04-28 12:08:39,276 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
 2025-04-28 12:08:39,459 - CatastoDB - INFO - Connessione stabilita con successo
 2025-04-28 12:11:33,536 - CatastoDB - INFO - Disconnessione completata
+2025-04-28 12:16:21,771 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 12:16:21,862 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 12:17:16,148 - __main__ - ERROR - Errore non gestito nel menu principale: 'CatastoDBManager' object has no attribute 'get_immobili_per_tipologia'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1635, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 237, in menu_principale
+    elif scelta == "3": menu_report(db)
+                        ~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 933, in menu_report
+    stats = db.get_immobili_per_tipologia(comune_nome=comune_filter)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'get_immobili_per_tipologia'
+2025-04-28 12:17:16,178 - CatastoDB - INFO - Disconnessione completata
+2025-04-28 12:18:22,851 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 12:18:22,921 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 12:19:39,078 - __main__ - ERROR - Errore non gestito nel menu principale: 'CatastoDBManager' object has no attribute 'get_report_annuale_partite'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1635, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 237, in menu_principale
+    elif scelta == "3": menu_report(db)
+                        ~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 982, in menu_report
+    report = db.get_report_annuale_partite(comune, anno)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'get_report_annuale_partite'
+2025-04-28 12:19:39,115 - CatastoDB - INFO - Disconnessione completata
+2025-04-28 12:21:44,808 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 12:21:44,878 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 12:24:01,305 - __main__ - ERROR - Errore non gestito nel menu principale: 'CatastoDBManager' object has no attribute 'get_report_proprieta_possessore'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1635, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 237, in menu_principale
+    elif scelta == "3": menu_report(db)
+                        ~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1004, in menu_report
+    report = db.get_report_proprieta_possessore(possessore_id, data_inizio, data_fine)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'get_report_proprieta_possessore'
+2025-04-28 12:24:01,344 - CatastoDB - INFO - Disconnessione completata
+2025-04-28 12:25:03,001 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 12:25:03,073 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 12:30:03,871 - CatastoDB - INFO - Disconnessione completata

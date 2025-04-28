@@ -1,0 +1,44 @@
+============================================================
+              REPORT STORICO DEL POSSESSORE
+                CATASTO STORICO ANNI '50
+============================================================
+
+POSSESSORE: Fossati Angelo fu Roberto
+PATERNITA: fu Roberto
+COMUNE: Carcare
+STATO: Attivo
+
+-------------------- PARTITE INTESTATE --------------------
+Partita n. 888 (Carcare)
+  Tipo: principale
+  Periodo: 2025-04-28 - attiva
+  Stato: attiva
+  Titolo: proprieta esclusiva
+  Immobili: 2
+
+    - Molino da cereali in Regione Vista (Artigianale)
+    - Molino da cereali in Regione Vista (Artigianale)
+
+Partita n. 302 (Carcare)
+  Tipo: principale
+  Periodo: 2025-04-23 - attiva
+  Stato: attiva
+  Titolo: proprietÃ  esclusiva
+  Immobili: 0
+
+
+Partita n. 221 (Carcare)
+  Tipo: principale
+  Periodo: 1950-05-10 - attiva
+  Stato: attiva
+  Titolo: proprieta esclusiva
+  Immobili: 3
+
+    - Molino da cereali in Regione Vista (Artigianale)
+    - Molino da cereali in Regione Vista (Artigianale)
+    - Molino da cereali in Regione Vista (Artigianale)
+
+-------------------- VARIAZIONI --------------------
+============================================================
+Report generato il: 2025-04-28
+============================================================

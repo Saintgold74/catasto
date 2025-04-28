@@ -18,6 +18,7 @@ import os
 import sys
 import hashlib
 import getpass # Per nascondere input password
+import logging # Aggiungi questa riga vicino agli altri import
 from typing import Optional, List, Dict, Any # Aggiunto per type hinting
 
 # --- Variabili Globali per Sessione Utente (SEMPLIFICATE) ---
@@ -1610,6 +1611,9 @@ def menu_storico_avanzato(db: CatastoDBManager):
 
 # --- Funzione Main ---
 def main():
+    # Configurazione iniziale del logger (puoi metterla qui o a livello globale)
+    # Se la configurazione è già in catasto_db_manager, basta ottenere il logger:
+    logger = logging.getLogger(__name__) # Ottieni un logger per questo modulo
     db_config = {
         "dbname": "catasto_storico",
         "user": "postgres",

@@ -1,0 +1,83 @@
+============================================================
+              REPORT DELLE CONSULTAZIONI
+                CATASTO STORICO ANNI '50
+============================================================
+
+PARAMETRI DI RICERCA:
+
+-------------------- CONSULTAZIONI --------------------
+Consultazione ID: 8 - 2025-04-28
+  Richiedente: Commissario Scialoia
+  Documento: CI1234567
+  Motivazione: Indagine
+  Materiale consultato: Cas
+  Funzionario autorizzante: Antonio De Pedis
+
+Consultazione ID: 7 - 2025-04-28
+  Richiedente: Lucia Neri
+  Documento: CI XY9876543
+  Motivazione: Ricerca genealogica
+  Materiale consultato: Partite di Carcare
+  Funzionario autorizzante: Dott. Bianchi
+
+Consultazione ID: 3 - 2025-04-23
+  Richiedente: Lucia Neri
+  Documento: CI XY9876543
+  Motivazione: Ricerca genealogica
+  Materiale consultato: Partite di Carcare
+  Funzionario autorizzante: Dott. Bianchi
+
+Consultazione ID: 4 - 2025-04-23
+  Richiedente: Santoro Marco
+  Documento: c
+  Motivazione: c
+  Materiale consultato: c
+  Funzionario autorizzante: c
+
+Consultazione ID: 10 - 2025-04-05
+  Richiedente: Studio Legale Rossi
+  Documento: Tessera Ordine 55213
+  Motivazione: Verifica proprieta
+  Materiale consultato: Partite 221 e 219 Carcare
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 2 - 2025-04-05
+  Richiedente: Studio Legale Rossi
+  Documento: Tessera Ordine 55213
+  Motivazione: Verifica proprieta
+  Materiale consultato: Partite 221 e 219 Carcare
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 6 - 2025-04-05
+  Richiedente: Studio Legale Rossi
+  Documento: Tessera Ordine 55213
+  Motivazione: Verifica proprieta
+  Materiale consultato: Partite 221 e 219 Carcare
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 5 - 2025-04-01
+  Richiedente: Mario Bianchi
+  Documento: CI AB1234567
+  Motivazione: Ricerca storica
+  Materiale consultato: Registro partite Carcare 1950
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 9 - 2025-04-01
+  Richiedente: Mario Bianchi
+  Documento: CI AB1234567
+  Motivazione: Ricerca storica
+  Materiale consultato: Registro partite Carcare 1950
+  Funzionario autorizzante: Dott. Verdi
+
+Consultazione ID: 1 - 2025-04-01
+  Richiedente: Mario Bianchi
+  Documento: CI AB1234567
+  Motivazione: Ricerca storica
+  Materiale consultato: Registro partite Carcare 1950
+  Funzionario autorizzante: Dott. Verdi
+
+Totale consultazioni: 10
+
+============================================================
+Report generato il: 2025-04-28
+============================================================

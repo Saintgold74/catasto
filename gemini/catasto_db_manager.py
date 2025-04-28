@@ -353,15 +353,55 @@ class CatastoDBManager:
         except Exception as e: logger.error(f"Errore Python genera_certificato_proprieta: {e}")
         return None
     # ... (Implementa gli altri metodi di reportistica con try...except simili) ...
+    # Inserisci/Sostituisci questi metodi nella classe CatastoDBManager in catasto_db_manager.py
+
     def genera_report_genealogico(self, partita_id: int) -> Optional[str]:
-        # ... implementazione con try/except ...
-        return None
+        """Chiama la funzione SQL per generare il report genealogico."""
+        try:
+            query = "SELECT genera_report_genealogico(%s) AS report"
+            if self.execute_query(query, (partita_id,)):
+                result = self.fetchone()
+                return result.get('report') if result else None
+            return None # Errore di connessione o altro
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in genera_report_genealogico (ID: {partita_id}): {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python in genera_report_genealogico (ID: {partita_id}): {e}")
+            self.rollback() # Rollback per errori Python generici
+            return None
+
     def genera_report_possessore(self, possessore_id: int) -> Optional[str]:
-        # ... implementazione con try/except ...
-        return None
+        """Chiama la funzione SQL per generare il report storico del possessore."""
+        try:
+            query = "SELECT genera_report_possessore(%s) AS report"
+            if self.execute_query(query, (possessore_id,)):
+                result = self.fetchone()
+                return result.get('report') if result else None
+            return None # Errore di connessione o altro
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in genera_report_possessore (ID: {possessore_id}): {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python in genera_report_possessore (ID: {possessore_id}): {e}")
+            self.rollback()
+            return None
+
     def genera_report_consultazioni(self, data_inizio: Optional[date]=None, data_fine: Optional[date]=None, richiedente: Optional[str]=None) -> Optional[str]:
-        # ... implementazione con try/except ...
-        return None
+        """Chiama la funzione SQL per generare il report delle consultazioni."""
+        try:
+            query = "SELECT genera_report_consultazioni(%s, %s, %s) AS report"
+            if self.execute_query(query, (data_inizio, data_fine, richiedente)):
+                result = self.fetchone()
+                return result.get('report') if result else None
+            return None # Errore di connessione o altro
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in genera_report_consultazioni: {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python in genera_report_consultazioni: {e}")
+            self.rollback()
+            return None
     def get_report_comune(self, comune_nome: str) -> Optional[Dict]:
         # ... implementazione con try/except ...
         return None
@@ -744,6 +784,59 @@ class CatastoDBManager:
                      except Exception as e: logger.error(f"Errore JSON exp possessore {possessore_id}: {e}"); return str(result['possessore_json'])
         except Exception as e: logger.error(f"Errore DB export possessore {possessore_id}: {e}")
         return None
+    # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+# vicino agli altri metodi di recupero dati (es. dopo get_partite_complete_view)
+
+    def get_cronologia_variazioni(self, comune_origine: Optional[str] = None, tipo_variazione: Optional[str] = None, limit: int = 100) -> List[Dict]:
+        """Recupera la cronologia delle variazioni dalla vista materializzata, con filtri opzionali."""
+        try:
+            conditions = []
+            params = []
+            query = "SELECT * FROM mv_cronologia_variazioni" # Usa la vista materializzata
+
+            if comune_origine:
+                conditions.append("comune_origine ILIKE %s")
+                params.append(f"%{comune_origine}%")
+            if tipo_variazione:
+                conditions.append("tipo_variazione = %s")
+                params.append(tipo_variazione)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY data_variazione DESC LIMIT %s"
+            params.append(limit)
+
+            if self.execute_query(query, tuple(params)):
+                return self.fetchall()
+            else:
+                # execute_query ha fallito (errore connessione o altro già loggato)
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_cronologia_variazioni: {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_cronologia_variazioni: {e}")
+            # Non c'è bisogno di rollback qui perché è una SELECT
+            return []
+    # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def get_statistiche_comune(self) -> List[Dict]:
+        """Recupera le statistiche per comune dalla vista materializzata mv_statistiche_comune."""
+        try:
+            query = "SELECT * FROM mv_statistiche_comune ORDER BY comune"
+            if self.execute_query(query):
+                return self.fetchall()
+            else:
+                # Errore di connessione o altro già loggato da execute_query
+                return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_statistiche_comune: {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python in get_statistiche_comune: {e}")
+            # Nessun rollback necessario per SELECT
+            return []
 
 # Esempio di utilizzo minimale (se eseguito direttamente)
 if __name__ == "__main__":

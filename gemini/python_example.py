@@ -204,7 +204,58 @@ def aggiungi_comune(db: CatastoDBManager):
         print("Errore durante l'inserimento del comune.")
         # Rollback gestito in execute_query
 
-# --- Menu Principale ---
+
+# Inserisci questa funzione in python_example.py dopo l'import
+# e prima della definizione di menu_consultazione
+
+def _esporta_entita_json(db: CatastoDBManager, tipo_entita: str, etichetta_id: str, nome_file_prefix: str):
+    """
+    Funzione generica per esportare un'entità (partita o possessore) in formato JSON.
+
+    Args:
+        db: Istanza di CatastoDBManager.
+        tipo_entita: Tipo di entità ('partita' o 'possessore').
+        etichetta_id: Etichetta da usare nel prompt per l'ID (es. "ID della Partita").
+        nome_file_prefix: Prefisso per il nome del file di output (es. "partita").
+    """
+    stampa_intestazione(f"ESPORTA {tipo_entita.upper()} IN JSON")
+    id_entita_str = input(f"{etichetta_id} da esportare: ").strip()
+
+    if not id_entita_str.isdigit():
+        print("ID non valido.")
+        return
+
+    entita_id = int(id_entita_str)
+    json_data_str = None
+
+    try:
+        if tipo_entita == 'partita':
+            json_data_str = db.export_partita_json(entita_id)
+        elif tipo_entita == 'possessore':
+            json_data_str = db.export_possessore_json(entita_id)
+        else:
+            print(f"Tipo entità '{tipo_entita}' non supportato per l'esportazione.")
+            return
+
+        if json_data_str:
+            print(f"\n--- DATI JSON {tipo_entita.upper()} ---")
+            print(json_data_str)
+            print("-" * (len(tipo_entita) + 16)) # Adatta la lunghezza della linea
+            filename = f"{nome_file_prefix}_{entita_id}.json"
+            if _confirm_action(f"Salvare in '{filename}'"):
+                try:
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(json_data_str)
+                    print(f"Dati salvati in {filename}")
+                except Exception as e:
+                    print(f"Errore nel salvataggio del file: {e}")
+        else:
+            print(f"{tipo_entita.capitalize()} non trovato/a o errore durante l'esportazione.")
+
+    except Exception as e:
+        # Logga l'errore se necessario, o gestiscilo diversamente
+        print(f"Si è verificato un errore durante l'esportazione: {e}")
+
 
 def menu_principale(db: CatastoDBManager):
     """Menu principale dell'applicazione."""
@@ -471,45 +522,19 @@ def menu_consultazione(db: CatastoDBManager):
                   else: print("Nessuna consultazione trovata.")
              except ValueError: print("Formato Data non valido.")
 
+        # --- MODIFICA QUI ---
         elif scelta == "12":
-             stampa_intestazione("ESPORTA PARTITA IN JSON")
-             id_partita_str = input("ID della Partita da esportare: ").strip()
-             if id_partita_str.isdigit():
-                  json_data_str = db.export_partita_json(int(id_partita_str))
-                  if json_data_str:
-                       print("\n--- DATI JSON PARTITA ---")
-                       print(json_data_str)
-                       print("-" * 25)
-                       filename = f"partita_{id_partita_str}.json"
-                       if _confirm_action(f"Salvare in '{filename}'"):
-                            try:
-                                 with open(filename, 'w', encoding='utf-8') as f:
-                                      f.write(json_data_str)
-                                 print(f"Dati salvati in {filename}")
-                            except Exception as e:
-                                 print(f"Errore nel salvataggio: {e}")
-                  else: print("Partita non trovata o errore esportazione.")
-             else: print("ID non valido.")
+            _esporta_entita_json(db,
+                                 tipo_entita='partita',
+                                 etichetta_id='ID della Partita',
+                                 nome_file_prefix='partita')
 
         elif scelta == "13":
-             stampa_intestazione("ESPORTA POSSESSORE IN JSON")
-             id_poss_str = input("ID del Possessore da esportare: ").strip()
-             if id_poss_str.isdigit():
-                  json_data_str = db.export_possessore_json(int(id_poss_str))
-                  if json_data_str:
-                       print("\n--- DATI JSON POSSESSORE ---")
-                       print(json_data_str)
-                       print("-" * 26)
-                       filename = f"possessore_{id_poss_str}.json"
-                       if _confirm_action(f"Salvare in '{filename}'"):
-                            try:
-                                 with open(filename, 'w', encoding='utf-8') as f:
-                                      f.write(json_data_str)
-                                 print(f"Dati salvati in {filename}")
-                            except Exception as e:
-                                 print(f"Errore nel salvataggio: {e}")
-                  else: print("Possessore non trovato o errore esportazione.")
-             else: print("ID non valido.")
+            _esporta_entita_json(db,
+                                 tipo_entita='possessore',
+                                 etichetta_id='ID del Possessore',
+                                 nome_file_prefix='possessore')
+        # --- FINE MODIFICA ---
 
         elif scelta == "14":
              break

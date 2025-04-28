@@ -179,6 +179,58 @@ class CatastoDBManager:
              except psycopg2.ProgrammingError: return None # Nessun risultato o cursore non valido
              except Exception as e: logger.error(f"Errore fetchone: {e}"); return None
         return None
+    # --- Funzioni Helper per Interfaccia Utente ---
+# ... (altre funzioni helper come stampa_intestazione, _confirm_action, ecc.)
+
+    def _esporta_entita_json(db: CatastoDBManager, tipo_entita: str, etichetta_id: str, nome_file_prefix: str):
+        """
+        Funzione generica per esportare un'entità (partita o possessore) in formato JSON.
+
+        Args:
+            db: Istanza di CatastoDBManager.
+            tipo_entita: Tipo di entità ('partita' o 'possessore').
+            etichetta_id: Etichetta da usare nel prompt per l'ID (es. "ID della Partita").
+            nome_file_prefix: Prefisso per il nome del file di output (es. "partita").
+        """
+        stampa_intestazione(f"ESPORTA {tipo_entita.upper()} IN JSON")
+        id_entita_str = input(f"{etichetta_id} da esportare: ").strip()
+
+        if not id_entita_str.isdigit():
+            print("ID non valido.")
+            return
+
+        entita_id = int(id_entita_str)
+        json_data_str = None
+
+        try:
+            if tipo_entita == 'partita':
+                json_data_str = db.export_partita_json(entita_id)
+            elif tipo_entita == 'possessore':
+                json_data_str = db.export_possessore_json(entita_id)
+            else:
+                print(f"Tipo entità '{tipo_entita}' non supportato per l'esportazione.")
+                return
+
+            if json_data_str:
+                print(f"\n--- DATI JSON {tipo_entita.upper()} ---")
+                print(json_data_str)
+                print("-" * (len(tipo_entita) + 16)) # Adatta la lunghezza della linea
+                filename = f"{nome_file_prefix}_{entita_id}.json"
+                if _confirm_action(f"Salvare in '{filename}'"):
+                    try:
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            f.write(json_data_str)
+                        print(f"Dati salvati in {filename}")
+                    except Exception as e:
+                        print(f"Errore nel salvataggio del file: {e}")
+            else:
+                print(f"{tipo_entita.capitalize()} non trovato/a o errore durante l'esportazione.")
+
+        except Exception as e:
+            # Logga l'errore se necessario, o gestiscilo diversamente
+            print(f"Si è verificato un errore durante l'esportazione: {e}")
+
+    # ... (resto delle funzioni come inserisci_possessore, ecc.)
 
     # ========================================
     # OPERAZIONI CRUD E DI RICERCA PRINCIPALI

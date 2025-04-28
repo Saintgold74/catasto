@@ -511,7 +511,6 @@ class CatastoDBManager:
             return []
         
         # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
-
     def get_report_comune(self, comune_nome: str) -> Optional[Dict]:
         """Chiama la funzione SQL genera_report_comune per ottenere le statistiche."""
         try:
@@ -564,6 +563,66 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB manutenzione: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python manutenzione: {e}"); self.rollback(); return False
 
+    # Inserisci questo metodo dentro la classe CatastoDBManager in catasto_db_manager.py
+
+    def refresh_materialized_views(self) -> bool:
+        """Aggiorna tutte le viste materializzate definite nel database."""
+        logger.info("Avvio aggiornamento viste materializzate...")
+        try:
+            # Chiama la procedura SQL definita in 08_advanced-reporting.sql
+            if self.execute_query("CALL aggiorna_tutte_statistiche()"):
+                self.commit() # Commit dopo la CALL
+                logger.info("Aggiornamento viste materializzate completato.")
+                return True
+            else:
+                logger.error("Fallita chiamata a 'aggiorna_tutte_statistiche'.")
+                return False
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB durante aggiornamento viste: {db_err}")
+            return False
+        except Exception as e:
+            logger.error(f"Errore Python durante aggiornamento viste: {e}")
+            self.rollback()
+            return False
+        
+    # Modifica il metodo run_database_maintenance in catasto_db_manager.py
+
+    def run_database_maintenance(self) -> bool:
+        logger.info("Avvio manutenzione database...")
+        original_autocommit = None
+        success = False
+        try:
+            if not self.conn or self.conn.closed:
+                if not self.connect(): return False
+
+            # Imposta autocommit a True per questa operazione
+            original_autocommit = self.conn.autocommit
+            self.conn.autocommit = True
+            logger.debug("Autocommit impostato a True per manutenzione.")
+
+            # Esegui la chiamata alla procedura
+            # Usiamo un cursore separato per sicurezza in modalità autocommit
+            with self.conn.cursor() as temp_cur:
+                 temp_cur.execute("CALL manutenzione_database()")
+                 # Non c'è fetchone/fetchall per CALL
+            logger.info("Manutenzione generale completata.")
+            success = True
+
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB manutenzione: {db_err}")
+            success = False
+        except Exception as e:
+            logger.error(f"Errore Python manutenzione: {e}")
+            success = False
+        finally:
+            # Ripristina lo stato originale di autocommit
+            if self.conn and not self.conn.closed and original_autocommit is not None:
+                self.conn.autocommit = original_autocommit
+                logger.debug(f"Autocommit ripristinato a {original_autocommit}.")
+            # Non fare commit/rollback qui perché eravamo in autocommit
+
+        return success
+        
     # ========================================
     # SISTEMA DI AUDIT E UTENTI (script 06, 07, 15)
     # ========================================

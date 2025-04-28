@@ -21,7 +21,7 @@ RETURNS TABLE (
     id INTEGER,
     nome_completo VARCHAR(255),
     comune_nome VARCHAR(100),
-    similarity FLOAT,
+    similarity REAL,
     num_partite BIGINT
 ) AS $$
 BEGIN

@@ -37,9 +37,9 @@ Menu Principale
 │   ├── 7. Visualizza Partite Complete (ok corretti - inseriti metodi mancanti)
 
 │   ├── 8. Cronologia Variazioni (ok - funziona)
-│   ├── 9. Report Annuale Partite per Comune
-│   ├── 10. Report Proprietà Possessore per Periodo
-│   ├── 11. Report Statistico Comune
+│   ├── 9. Report Annuale Partite per Comune  (ok - funziona)
+│   ├── 10. Report Proprietà Possessore per Periodo  (ok - funziona)
+│   ├── 11. Report Statistico Comune  (ERR generico)
 │   └── 12. Torna al menu principale
 │
 ├── 4. Manutenzione database

@@ -585,17 +585,42 @@ class CatastoDBManager:
             self.rollback()
             return False
         
-    # Modifica il metodo run_database_maintenance in catasto_db_manager.py
+    
+    # In catasto_db_manager.py (sostituisci il metodo esistente)
 
     def run_database_maintenance(self) -> bool:
         logger.info("Avvio manutenzione database...")
         original_autocommit = None
+        connection_usable = False # Flag per tracciare se la connessione era usabile
         success = False
         try:
             if not self.conn or self.conn.closed:
-                if not self.connect(): return False
+                logger.warning("Connessione non attiva per manutenzione. Tentativo di riconnessione...")
+                if not self.connect():
+                    return False # Impossibile connettere
 
-            # Imposta autocommit a True per questa operazione
+            # Controlla lo stato prima di procedere
+            if self.conn.closed:
+                 logger.error("La connessione è chiusa prima di avviare la manutenzione.")
+                 return False
+            # Verifica se lo stato della connessione è pronto
+            # Usiamo self.conn.status == psycopg2.extensions.STATUS_READY
+            # Nota: Potrebbe essere necessario importare psycopg2.extensions
+            try:
+                import psycopg2.extensions
+                if self.conn.status != psycopg2.extensions.STATUS_READY:
+                    logger.warning(f"Stato connessione non pronto ({self.conn.status}). Tentativo di reset...")
+                    self.conn.reset() # Prova a resettare la connessione
+                    if self.conn.status != psycopg2.extensions.STATUS_READY:
+                         logger.error("Reset connessione fallito. Impossibile eseguire manutenzione.")
+                         return False
+            except ImportError:
+                logger.warning("Modulo psycopg2.extensions non trovato, impossibile verificare stato connessione pre-reset.")
+            except Exception as status_err:
+                logger.warning(f"Errore nel controllo/reset dello stato connessione: {status_err}")
+                # Proseguiamo con cautela, ma la connessione potrebbe essere instabile
+
+            connection_usable = True # La connessione sembra ok o è stata resettata
             original_autocommit = self.conn.autocommit
             self.conn.autocommit = True
             logger.debug("Autocommit impostato a True per manutenzione.")
@@ -604,22 +629,54 @@ class CatastoDBManager:
             # Usiamo un cursore separato per sicurezza in modalità autocommit
             with self.conn.cursor() as temp_cur:
                  temp_cur.execute("CALL manutenzione_database()")
-                 # Non c'è fetchone/fetchall per CALL
-            logger.info("Manutenzione generale completata.")
+                 # Nessun fetchone/fetchall per CALL
+
+            logger.info("Manutenzione generale completata (chiamata a procedura terminata).")
             success = True
 
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB manutenzione: {db_err}")
+            # L'errore originale (es. da ANALYZE o REFRESH) viene catturato qui
+            logger.error(f"Errore DB durante la manutenzione: {db_err}")
             success = False
+            # La connessione potrebbe essere in uno stato non valido dopo l'errore
+            connection_usable = False # Segna come non utilizzabile
         except Exception as e:
-            logger.error(f"Errore Python manutenzione: {e}")
+            logger.error(f"Errore Python durante la manutenzione: {e}")
             success = False
+            connection_usable = False # Segna come non utilizzabile
         finally:
-            # Ripristina lo stato originale di autocommit
-            if self.conn and not self.conn.closed and original_autocommit is not None:
-                self.conn.autocommit = original_autocommit
-                logger.debug(f"Autocommit ripristinato a {original_autocommit}.")
-            # Non fare commit/rollback qui perché eravamo in autocommit
+            # Ripristina lo stato originale di autocommit SOLO se la connessione
+            # era utilizzabile E non è stata chiusa nel frattempo e avevamo salvato lo stato originale
+            if connection_usable and self.conn and not self.conn.closed and original_autocommit is not None:
+                try:
+                    # Verifica nuovamente lo stato prima di reimpostare
+                    # Nota: import di psycopg2.extensions richiesto
+                    try:
+                        import psycopg2.extensions
+                        if self.conn.status == psycopg2.extensions.STATUS_READY:
+                            self.conn.autocommit = original_autocommit
+                            logger.debug(f"Autocommit ripristinato a {original_autocommit}.")
+                        else:
+                             logger.warning(f"Stato connessione non pronto ({self.conn.status}) nel finally. Impossibile ripristinare autocommit.")
+                             # Considera la disconnessione forzata se lo stato non è pronto dopo l'operazione
+                             # self.disconnect() # Opzione drastica
+                    except ImportError:
+                         logger.warning("Modulo psycopg2.extensions non trovato, impossibile verificare stato connessione post-operazione. Ripristino autocommit con cautela.")
+                         # Tentativo di ripristino anche senza controllo stato dettagliato
+                         self.conn.autocommit = original_autocommit
+                         logger.debug(f"Autocommit ripristinato a {original_autocommit} (senza controllo stato).")
+                    except Exception as status_err_finally:
+                         logger.error(f"Errore nel controllo dello stato connessione nel finally: {status_err_finally}")
+                         # Non tentare di modificare autocommit se il controllo stesso fallisce
+                except psycopg2.Error as final_err:
+                     # Questo cattura l'errore "set_session cannot be used inside a transaction" se la sessione è ancora invalida
+                     logger.error(f"Errore nel ripristinare autocommit nel finally: {final_err}")
+                     # A questo punto la connessione è probabilmente inutilizzabile
+                     # Disconnessione forzata è una buona idea
+                     self.disconnect()
+
+            # Non fare commit/rollback qui perché eravamo (o dovevamo essere) in autocommit
+            # o la transazione è fallita e il rollback è implicito o gestito da psycopg2
 
         return success
         

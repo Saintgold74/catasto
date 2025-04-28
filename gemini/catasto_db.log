@@ -1,0 +1,3 @@
+2025-04-28 10:05:53,983 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 10:05:54,252 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 10:07:52,448 - CatastoDB - INFO - Disconnessione completata

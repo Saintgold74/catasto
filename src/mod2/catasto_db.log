@@ -1,0 +1,42 @@
+2025-04-23 10:54:03,869 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:54:03,977 - CatastoDB - ERROR - Errore durante la connessione: connection to server at "localhost" (::1), port 5432 failed: FATALE:  autenticazione con password fallita per l'utente "postgres"
+
+2025-04-23 10:55:32,058 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:55:32,123 - CatastoDB - ERROR - Errore durante la connessione: connection to server at "localhost" (::1), port 5432 failed: FATALE:  autenticazione con password fallita per l'utente "postgres"
+
+2025-04-23 10:55:45,778 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:55:45,845 - CatastoDB - ERROR - Errore durante la connessione: connection to server at "localhost" (::1), port 5432 failed: FATALE:  autenticazione con password fallita per l'utente "postgres"
+
+2025-04-23 10:56:48,625 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:56:48,688 - CatastoDB - ERROR - Errore durante la connessione: connection to server at "localhost" (::1), port 5432 failed: FATALE:  autenticazione con password fallita per l'utente "postgres"
+
+2025-04-23 10:59:55,193 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:59:55,266 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 11:00:12,082 - CatastoDB - INFO - Ricerca comuni con pattern: %albi%
+2025-04-23 11:00:12,083 - CatastoDB - INFO - Trovati 1 comuni
+2025-04-23 11:00:26,324 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %albis%
+2025-04-23 11:00:26,334 - CatastoDB - INFO - Trovati 0 possessori
+2025-04-23 11:00:36,848 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %cairo%
+2025-04-23 11:00:36,850 - CatastoDB - INFO - Trovati 2 possessori
+2025-04-23 11:03:25,791 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 11:38:24,021 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 11:38:24,126 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 11:41:17,855 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 11:46:22,708 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 11:46:22,906 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 11:46:55,356 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 11:59:39,853 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 11:59:39,964 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 12:00:11,265 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 12:01:01,934 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 12:01:01,934 - CatastoDB - INFO - Registrata consultazione: Santoro Marco, 2025-04-23
+2025-04-23 12:02:17,298 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 12:22:42,204 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 12:22:42,315 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 12:23:14,643 - CatastoDB - INFO - Disconnessione completata
+2025-04-24 08:13:54,478 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 08:13:54,621 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 08:13:57,507 - CatastoDB - INFO - Disconnessione completata
+2025-04-24 08:17:15,790 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 08:17:15,914 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 08:17:56,736 - CatastoDB - INFO - Disconnessione completata

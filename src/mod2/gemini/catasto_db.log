@@ -1,0 +1,99 @@
+2025-04-24 12:01:40,704 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 12:01:40,832 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 12:01:54,578 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-24 12:01:54,578 - CatastoDB - INFO - Immobile ID 1 trasferito alla partita ID 1.
+2025-04-24 12:02:19,267 - CatastoDB - INFO - Disconnessione completata
+2025-04-24 12:24:07,843 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 12:24:07,844 - CatastoDB - ERROR - Errore durante la connessione: 'CatastoDBManager' object has no attribute 'conn_params'
+2025-04-24 12:25:08,404 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 12:25:08,404 - CatastoDB - ERROR - Errore durante la connessione: 'CatastoDBManager' object has no attribute 'conn_params'
+2025-04-24 12:26:33,368 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 12:26:33,369 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 12:26:33,525 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 12:27:02,014 - CatastoDB - ERROR - Errore durante l'esecuzione della query: 'CatastoDBManager' object has no attribute 'cur'
+Query: 
+        SELECT DISTINCT p.*
+        FROM partita p
+         WHERE p.comune_nome ILIKE %s AND p.numero_partita = %s ORDER BY p.comune_nome, p.numero_partita
+Parametri: ('%cairo%', 1)
+2025-04-24 12:27:02,028 - CatastoDB - INFO - Rollback transazione avvenuto con successo
+2025-04-24 12:27:16,574 - CatastoDB - ERROR - Errore durante l'esecuzione della query: 'CatastoDBManager' object has no attribute 'cur'
+Query: 
+                SELECT id, nome, tipo, civico 
+                FROM localita 
+                WHERE comune_nome ILIKE %s 
+                ORDER BY tipo, nome
+                
+Parametri: ('%cairo%',)
+2025-04-24 12:27:16,575 - CatastoDB - INFO - Rollback transazione avvenuto con successo
+2025-04-24 12:57:07,639 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-24 12:57:07,640 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 12:57:07,787 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 12:57:35,564 - CatastoDB - ERROR - Errore durante l'esecuzione della query: 'CatastoDBManager' object has no attribute 'cur'
+Query: 
+            CALL registra_consultazione(%s, %s, %s, %s, %s, %s)
+            
+Parametri: (datetime.date(2025, 4, 24), 'santoro', None, 'l', 'k', 'k')
+2025-04-24 12:57:35,605 - CatastoDB - INFO - Rollback transazione avvenuto con successo
+2025-04-24 13:35:51,551 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (Host: localhost) schema catasto
+2025-04-24 13:35:51,553 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 13:35:51,690 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 13:36:03,836 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la colonna "last_refresh" non esiste
+LINE 1: ...FROM pg_matviews WHERE schemaname = 'catasto' AND last_refre...
+                                                             ^
+QUERY:  SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'catasto' AND last_refresh < NOW() - INTERVAL '1 day'
+CONTEXT:  funzione PL/pgSQL suggerimenti_ottimizzazione() riga 30 a EXECUTE
+
+2025-04-24 13:36:20,670 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 13:36:34,340 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 13:36:50,057 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 13:39:10,241 - CatastoDB - INFO - Disconnessione dal database completata.
+2025-04-24 19:09:15,567 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (Host: localhost) schema catasto
+2025-04-24 19:09:15,568 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 19:09:15,709 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 19:09:57,044 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la funzione cerca_audit_log(unknown, unknown, unknown, unknown, unknown) non esiste
+LINE 1: SELECT * FROM cerca_audit_log(NULL, NULL, NULL, NULL, NULL)
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-24 19:10:32,135 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 19:11:04,457 - CatastoDB - INFO - Disconnessione dal database completata.
+2025-04-24 19:21:00,653 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (Host: localhost) schema catasto
+2025-04-24 19:21:00,654 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 19:21:00,793 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 19:21:38,586 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-24 19:21:55,128 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 19:22:05,522 - CatastoDB - INFO - Disconnessione dal database completata.
+2025-04-24 19:22:11,718 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (Host: localhost) schema catasto
+2025-04-24 19:22:11,718 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 19:22:11,821 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 19:22:21,697 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la colonna p.comune_id non esiste
+LINE 3:             FROM partita p JOIN comune c ON p.comune_id = c....
+                                                    ^
+
+2025-04-24 19:22:34,595 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 19:22:47,751 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 19:22:58,268 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-04-24 19:23:05,986 - CatastoDB - INFO - Disconnessione dal database completata.
+2025-04-24 19:23:10,938 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (Host: localhost) schema catasto
+2025-04-24 19:23:10,938 - CatastoDB - INFO - Tentativo di connessione a catasto_storico su localhost:5432...
+2025-04-24 19:23:11,018 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-24 19:24:03,536 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: ERRORE:  la nuova riga per la relazione "utente" viola il vincolo di controllo "utente_ruolo_check"
+DETAIL:  La riga in errore contiene (2, l, $2b$12$FcHwhvdGnFdhiEI77V8iBe3nDQ9ySMMpxM4WHsboDAIZy83uVRBuO, l, l@mi.iy, p, t, null, 2025-04-24 19:23:11.018189, 2025-04-24 19:23:11.018189).
+CONTEXT:  istruzione SQL "INSERT INTO utente (username, password_hash, nome_completo, email, ruolo)
+    VALUES (p_username, p_password, p_nome_completo, p_email, p_ruolo)"
+funzione PL/pgSQL crea_utente(character varying,character varying,character varying,character varying,character varying) riga 3 a istruzione SQL
+
+2025-04-24 19:24:03,537 - CatastoDB - INFO - Rollback transazione avvenuto con successo.
+2025-04-24 19:24:36,526 - CatastoDB - INFO - Disconnessione dal database completata.

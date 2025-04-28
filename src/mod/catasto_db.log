@@ -1,0 +1,90 @@
+2025-04-23 08:28:40,653 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 08:28:40,829 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 08:28:49,420 - CatastoDB - INFO - Ricerca comuni con pattern: %cairo%
+2025-04-23 08:28:49,472 - CatastoDB - INFO - Trovati 1 comuni
+2025-04-23 08:28:53,682 - CatastoDB - INFO - Ricerca partite per comune con pattern: %%
+2025-04-23 08:28:53,773 - CatastoDB - INFO - Trovate 8 partite
+2025-04-23 08:31:07,670 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 08:40:23,325 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 08:40:23,499 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 08:40:30,893 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %cairo%
+2025-04-23 08:40:30,948 - CatastoDB - INFO - Trovati 6 possessori
+2025-04-23 08:40:50,493 - CatastoDB - INFO - Ricerca partite per comune con pattern: %cairo%
+2025-04-23 08:40:50,586 - CatastoDB - INFO - Trovate 2 partite
+2025-04-23 08:41:57,727 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 08:42:12,438 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 08:42:12,560 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 08:42:31,190 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 08:43:01,851 - CatastoDB - INFO - Ricerca partite per comune con pattern: %albi%
+2025-04-23 08:43:01,867 - CatastoDB - INFO - Trovate 0 partite
+2025-04-23 08:46:31,375 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 08:46:56,604 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 08:46:56,683 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 08:47:21,880 - CatastoDB - INFO - Ricerca comuni con pattern: %carcare%
+2025-04-23 08:47:21,883 - CatastoDB - INFO - Trovati 1 comuni
+2025-04-23 08:47:39,724 - CatastoDB - INFO - Ricerca partite per comune con pattern: %carcare%
+2025-04-23 08:47:39,756 - CatastoDB - INFO - Trovate 4 partite
+2025-04-23 08:47:56,619 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %carcare%
+2025-04-23 08:47:56,624 - CatastoDB - INFO - Trovati 10 possessori
+2025-04-23 08:49:36,784 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 08:49:59,446 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 08:54:04,200 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 08:54:04,315 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 08:54:19,239 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 08:54:28,630 - CatastoDB - INFO - Ricerca partite per comune con pattern: %cairo%
+2025-04-23 08:54:28,688 - CatastoDB - INFO - Trovate 2 partite
+2025-04-23 08:54:40,434 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %cairo%
+2025-04-23 08:54:40,436 - CatastoDB - INFO - Trovati 6 possessori
+2025-04-23 09:00:46,494 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %cairo%
+2025-04-23 09:00:46,496 - CatastoDB - INFO - Trovati 6 possessori
+2025-04-23 09:01:25,372 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 09:48:57,743 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 09:48:57,834 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 09:53:26,658 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 09:53:26,734 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 09:59:10,278 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 10:01:57,937 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:01:58,006 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 10:02:02,306 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 10:02:30,563 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:02:30,642 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 10:05:49,164 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 10:05:53,840 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:05:53,910 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 10:06:01,757 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:06:01,825 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 10:06:19,069 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 10:07:31,097 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 10:09:39,660 - CatastoDB - ERROR - Errore durante l'esecuzione della query: ERRORE:  la nuova riga per la relazione "localita" viola il vincolo di controllo "localita_tipo_check"
+DETAIL:  La riga in errore contiene (7, Serra Riccò, Strapponi, Via, null, 2025-04-23 10:07:31.098451, 2025-04-23 10:07:31.098451, null).
+CONTEXT:  istruzione SQL "INSERT INTO localita(comune_nome, nome, tipo)
+            VALUES (p_comune_nome, v_immobile.localita, COALESCE(v_immobile.tipo_localita, 'regione'))
+            RETURNING id"
+funzione PL/pgSQL registra_nuova_proprieta(character varying,integer,date,json,json) riga 76 a istruzione SQL
+
+Query: 
+            CALL registra_nuova_proprieta(%s, %s, %s, %s, %s)
+            
+Parametri: ('Serra Riccò', 777, datetime.date(1950, 4, 23), '[{"nome_completo": "Fam\\u00e0 Antonio", "cognome_nome": "Fam\\u00e0 Antonio", "paternita": "di Giuseppe"}]', '[{"natura": "Negozio", "localita": "Strapponi", "tipo_localita": "Via", "classificazione": "", "numero_piani": 2, "numero_vani": 2, "consistenza": "50"}]')
+2025-04-23 10:09:39,661 - CatastoDB - INFO - Rollback transazione avvenuto con successo
+2025-04-23 10:15:38,615 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 10:15:38,615 - CatastoDB - INFO - Registrata nuova proprietà: Serra Riccò, partita 777
+2025-04-23 10:18:30,917 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 10:39:11,206 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 10:39:11,316 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 10:39:27,479 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 10:41:39,432 - CatastoDB - INFO - Commit transazione avvenuto con successo
+2025-04-23 10:41:59,115 - CatastoDB - INFO - Ricerca partite per comune con pattern: %albi%
+2025-04-23 10:41:59,117 - CatastoDB - INFO - Trovate 0 partite
+2025-04-23 10:42:16,425 - CatastoDB - INFO - Ricerca partite per comune con pattern: %cairo%
+2025-04-23 10:42:16,441 - CatastoDB - INFO - Trovate 2 partite
+2025-04-23 10:42:30,564 - CatastoDB - INFO - Ricerca possessori per comune con pattern: %cairo%
+2025-04-23 10:42:30,566 - CatastoDB - INFO - Trovati 2 possessori
+2025-04-23 10:42:46,236 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 19:08:30,140 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 19:08:30,416 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 19:08:43,088 - CatastoDB - INFO - Disconnessione completata
+2025-04-23 19:12:48,111 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 19:12:48,220 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-23 19:18:34,071 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-23 19:18:34,203 - CatastoDB - INFO - Connessione stabilita con successo

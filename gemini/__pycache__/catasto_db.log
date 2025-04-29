@@ -1,0 +1,18 @@
+2025-04-28 13:32:08,524 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-28 13:32:08,672 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-28 13:32:08,765 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "last_refresh" non esiste
+LINE 1: ...FROM pg_matviews WHERE schemaname = 'catasto' AND last_refre...
+                                                             ^
+QUERY:  SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'catasto' AND last_refresh < NOW() - INTERVAL '1 day'
+CONTEXT:  funzione PL/pgSQL suggerimenti_ottimizzazione() riga 30 a EXECUTE
+
+2025-04-28 13:32:08,765 - CatastoDB - ERROR - Query: b'SELECT suggerimenti_ottimizzazione() AS suggestions'
+2025-04-28 13:32:08,766 - CatastoDB - ERROR - Parametri: None
+2025-04-28 13:32:08,766 - CatastoDB - INFO - Rollback eseguito.
+2025-04-28 13:32:08,767 - CatastoDB - ERROR - Errore get optimization sugg: ERRORE:  la colonna "last_refresh" non esiste
+LINE 1: ...FROM pg_matviews WHERE schemaname = 'catasto' AND last_refre...
+                                                             ^
+QUERY:  SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'catasto' AND last_refresh < NOW() - INTERVAL '1 day'
+CONTEXT:  funzione PL/pgSQL suggerimenti_ottimizzazione() riga 30 a EXECUTE
+
+2025-04-28 13:32:08,768 - CatastoDB - INFO - Disconnessione completata

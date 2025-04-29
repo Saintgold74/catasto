@@ -632,7 +632,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- *NUOVA DEFINIZIONE CORRETTA* della funzione genera_report_comune
+-- NUOVA DEFINIZIONE CORRETTA (v2) della funzione genera_report_comune
 CREATE OR REPLACE FUNCTION genera_report_comune(
     p_comune_nome VARCHAR
 )
@@ -651,16 +651,27 @@ BEGIN
     WITH comune_base AS ( -- Seleziona il comune per assicurarsi che esista
         SELECT nome FROM comune WHERE nome = p_comune_nome LIMIT 1
     ),
-    immobili_classe_agg AS ( -- CTE per calcolare separatamente il JSON degli immobili
+    -- CTE 1: Conta immobili per classificazione nel comune dato
+    immobili_conteggio_classe AS (
         SELECT
-            p_comune_nome AS comune_nome, -- Aggiungi comune_nome per il join
-            json_object_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) AS immobili_json
+            p.comune_nome, -- Serve per il join successivo
+            COALESCE(i.classificazione, 'Non Class.') AS classificazione_grp,
+            COUNT(*) AS conteggio
         FROM immobile i
         JOIN partita p ON i.partita_id = p.id
         WHERE p.comune_nome = p_comune_nome
-        GROUP BY p.comune_nome -- Gruppo per comune per ottenere un JSON per comune
+        GROUP BY p.comune_nome, classificazione_grp -- Raggruppa per comune E classificazione
     ),
-    stats AS ( -- CTE principale per le altre statistiche
+    -- CTE 2: Aggrega i conteggi in un JSON per il comune
+    immobili_json_final AS (
+        SELECT
+            icc.comune_nome,
+            json_object_agg(icc.classificazione_grp, icc.conteggio) AS immobili_json
+        FROM immobili_conteggio_classe icc
+        GROUP BY icc.comune_nome -- Raggruppa per comune per creare un JSON per comune
+    ),
+    -- CTE 3: Calcola le altre statistiche principali
+    stats AS (
         SELECT
             c.nome AS comune_nome,
             COUNT(DISTINCT p.id) AS totale_partite,
@@ -668,7 +679,6 @@ BEGIN
             COUNT(DISTINCT i.id) AS totale_immobili,
             COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
             COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
-            -- Rimosso il calcolo di immobili_per_classe da qui
         FROM comune c
         LEFT JOIN partita p ON c.nome = p.comune_nome
         LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
@@ -685,14 +695,14 @@ BEGIN
         COALESCE(s.totale_immobili, 0) AS totale_immobili,
         COALESCE(s.partite_attive, 0) AS partite_attive,
         COALESCE(s.partite_inattive, 0) AS partite_inattive,
-        ica.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE separata
+        ijf.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE dedicata
         CASE
             WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
             ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
         END AS possessori_per_partita
     FROM comune_base cb
     LEFT JOIN stats s ON cb.nome = s.comune_nome
-    LEFT JOIN immobili_classe_agg ica ON cb.nome = ica.comune_nome;
+    LEFT JOIN immobili_json_final ijf ON cb.nome = ijf.comune_nome; -- Join con la CTE del JSON
 
 END;
 $$ LANGUAGE plpgsql;

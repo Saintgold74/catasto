@@ -1,0 +1,215 @@
+2025-04-29 08:49:54,857 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-29 08:49:55,151 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 08:50:24,237 - CatastoDB - ERROR - Errore DB specifico rilevato: GroupingError - ERRORE:  le chiamate a funzioni di aggregazione non possono essere annidate
+LINE 7: ...ct_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) ...
+                                                             ^
+QUERY:  WITH comune_base AS ( -- Seleziona il comune per assicurarsi che esista
+        SELECT nome FROM comune WHERE nome = p_comune_nome LIMIT 1
+    ),
+    immobili_classe_agg AS ( -- CTE per calcolare separatamente il JSON degli immobili
+        SELECT
+            p_comune_nome AS comune_nome, -- Aggiungi comune_nome per il join
+            json_object_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) AS immobili_json
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        WHERE p.comune_nome = p_comune_nome
+        GROUP BY p.comune_nome -- Gruppo per comune per ottenere un JSON per comune
+    ),
+    stats AS ( -- CTE principale per le altre statistiche
+        SELECT
+            c.nome AS comune_nome,
+            COUNT(DISTINCT p.id) AS totale_partite,
+            COUNT(DISTINCT pos.id) AS totale_possessori,
+            COUNT(DISTINCT i.id) AS totale_immobili,
+            COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
+            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
+            -- Rimosso il calcolo di immobili_per_classe da qui
+        FROM comune c
+        LEFT JOIN partita p ON c.nome = p.comune_nome
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        LEFT JOIN immobile i ON p.id = i.partita_id
+        WHERE c.nome = p_comune_nome
+        GROUP BY c.nome
+    )
+    -- Join finale per combinare i risultati
+    SELECT
+        cb.nome AS comune,
+        COALESCE(s.totale_partite, 0) AS totale_partite,
+        COALESCE(s.totale_possessori, 0) AS totale_possessori,
+        COALESCE(s.totale_immobili, 0) AS totale_immobili,
+        COALESCE(s.partite_attive, 0) AS partite_attive,
+        COALESCE(s.partite_inattive, 0) AS partite_inattive,
+        ica.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE separata
+        CASE
+            WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
+            ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
+        END AS possessori_per_partita
+    FROM comune_base cb
+    LEFT JOIN stats s ON cb.nome = s.comune_nome
+    LEFT JOIN immobili_classe_agg ica ON cb.nome = ica.comune_nome
+CONTEXT:  funzione PL/pgSQL genera_report_comune(character varying) riga 3 a RETURN QUERY
+
+2025-04-29 08:50:24,239 - CatastoDB - ERROR - SQLSTATE: 42803
+2025-04-29 08:50:24,239 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM genera_report_comune('carcare')"
+2025-04-29 08:50:24,239 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 08:50:24,240 - CatastoDB - ERROR - Errore DB get_report_comune: ERRORE:  le chiamate a funzioni di aggregazione non possono essere annidate
+LINE 7: ...ct_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) ...
+                                                             ^
+QUERY:  WITH comune_base AS ( -- Seleziona il comune per assicurarsi che esista
+        SELECT nome FROM comune WHERE nome = p_comune_nome LIMIT 1
+    ),
+    immobili_classe_agg AS ( -- CTE per calcolare separatamente il JSON degli immobili
+        SELECT
+            p_comune_nome AS comune_nome, -- Aggiungi comune_nome per il join
+            json_object_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) AS immobili_json
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        WHERE p.comune_nome = p_comune_nome
+        GROUP BY p.comune_nome -- Gruppo per comune per ottenere un JSON per comune
+    ),
+    stats AS ( -- CTE principale per le altre statistiche
+        SELECT
+            c.nome AS comune_nome,
+            COUNT(DISTINCT p.id) AS totale_partite,
+            COUNT(DISTINCT pos.id) AS totale_possessori,
+            COUNT(DISTINCT i.id) AS totale_immobili,
+            COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
+            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
+            -- Rimosso il calcolo di immobili_per_classe da qui
+        FROM comune c
+        LEFT JOIN partita p ON c.nome = p.comune_nome
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        LEFT JOIN immobile i ON p.id = i.partita_id
+        WHERE c.nome = p_comune_nome
+        GROUP BY c.nome
+    )
+    -- Join finale per combinare i risultati
+    SELECT
+        cb.nome AS comune,
+        COALESCE(s.totale_partite, 0) AS totale_partite,
+        COALESCE(s.totale_possessori, 0) AS totale_possessori,
+        COALESCE(s.totale_immobili, 0) AS totale_immobili,
+        COALESCE(s.partite_attive, 0) AS partite_attive,
+        COALESCE(s.partite_inattive, 0) AS partite_inattive,
+        ica.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE separata
+        CASE
+            WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
+            ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
+        END AS possessori_per_partita
+    FROM comune_base cb
+    LEFT JOIN stats s ON cb.nome = s.comune_nome
+    LEFT JOIN immobili_classe_agg ica ON cb.nome = ica.comune_nome
+CONTEXT:  funzione PL/pgSQL genera_report_comune(character varying) riga 3 a RETURN QUERY
+
+2025-04-29 08:50:31,211 - CatastoDB - ERROR - Errore DB specifico rilevato: GroupingError - ERRORE:  le chiamate a funzioni di aggregazione non possono essere annidate
+LINE 7: ...ct_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) ...
+                                                             ^
+QUERY:  WITH comune_base AS ( -- Seleziona il comune per assicurarsi che esista
+        SELECT nome FROM comune WHERE nome = p_comune_nome LIMIT 1
+    ),
+    immobili_classe_agg AS ( -- CTE per calcolare separatamente il JSON degli immobili
+        SELECT
+            p_comune_nome AS comune_nome, -- Aggiungi comune_nome per il join
+            json_object_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) AS immobili_json
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        WHERE p.comune_nome = p_comune_nome
+        GROUP BY p.comune_nome -- Gruppo per comune per ottenere un JSON per comune
+    ),
+    stats AS ( -- CTE principale per le altre statistiche
+        SELECT
+            c.nome AS comune_nome,
+            COUNT(DISTINCT p.id) AS totale_partite,
+            COUNT(DISTINCT pos.id) AS totale_possessori,
+            COUNT(DISTINCT i.id) AS totale_immobili,
+            COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
+            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
+            -- Rimosso il calcolo di immobili_per_classe da qui
+        FROM comune c
+        LEFT JOIN partita p ON c.nome = p.comune_nome
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        LEFT JOIN immobile i ON p.id = i.partita_id
+        WHERE c.nome = p_comune_nome
+        GROUP BY c.nome
+    )
+    -- Join finale per combinare i risultati
+    SELECT
+        cb.nome AS comune,
+        COALESCE(s.totale_partite, 0) AS totale_partite,
+        COALESCE(s.totale_possessori, 0) AS totale_possessori,
+        COALESCE(s.totale_immobili, 0) AS totale_immobili,
+        COALESCE(s.partite_attive, 0) AS partite_attive,
+        COALESCE(s.partite_inattive, 0) AS partite_inattive,
+        ica.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE separata
+        CASE
+            WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
+            ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
+        END AS possessori_per_partita
+    FROM comune_base cb
+    LEFT JOIN stats s ON cb.nome = s.comune_nome
+    LEFT JOIN immobili_classe_agg ica ON cb.nome = ica.comune_nome
+CONTEXT:  funzione PL/pgSQL genera_report_comune(character varying) riga 3 a RETURN QUERY
+
+2025-04-29 08:50:31,212 - CatastoDB - ERROR - SQLSTATE: 42803
+2025-04-29 08:50:31,213 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM genera_report_comune('Carcare')"
+2025-04-29 08:50:31,214 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 08:50:31,214 - CatastoDB - ERROR - Errore DB get_report_comune: ERRORE:  le chiamate a funzioni di aggregazione non possono essere annidate
+LINE 7: ...ct_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) ...
+                                                             ^
+QUERY:  WITH comune_base AS ( -- Seleziona il comune per assicurarsi che esista
+        SELECT nome FROM comune WHERE nome = p_comune_nome LIMIT 1
+    ),
+    immobili_classe_agg AS ( -- CTE per calcolare separatamente il JSON degli immobili
+        SELECT
+            p_comune_nome AS comune_nome, -- Aggiungi comune_nome per il join
+            json_object_agg(COALESCE(i.classificazione, 'Non Class.'), COUNT(*)) AS immobili_json
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        WHERE p.comune_nome = p_comune_nome
+        GROUP BY p.comune_nome -- Gruppo per comune per ottenere un JSON per comune
+    ),
+    stats AS ( -- CTE principale per le altre statistiche
+        SELECT
+            c.nome AS comune_nome,
+            COUNT(DISTINCT p.id) AS totale_partite,
+            COUNT(DISTINCT pos.id) AS totale_possessori,
+            COUNT(DISTINCT i.id) AS totale_immobili,
+            COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
+            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
+            -- Rimosso il calcolo di immobili_per_classe da qui
+        FROM comune c
+        LEFT JOIN partita p ON c.nome = p.comune_nome
+        LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+        LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+        LEFT JOIN immobile i ON p.id = i.partita_id
+        WHERE c.nome = p_comune_nome
+        GROUP BY c.nome
+    )
+    -- Join finale per combinare i risultati
+    SELECT
+        cb.nome AS comune,
+        COALESCE(s.totale_partite, 0) AS totale_partite,
+        COALESCE(s.totale_possessori, 0) AS totale_possessori,
+        COALESCE(s.totale_immobili, 0) AS totale_immobili,
+        COALESCE(s.partite_attive, 0) AS partite_attive,
+        COALESCE(s.partite_inattive, 0) AS partite_inattive,
+        ica.immobili_json AS immobili_per_classe, -- Prendi il JSON dalla CTE separata
+        CASE
+            WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
+            ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
+        END AS possessori_per_partita
+    FROM comune_base cb
+    LEFT JOIN stats s ON cb.nome = s.comune_nome
+    LEFT JOIN immobili_classe_agg ica ON cb.nome = ica.comune_nome
+CONTEXT:  funzione PL/pgSQL genera_report_comune(character varying) riga 3 a RETURN QUERY
+
+2025-04-29 08:56:18,107 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 08:57:08,442 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-29 08:57:08,531 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 08:57:38,924 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 10:07:34,664 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-29 10:07:34,811 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 10:08:19,606 - CatastoDB - INFO - Disconnessione completata

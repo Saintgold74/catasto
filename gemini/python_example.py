@@ -19,7 +19,12 @@ import sys
 import hashlib
 import getpass # Per nascondere input password
 import logging # Aggiungi questa riga vicino agli altri import
+import bcrypt # Aggiungi questo import all'inizio del file
 from typing import Optional, List, Dict, Any # Aggiunto per type hinting
+
+# --- Logger (assicurati che sia definito, es. logger = logging.getLogger(__name__)) ---
+# Se non è già definito globalmente, ottienilo:
+logger = logging.getLogger(__name__)
 
 # --- Variabili Globali per Sessione Utente (SEMPLIFICATE) ---
 # In un'app reale, usare meccanismi di sessione più robusti
@@ -80,6 +85,30 @@ def _set_session_context(db: CatastoDBManager):
 def _confirm_action(prompt: str) -> bool:
      """Chiede conferma all'utente."""
      return input(f"{prompt} (s/n)? ").strip().lower() == 's'
+
+def _hash_password(password: str) -> str:
+    """Funzione helper per hashare la password usando bcrypt."""
+    # Genera il sale e crea l'hash
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+    # Ritorna l'hash come stringa decodificata per salvarlo nel DB (VARCHAR)
+    return hashed_bytes.decode('utf-8')
+
+def _verify_password(stored_hash: str, provided_password: str) -> bool:
+    """Funzione helper per verificare la password usando bcrypt."""
+    try:
+        stored_hash_bytes = stored_hash.encode('utf-8')
+        provided_password_bytes = provided_password.encode('utf-8')
+        # Confronta la password fornita con l'hash memorizzato
+        return bcrypt.checkpw(provided_password_bytes, stored_hash_bytes)
+    except ValueError:
+        # Questo errore può verificarsi se stored_hash non è un hash bcrypt valido
+        logger.error(f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
+        return False
+    except Exception as e:
+        logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
+        return False
 
 # --- Funzioni di Inserimento Dati (Componenti dei Menu) ---
 
@@ -1283,7 +1312,8 @@ def menu_audit(db: CatastoDBManager):
 
 def menu_utenti(db: CatastoDBManager):
     """Menu per la gestione degli utenti, login e logout."""
-    global logged_in_user_id, current_session_id
+    # Rende esplicito l'uso delle variabili globali per la sessione
+    global logged_in_user_id, current_session_id, client_ip_address
 
     while True:
         stampa_intestazione("GESTIONE UTENTI E SESSIONE")
@@ -1300,85 +1330,169 @@ def menu_utenti(db: CatastoDBManager):
         scelta = input("\nSeleziona un'opzione (1-5): ").strip()
 
         # Imposta contesto PRIMA di operazioni potenzialmente auditate
+        # (Nota: _set_session_context usa le variabili globali logged_in_user_id e client_ip_address)
         _set_session_context(db)
 
-        if scelta == "1":
+        if scelta == "1": # Crea nuovo utente
             stampa_intestazione("CREA NUOVO UTENTE")
             username = input("Username: ").strip()
             password = getpass.getpass("Password: ")
             password_confirm = getpass.getpass("Conferma Password: ")
-            if password != password_confirm: print("Le password non coincidono."); continue
+
+            if not password:
+                print("La password non può essere vuota.")
+                continue # Torna al menu
+
+            if password != password_confirm:
+                print("Le password non coincidono.")
+                continue # Torna al menu
+
             nome_completo = input("Nome completo: ").strip()
             email = input("Email: ").strip()
             print("Ruoli disponibili: admin, archivista, consultatore")
             ruolo = input("Ruolo: ").strip().lower()
 
-            if not all([username, password, nome_completo, email, ruolo]): print("Tutti i campi sono obbligatori."); continue
-            if ruolo not in ['admin', 'archivista', 'consultatore']: print("Ruolo non valido."); continue
+            if not all([username, nome_completo, email, ruolo]):
+                print("Username, nome completo, email e ruolo sono obbligatori.")
+                continue # Torna al menu
 
-            password_hash = _hash_password(password)
+            if ruolo not in ['admin', 'archivista', 'consultatore']:
+                print("Ruolo non valido. Scegli tra: admin, archivista, consultatore.")
+                continue # Torna al menu
+
+            # Hash della password usando bcrypt PRIMA di inviarla al DB Manager
+            try:
+                password_hash = _hash_password(password)
+                logger.debug(f"Password hash generato per {username}: {password_hash[:10]}...")
+            except Exception as hash_err:
+                logger.error(f"Errore durante l'hashing della password per {username}: {hash_err}")
+                print("Si è verificato un errore tecnico durante la creazione dell'hash.")
+                continue # Torna al menu
+
+            # Chiama il DB Manager con l'hash generato
             if db.create_user(username, password_hash, nome_completo, email, ruolo):
                 print(f"Utente '{username}' creato con successo.")
-            else: print(f"Errore durante la creazione dell'utente '{username}' (controllare log).")
+            else:
+                # L'errore specifico (es. utente duplicato) dovrebbe essere già stato loggato da db.create_user
+                print(f"Errore durante la creazione dell'utente '{username}' (controllare log).")
 
-        elif scelta == "2":
-            if logged_in_user_id: print("Sei già connesso. Esegui prima il logout (opzione 3)."); continue
+        elif scelta == "2": # Login Utente
+            if logged_in_user_id:
+                print("Sei già connesso. Esegui prima il logout (opzione 3).")
+                continue # Torna al menu
+
             stampa_intestazione("LOGIN UTENTE")
             username = input("Username: ").strip()
             password = getpass.getpass("Password: ")
 
+            if not username or not password:
+                print("Username e password sono obbligatori.")
+                continue # Torna al menu
+
             credentials = db.get_user_credentials(username)
-            if credentials and _verify_password(credentials['password_hash'], password):
-                user_id = credentials['id']
-                print(f"Login riuscito per l'utente ID: {user_id}")
-                session_id_returned = db.register_access(user_id, 'login', indirizzo_ip=client_ip_address, esito=True)
-                if session_id_returned:
+            login_success = False
+            user_id = None # Inizializza user_id
+
+            if credentials:
+                user_id = credentials['id'] # Ottieni l'ID per il log accessi
+                stored_hash = credentials['password_hash']
+                logger.debug(f"Tentativo login per utente ID {user_id}. Hash recuperato: {stored_hash[:10]}...")
+
+                # Verifica la password fornita con l'hash memorizzato usando bcrypt
+                if _verify_password(stored_hash, password):
+                    login_success = True
+                    print(f"Login riuscito per l'utente ID: {user_id}")
+                    logger.info(f"Login riuscito per utente ID: {user_id}")
+                else:
+                    print("Password errata.")
+                    logger.warning(f"Tentativo di login fallito (password errata) per utente ID: {user_id}")
+            else:
+                 print("Utente non trovato o non attivo.")
+                 logger.warning(f"Tentativo di login fallito (utente '{username}' non trovato o non attivo).")
+                 # Non abbiamo un user_id, quindi non possiamo registrare l'accesso fallito nel log DB
+
+            # Registra l'accesso solo se l'utente è stato trovato (user_id is not None)
+            if user_id is not None:
+                session_id_returned = db.register_access(user_id, 'login', indirizzo_ip=client_ip_address, esito=login_success)
+                if login_success and session_id_returned:
+                    # Imposta le variabili globali di sessione SOLO se il login è riuscito E la registrazione accesso ha funzionato
                     logged_in_user_id = user_id
                     current_session_id = session_id_returned
-                    db.set_session_app_user(logged_in_user_id, client_ip_address) # Imposta contesto DB
+                    # Imposta il contesto di sessione nel DB
+                    if not db.set_session_app_user(logged_in_user_id, client_ip_address):
+                        logger.error("Impossibile impostare il contesto di sessione nel DB dopo il login!")
+                        # Considerare se annullare il login a questo punto?
                     print(f"Sessione {current_session_id[:8]}... avviata.")
-                else: print("Errore nella registrazione dell'accesso.")
-            elif credentials:
-                 print("Password errata.")
-                 db.register_access(credentials['id'], 'login', indirizzo_ip=client_ip_address, esito=False)
-            else: print("Utente non trovato o non attivo.")
+                elif login_success and not session_id_returned:
+                    # Caso anomalo: login verificato ma errore registrazione accesso/sessione
+                    print("Errore critico: Impossibile registrare la sessione di accesso nel database.")
+                    logger.error(f"Login verificato per user ID {user_id} ma fallita registrazione accesso.")
+                    # Non impostare le variabili globali di sessione
+                    logged_in_user_id = None
+                    current_session_id = None
+                # Se login_success è False, register_access registrerà il tentativo fallito
 
-        elif scelta == "3":
-             if not logged_in_user_id: print("Nessun utente attualmente connesso."); continue
+        elif scelta == "3": # Logout Utente
+             if not logged_in_user_id:
+                 print("Nessun utente attualmente connesso.")
+                 continue # Torna al menu
+
              stampa_intestazione("LOGOUT UTENTE")
              print(f"Disconnessione utente ID: {logged_in_user_id}...")
-             if db.logout_user(logged_in_user_id, current_session_id, client_ip_address): print("Logout eseguito con successo.")
-             else: print("Errore durante il logout (controllare log).")
+             # Passa user_id e session_id correnti alla funzione di logout
+             if db.logout_user(logged_in_user_id, current_session_id, client_ip_address):
+                 print("Logout eseguito con successo.")
+             else:
+                 # L'errore dovrebbe essere loggato da logout_user
+                 print("Errore durante la registrazione del logout (controllare log).")
+
+             # Resetta sempre le variabili globali dopo il tentativo di logout
              logged_in_user_id = None
              current_session_id = None
+             # Il contesto DB viene resettato da db.logout_user() internamente
 
-        elif scelta == "4":
+        elif scelta == "4": # Verifica Permesso Utente
              stampa_intestazione("VERIFICA PERMESSO UTENTE")
              utente_id_str = input("ID Utente (lascia vuoto per utente corrente): ").strip()
              utente_id_to_check = None
+
              if utente_id_str.isdigit():
-                 utente_id_to_check = int(utente_id_str)
+                 try:
+                     utente_id_to_check = int(utente_id_str)
+                 except ValueError:
+                     print("ID utente non valido.")
+                     continue # Torna al menu
              elif logged_in_user_id:
                  utente_id_to_check = logged_in_user_id
                  print(f"(Verifica per utente corrente ID: {utente_id_to_check})")
              else:
                  print("Nessun utente corrente e ID non specificato.")
-                 continue
+                 continue # Torna al menu
 
              permesso = input("Nome del permesso (es. 'modifica_partite'): ").strip()
-             if utente_id_to_check and permesso:
-                 if db.check_permission(utente_id_to_check, permesso):
-                     print(f"L'utente ID {utente_id_to_check} HA il permesso '{permesso}'.")
-                 else:
-                     print(f"L'utente ID {utente_id_to_check} NON HA il permesso '{permesso}'.")
-             else: print("ID utente e nome permesso richiesti.")
+             if not permesso:
+                 print("Il nome del permesso è obbligatorio.")
+                 continue # Torna al menu
 
-        elif scelta == "5":
-            break
+             if utente_id_to_check is not None:
+                 try:
+                     ha_permesso = db.check_permission(utente_id_to_check, permesso)
+                     if ha_permesso:
+                         print(f"L'utente ID {utente_id_to_check} HA il permesso '{permesso}'.")
+                     else:
+                         # Questo può significare che non ha il permesso o che c'è stato un errore (controllare log)
+                         print(f"L'utente ID {utente_id_to_check} NON HA il permesso '{permesso}' o si è verificato un errore.")
+                 except Exception as perm_err:
+                     logger.error(f"Errore durante la verifica del permesso '{permesso}' per user ID {utente_id_to_check}: {perm_err}")
+                     print("Si è verificato un errore durante la verifica del permesso.")
+             # Non c'è 'else' qui perché i casi precedenti coprono tutto
+
+        elif scelta == "5": # Torna al menu principale
+            break # Esce dal ciclo while di menu_utenti
         else:
             print("Opzione non valida!")
-        input("\nPremi INVIO per continuare...")
 
+        input("\nPremi INVIO per continuare...") # Pausa prima di mostrare di nuovo il menu
 # --- Menu Backup ---
 
 def menu_backup(db: CatastoDBManager):

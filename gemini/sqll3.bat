@@ -6,7 +6,8 @@ set DB_USER=postgres
 set DB_HOST=localhost
 set DB_DEFAULT=postgres
 set DB_NAME=catasto_storico
-set SCRIPTS_DIR=.\
+REM --- Ottieni percorso dello script ---
+SET SCRIPT_DIR=%~dp0
 
 :: Chiedi la password solo una volta
 set /p DB_PASSWORD=Inserisci la password per l'utente PostgreSQL: 

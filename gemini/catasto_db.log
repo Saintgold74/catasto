@@ -294,3 +294,62 @@ LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
 2025-04-29 12:04:25,926 - CatastoDB - INFO - Riconnessione in corso...
 2025-04-29 12:04:25,926 - CatastoDB - ERROR - Riconnessione fallita definitivamente.
 2025-04-29 12:04:25,927 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 14:37:43,741 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 14:37:43,825 - CatastoDB - ERROR - Errore operativo durante la connessione (controllare DB e parametri): connection to server at "localhost" (::1), port 5432 failed: FATALE:  il database "catasto_storico" non esiste
+
+2025-04-29 16:36:38,958 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 16:36:39,203 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 16:36:44,177 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:36:44,182 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 16:36:44,187 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 16:36:44,192 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 16:36:44,196 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:36:55,974 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:36:55,979 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 16:36:55,984 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 16:36:55,989 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 16:36:55,994 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:37:06,831 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 16:37:55,651 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 16:37:55,878 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 16:38:11,480 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:38:11,485 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 16:38:11,490 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 16:38:11,495 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 16:38:11,500 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:40:45,591 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 16:48:22,710 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 16:48:22,946 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 16:48:28,197 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:48:28,202 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 16:48:28,207 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 16:48:28,212 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 16:48:28,217 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 16:53:06,287 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 17:35:00,970 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 17:35:01,107 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 17:35:27,679 - CatastoDB - INFO - Disconnessione completata

@@ -19,10 +19,10 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     -- Verifica che pg_trgm sia installato (opzionale, ma utile)
-    PERFORM 1 FROM pg_extension WHERE extname = 'pg_trgm';
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Estensione pg_trgm non installata. Eseguire: CREATE EXTENSION pg_trgm;';
-    END IF;
+    -- PERFORM 1 FROM pg_extension WHERE extname = 'pg_trgm';
+    -- IF NOT FOUND THEN
+    --    RAISE EXCEPTION 'Estensione pg_trgm non installata. Eseguire: CREATE EXTENSION pg_trgm;';
+    -- END IF;
 
     -- Esegui la query di ricerca per similarità
     RETURN QUERY
@@ -67,17 +67,17 @@ $$ LANGUAGE plpgsql;
 -- su tabelle grandi. Eseguire una sola volta.
 -- ========================================================================
 -- Crea indice su nome_completo (il campo più probabile per la ricerca)
-CREATE INDEX IF NOT EXISTS idx_gin_possessore_nome_completo_trgm
+--CREATE INDEX IF NOT EXISTS idx_gin_possessore_nome_completo_trgm
 ON possessore
 USING gin (nome_completo gin_trgm_ops);
 
 -- Crea indici simili anche per cognome_nome e paternita se si prevede
 -- di fare ricerche frequenti specificamente su quei campi
-CREATE INDEX IF NOT EXISTS idx_gin_possessore_cognome_nome_trgm
+--CREATE INDEX IF NOT EXISTS idx_gin_possessore_cognome_nome_trgm
 ON possessore
 USING gin (cognome_nome gin_trgm_ops);
 
-CREATE INDEX IF NOT EXISTS idx_gin_possessore_paternita_trgm
+--CREATE INDEX IF NOT EXISTS idx_gin_possessore_paternita_trgm
 ON possessore
 USING gin (paternita gin_trgm_ops)
 WHERE paternita IS NOT NULL; -- Indice su colonna nullable

@@ -56,10 +56,10 @@ EXCEPTION
 END;
 $$;
 
--- Correzione della funzione cerca_immobili
+-- Funzione cerca_immobili (MODIFICATA)
 CREATE OR REPLACE FUNCTION cerca_immobili(
     p_partita_id INTEGER DEFAULT NULL,
-    p_comune_nome VARCHAR DEFAULT NULL,
+    p_comune_id INTEGER DEFAULT NULL, -- Modificato parametro
     p_localita_id INTEGER DEFAULT NULL,
     p_natura VARCHAR DEFAULT NULL,
     p_classificazione VARCHAR DEFAULT NULL
@@ -68,7 +68,7 @@ RETURNS TABLE (
     id INTEGER,
     partita_id INTEGER,
     numero_partita INTEGER,
-    comune_nome VARCHAR,
+    comune_nome VARCHAR, -- Manteniamo nome output
     localita_nome VARCHAR,
     natura VARCHAR,
     numero_piani INTEGER,
@@ -78,11 +78,11 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         i.id,
         i.partita_id,
         p.numero_partita,
-        p.comune_nome,
+        c.nome AS comune_nome, -- Seleziona nome comune
         l.nome AS localita_nome,
         i.natura,
         i.numero_piani,
@@ -92,14 +92,16 @@ BEGIN
     FROM immobile i
     JOIN partita p ON i.partita_id = p.id
     JOIN localita l ON i.localita_id = l.id
+    JOIN comune c ON p.comune_id = c.id -- *** JOIN AGGIUNTO ***
     WHERE (p_partita_id IS NULL OR i.partita_id = p_partita_id)
-      AND (p_comune_nome IS NULL OR p.comune_nome = p_comune_nome)
+      AND (p_comune_id IS NULL OR p.comune_id = p_comune_id) -- Filtra per ID
       AND (p_localita_id IS NULL OR i.localita_id = p_localita_id)
       AND (p_natura IS NULL OR i.natura ILIKE '%' || p_natura || '%')
       AND (p_classificazione IS NULL OR i.classificazione = p_classificazione)
-    ORDER BY p.comune_nome, p.numero_partita, i.natura;
+    ORDER BY c.nome, p.numero_partita, i.natura;
 END;
 $$ LANGUAGE plpgsql;
+
 
 -- Correzione della procedura aggiorna_variazione
 CREATE OR REPLACE PROCEDURE aggiorna_variazione(
@@ -187,14 +189,14 @@ EXCEPTION
 END;
 $$;
 
--- Correzione della funzione cerca_variazioni
+-- Funzione cerca_variazioni (MODIFICATA)
 CREATE OR REPLACE FUNCTION cerca_variazioni(
     p_tipo VARCHAR DEFAULT NULL,
     p_data_inizio DATE DEFAULT NULL,
     p_data_fine DATE DEFAULT NULL,
     p_partita_origine_id INTEGER DEFAULT NULL,
     p_partita_destinazione_id INTEGER DEFAULT NULL,
-    p_comune VARCHAR DEFAULT NULL
+    p_comune_id INTEGER DEFAULT NULL -- Modificato parametro
 )
 RETURNS TABLE (
     id INTEGER,
@@ -204,13 +206,13 @@ RETURNS TABLE (
     partita_origine_numero INTEGER,
     partita_destinazione_id INTEGER,
     partita_destinazione_numero INTEGER,
-    comune_nome VARCHAR,
+    comune_nome VARCHAR, -- Manteniamo nome output
     numero_riferimento VARCHAR,
     nominativo_riferimento VARCHAR
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         v.id,
         v.tipo,
         v.data_variazione,
@@ -218,19 +220,20 @@ BEGIN
         po.numero_partita AS partita_origine_numero,
         v.partita_destinazione_id,
         pd.numero_partita AS partita_destinazione_numero,
-        po.comune_nome,
+        c.nome AS comune_nome, -- Seleziona nome comune
         v.numero_riferimento,
         v.nominativo_riferimento
     FROM variazione v
     JOIN partita po ON v.partita_origine_id = po.id
+    JOIN comune c ON po.comune_id = c.id -- *** JOIN AGGIUNTO ***
     LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
     WHERE (p_tipo IS NULL OR v.tipo = p_tipo)
       AND (p_data_inizio IS NULL OR v.data_variazione >= p_data_inizio)
       AND (p_data_fine IS NULL OR v.data_variazione <= p_data_fine)
       AND (p_partita_origine_id IS NULL OR v.partita_origine_id = p_partita_origine_id)
       AND (p_partita_destinazione_id IS NULL OR v.partita_destinazione_id = p_partita_destinazione_id)
-      AND (p_comune IS NULL OR po.comune_nome = p_comune)
-    ORDER BY v.data_variazione DESC, po.comune_nome, po.numero_partita;
+      AND (p_comune_id IS NULL OR po.comune_id = p_comune_id) -- Filtra per ID
+    ORDER BY v.data_variazione DESC, c.nome, po.numero_partita;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -632,9 +635,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Correzione della funzione genera_report_comune
+-- Funzione genera_report_comune (MODIFICATA v3)
 CREATE OR REPLACE FUNCTION genera_report_comune(
-    p_comune_nome VARCHAR
+    p_comune_id INTEGER -- Modificato parametro
 )
 RETURNS TABLE (
     comune VARCHAR,
@@ -646,47 +649,65 @@ RETURNS TABLE (
     immobili_per_classe JSON,
     possessori_per_partita NUMERIC
 ) AS $$
+DECLARE
+    v_comune_nome VARCHAR; -- Variabile per nome comune
 BEGIN
+    -- Ottieni nome comune per controlli e output
+    SELECT nome INTO v_comune_nome FROM comune WHERE id = p_comune_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Comune con ID % non trovato', p_comune_id;
+    END IF;
+
     RETURN QUERY
-    WITH stats AS (
+    WITH -- ... (CTE definite come nella v2, ma filtrano/raggruppano per p_comune_id) ...
+    immobili_conteggio_classe AS (
         SELECT
-            p.comune_nome,
+            p.comune_id, -- Serve per il join successivo
+            COALESCE(i.classificazione, 'Non Class.') AS classificazione_grp,
+            COUNT(*) AS conteggio
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        WHERE p.comune_id = p_comune_id -- Filtra per ID
+        GROUP BY p.comune_id, classificazione_grp
+    ),
+    immobili_json_final AS (
+         SELECT
+            icc.comune_id,
+            json_object_agg(icc.classificazione_grp, icc.conteggio) AS immobili_json
+        FROM immobili_conteggio_classe icc
+        GROUP BY icc.comune_id
+    ),
+    stats AS (
+        SELECT
+            p.comune_id, -- Usa ID
             COUNT(DISTINCT p.id) AS totale_partite,
             COUNT(DISTINCT pos.id) AS totale_possessori,
             COUNT(DISTINCT i.id) AS totale_immobili,
             COUNT(DISTINCT CASE WHEN p.stato = 'attiva' THEN p.id END) AS partite_attive,
-            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive,
-            (
-                SELECT json_object_agg(classificazione, COUNT(*))
-                FROM (
-                    SELECT i.classificazione, COUNT(*) 
-                    FROM immobile i
-                    JOIN partita p2 ON i.partita_id = p2.id
-                    WHERE p2.comune_nome = p_comune_nome
-                    GROUP BY i.classificazione
-                ) imm_class
-            ) AS immobili_per_classe,
-            CASE 
-                WHEN COUNT(DISTINCT p.id) = 0 THEN 0
-                ELSE COUNT(DISTINCT pos.id)::NUMERIC / COUNT(DISTINCT p.id)
-            END AS possessori_per_partita
-        FROM comune c
-        LEFT JOIN partita p ON c.nome = p.comune_nome
+            COUNT(DISTINCT CASE WHEN p.stato = 'inattiva' THEN p.id END) AS partite_inattive
+        FROM partita p -- Parte da partita per avere comune_id
         LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
         LEFT JOIN possessore pos ON pp.possessore_id = pos.id
         LEFT JOIN immobile i ON p.id = i.partita_id
-        WHERE c.nome = p_comune_nome
-        GROUP BY c.nome
+        WHERE p.comune_id = p_comune_id -- Filtra per ID
+        GROUP BY p.comune_id
     )
-    SELECT 
-        s.comune_nome,
-        s.totale_partite,
-        s.totale_possessori,
-        s.totale_immobili,
-        s.partite_attive,
-        s.partite_inattive,
-        s.immobili_per_classe,
-        s.possessori_per_partita
-    FROM stats s;
+    -- Join finale
+    SELECT
+        v_comune_nome AS comune, -- Usa nome recuperato all'inizio
+        COALESCE(s.totale_partite, 0),
+        COALESCE(s.totale_possessori, 0),
+        COALESCE(s.totale_immobili, 0),
+        COALESCE(s.partite_attive, 0),
+        COALESCE(s.partite_inattive, 0),
+        ijf.immobili_json,
+        CASE
+            WHEN COALESCE(s.totale_partite, 0) = 0 THEN 0
+            ELSE COALESCE(s.totale_possessori, 0)::NUMERIC / s.totale_partite
+        END
+    FROM (SELECT p_comune_id AS id) cb -- Simula comune_base con ID
+    LEFT JOIN stats s ON cb.id = s.comune_id
+    LEFT JOIN immobili_json_final ijf ON cb.id = ijf.comune_id;
+
 END;
 $$ LANGUAGE plpgsql;

@@ -1,0 +1,29 @@
+{
+    "possessore": {
+        "id": 1,
+        "comune_nome": "Carcare",
+        "cognome_nome": "Rossi Marco",
+        "paternita": "fu Antonio",
+        "nome_completo": "Rossi Marco fu Antonio",
+        "attivo": true,
+        "data_creazione": "2025-04-29T10:17:58.60494",
+        "data_modifica": "2025-04-29T10:17:58.60494"
+    },
+    "partite": [
+        {
+            "id": 1,
+            "comune_nome": "Carcare",
+            "numero_partita": 302,
+            "tipo": "principale",
+            "data_impianto": "2025-04-29",
+            "data_chiusura": null,
+            "numero_provenienza": null,
+            "stato": "attiva",
+            "data_creazione": "2025-04-29T10:17:58.783561",
+            "data_modifica": "2025-04-29T10:17:58.783561",
+            "titolo": "proprietÃ  esclusiva",
+            "quota": null
+        }
+    ],
+    "immobili": null
+}

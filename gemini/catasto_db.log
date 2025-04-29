@@ -213,3 +213,84 @@ CONTEXT:  funzione PL/pgSQL genera_report_comune(character varying) riga 3 a RET
 2025-04-29 10:07:34,664 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
 2025-04-29 10:07:34,811 - CatastoDB - INFO - Connessione stabilita con successo
 2025-04-29 10:08:19,606 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 10:18:41,487 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-29 10:18:41,581 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 10:19:53,187 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione ricerca_avanzata_possessori(unknown) non esiste
+LINE 1: SELECT * FROM ricerca_avanzata_possessori('cognome')
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-29 10:19:53,188 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-29 10:19:53,188 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM ricerca_avanzata_possessori('cognome')"
+2025-04-29 10:19:53,189 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 10:19:53,189 - CatastoDB - WARNING - Funzione 'ricerca_avanzata_possessori' non trovata nel database.
+2025-04-29 10:31:59,271 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione ricerca_avanzata_possessori(unknown) non esiste
+LINE 1: SELECT * FROM ricerca_avanzata_possessori('cognome')
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-29 10:31:59,271 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-29 10:31:59,272 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM ricerca_avanzata_possessori('cognome')"
+2025-04-29 10:31:59,273 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 10:31:59,273 - CatastoDB - WARNING - Funzione 'ricerca_avanzata_possessori' non trovata nel database.
+2025-04-29 10:37:14,390 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 10:41:45,945 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico schema catasto
+2025-04-29 10:41:46,019 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 10:49:58,047 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  il record "new" non ha un campo "id"
+CONTEXT:  Assegnazione PL/pgSQL "v_record_id := NEW.id"
+funzione PL/pgSQL audit_trigger_function() riga 23 a assegnazione
+
+2025-04-29 10:49:58,048 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 10:49:58,048 - CatastoDB - ERROR - Query renderizzata: b"INSERT INTO comune (nome, provincia, regione, periodo_id) VALUES ('Savona', 'Savona', 'Liguria', 1) ON CONFLICT (nome) DO NOTHING"
+2025-04-29 10:49:58,049 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 10:49:58,049 - __main__ - ERROR - Errore non gestito nel menu principale: ERRORE:  il record "new" non ha un campo "id"
+CONTEXT:  Assegnazione PL/pgSQL "v_record_id := NEW.id"
+funzione PL/pgSQL audit_trigger_function() riga 23 a assegnazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1774, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 316, in menu_principale
+    elif scelta == "2": menu_inserimento(db)
+                        ~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 595, in menu_inserimento
+    if scelta == "1": aggiungi_comune(db)
+                      ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 224, in aggiungi_comune
+    if db.execute_query(query, (nome, provincia, regione, periodo_id)):
+       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 178, in execute_query
+    raise db_err # RILANCIA l'eccezione per gestione specifica nel chiamante
+    ^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 151, in execute_query
+    self.cur.execute(query, params)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  il record "new" non ha un campo "id"
+CONTEXT:  Assegnazione PL/pgSQL "v_record_id := NEW.id"
+funzione PL/pgSQL audit_trigger_function() riga 23 a assegnazione
+
+2025-04-29 10:49:58,102 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 12:00:37,407 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 12:00:37,512 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 12:00:42,148 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 12:00:42,149 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 12:00:42,149 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 12:00:42,150 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 12:00:42,151 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 12:04:25,912 - CatastoDB - ERROR - Errore di connessione DB: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+2025-04-29 12:04:25,925 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 12:04:25,926 - CatastoDB - INFO - Riconnessione in corso...
+2025-04-29 12:04:25,926 - CatastoDB - ERROR - Riconnessione fallita definitivamente.
+2025-04-29 12:04:25,927 - CatastoDB - INFO - Disconnessione completata

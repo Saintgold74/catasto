@@ -9,6 +9,31 @@
 SET search_path TO catasto;
 
 -- =========================================================================
+-- FASE 0: Creazione Tabella Audit Log (Precedentemente in script 06)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS catasto.audit_log (
+    id SERIAL PRIMARY KEY,
+    tabella VARCHAR(100) NOT NULL,
+    operazione CHAR(1) NOT NULL CHECK (operazione IN ('I', 'U', 'D')),
+    record_id INTEGER, -- Modificato per permettere NULL (per tabelle senza ID PK standard come 'comune' nella vecchia versione del trigger)
+    dati_prima JSONB,
+    dati_dopo JSONB,
+    utente VARCHAR(100), -- Rimosso NOT NULL per permettere operazioni iniziali senza utente di sessione? O mettere current_user? Lasciamo nullable per ora.
+    ip_address VARCHAR(40),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Colonne aggiunte per integrazione utenti (verranno popolate da FASE 1 sotto)
+    session_id VARCHAR(100),
+    app_user_id INTEGER
+    -- Aggiungere FK per app_user_id qui o dopo? Meglio dopo l'ALTER nel blocco DO sotto.
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_tabella ON catasto.audit_log(tabella);
+CREATE INDEX IF NOT EXISTS idx_audit_operazione ON catasto.audit_log(operazione);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON catasto.audit_log(timestamp);
+
+RAISE NOTICE 'Tabella audit_log creata (se non esisteva).';
+
+-- =========================================================================
 -- FASE 1: Modifica delle tabelle esistenti
 -- =========================================================================
 
@@ -120,7 +145,9 @@ $$ LANGUAGE plpgsql;
 -- FASE 3: Aggiornamento funzione trigger di audit
 -- =========================================================================
 
--- Aggiornamento della funzione di audit per utilizzare il contesto di sessione
+-- Inserisci/Sostituisci questa definizione in 15_integration_audit_users.sql
+-- (o in 06_audit-system.sql se 15 non è stato applicato)
+
 CREATE OR REPLACE FUNCTION audit_trigger_function()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -130,80 +157,98 @@ DECLARE
     v_app_user_id INTEGER;
     v_session_id TEXT;
     v_ip_address TEXT;
-    v_record_id INTEGER;
+    v_record_id INTEGER; -- Manteniamo INTEGER per compatibilità generale
+    v_record_identifier TEXT; -- Usiamo per identificatori non numerici
 BEGIN
-    -- Ottieni l'utente di database corrente
-    v_db_user := session_user; -- Usiamo session_user invece di current_user per l'utente originale della sessione
-
-    -- Tenta di recuperare le variabili di sessione
+    -- Ottieni informazioni utente/sessione
+    v_db_user := session_user;
     v_app_user_id := NULLIF(current_setting('app.user_id', TRUE), '')::INTEGER;
     v_session_id := current_setting('app.session_id', TRUE);
     v_ip_address := current_setting('app.ip_address', TRUE);
 
-    -- Determina l'operazione e l'ID del record
-    IF TG_OP = 'INSERT' THEN
-        v_old_data := NULL;
+    -- Determina l'ID del record o un identificatore alternativo
+    v_record_id := NULL; -- Default a NULL
+    v_record_identifier := NULL; -- Default a NULL
+
+    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+        -- Prova a prendere l'ID se esiste
+        BEGIN
+            v_record_id := (to_jsonb(NEW)->>'id')::INTEGER;
+        EXCEPTION
+            WHEN OTHERS THEN -- Se la colonna 'id' non esiste o non è convertibile a INTEGER
+                 -- Gestisci caso specifico 'comune' (o altre tabelle senza 'id' PK)
+                 IF TG_TABLE_NAME = 'comune' THEN
+                     v_record_identifier := (to_jsonb(NEW)->>'nome'); -- Usa 'nome' come identificatore testuale
+                 END IF;
+                 -- Lascia v_record_id a NULL se non è possibile ottenere un ID numerico
+                 -- Potresti aggiungere logica per altre tabelle qui se necessario
+        END;
         v_new_data := to_jsonb(NEW);
-        v_record_id := NEW.id; -- Assumiamo che tutte le tabelle auditate abbiano una colonna 'id' come PK
-        INSERT INTO catasto.audit_log (
-            tabella, operazione, record_id, dati_prima, dati_dopo,
-            utente, app_user_id, session_id, ip_address
-        )
-        VALUES (
-            TG_TABLE_NAME, 'I', v_record_id, v_old_data, v_new_data,
-            v_db_user, v_app_user_id, v_session_id, v_ip_address
-        );
+    END IF;
+
+    IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
+         -- Prova a prendere l'ID dal vecchio record se esiste
+        BEGIN
+            -- Precedenza a NEW se esiste (per UPDATE), altrimenti OLD
+            IF v_record_id IS NULL THEN
+               v_record_id := (to_jsonb(OLD)->>'id')::INTEGER;
+            END IF;
+        EXCEPTION
+            WHEN OTHERS THEN -- Se la colonna 'id' non esiste o non è convertibile a INTEGER
+                 IF TG_TABLE_NAME = 'comune' THEN
+                     -- Precedenza a NEW se esiste (per UPDATE), altrimenti OLD
+                     IF v_record_identifier IS NULL THEN
+                        v_record_identifier := (to_jsonb(OLD)->>'nome');
+                     END IF;
+                 END IF;
+                 -- Lascia v_record_id a NULL
+        END;
+        v_old_data := to_jsonb(OLD);
+    END IF;
+
+    -- Inserisci nel log
+    -- Nota: record_id sarà NULL per la tabella 'comune'.
+    -- Si potrebbe modificare audit_log per avere una colonna VARCHAR per l'identificatore,
+    -- ma per ora usiamo NULL per l'ID numerico.
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
+        VALUES (TG_TABLE_NAME, 'I', v_record_id, NULL, v_new_data, v_db_user, v_app_user_id, v_session_id, v_ip_address);
         RETURN NEW;
     ELSIF TG_OP = 'UPDATE' THEN
-        -- Non registrare se i dati JSON sono identici (evita log inutili)
-        IF to_jsonb(OLD) IS NOT DISTINCT FROM to_jsonb(NEW) THEN
-            RETURN NEW; -- Nessuna modifica effettiva
+        -- Non registrare se i dati JSON sono identici
+        IF v_old_data IS NOT DISTINCT FROM v_new_data THEN
+            RETURN NEW;
         END IF;
-        v_old_data := to_jsonb(OLD);
-        v_new_data := to_jsonb(NEW);
-        v_record_id := NEW.id;
-        INSERT INTO catasto.audit_log (
-            tabella, operazione, record_id, dati_prima, dati_dopo,
-            utente, app_user_id, session_id, ip_address
-        )
-        VALUES (
-            TG_TABLE_NAME, 'U', v_record_id, v_old_data, v_new_data,
-            v_db_user, v_app_user_id, v_session_id, v_ip_address
-        );
+        INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
+        VALUES (TG_TABLE_NAME, 'U', v_record_id, v_old_data, v_new_data, v_db_user, v_app_user_id, v_session_id, v_ip_address);
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
-        v_old_data := to_jsonb(OLD);
-        v_new_data := NULL;
-        v_record_id := OLD.id;
-        INSERT INTO catasto.audit_log (
-            tabella, operazione, record_id, dati_prima, dati_dopo,
-            utente, app_user_id, session_id, ip_address
-        )
-        VALUES (
-            TG_TABLE_NAME, 'D', v_record_id, v_old_data, v_new_data,
-            v_db_user, v_app_user_id, v_session_id, v_ip_address
-        );
+        INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
+        VALUES (TG_TABLE_NAME, 'D', v_record_id, v_old_data, NULL, v_db_user, v_app_user_id, v_session_id, v_ip_address);
         RETURN OLD;
     END IF;
-    RETURN NULL; -- In caso di TG_OP non gestito
+
+    RETURN NULL; -- Non dovrebbe arrivare qui
 END;
 $$ LANGUAGE plpgsql;
 
--- Assicurarsi che il trigger sia applicato (potrebbe essere già stato fatto)
--- Riapplicare i trigger per usare la nuova funzione aggiornata (se necessario)
+-- Dopo aver aggiornato la funzione, assicurati che sia applicata correttamente
+-- (questo blocco è già presente in 15_integration_audit_users.sql)
+/*
 DO $$
 DECLARE
   tbl RECORD;
 BEGIN
   FOR tbl IN SELECT table_name FROM information_schema.tables
              WHERE table_schema = 'catasto' AND table_type = 'BASE TABLE'
-             AND table_name IN ('partita', 'possessore', 'immobile', 'variazione', 'contratto', 'consultazione', 'localita', 'comune') -- Elenca tabelle da auditare
+             AND table_name IN ('partita', 'possessore', 'immobile', 'variazione', 'contratto', 'consultazione', 'localita', 'comune') -- Assicurati che 'comune' sia inclusa
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS audit_trigger_%I ON catasto.%I;', tbl.table_name, tbl.table_name);
     EXECUTE format('CREATE TRIGGER audit_trigger_%I AFTER INSERT OR UPDATE OR DELETE ON catasto.%I FOR EACH ROW EXECUTE FUNCTION catasto.audit_trigger_function();', tbl.table_name, tbl.table_name);
-    RAISE NOTICE 'Trigger di audit applicato a %.%', 'catasto', tbl.table_name;
+    RAISE NOTICE 'Trigger di audit riapplicato a %.%', 'catasto', tbl.table_name;
   END LOOP;
 END $$;
+*/
 
 
 -- =========================================================================

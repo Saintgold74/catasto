@@ -353,3 +353,34 @@ LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
 2025-04-29 17:35:00,970 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
 2025-04-29 17:35:01,107 - CatastoDB - INFO - Connessione stabilita con successo
 2025-04-29 17:35:27,679 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 19:07:51,868 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 19:07:51,971 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 19:07:56,671 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 19:07:56,672 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 19:07:56,672 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 19:07:56,673 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 19:07:56,674 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 19:08:07,075 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 19:16:38,965 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 19:16:39,074 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 19:16:42,546 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 19:16:42,547 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-29 19:16:42,547 - CatastoDB - ERROR - Query renderizzata: b'SELECT id, nome, provincia, regione FROM comune ORDER BY nome'
+2025-04-29 19:16:42,548 - CatastoDB - INFO - Rollback eseguito.
+2025-04-29 19:16:42,549 - CatastoDB - ERROR - Errore DB in get_comuni: ERRORE:  la colonna "id" non esiste
+LINE 1: SELECT id, nome, provincia, regione FROM comune ORDER BY nom...
+               ^
+
+2025-04-29 19:16:58,895 - CatastoDB - INFO - Disconnessione completata
+2025-04-29 19:25:54,799 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-29 19:25:54,867 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-29 19:26:14,334 - CatastoDB - INFO - Disconnessione completata

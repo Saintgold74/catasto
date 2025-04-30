@@ -1,30 +1,47 @@
 {
     "partita": {
         "id": 1,
-        "comune_nome": "Carcare",
-        "numero_partita": 302,
+        "comune_id": 1,
+        "numero_partita": 221,
         "tipo": "principale",
-        "data_impianto": "2025-04-29",
+        "data_impianto": "1950-05-10",
         "data_chiusura": null,
         "numero_provenienza": null,
         "stato": "attiva",
-        "data_creazione": "2025-04-29T10:17:58.783561",
-        "data_modifica": "2025-04-29T10:17:58.783561"
+        "data_creazione": "2025-04-30T11:05:51.206153",
+        "data_modifica": "2025-04-30T11:05:51.206153",
+        "comune_nome": "Carcare"
     },
     "possessori": [
         {
             "id": 1,
-            "comune_nome": "Carcare",
-            "cognome_nome": "Rossi Marco",
-            "paternita": "fu Antonio",
-            "nome_completo": "Rossi Marco fu Antonio",
+            "comune_id": 1,
+            "cognome_nome": "Fossati Angelo",
+            "paternita": "fu Roberto",
+            "nome_completo": "Fossati Angelo fu Roberto",
             "attivo": true,
-            "data_creazione": "2025-04-29T10:17:58.60494",
-            "data_modifica": "2025-04-29T10:17:58.60494",
+            "data_creazione": "2025-04-30T11:05:51.206153",
+            "data_modifica": "2025-04-30T11:05:51.206153",
             "titolo": "proprietÃ  esclusiva",
             "quota": null
         }
     ],
     "immobili": null,
-    "variazioni": null
+    "variazioni": [
+        {
+            "id": 2,
+            "partita_origine_id": 1,
+            "partita_destinazione_id": 7,
+            "tipo": "Vendita",
+            "data_variazione": "1953-02-20",
+            "numero_riferimento": "Atto Not. Verdi",
+            "nominativo_riferimento": "Rossi Marco",
+            "data_creazione": "2025-04-30T11:05:51.206153",
+            "data_modifica": "2025-04-30T11:05:51.206153",
+            "contratto_tipo": "Vendita",
+            "data_contratto": "1953-02-15",
+            "notaio": "Notaio Verdi",
+            "repertorio": "567/53"
+        }
+    ]
 }

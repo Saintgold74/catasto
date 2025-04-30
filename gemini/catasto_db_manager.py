@@ -517,11 +517,19 @@ class CatastoDBManager:
             if self.execute_query(call_proc, params): self.commit(); logger.info(f"Contratto inserito per variazione ID {variazione_id}."); return True
             return False
         except psycopg2.Error as db_err:
-            if hasattr(db_err, 'pgcode') and db_err.pgcode == psycopg2.errors.RaiseException.sqlstate and 'Esiste già un contratto' in str(db_err): logger.warning(f"Contratto per variazione ID {variazione_id} esiste già.")
-            else: logger.error(f"Errore DB inserimento contratto var ID {variazione_id}: {db_err}")
-            return False
-        except Exception as e: logger.error(f"Errore Python inserimento contratto var ID {variazione_id}: {e}"); self.rollback(); return False
-
+        # --- INIZIO CORREZIONE ---
+        # Verifica se è l'eccezione specifica di contratto duplicato sollevata dalla procedura
+        # Controlla il codice SQLSTATE ('P0001' per raise_exception) E il messaggio
+            if hasattr(db_err, 'pgcode') and db_err.pgcode == 'P0001' and 'Esiste già un contratto' in str(db_err):
+                logger.warning(f"Contratto per variazione ID {variazione_id} esiste già.")
+            # --- FINE CORREZIONE ---
+            else:
+                # Logga altri errori DB generici
+                logger.error(f"Errore DB inserimento contratto var ID {variazione_id}: {db_err}")
+                # Potresti voler loggare anche db_err.pgcode e db_err.pgerror qui per più dettagli
+                # logger.error(f"SQLSTATE: {db_err.pgcode} - Errore: {db_err.pgerror}")
+            # In entrambi i casi (duplicato o altro errore DB), ritorna False
+        return False
     def update_contratto(self, contratto_id: int, **kwargs) -> bool:
         """Chiama la procedura SQL aggiorna_contratto."""
         params = {'p_id': contratto_id, 'p_tipo': kwargs.get('tipo'), 'p_data_contratto': kwargs.get('data_contratto'),

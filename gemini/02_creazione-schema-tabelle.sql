@@ -140,7 +140,7 @@ CREATE TABLE variazione (
     id SERIAL PRIMARY KEY,
     partita_origine_id INTEGER NOT NULL REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     partita_destinazione_id INTEGER REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Acquisto', 'Successione', 'Variazione', 'Frazionamento', 'Divisione', 'Trasferimento')), -- Aggiunto Trasferimento
+    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Vendita','Acquisto', 'Successione', 'Variazione', 'Frazionamento', 'Divisione', 'Trasferimento')), -- Aggiunto Trasferimento
     data_variazione DATE NOT NULL,
     numero_riferimento VARCHAR(50),
     nominativo_riferimento VARCHAR(255),

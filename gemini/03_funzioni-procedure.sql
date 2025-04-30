@@ -1,43 +1,59 @@
 -- Imposta lo schema
-SET search_path TO catasto;
+SET search_path TO catasto, public; -- Aggiunto public per estensioni
 
 -- 1. Funzione per aggiornare automaticamente il timestamp di modifica
+-- (Questa funzione è corretta e rimane invariata)
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.data_modifica = now();
+    -- Assicurati che la tabella abbia la colonna data_modifica
+    IF TG_OP = 'UPDATE' THEN
+        NEW.data_modifica = now();
+    END IF;
+    -- Potresti voler gestire anche data_creazione qui se non impostata di default
+    -- IF TG_OP = 'INSERT' THEN
+    --    NEW.data_creazione = now();
+    --    NEW.data_modifica = now();
+    -- END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE 'plpgsql';
 
 -- Applica i trigger per aggiornare il timestamp sulle tabelle principali
+-- (Assicurati che questi trigger vengano creati una sola volta)
+--DROP TRIGGER IF EXISTS update_comune_modifica ON comune; -- Esempio drop se necessario
 CREATE TRIGGER update_comune_modifica
 BEFORE UPDATE ON comune
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
+--DROP TRIGGER IF EXISTS update_partita_modifica ON partita;
 CREATE TRIGGER update_partita_modifica
 BEFORE UPDATE ON partita
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
+--DROP TRIGGER IF EXISTS update_possessore_modifica ON possessore;
 CREATE TRIGGER update_possessore_modifica
 BEFORE UPDATE ON possessore
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
+--DROP TRIGGER IF EXISTS update_immobile_modifica ON immobile;
 CREATE TRIGGER update_immobile_modifica
 BEFORE UPDATE ON immobile
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
+--DROP TRIGGER IF EXISTS update_localita_modifica ON localita;
 CREATE TRIGGER update_localita_modifica
 BEFORE UPDATE ON localita
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
+--DROP TRIGGER IF EXISTS update_variazione_modifica ON variazione;
 CREATE TRIGGER update_variazione_modifica
 BEFORE UPDATE ON variazione
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
--- 2. Procedura per inserire un nuovo possessore (CORRETTA: senza COMMIT)
+-- 2. Procedura per inserire un nuovo possessore (MODIFICATA: usa comune_id)
 CREATE OR REPLACE PROCEDURE inserisci_possessore(
-    p_comune_nome VARCHAR(100),
+    p_comune_id INTEGER, -- Modificato da p_comune_nome
     p_cognome_nome VARCHAR(255),
     p_paternita VARCHAR(255),
     p_nome_completo VARCHAR(255),
@@ -46,12 +62,17 @@ CREATE OR REPLACE PROCEDURE inserisci_possessore(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO possessore(comune_nome, cognome_nome, paternita, nome_completo, attivo)
-    VALUES (p_comune_nome, p_cognome_nome, p_paternita, p_nome_completo, p_attivo);
+    -- Verifica che il comune_id esista (opzionale ma consigliato)
+    IF NOT EXISTS (SELECT 1 FROM comune WHERE id = p_comune_id) THEN
+        RAISE EXCEPTION 'Comune con ID % non trovato.', p_comune_id;
+    END IF;
+
+    INSERT INTO possessore(comune_id, cognome_nome, paternita, nome_completo, attivo)
+    VALUES (p_comune_id, p_cognome_nome, p_paternita, p_nome_completo, p_attivo);
 END;
 $$;
 
--- 3. Funzione per verificare se una partita è attiva
+-- 3. Funzione per verificare se una partita è attiva (Invariata)
 CREATE OR REPLACE FUNCTION is_partita_attiva(p_partita_id INTEGER)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -62,9 +83,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. Procedura per registrare una nuova partita e relativi possessori (CORRETTA: senza COMMIT)
+-- 4. Procedura per registrare una nuova partita e relativi possessori (MODIFICATA: usa comune_id)
 CREATE OR REPLACE PROCEDURE inserisci_partita_con_possessori(
-    p_comune_nome VARCHAR(100),
+    p_comune_id INTEGER, -- Modificato da p_comune_nome
     p_numero_partita INTEGER,
     p_tipo VARCHAR(20),
     p_data_impianto DATE,
@@ -76,21 +97,32 @@ DECLARE
     v_partita_id INTEGER;
     v_possessore_id INTEGER;
 BEGIN
+    -- Verifica che il comune_id esista (opzionale ma consigliato)
+    IF NOT EXISTS (SELECT 1 FROM comune WHERE id = p_comune_id) THEN
+        RAISE EXCEPTION 'Comune con ID % non trovato.', p_comune_id;
+    END IF;
+
     -- Inserisci la partita
-    INSERT INTO partita(comune_nome, numero_partita, tipo, data_impianto, stato)
-    VALUES (p_comune_nome, p_numero_partita, p_tipo, p_data_impianto, 'attiva')
+    INSERT INTO partita(comune_id, numero_partita, tipo, data_impianto, stato)
+    VALUES (p_comune_id, p_numero_partita, p_tipo, p_data_impianto, 'attiva')
     RETURNING id INTO v_partita_id;
-    
+
     -- Collega i possessori
     FOREACH v_possessore_id IN ARRAY p_possessore_ids
     LOOP
-        INSERT INTO partita_possessore(partita_id, possessore_id, tipo_partita)
-        VALUES (v_partita_id, v_possessore_id, p_tipo);
+        -- Verifica che il possessore esista
+        IF EXISTS (SELECT 1 FROM possessore WHERE id = v_possessore_id) THEN
+             INSERT INTO partita_possessore(partita_id, possessore_id, tipo_partita)
+             VALUES (v_partita_id, v_possessore_id, p_tipo);
+        ELSE
+             RAISE WARNING 'Possessore ID % non trovato, impossibile collegarlo alla partita ID %', v_possessore_id, v_partita_id;
+        END IF;
     END LOOP;
 END;
 $$;
 
--- 5. Procedura per registrare una variazione di proprietà (CORRETTA: senza COMMIT)
+-- 5. Procedura per registrare una variazione di proprietà (Invariata rispetto a comune_id)
+--    Nota: La logica assume che partita_origine_id e partita_destinazione_id siano corretti.
 CREATE OR REPLACE PROCEDURE registra_variazione(
     p_partita_origine_id INTEGER,
     p_partita_destinazione_id INTEGER,
@@ -111,50 +143,56 @@ DECLARE
 BEGIN
     -- Verifica che la partita origine sia attiva
     IF NOT is_partita_attiva(p_partita_origine_id) THEN
-        RAISE EXCEPTION 'La partita di origine non è attiva';
+        RAISE EXCEPTION 'La partita di origine ID % non è attiva', p_partita_origine_id;
     END IF;
-    
+
     -- Inserisci la variazione
-    INSERT INTO variazione(partita_origine_id, partita_destinazione_id, tipo, data_variazione, 
+    INSERT INTO variazione(partita_origine_id, partita_destinazione_id, tipo, data_variazione,
                           numero_riferimento, nominativo_riferimento)
-    VALUES (p_partita_origine_id, p_partita_destinazione_id, p_tipo, p_data_variazione, 
+    VALUES (p_partita_origine_id, p_partita_destinazione_id, p_tipo, p_data_variazione,
            p_numero_riferimento, p_nominativo_riferimento)
     RETURNING id INTO v_variazione_id;
-    
-    -- Inserisci il contratto associato
-    INSERT INTO contratto(variazione_id, tipo, data_contratto, notaio, repertorio, note)
-    VALUES (v_variazione_id, p_tipo_contratto, p_data_contratto, p_notaio, p_repertorio, p_note);
-    
-    -- Se è una variazione che inattiva la partita di origine
-    IF p_tipo IN ('Vendita', 'Successione', 'Frazionamento') THEN
+
+    -- Inserisci il contratto associato (se fornito)
+    IF p_tipo_contratto IS NOT NULL AND p_data_contratto IS NOT NULL THEN
+        INSERT INTO contratto(variazione_id, tipo, data_contratto, notaio, repertorio, note)
+        VALUES (v_variazione_id, p_tipo_contratto, p_data_contratto, p_notaio, p_repertorio, p_note);
+    END IF;
+
+    -- Se è una variazione che inattiva la partita di origine (es. vendita totale, successione completa)
+    -- La logica workflow più complessa è in script 13
+    IF p_tipo IN ('Vendita', 'Successione', 'Frazionamento') AND p_partita_destinazione_id IS NOT NULL THEN
+         -- Potrebbe essere necessario verificare se TUTTI gli immobili sono stati trasferiti
+         -- per decidere se chiudere la partita origine. Questa logica semplice la chiude.
         UPDATE partita SET stato = 'inattiva', data_chiusura = p_data_variazione
         WHERE id = p_partita_origine_id;
     END IF;
 END;
 $$;
 
--- 6. Funzione per ottenere tutti gli immobili di un possessore
+-- 6. Funzione per ottenere tutti gli immobili di un possessore (MODIFICATA: join con comune)
 CREATE OR REPLACE FUNCTION get_immobili_possessore(p_possessore_id INTEGER)
 RETURNS TABLE (
     immobile_id INTEGER,
     natura VARCHAR(100),
     localita_nome VARCHAR(255),
-    comune VARCHAR(100),
+    comune_nome VARCHAR(100), -- Nome colonna output
     partita_numero INTEGER,
     tipo_partita VARCHAR(20)
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT i.id, i.natura, l.nome, l.comune_nome, p.numero_partita, pp.tipo_partita
+    SELECT i.id, i.natura, l.nome, c.nome, p.numero_partita, pp.tipo_partita -- Seleziona c.nome
     FROM immobile i
     JOIN localita l ON i.localita_id = l.id
     JOIN partita p ON i.partita_id = p.id
+    JOIN comune c ON p.comune_id = c.id -- *** JOIN AGGIUNTO ***
     JOIN partita_possessore pp ON p.id = pp.partita_id
     WHERE pp.possessore_id = p_possessore_id AND p.stato = 'attiva';
 END;
 $$ LANGUAGE plpgsql;
 
--- 7. Procedura per registrare una consultazione (CORRETTA: senza COMMIT)
+-- 7. Procedura per registrare una consultazione (Invariata)
 CREATE OR REPLACE PROCEDURE registra_consultazione(
     p_data DATE,
     p_richiedente VARCHAR(255),
@@ -166,18 +204,19 @@ CREATE OR REPLACE PROCEDURE registra_consultazione(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO consultazione(data, richiedente, documento_identita, motivazione, 
+    INSERT INTO consultazione(data, richiedente, documento_identita, motivazione,
                              materiale_consultato, funzionario_autorizzante)
-    VALUES (p_data, p_richiedente, p_documento_identita, p_motivazione, 
+    VALUES (p_data, p_richiedente, p_documento_identita, p_motivazione,
            p_materiale_consultato, p_funzionario_autorizzante);
 END;
 $$;
 
--- 8. Vista per facilitare la ricerca di partite
+-- 8. Vista per facilitare la ricerca di partite (MODIFICATA: join con comune)
+-- DROP VIEW IF EXISTS v_partite_complete; -- Rimuovi se necessario ricrearla
 CREATE OR REPLACE VIEW v_partite_complete AS
-SELECT 
+SELECT
     p.id AS partita_id,
-    p.comune_nome,
+    c.nome AS comune_nome, -- Seleziona c.nome
     p.numero_partita,
     p.tipo,
     p.data_impianto,
@@ -189,55 +228,60 @@ SELECT
     pos.nome_completo,
     pp.titolo,
     pp.quota,
-    COUNT(i.id) AS num_immobili
+    COUNT(i.id) AS num_immobili -- Conta immobili associati
 FROM partita p
+JOIN comune c ON p.comune_id = c.id -- *** JOIN AGGIUNTO ***
 LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
 LEFT JOIN possessore pos ON pp.possessore_id = pos.id
 LEFT JOIN immobile i ON p.id = i.partita_id
-GROUP BY p.id, p.comune_nome, p.numero_partita, p.tipo, p.data_impianto, p.data_chiusura, 
+GROUP BY p.id, c.nome, p.numero_partita, p.tipo, p.data_impianto, p.data_chiusura,
          p.stato, pos.id, pos.cognome_nome, pos.paternita, pos.nome_completo, pp.titolo, pp.quota;
 
--- 9. Vista per le variazioni complete con contratti
+-- 9. Vista per le variazioni complete con contratti (MODIFICATA: join con comune)
+-- DROP VIEW IF EXISTS v_variazioni_complete; -- Rimuovi se necessario ricrearla
 CREATE OR REPLACE VIEW v_variazioni_complete AS
-SELECT 
+SELECT
     v.id AS variazione_id,
     v.tipo AS tipo_variazione,
     v.data_variazione,
     p_orig.numero_partita AS partita_origine_numero,
-    p_orig.comune_nome AS partita_origine_comune,
+    c_orig.nome AS partita_origine_comune, -- Seleziona c_orig.nome
     p_dest.numero_partita AS partita_dest_numero,
-    p_dest.comune_nome AS partita_dest_comune,
-    c.tipo AS tipo_contratto,
-    c.data_contratto,
-    c.notaio,
-    c.repertorio
+    c_dest.nome AS partita_dest_comune, -- Seleziona c_dest.nome
+    con.tipo AS tipo_contratto, -- Alias 'con' per contratto
+    con.data_contratto,
+    con.notaio,
+    con.repertorio
 FROM variazione v
 JOIN partita p_orig ON v.partita_origine_id = p_orig.id
+JOIN comune c_orig ON p_orig.comune_id = c_orig.id -- *** JOIN AGGIUNTO ***
 LEFT JOIN partita p_dest ON v.partita_destinazione_id = p_dest.id
-LEFT JOIN contratto c ON v.id = c.variazione_id;
+LEFT JOIN comune c_dest ON p_dest.comune_id = c_dest.id -- *** JOIN AGGIUNTO ***
+LEFT JOIN contratto con ON v.id = con.variazione_id; -- Alias 'con'
 
--- 10. Funzione per ricerca full-text di possessori
+-- 10. Funzione per ricerca full-text di possessori (MODIFICATA: join con comune)
 CREATE OR REPLACE FUNCTION cerca_possessori(p_query TEXT)
 RETURNS TABLE (
     id INTEGER,
     nome_completo VARCHAR(255),
-    comune_nome VARCHAR(100),
+    comune_nome VARCHAR(100), -- Nome colonna output
     num_partite BIGINT
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         p.id,
         p.nome_completo,
-        p.comune_nome,
+        c.nome, -- Seleziona c.nome
         COUNT(DISTINCT pp.partita_id) AS num_partite
     FROM possessore p
+    JOIN comune c ON p.comune_id = c.id -- *** JOIN AGGIUNTO ***
     LEFT JOIN partita_possessore pp ON p.id = pp.possessore_id
-    WHERE 
+    WHERE
         p.nome_completo ILIKE '%' || p_query || '%' OR
         p.cognome_nome ILIKE '%' || p_query || '%' OR
         p.paternita ILIKE '%' || p_query || '%'
-    GROUP BY p.id, p.nome_completo, p.comune_nome
+    GROUP BY p.id, p.nome_completo, c.nome -- Raggruppa per c.nome
     ORDER BY num_partite DESC;
 END;
 $$ LANGUAGE plpgsql;

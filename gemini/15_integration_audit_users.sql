@@ -1,299 +1,306 @@
--- Filename: 15_integration_audit_users.sql
--- =========================================================================
--- Integrazione sistema di audit con sistema utenti (MODIFICATO)
--- Versione: 1.2 (Rimosso CREATE TABLE audit_log, aggiunto controllo FK)
--- Data: 29/04/2025
--- ASSUNZIONE: La tabella 'audit_log' è stata creata alla fine dello script 02.
--- =========================================================================
+-- Script: 05_query-test_corretto.sql
+-- Oggetto: Script di test SQL rivisto per il database Catasto Storico
+-- Versione: 1.1
+-- Data: 30/04/2025
+-- Note: Questo script tiene conto dell'uso di comune_id come PK
+--       e delle correzioni apportate a funzioni, procedure e viste.
+--       Eseguire DOPO 04_dati-esempio_modificato.sql corretto.
 
 -- Imposta lo schema
-SET search_path TO catasto, public; -- Assicurati che public sia incluso per le estensioni
+SET search_path TO catasto, public;
 
--- =========================================================================
--- FASE 1: Modifica della tabella audit_log esistente
--- (La tabella è stata creata in script 02)
--- =========================================================================
-
--- Aggiungi colonne per collegare audit_log con il sistema utenti
--- Aggiungi colonne solo se non esistono già per rendere lo script rieseguibile
 DO $$
-BEGIN
-   --RAISE NOTICE 'FASE 1: Modifica tabella audit_log (aggiunta colonne session/user)...';
-    -- Verifica se la colonna session_id esiste già
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'catasto' AND table_name = 'audit_log' AND column_name = 'session_id') THEN
-        ALTER TABLE catasto.audit_log ADD COLUMN session_id VARCHAR(100);
-        RAISE NOTICE '  -> Colonna session_id aggiunta a audit_log.';
-    ELSE
-        RAISE NOTICE '  -> Colonna session_id già presente in audit_log.';
-    END IF;
+BEGIN RAISE NOTICE '--- INIZIO SCRIPT DI TEST (05_query-test_corretto.sql) ---'; END $$;
 
-    -- Verifica se la colonna app_user_id esiste già
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'catasto' AND table_name = 'audit_log' AND column_name = 'app_user_id') THEN
-        ALTER TABLE catasto.audit_log ADD COLUMN app_user_id INTEGER;
-        RAISE NOTICE '  -> Colonna app_user_id aggiunta a audit_log.';
+-- ================================================
+-- TEST 1: Inserimento/Verifica Possessore Esistente
+-- ================================================
+DO $$
+DECLARE
+    v_possessore_id INTEGER;
+    v_comune_id INTEGER;
+    v_cognome VARCHAR := 'Rossi Marco';
+    v_paternita VARCHAR := 'fu Antonio';
+    v_nome_completo VARCHAR := 'Rossi Marco fu Antonio';
+    v_comune_nome VARCHAR := 'Carcare';
+BEGIN
+    RAISE NOTICE '--- TEST 1: Inserisci/Verifica Possessore Esistente ---';
+    SELECT id INTO v_comune_id FROM comune WHERE nome = v_comune_nome;
+    IF NOT FOUND THEN RAISE WARNING 'Comune % non trovato, test saltato.', v_comune_nome; RETURN; END IF;
+
+    -- Verifica se esiste già
+    SELECT id INTO v_possessore_id FROM possessore
+    WHERE comune_id = v_comune_id AND nome_completo = v_nome_completo;
+
+    IF v_possessore_id IS NULL THEN
+        RAISE WARNING 'Test 1: INASPETTATO - Possessore % non trovato, tentativo inserimento.', v_nome_completo;
+        CALL inserisci_possessore(v_comune_id, v_cognome, v_paternita, v_nome_completo, true);
     ELSE
-        RAISE NOTICE '  -> Colonna app_user_id già presente in audit_log.';
+        RAISE NOTICE 'Test 1: OK - Possessore già esistente con ID %: %', v_possessore_id, v_nome_completo;
     END IF;
-    RAISE NOTICE 'FASE 1: Modifica tabella audit_log completata.';
 END $$;
 
--- Aggiungiamo un vincolo di chiave esterna (FOREIGN KEY) posticipato
--- Aggiungi vincolo solo se non esiste già
+-- Verifica risultato Test 1
+SELECT pos.id, pos.cognome_nome, pos.paternita, pos.nome_completo, c.nome as comune_nome
+FROM possessore pos JOIN comune c ON pos.comune_id = c.id
+WHERE c.nome = 'Carcare' AND pos.cognome_nome = 'Rossi Marco';
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 2: Registra Nuova Consultazione
+-- ================================================
 DO $$
+DECLARE
+    v_consultazione_id INTEGER;
+    v_richiedente VARCHAR := 'Luigi Neri'; -- Nuovo richiedente diverso
+    v_oggi DATE := CURRENT_DATE;
 BEGIN
-    --RAISE NOTICE 'FASE 1.1: Aggiunta Foreign Key fk_audit_user a audit_log...';
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_audit_user' AND conrelid = 'catasto.audit_log'::regclass) THEN
-        -- Verifica che la tabella utente esista prima di aggiungere il vincolo
-        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'catasto' AND table_name = 'utente') THEN
-            ALTER TABLE catasto.audit_log
-            ADD CONSTRAINT fk_audit_user
-              FOREIGN KEY (app_user_id) REFERENCES catasto.utente(id)
-              ON DELETE SET NULL -- O RESTRICT se preferisci impedire cancellazione utente con log
-              ON UPDATE CASCADE
-              DEFERRABLE INITIALLY DEFERRED; -- Utile se si inseriscono log prima dell'utente in transazioni complesse
-            RAISE NOTICE '  -> Foreign Key fk_audit_user aggiunta.';
+    RAISE NOTICE '--- TEST 2: Registra Nuova Consultazione ---';
+    -- Verifica se esiste già per questo richiedente oggi
+    SELECT id INTO v_consultazione_id FROM consultazione
+    WHERE richiedente = v_richiedente AND data = v_oggi;
+
+    IF v_consultazione_id IS NULL THEN
+        CALL registra_consultazione(v_oggi, v_richiedente, 'CI ZZ9876543',
+            'Verifica genealogica', 'Matricole Altare anni 50', 'Dott. Bianchi');
+        RAISE NOTICE 'Test 2: OK - Inserita nuova consultazione per: %', v_richiedente;
+    ELSE
+        RAISE NOTICE 'Test 2: ATTENZIONE - Consultazione già esistente oggi con ID % per: %', v_consultazione_id, v_richiedente;
+    END IF;
+END $$;
+
+-- Verifica risultato Test 2
+SELECT id, data, richiedente, motivazione FROM consultazione
+WHERE richiedente = 'Luigi Neri' ORDER BY data DESC;
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 3: Crea Nuova Partita con Possessori
+-- ================================================
+DO $$
+DECLARE
+    v_partita_id INTEGER;
+    v_numero_partita INTEGER := 303; -- Numero non usato negli esempi
+    v_comune_id INTEGER;
+    v_comune_nome VARCHAR := 'Carcare';
+    v_fossati_id INTEGER;
+    v_caviglia_id INTEGER;
+    v_possessore_ids INTEGER[];
+BEGIN
+     RAISE NOTICE '--- TEST 3: Crea Nuova Partita con Possessori Esistenti ---';
+    SELECT id INTO v_comune_id FROM comune WHERE nome = v_comune_nome;
+    IF NOT FOUND THEN RAISE WARNING 'Comune % non trovato, test saltato.', v_comune_nome; RETURN; END IF;
+
+    -- Verifica se la partita esiste già
+    SELECT id INTO v_partita_id FROM partita
+    WHERE comune_id = v_comune_id AND numero_partita = v_numero_partita;
+
+    -- Trova gli ID dei possessori esistenti
+    SELECT id INTO v_fossati_id FROM possessore WHERE comune_id=v_comune_id AND nome_completo LIKE 'Fossati Angelo%';
+    SELECT id INTO v_caviglia_id FROM possessore WHERE comune_id=v_comune_id AND nome_completo LIKE 'Caviglia Maria%';
+
+    v_possessore_ids := ARRAY[]::INTEGER[];
+    IF v_fossati_id IS NOT NULL THEN v_possessore_ids := array_append(v_possessore_ids, v_fossati_id); END IF;
+    IF v_caviglia_id IS NOT NULL THEN v_possessore_ids := array_append(v_possessore_ids, v_caviglia_id); END IF;
+
+    IF v_partita_id IS NULL THEN
+        IF array_length(v_possessore_ids, 1) > 0 THEN
+            -- La procedura inserisci_partita_con_possessori è nello script 03
+            CALL inserisci_partita_con_possessori(v_comune_id, v_numero_partita, 'principale', CURRENT_DATE, v_possessore_ids);
+            RAISE NOTICE 'Test 3: OK - Inserita nuova partita % (Comune ID %) con possessori: %', v_numero_partita, v_comune_id, v_possessore_ids;
         ELSE
-            RAISE WARNING '  -> Tabella utente non trovata, impossibile aggiungere Foreign Key fk_audit_user.';
+            RAISE WARNING 'Test 3: FALLITO - Non trovati possessori (Fossati/Caviglia) nel comune ID %', v_comune_id;
         END IF;
     ELSE
-        RAISE NOTICE '  -> Foreign Key fk_audit_user già presente.';
+        RAISE NOTICE 'Test 3: ATTENZIONE - Partita % (Comune ID %) già esistente con ID %', v_numero_partita, v_comune_id, v_partita_id;
     END IF;
-    RAISE NOTICE 'FASE 1.1: Controllo/Aggiunta Foreign Key completato.';
 END $$;
 
+-- Verifica risultato Test 3
+SELECT p.*, c.nome as comune_nome
+FROM partita p JOIN comune c ON p.comune_id = c.id
+WHERE c.nome = 'Carcare' AND p.numero_partita = 303;
 
--- Aggiunta colonne alla tabella accesso_log (se non già presenti)
-DO $$
-BEGIN
-    --RAISE NOTICE 'FASE 1.2: Modifica tabella accesso_log (aggiunta colonne session/app)...';
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'catasto' AND table_name = 'accesso_log' AND column_name = 'session_id') THEN
-        ALTER TABLE catasto.accesso_log ADD COLUMN session_id VARCHAR(100);
-         RAISE NOTICE '  -> Colonna session_id aggiunta a accesso_log.';
-    ELSE
-        RAISE NOTICE '  -> Colonna session_id già presente in accesso_log.';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'catasto' AND table_name = 'accesso_log' AND column_name = 'application_name') THEN
-        ALTER TABLE catasto.accesso_log ADD COLUMN application_name VARCHAR(100);
-        RAISE NOTICE '  -> Colonna application_name aggiunta a accesso_log.';
-    ELSE
-        RAISE NOTICE '  -> Colonna application_name già presente in accesso_log.';
-    END IF;
-    RAISE NOTICE 'FASE 1.2: Modifica tabella accesso_log completata.';
-END $$;
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
+-- ================================================
+-- TEST 4: Ricerca Partita Esistente (Carcare 221)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 4: Ricerca partita numero 221 (Carcare) ---'; END $$;
+SELECT
+    p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.stato,
+    string_agg(pos.nome_completo, ', ') AS possessori
+FROM partita p
+JOIN comune c ON p.comune_id = c.id
+LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+WHERE p.numero_partita = 221 AND c.nome = 'Carcare' -- Filtra per nome comune
+GROUP BY p.id, c.nome, p.numero_partita, p.tipo, p.stato;
 
--- =========================================================================
--- FASE 2: Funzioni di supporto (UUID, Sessione)
--- =========================================================================
---RAISE NOTICE 'FASE 2: Creazione/Aggiornamento funzioni di supporto...';
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
--- Funzione per generare un session_id univoco
-CREATE OR REPLACE FUNCTION genera_session_id() RETURNS VARCHAR AS $$
-DECLARE
-  v_uuid_ext_exists BOOLEAN;
-BEGIN
-  SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'uuid-ossp') INTO v_uuid_ext_exists;
-  IF v_uuid_ext_exists THEN
-    RETURN uuid_generate_v4()::VARCHAR;
-  ELSE
-    RETURN md5(random()::text || clock_timestamp()::text);
-  END IF;
-END;
-$$ LANGUAGE plpgsql VOLATILE;
+-- ================================================
+-- TEST 5: Ricerca Immobili per Località (Carcare, Via G. Verdi)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 5: Ricerca immobili in Via Giuseppe Verdi (Carcare) ---'; END $$;
+SELECT
+    i.id, i.natura, i.consistenza, i.classificazione,
+    l.nome AS localita, c.nome AS comune_nome,
+    p.numero_partita,
+    string_agg(pos.nome_completo, ', ') AS possessori
+FROM immobile i
+JOIN localita l ON i.localita_id = l.id
+JOIN comune c ON l.comune_id = c.id
+JOIN partita p ON i.partita_id = p.id
+LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
+LEFT JOIN possessore pos ON pp.possessore_id = pos.id
+WHERE l.nome LIKE '%Verdi%' AND c.nome = 'Carcare' -- Filtra per nome comune
+GROUP BY i.id, i.natura, i.consistenza, i.classificazione, l.nome, c.nome, p.numero_partita;
 
--- Funzione per impostare le variabili di sessione
-CREATE OR REPLACE FUNCTION imposta_utente_sessione(
-    p_user_id INTEGER,
-    p_session_id VARCHAR,
-    p_ip_address VARCHAR
-) RETURNS VOID AS $$
-BEGIN
-    PERFORM set_config('app.user_id', p_user_id::text, FALSE);
-    PERFORM set_config('app.session_id', p_session_id, FALSE);
-    PERFORM set_config('app.ip_address', COALESCE(p_ip_address, ''), FALSE); -- Usa stringa vuota se IP è NULL
-    -- Rimosso RAISE NOTICE per ridurre verbosità
-END;
-$$ LANGUAGE plpgsql;
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
--- Funzione per ottenere informazioni sulla sessione corrente
-CREATE OR REPLACE FUNCTION get_sessione_info()
-RETURNS TABLE (app_user_id INTEGER, session_id VARCHAR, ip_address VARCHAR, db_user_name TEXT, is_active BOOLEAN) AS $$
-DECLARE
-    v_app_user_id TEXT; v_session_id TEXT; v_ip_address TEXT;
-BEGIN
-    v_app_user_id := current_setting('app.user_id', TRUE);
-    v_session_id := current_setting('app.session_id', TRUE);
-    v_ip_address := current_setting('app.ip_address', TRUE);
-    app_user_id := NULLIF(v_app_user_id, '')::INTEGER;
-    get_sessione_info.session_id := v_session_id; -- Qualifica nome colonna output
-    get_sessione_info.ip_address := v_ip_address;
-    get_sessione_info.db_user_name := current_user;
-    get_sessione_info.is_active := v_app_user_id IS NOT NULL AND v_session_id IS NOT NULL;
-    RETURN NEXT;
-END;
-$$ LANGUAGE plpgsql;
+-- ================================================
+-- TEST 6: Elenco Possessori con Conteggi
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 6: Elenco possessori con num partite/immobili ---'; END $$;
+SELECT
+    pos.id, pos.nome_completo, c.nome AS comune_nome,
+    COUNT(DISTINCT p.id) AS num_partite_totali,
+    COUNT(DISTINCT CASE WHEN p.stato='attiva' THEN p.id ELSE NULL END) as num_partite_attive,
+    COUNT(DISTINCT i.id) AS numero_immobili_associati
+FROM possessore pos
+JOIN comune c ON pos.comune_id = c.id
+LEFT JOIN partita_possessore pp ON pos.id = pp.possessore_id
+LEFT JOIN partita p ON pp.partita_id = p.id
+LEFT JOIN immobile i ON p.id = i.partita_id
+GROUP BY pos.id, pos.nome_completo, c.nome
+ORDER BY c.nome, pos.nome_completo;
 
---RAISE NOTICE 'FASE 2: Funzioni di supporto create/aggiornate.';
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
--- =========================================================================
--- FASE 3: Aggiornamento funzione trigger di audit (Versione Corretta)
--- =========================================================================
---RAISE NOTICE 'FASE 3: Creazione/Aggiornamento funzione trigger audit...';
+-- ================================================
+-- TEST 7: Ricerca Possessori Semplice (Funzione cerca_possessori)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 7: Ricerca possessore "Fossati" ---'; END $$;
+SELECT * FROM cerca_possessori('Fossati'); -- Funzione da script 03 (presume join comune corretto)
 
--- Aggiornamento della funzione di audit per usare contesto sessione e gestire PK 'comune'
-CREATE OR REPLACE FUNCTION audit_trigger_function()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_old_data JSONB;
-    v_new_data JSONB;
-    v_db_user TEXT;
-    v_app_user_id INTEGER;
-    v_session_id TEXT;
-    v_ip_address TEXT;
-    v_record_id INTEGER := NULL; -- Default a NULL
-    v_record_identifier TEXT := NULL; -- Identificatore alternativo per tabelle senza 'id' PK numerico
-BEGIN
-    -- Ottieni informazioni utente/sessione
-    v_db_user := session_user;
-    v_app_user_id := NULLIF(current_setting('app.user_id', TRUE), '')::INTEGER;
-    v_session_id := current_setting('app.session_id', TRUE);
-    v_ip_address := current_setting('app.ip_address', TRUE);
+DO $$ BEGIN RAISE NOTICE '--- TEST 7: Ricerca possessore "Maria" ---'; END $$;
+SELECT * FROM cerca_possessori('Maria');
 
-    -- Determina l'ID del record o un identificatore alternativo
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        BEGIN
-            -- Prova a ottenere l'ID numerico (più comune)
-            v_record_id := (to_jsonb(NEW)->>'id')::INTEGER;
-        EXCEPTION
-            WHEN OTHERS THEN -- Se 'id' non esiste o non è INTEGER
-                IF TG_TABLE_NAME = 'comune' THEN
-                    -- Per 'comune', usiamo 'nome' come identificatore testuale
-                    -- Potremmo salvarlo in una colonna dedicata nell'audit_log se necessario
-                    v_record_identifier := (to_jsonb(NEW)->>'nome');
-                END IF;
-                -- Lasciamo v_record_id a NULL
-        END;
-        v_new_data := to_jsonb(NEW);
-    END IF;
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
-    IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
-        BEGIN
-             -- Precedenza a NEW.id se esiste (per UPDATE), altrimenti prova OLD.id
-            IF v_record_id IS NULL THEN
-               v_record_id := (to_jsonb(OLD)->>'id')::INTEGER;
-            END IF;
-        EXCEPTION
-            WHEN OTHERS THEN
-                IF TG_TABLE_NAME = 'comune' THEN
-                    -- Precedenza a NEW.nome se esiste (per UPDATE), altrimenti OLD.nome
-                     IF v_record_identifier IS NULL THEN
-                        v_record_identifier := (to_jsonb(OLD)->>'nome');
-                     END IF;
-                 END IF;
-                 -- Lasciamo v_record_id a NULL
-        END;
-        v_old_data := to_jsonb(OLD);
-    END IF;
-
-    -- Inserisci nel log (record_id sarà NULL per 'comune')
-    BEGIN
-        IF TG_OP = 'INSERT' THEN
-            INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
-            VALUES (TG_TABLE_NAME, 'I', v_record_id, NULL, v_new_data, v_db_user, v_app_user_id, v_session_id, v_ip_address);
-        ELSIF TG_OP = 'UPDATE' THEN
-            IF v_old_data IS NOT DISTINCT FROM v_new_data THEN RETURN NEW; END IF; -- Salta se non ci sono modifiche
-            INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
-            VALUES (TG_TABLE_NAME, 'U', v_record_id, v_old_data, v_new_data, v_db_user, v_app_user_id, v_session_id, v_ip_address);
-        ELSIF TG_OP = 'DELETE' THEN
-            INSERT INTO catasto.audit_log (tabella, operazione, record_id, dati_prima, dati_dopo, utente, app_user_id, session_id, ip_address)
-            VALUES (TG_TABLE_NAME, 'D', v_record_id, v_old_data, NULL, v_db_user, v_app_user_id, v_session_id, v_ip_address);
-        END IF;
-    EXCEPTION
-        WHEN OTHERS THEN
-            -- Logga un errore se l'inserimento nell'audit fallisce, ma non bloccare l'operazione originale
-            RAISE WARNING '[AUDIT TRIGGER] Impossibile registrare log per % su %.%: %', TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME, SQLERRM;
-    END;
-
-    -- Ritorna il record appropriato per l'operazione originale
-    IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
-
-END;
-$$ LANGUAGE plpgsql;
-
---RAISE NOTICE 'FASE 3: Funzione trigger audit creata/aggiornata.';
-
--- Applica il trigger aggiornato alle tabelle necessarie
+-- ================================================
+-- TEST 8: Immobili di un Possessore (Funzione get_immobili_possessore)
+-- ================================================
 DO $$
 DECLARE
-  tbl RECORD;
-  trigger_name TEXT;
+    v_possessore_id INTEGER;
 BEGIN
-  RAISE NOTICE 'FASE 3.1: Applicazione trigger di audit...';
-  FOR tbl IN SELECT table_name FROM information_schema.tables
-             WHERE table_schema = 'catasto' AND table_type = 'BASE TABLE'
-             AND table_name IN ('partita', 'possessore', 'immobile', 'variazione', 'contratto', 'consultazione', 'localita', 'comune') -- Elenco tabelle auditate
-  LOOP
-    trigger_name := 'audit_trigger_' || tbl.table_name;
-    -- Controlla se il trigger esiste già prima di dropparlo
-    IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND tgrelid = ('catasto.' || quote_ident(tbl.table_name))::regclass) THEN
-        EXECUTE format('DROP TRIGGER %I ON catasto.%I;', trigger_name, tbl.table_name);
-        RAISE NOTICE '  -> Trigger % droppato da %.%', trigger_name, 'catasto', tbl.table_name;
+    RAISE NOTICE '--- TEST 8: Immobili di Caviglia Maria ---';
+    SELECT id INTO v_possessore_id FROM possessore WHERE nome_completo LIKE 'Caviglia Maria%' LIMIT 1;
+    IF v_possessore_id IS NOT NULL THEN
+        RAISE NOTICE 'Test 8: Esecuzione get_immobili_possessore per ID % (Caviglia Maria)', v_possessore_id;
     ELSE
-        RAISE NOTICE '  -> Trigger % non esistente su %.%', trigger_name, 'catasto', tbl.table_name;
+        RAISE NOTICE 'Test 8: Possessore "Caviglia Maria" non trovato';
     END IF;
-    -- Crea il trigger
-    EXECUTE format('CREATE TRIGGER %I AFTER INSERT OR UPDATE OR DELETE ON catasto.%I FOR EACH ROW EXECUTE FUNCTION catasto.audit_trigger_function();', trigger_name, tbl.table_name);
-    RAISE NOTICE '  -> Trigger % applicato a %.%', trigger_name, 'catasto', tbl.table_name;
-  END LOOP;
-  RAISE NOTICE 'FASE 3.1: Applicazione trigger completata.';
 END $$;
+-- Esegui la funzione (presume join comune corretto)
+SELECT * FROM get_immobili_possessore( (SELECT id FROM possessore WHERE nome_completo LIKE 'Caviglia Maria%' LIMIT 1) );
 
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 
--- =========================================================================
--- FASE 4: Aggiornamento procedure per registrazione accessi
--- =========================================================================
---RAISE NOTICE 'FASE 4: Creazione/Aggiornamento procedure registrazione accessi...';
+-- ================================================
+-- TEST 9: Vista Partite Complete (v_partite_complete)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 9: Vista v_partite_complete (Comune Carcare) ---'; END $$;
+SELECT * FROM v_partite_complete WHERE comune_nome = 'Carcare'; -- Vista da script 03 (presume join comune corretto)
 
--- Aggiornamento procedura registra_accesso
-CREATE OR REPLACE PROCEDURE registra_accesso(
-    p_utente_id INTEGER,
-    p_azione VARCHAR(50),
-    p_indirizzo_ip VARCHAR(40) DEFAULT NULL,
-    p_user_agent TEXT DEFAULT NULL,
-    p_esito BOOLEAN DEFAULT TRUE,
-    p_session_id VARCHAR(100) DEFAULT NULL, -- Rende session_id un parametro IN
-    p_application_name VARCHAR(100) DEFAULT 'CatastoApp'
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_final_session_id VARCHAR(100);
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 10: Vista Variazioni Complete (v_variazioni_complete)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 10: Vista v_variazioni_complete ---'; END $$;
+SELECT * FROM v_variazioni_complete ORDER BY data_variazione DESC; -- Vista da script 03 (presume join comune corretto)
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 11: Ricerca Avanzata Possessori (pg_trgm)
+-- ================================================
+DO $$ BEGIN RAISE NOTICE '--- TEST 11: Ricerca avanzata possessore ---'; END $$;
+-- Assumiamo che la funzione sia stata corretta in 16_advanced_search.sql per includere comune_nome
+DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Angelo Fosati" (typo)'; END $$;
+SELECT * FROM ricerca_avanzata_possessori('Angelo Fosati', 0.2);
+
+DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Rossi A"'; END $$;
+SELECT * FROM ricerca_avanzata_possessori('Rossi A', 0.3);
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 12: Funzione Report Annuale Partite
+-- ================================================
+DO $$
+DECLARE v_comune_id INTEGER; v_comune_nome VARCHAR := 'Carcare';
 BEGIN
-    v_final_session_id := COALESCE(p_session_id, genera_session_id());
-
-    INSERT INTO catasto.accesso_log (utente_id, timestamp, azione, indirizzo_ip, user_agent, esito, session_id, application_name)
-    VALUES (p_utente_id, CURRENT_TIMESTAMP, p_azione, p_indirizzo_ip, p_user_agent, p_esito, v_final_session_id, p_application_name);
-
-    IF p_azione = 'login' AND p_esito = TRUE THEN
-        UPDATE catasto.utente SET ultimo_accesso = CURRENT_TIMESTAMP WHERE id = p_utente_id;
-        PERFORM catasto.imposta_utente_sessione(p_utente_id, v_final_session_id, p_indirizzo_ip);
+    RAISE NOTICE '--- TEST 12: Report Annuale Partite ---';
+    SELECT id INTO v_comune_id FROM comune WHERE nome = v_comune_nome;
+    IF v_comune_id IS NOT NULL THEN
+        RAISE NOTICE '  -> Report per % (ID: %), Anno 1950', v_comune_nome, v_comune_id;
+        -- Esegui la funzione (l'output viene mostrato dal SELECT successivo)
+    ELSE
+         RAISE NOTICE '  -> Comune % non trovato per report.', v_comune_nome;
     END IF;
-END;
-$$;
+END $$;
+-- Funzione da script 08 (modificata per usare comune_id)
+SELECT * FROM report_annuale_partite((SELECT id FROM comune WHERE nome = 'Carcare'), 1950);
 
--- Procedura per logout utente
-CREATE OR REPLACE PROCEDURE logout_utente(
-    p_utente_id INTEGER,
-    p_session_id VARCHAR(100),
-    p_indirizzo_ip VARCHAR(40) DEFAULT NULL
-)
-LANGUAGE plpgsql
-AS $$
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 13: Funzione Report Proprietà Possessore per Periodo
+-- ================================================
+DO $$
+DECLARE v_possessore_id INTEGER; v_nome VARCHAR := 'Fossati Angelo fu Roberto';
 BEGIN
-    -- Registra logout
-    CALL catasto.registra_accesso(p_utente_id, 'logout', p_indirizzo_ip, NULL, TRUE, p_session_id, 'CatastoApp');
-    -- Resetta variabili di sessione DB per la connessione corrente
-    PERFORM set_config('app.user_id', NULL, FALSE);
-    PERFORM set_config('app.session_id', NULL, FALSE);
-    PERFORM set_config('app.ip_address', NULL, FALSE);
-    -- RAISE NOTICE 'Variabili sessione DB resettate.';
+    RAISE NOTICE '--- TEST 13: Report Proprietà Possessore per Periodo ---';
+    SELECT id INTO v_possessore_id FROM possessore WHERE nome_completo = v_nome;
+    IF v_possessore_id IS NOT NULL THEN
+        RAISE NOTICE '  -> Report per % (ID: %), Periodo 1950-01-01 - 1952-12-31', v_nome, v_possessore_id;
+    ELSE
+         RAISE NOTICE '  -> Possessore % non trovato per report.', v_nome;
+    END IF;
+END $$;
+-- Funzione da script 08 (presume join comune corretto)
+SELECT * FROM report_proprieta_possessore(
+    (SELECT id FROM possessore WHERE nome_completo = 'Fossati Angelo fu Roberto'),
+    '1950-01-01',
+    '1952-12-31'
+);
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+-- ================================================
+-- TEST 14: Funzione Report Statistico Comune
+-- ================================================
+DO $$
+DECLARE v_comune_id INTEGER; v_comune_nome VARCHAR := 'Cairo Montenotte';
+BEGIN
+    RAISE NOTICE '--- TEST 14: Report Statistico Comune ---';
+    SELECT id INTO v_comune_id FROM comune WHERE nome = v_comune_nome;
+    IF v_comune_id IS NOT NULL THEN
+        RAISE NOTICE '  -> Report per % (ID: %)', v_comune_nome, v_comune_id;
+    ELSE
+         RAISE NOTICE '  -> Comune % non trovato per report.', v_comune_nome;
+    END IF;
+END $$;
+-- Funzione da script 14 (modificata per usare comune_id)
+SELECT * FROM genera_report_comune((SELECT id FROM comune WHERE nome = 'Cairo Montenotte'));
+
+DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
+
+
+DO $$ BEGIN RAISE NOTICE '--- FINE SCRIPT DI TEST ---'; END $$;

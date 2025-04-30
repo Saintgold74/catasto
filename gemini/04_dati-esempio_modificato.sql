@@ -1,469 +1,220 @@
 -- Imposta lo schema
-SET search_path TO catasto;
+SET search_path TO catasto, public;
 
 /*
  * Script per l'inserimento di dati di esempio nel database del catasto storico
- * Questo script offre due modalità:
- * 1. Inserimento di dati di esempio predefiniti
- * 2. Importazione di dati da file CSV
- *
- * Utilizzare il parametro p_source per specificare la modalità:
- *   - 'predefined': utilizza i dati predefiniti (default)
- *   - 'csv': importa dati da file CSV
- *
- * Per l'importazione da CSV, è necessario specificare il percorso dei file
- * tramite il parametro p_csv_path
+ * VERSIONE CORRETTA per compatibilità con comune.id PK
+ * Utilizza una procedura per gestire l'inserimento e le relazioni tramite ID.
  */
 
--- Funzione per gestire l'inserimento di dati di esempio
-CREATE OR REPLACE PROCEDURE carica_dati_esempio(
-    p_source VARCHAR DEFAULT 'predefined',
-    p_csv_path VARCHAR DEFAULT '/tmp/csv/'
-)
+-- Procedura principale per caricare i dati di esempio
+CREATE OR REPLACE PROCEDURE carica_dati_esempio_completo()
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_count INTEGER;
-    v_comune_count INTEGER;
-    v_file_exists BOOLEAN;
+    -- IDs Comuni
+    v_carcare_id INTEGER;
+    v_cairo_id INTEGER;
+    v_altare_id INTEGER;
+
+    -- IDs Possessori
+    v_fossati_a_id INTEGER;
+    v_caviglia_m_id INTEGER;
+    v_barberis_g_id INTEGER;
+    v_berruti_a_id INTEGER;
+    v_ferraro_c_id INTEGER;
+    v_bormioli_p_id INTEGER;
+    v_rossi_m_id INTEGER; -- Nuovo possessore per test
+
+    -- IDs Località
+    v_loc_car_vista_id INTEGER;
+    v_loc_car_verdi_id INTEGER;
+    v_loc_car_roma_id INTEGER;
+    v_loc_cai_ferrere_id INTEGER;
+    v_loc_cai_prov_id INTEGER;
+    v_loc_alt_palermo_id INTEGER;
+
+    -- IDs Partite
+    v_par_car_221_id INTEGER;
+    v_par_car_219_id INTEGER;
+    v_par_car_245_id INTEGER; -- Secondaria
+    v_par_cai_112_id INTEGER;
+    v_par_cai_118_id INTEGER; -- Inattiva
+    v_par_alt_87_id INTEGER;
+    v_par_car_305_id INTEGER; -- Nuova per variazione
+
+    -- IDs Variazioni
+    v_var_cai_succ_id INTEGER;
+    v_var_car_vend_id INTEGER;
+
 BEGIN
-    -- Verifica se esistono già dati nel database
-    SELECT COUNT(*) INTO v_comune_count FROM comune;
-    
-    IF v_comune_count > 0 THEN
-        RAISE NOTICE 'Ci sono già dati nel database. Procedere con cautela.';
+    RAISE NOTICE '[DATI ESEMPIO] Inizio caricamento...';
+
+    -- === 1. Inserimento Comuni ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Comuni...';
+    -- Usa ON CONFLICT per rendere rieseguibile senza errori se i comuni esistono già
+    INSERT INTO comune (nome, provincia, regione) VALUES ('Carcare', 'Savona', 'Liguria') ON CONFLICT (nome) DO UPDATE SET provincia = EXCLUDED.provincia RETURNING id INTO v_carcare_id;
+    INSERT INTO comune (nome, provincia, regione) VALUES ('Cairo Montenotte', 'Savona', 'Liguria') ON CONFLICT (nome) DO UPDATE SET provincia = EXCLUDED.provincia RETURNING id INTO v_cairo_id;
+    INSERT INTO comune (nome, provincia, regione) VALUES ('Altare', 'Savona', 'Liguria') ON CONFLICT (nome) DO UPDATE SET provincia = EXCLUDED.provincia RETURNING id INTO v_altare_id;
+    -- Recupera gli ID anche se esistevano già
+    SELECT id INTO v_carcare_id FROM comune WHERE nome='Carcare';
+    SELECT id INTO v_cairo_id FROM comune WHERE nome='Cairo Montenotte';
+    SELECT id INTO v_altare_id FROM comune WHERE nome='Altare';
+    RAISE NOTICE '[DATI ESEMPIO]   -> Carcare ID: %, Cairo ID: %, Altare ID: %', v_carcare_id, v_cairo_id, v_altare_id;
+
+    -- === 2. Inserimento Registri (Opzionale, se li usi) ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Registri Partite/Matricole...';
+    INSERT INTO registro_partite (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_carcare_id, 1950, 3, 'Buono') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+    INSERT INTO registro_partite (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_cairo_id, 1948, 5, 'Discreto') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+    INSERT INTO registro_partite (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_altare_id, 1952, 2, 'Ottimo') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+    INSERT INTO registro_matricole (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_carcare_id, 1950, 2, 'Buono') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+    INSERT INTO registro_matricole (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_cairo_id, 1948, 4, 'Discreto') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+    INSERT INTO registro_matricole (comune_id, anno_impianto, numero_volumi, stato_conservazione) VALUES (v_altare_id, 1952, 1, 'Ottimo') ON CONFLICT (comune_id, anno_impianto) DO NOTHING;
+
+    -- === 3. Inserimento Possessori ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Possessori...';
+    -- Usiamo ON CONFLICT per robustezza, assumendo UNIQUE(comune_id, nome_completo) se aggiunto, altrimenti si basa su SELECT
+    SELECT id INTO v_fossati_a_id FROM possessore WHERE comune_id=v_carcare_id AND nome_completo='Fossati Angelo fu Roberto';
+    IF v_fossati_a_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_carcare_id, 'Fossati Angelo', 'fu Roberto', 'Fossati Angelo fu Roberto', true) RETURNING id INTO v_fossati_a_id; END IF;
+
+    SELECT id INTO v_caviglia_m_id FROM possessore WHERE comune_id=v_carcare_id AND nome_completo='Caviglia Maria fu Giuseppe';
+    IF v_caviglia_m_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_carcare_id, 'Caviglia Maria', 'fu Giuseppe', 'Caviglia Maria fu Giuseppe', true) RETURNING id INTO v_caviglia_m_id; END IF;
+
+    SELECT id INTO v_barberis_g_id FROM possessore WHERE comune_id=v_carcare_id AND nome_completo='Barberis Giovanni fu Paolo';
+    IF v_barberis_g_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_carcare_id, 'Barberis Giovanni', 'fu Paolo', 'Barberis Giovanni fu Paolo', true) RETURNING id INTO v_barberis_g_id; END IF;
+
+    SELECT id INTO v_berruti_a_id FROM possessore WHERE comune_id=v_cairo_id AND nome_completo='Berruti Antonio fu Luigi';
+    IF v_berruti_a_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_cairo_id, 'Berruti Antonio', 'fu Luigi', 'Berruti Antonio fu Luigi', true) RETURNING id INTO v_berruti_a_id; END IF;
+
+    SELECT id INTO v_ferraro_c_id FROM possessore WHERE comune_id=v_cairo_id AND nome_completo='Ferraro Caterina fu Marco';
+    IF v_ferraro_c_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_cairo_id, 'Ferraro Caterina', 'fu Marco', 'Ferraro Caterina fu Marco', true) RETURNING id INTO v_ferraro_c_id; END IF;
+
+    SELECT id INTO v_bormioli_p_id FROM possessore WHERE comune_id=v_altare_id AND nome_completo='Bormioli Pietro fu Carlo';
+    IF v_bormioli_p_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_altare_id, 'Bormioli Pietro', 'fu Carlo', 'Bormioli Pietro fu Carlo', true) RETURNING id INTO v_bormioli_p_id; END IF;
+
+    SELECT id INTO v_rossi_m_id FROM possessore WHERE comune_id=v_carcare_id AND nome_completo='Rossi Marco fu Antonio';
+    IF v_rossi_m_id IS NULL THEN INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo) VALUES (v_carcare_id, 'Rossi Marco', 'fu Antonio', 'Rossi Marco fu Antonio', true) RETURNING id INTO v_rossi_m_id; END IF;
+    RAISE NOTICE '[DATI ESEMPIO]   -> Inseriti/Trovati 7 possessori.';
+
+    -- === 4. Inserimento Località ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Località...';
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_carcare_id, 'Regione Vista', 'regione', NULL) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_car_vista_id;
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_carcare_id, 'Via Giuseppe Verdi', 'via', 12) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_car_verdi_id;
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_carcare_id, 'Via Roma', 'via', 5) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_car_roma_id;
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_cairo_id, 'Borgata Ferrere', 'borgata', NULL) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_cai_ferrere_id;
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_cairo_id, 'Strada Provinciale', 'via', 76) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_cai_prov_id;
+    INSERT INTO localita (comune_id, nome, tipo, civico) VALUES (v_altare_id, 'Via Palermo', 'via', 22) ON CONFLICT(comune_id, nome, civico) DO NOTHING RETURNING id INTO v_loc_alt_palermo_id;
+    -- Recupera ID se esistevano già
+    SELECT id INTO v_loc_car_vista_id FROM localita WHERE comune_id=v_carcare_id AND nome='Regione Vista' AND civico IS NULL;
+    SELECT id INTO v_loc_car_verdi_id FROM localita WHERE comune_id=v_carcare_id AND nome='Via Giuseppe Verdi' AND civico=12;
+    SELECT id INTO v_loc_car_roma_id FROM localita WHERE comune_id=v_carcare_id AND nome='Via Roma' AND civico=5;
+    SELECT id INTO v_loc_cai_ferrere_id FROM localita WHERE comune_id=v_cairo_id AND nome='Borgata Ferrere' AND civico IS NULL;
+    SELECT id INTO v_loc_cai_prov_id FROM localita WHERE comune_id=v_cairo_id AND nome='Strada Provinciale' AND civico=76;
+    SELECT id INTO v_loc_alt_palermo_id FROM localita WHERE comune_id=v_altare_id AND nome='Via Palermo' AND civico=22;
+    RAISE NOTICE '[DATI ESEMPIO]   -> Inserite/Trovate 6 località.';
+
+    -- === 5. Inserimento Partite ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Partite...';
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato) VALUES (v_carcare_id, 221, 'principale', '1950-05-10', 'attiva') ON CONFLICT(comune_id, numero_partita) DO NOTHING RETURNING id INTO v_par_car_221_id;
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato) VALUES (v_carcare_id, 219, 'principale', '1950-05-10', 'attiva') ON CONFLICT(comune_id, numero_partita) DO NOTHING RETURNING id INTO v_par_car_219_id;
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato) VALUES (v_carcare_id, 245, 'secondaria', '1951-03-22', 'attiva') ON CONFLICT(comune_id, numero_partita) DO NOTHING RETURNING id INTO v_par_car_245_id;
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato) VALUES (v_cairo_id, 112, 'principale', '1948-11-05', 'attiva') ON CONFLICT(comune_id, numero_partita) DO NOTHING RETURNING id INTO v_par_cai_112_id;
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato, data_chiusura) VALUES (v_cairo_id, 118, 'principale', '1949-01-15', 'inattiva', '1952-08-15') ON CONFLICT(comune_id, numero_partita) DO UPDATE SET stato=EXCLUDED.stato, data_chiusura=EXCLUDED.data_chiusura RETURNING id INTO v_par_cai_118_id;
+    INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato) VALUES (v_altare_id, 87, 'principale', '1952-07-03', 'attiva') ON CONFLICT(comune_id, numero_partita) DO NOTHING RETURNING id INTO v_par_alt_87_id;
+    -- Recupera ID se esistevano già
+    SELECT id INTO v_par_car_221_id FROM partita WHERE comune_id=v_carcare_id AND numero_partita=221;
+    SELECT id INTO v_par_car_219_id FROM partita WHERE comune_id=v_carcare_id AND numero_partita=219;
+    SELECT id INTO v_par_car_245_id FROM partita WHERE comune_id=v_carcare_id AND numero_partita=245;
+    SELECT id INTO v_par_cai_112_id FROM partita WHERE comune_id=v_cairo_id AND numero_partita=112;
+    SELECT id INTO v_par_cai_118_id FROM partita WHERE comune_id=v_cairo_id AND numero_partita=118;
+    SELECT id INTO v_par_alt_87_id FROM partita WHERE comune_id=v_altare_id AND numero_partita=87;
+    RAISE NOTICE '[DATI ESEMPIO]   -> Inserite/Trovate 6 partite esistenti.';
+
+    -- === 6. Associazione Partite-Possessori ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Associazioni Partita-Possessore...';
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_car_221_id, v_fossati_a_id, 'principale', 'proprietà esclusiva', NULL) ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_car_219_id, v_caviglia_m_id, 'principale', 'proprietà esclusiva', NULL) ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_car_245_id, v_barberis_g_id, 'secondaria', 'comproprietà', '1/2') ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_car_245_id, v_caviglia_m_id, 'secondaria', 'comproprietà', '1/2') ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_cai_112_id, v_berruti_a_id, 'principale', 'proprietà esclusiva', NULL) ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_cai_118_id, v_ferraro_c_id, 'principale', 'proprietà esclusiva', NULL) ON CONFLICT DO NOTHING;
+    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES (v_par_alt_87_id, v_bormioli_p_id, 'principale', 'proprietà esclusiva', NULL) ON CONFLICT DO NOTHING;
+
+    -- === 7. Relazioni tra partite ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Relazioni Partita...';
+    INSERT INTO partita_relazione (partita_principale_id, partita_secondaria_id) VALUES (v_par_car_219_id, v_par_car_245_id) ON CONFLICT DO NOTHING;
+
+    -- === 8. Inserimento Immobili ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Immobili...';
+    -- Usiamo ON CONFLICT per robustezza, assumendo UNIQUE(partita_id, localita_id, natura) - SE AGGIUNTO! Altrimenti rimuovere ON CONFLICT.
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_car_221_id, v_loc_car_vista_id, 'Molino da cereali', 2, NULL, '150 mq', 'Artigianale') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_car_219_id, v_loc_car_verdi_id, 'Casa', 3, 8, '210 mq', 'Abitazione civile') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_car_219_id, v_loc_car_verdi_id, 'Giardino', NULL, NULL, '50 mq', 'Area scoperta') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_car_245_id, v_loc_car_roma_id, 'Magazzino', 1, NULL, '80 mq', 'Deposito') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_cai_112_id, v_loc_cai_ferrere_id, 'Fabbricato rurale', 2, 5, '180 mq', 'Abitazione rurale') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_cai_118_id, v_loc_cai_prov_id, 'Casa', 2, 6, '160 mq', 'Abitazione civile') ON CONFLICT DO NOTHING;
+    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES (v_par_alt_87_id, v_loc_alt_palermo_id, 'Laboratorio', 1, NULL, '120 mq', 'Artigianale') ON CONFLICT DO NOTHING;
+    RAISE NOTICE '[DATI ESEMPIO]   -> Inseriti/Saltati 7 immobili.';
+
+    -- === 9. Inserimento Variazioni e Contratti ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Variazioni e Contratti...';
+    -- 9.1 Successione Cairo 118 (già inattiva)
+    -- Verifica se variazione esiste già prima di inserirla
+    SELECT id INTO v_var_cai_succ_id FROM variazione WHERE partita_origine_id = v_par_cai_118_id AND tipo = 'Successione';
+    IF v_var_cai_succ_id IS NULL THEN
+        INSERT INTO variazione (partita_origine_id, partita_destinazione_id, tipo, data_variazione, numero_riferimento, nominativo_riferimento) VALUES
+        (v_par_cai_118_id, NULL, 'Successione', '1952-08-15', '22/52', 'Ferraro Caterina') RETURNING id INTO v_var_cai_succ_id;
+        INSERT INTO contratto (variazione_id, tipo, data_contratto, notaio, repertorio, note) VALUES
+        (v_var_cai_succ_id, 'Successione', '1952-08-10', 'Notaio Bianchi', '1234/52', 'Successione per morte del proprietario Luigi Ferraro');
     END IF;
 
-    -- Gestione in base alla fonte dei dati
-    IF p_source = 'predefined' THEN
-        RAISE NOTICE 'Caricamento dati predefiniti...';
-        PERFORM carica_dati_predefiniti();
-    ELSIF p_source = 'csv' THEN
-        -- Verifica l'esistenza della directory e dei file CSV
-        -- Nota: In PostgreSQL standard non è possibile verificare l'esistenza di file
-        -- Questo controllo è solo indicativo e andrebbe implementato a livello applicativo
-        RAISE NOTICE 'Caricamento dati da CSV nella directory: %', p_csv_path;
-        PERFORM carica_dati_csv(p_csv_path);
-    ELSE
-        RAISE EXCEPTION 'Fonte dati non valida. Utilizzare "predefined" o "csv".';
+    -- 9.2 Vendita parziale da Fossati a Rossi (Nuova partita)
+    --     Crea nuova partita per Rossi (se non esiste)
+    SELECT id INTO v_par_car_305_id FROM partita WHERE comune_id = v_carcare_id AND numero_partita = 305;
+    IF v_par_car_305_id IS NULL THEN
+        INSERT INTO partita (comune_id, numero_partita, tipo, data_impianto, stato, numero_provenienza) VALUES
+        (v_carcare_id, 305, 'principale', '1953-02-20', 'attiva', 221) RETURNING id INTO v_par_car_305_id;
+        -- Associa Rossi
+        INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo) VALUES
+        (v_par_car_305_id, v_rossi_m_id, 'principale', 'proprietà esclusiva') ON CONFLICT DO NOTHING;
+         -- Trasferisci immobile (Molino ID 1)
+        UPDATE immobile SET partita_id = v_par_car_305_id WHERE id = 1 AND partita_id = v_par_car_221_id;
     END IF;
-    
-    RAISE NOTICE 'Caricamento dati completato con successo.';
-END;
-$$;
 
--- Funzione per caricare i dati predefiniti
-CREATE OR REPLACE FUNCTION carica_dati_predefiniti()
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    -- Inserimento Comuni (con ON CONFLICT per evitare duplicati)
-    INSERT INTO comune (nome, provincia, regione) VALUES 
-    ('Carcare', 'Savona', 'Liguria'),
-    ('Cairo Montenotte', 'Savona', 'Liguria'),
-    ('Altare', 'Savona', 'Liguria')
-    ON CONFLICT (nome) DO NOTHING;
+    -- Registra variazione (se non esiste)
+    SELECT id INTO v_var_car_vend_id FROM variazione WHERE partita_origine_id = v_par_car_221_id AND partita_destinazione_id = v_par_car_305_id;
+    IF v_var_car_vend_id IS NULL THEN
+        INSERT INTO variazione (partita_origine_id, partita_destinazione_id, tipo, data_variazione, numero_riferimento, nominativo_riferimento) VALUES
+        (v_par_car_221_id, v_par_car_305_id, 'Vendita', '1953-02-20', 'Atto Not. Verdi', 'Rossi Marco') RETURNING id INTO v_var_car_vend_id;
+        INSERT INTO contratto (variazione_id, tipo, data_contratto, notaio, repertorio, note) VALUES
+        (v_var_car_vend_id, 'Vendita', '1953-02-15', 'Notaio Verdi', '567/53', 'Vendita parziale di immobile da partita 221');
+    END IF;
 
-    -- Inserimento Registri Partite
-    INSERT INTO registro_partite (comune_nome, anno_impianto, numero_volumi, stato_conservazione) VALUES
-    ('Carcare', 1950, 3, 'Buono'),
-    ('Cairo Montenotte', 1948, 5, 'Discreto'),
-    ('Altare', 1952, 2, 'Ottimo');
-
-    -- Inserimento Registri Matricole
-    INSERT INTO registro_matricole (comune_nome, anno_impianto, numero_volumi, stato_conservazione) VALUES
-    ('Carcare', 1950, 2, 'Buono'),
-    ('Cairo Montenotte', 1948, 4, 'Discreto'),
-    ('Altare', 1952, 1, 'Ottimo');
-
-    -- Inserimento Possessori
-    INSERT INTO possessore (comune_nome, cognome_nome, paternita, nome_completo, attivo) VALUES
-    ('Carcare', 'Fossati Angelo', 'fu Roberto', 'Fossati Angelo fu Roberto', true),
-    ('Carcare', 'Caviglia Maria', 'fu Giuseppe', 'Caviglia Maria fu Giuseppe', true),
-    ('Carcare', 'Barberis Giovanni', 'fu Paolo', 'Barberis Giovanni fu Paolo', true),
-    ('Cairo Montenotte', 'Berruti Antonio', 'fu Luigi', 'Berruti Antonio fu Luigi', true),
-    ('Cairo Montenotte', 'Ferraro Caterina', 'fu Marco', 'Ferraro Caterina fu Marco', true),
-    ('Altare', 'Bormioli Pietro', 'fu Carlo', 'Bormioli Pietro fu Carlo', true);
-
-    -- Inserimento Località
-    INSERT INTO localita (comune_nome, nome, tipo, civico) VALUES
-    ('Carcare', 'Regione Vista', 'regione', NULL),
-    ('Carcare', 'Via Giuseppe Verdi', 'via', 12),
-    ('Carcare', 'Via Roma', 'via', 5),
-    ('Cairo Montenotte', 'Borgata Ferrere', 'borgata', NULL),
-    ('Cairo Montenotte', 'Strada Provinciale', 'via', 76),
-    ('Altare', 'Via Palermo', 'via', 22);
-
-    -- Inserimento Partite
-    INSERT INTO partita (comune_nome, numero_partita, tipo, data_impianto, stato) VALUES
-    ('Carcare', 221, 'principale', '1950-05-10', 'attiva'),
-    ('Carcare', 219, 'principale', '1950-05-10', 'attiva'),
-    ('Carcare', 245, 'secondaria', '1951-03-22', 'attiva'),
-    ('Cairo Montenotte', 112, 'principale', '1948-11-05', 'attiva'),
-    ('Cairo Montenotte', 118, 'principale', '1949-01-15', 'inattiva'),
-    ('Altare', 87, 'principale', '1952-07-03', 'attiva');
-
-    -- Associazione Partite-Possessori
-    INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota) VALUES
-    (1, 1, 'principale', 'proprietà esclusiva', NULL),
-    (2, 2, 'principale', 'proprietà esclusiva', NULL),
-    (3, 3, 'secondaria', 'comproprietà', '1/2'),
-    (3, 2, 'secondaria', 'comproprietà', '1/2'),
-    (4, 4, 'principale', 'proprietà esclusiva', NULL),
-    (5, 5, 'principale', 'proprietà esclusiva', NULL),
-    (6, 6, 'principale', 'proprietà esclusiva', NULL);
-
-    -- Relazioni tra partite (principale-secondaria)
-    INSERT INTO partita_relazione (partita_principale_id, partita_secondaria_id) VALUES
-    (2, 3);
-
-    -- Inserimento Immobili
-    INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione) VALUES
-    (1, 1, 'Molino da cereali', 2, NULL, '150 mq', 'Artigianale'),
-    (2, 2, 'Casa', 3, 8, '210 mq', 'Abitazione civile'),
-    (3, 3, 'Magazzino', 1, NULL, '80 mq', 'Deposito'),
-    (4, 4, 'Fabbricato rurale', 2, 5, '180 mq', 'Abitazione rurale'),
-    (5, 5, 'Casa', 2, 6, '160 mq', 'Abitazione civile'),
-    (6, 6, 'Laboratorio', 1, NULL, '120 mq', 'Artigianale');
-
-    -- Inserimento Variazioni
-    INSERT INTO variazione (partita_origine_id, partita_destinazione_id, tipo, data_variazione, numero_riferimento, nominativo_riferimento) VALUES
-    (5, NULL, 'Successione', '1952-08-15', '22/52', 'Ferraro Caterina');
-
-    -- Inserimento Contratti
-    INSERT INTO contratto (variazione_id, tipo, data_contratto, notaio, repertorio, note) VALUES
-    (1, 'Successione', '1952-08-10', 'Notaio Rossi', '1234/52', 'Successione per morte del proprietario Luigi Ferraro');
-
-    -- Inserimento Consultazioni
+    -- === 10. Inserimento Consultazioni ===
+    RAISE NOTICE '[DATI ESEMPIO] Inserimento Consultazioni...';
     INSERT INTO consultazione (data, richiedente, documento_identita, motivazione, materiale_consultato, funzionario_autorizzante) VALUES
-    ('2025-04-01', 'Mario Bianchi', 'CI AB1234567', 'Ricerca storica', 'Registro partite Carcare 1950', 'Dott. Verdi'),
-    ('2025-04-05', 'Studio Legale Rossi', 'Tessera Ordine 55213', 'Verifica proprietà', 'Partite 221 e 219 Carcare', 'Dott. Verdi');
+    ('2025-04-01', 'Mario Bianchi', 'CI AB1234567', 'Ricerca storica', 'Registro partite Carcare 1950', 'Dott. Verdi') ON CONFLICT DO NOTHING;
+    INSERT INTO consultazione (data, richiedente, documento_identita, motivazione, materiale_consultato, funzionario_autorizzante) VALUES
+    ('2025-04-05', 'Studio Legale Rossi', 'Tessera Ordine 55213', 'Verifica proprietà', 'Partite 221 e 305 Carcare', 'Dott. Verdi') ON CONFLICT DO NOTHING;
+
+    RAISE NOTICE '[DATI ESEMPIO] Caricamento dati di esempio completato.';
+
 END;
 $$;
 
--- Funzione per caricare i dati da file CSV
-CREATE OR REPLACE FUNCTION carica_dati_csv(p_csv_path VARCHAR)
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_comuni_file VARCHAR := p_csv_path || 'comuni.csv';
-    v_possessori_file VARCHAR := p_csv_path || 'possessori.csv';
-    v_localita_file VARCHAR := p_csv_path || 'localita.csv';
-    v_partite_file VARCHAR := p_csv_path || 'partite.csv';
-    v_immobili_file VARCHAR := p_csv_path || 'immobili.csv';
-    v_variazioni_file VARCHAR := p_csv_path || 'variazioni.csv';
-    v_sql TEXT;
-BEGIN
-    -- Creazione di tabelle temporanee per il caricamento dei CSV
-    CREATE TEMP TABLE temp_comuni (
-        nome VARCHAR(100),
-        provincia VARCHAR(100),
-        regione VARCHAR(100)
-    );
-    
-    CREATE TEMP TABLE temp_possessori (
-        comune_nome VARCHAR(100),
-        cognome_nome VARCHAR(255),
-        paternita VARCHAR(255),
-        nome_completo VARCHAR(255),
-        attivo BOOLEAN
-    );
-    
-    CREATE TEMP TABLE temp_localita (
-        comune_nome VARCHAR(100),
-        nome VARCHAR(255),
-        tipo VARCHAR(50),
-        civico INTEGER
-    );
-    
-    CREATE TEMP TABLE temp_partite (
-        comune_nome VARCHAR(100),
-        numero_partita INTEGER,
-        tipo VARCHAR(20),
-        data_impianto DATE,
-        stato VARCHAR(20)
-    );
-    
-    CREATE TEMP TABLE temp_partita_possessore (
-        partita_comune VARCHAR(100),
-        partita_numero INTEGER,
-        possessore_nome_completo VARCHAR(255),
-        tipo_partita VARCHAR(20),
-        titolo VARCHAR(50),
-        quota VARCHAR(20)
-    );
-    
-    CREATE TEMP TABLE temp_immobili (
-        partita_comune VARCHAR(100),
-        partita_numero INTEGER,
-        localita_nome VARCHAR(255),
-        natura VARCHAR(100),
-        numero_piani INTEGER,
-        numero_vani INTEGER,
-        consistenza VARCHAR(255),
-        classificazione VARCHAR(100)
-    );
-    
-    CREATE TEMP TABLE temp_variazioni (
-        partita_origine_comune VARCHAR(100),
-        partita_origine_numero INTEGER,
-        partita_dest_comune VARCHAR(100),
-        partita_dest_numero INTEGER,
-        tipo VARCHAR(50),
-        data_variazione DATE,
-        numero_riferimento VARCHAR(50),
-        nominativo_riferimento VARCHAR(255)
-    );
-    
-    -- Caricamento dei file CSV nelle tabelle temporanee
-    BEGIN
-        -- Caricamento comuni
-        v_sql := 'COPY temp_comuni FROM ''' || v_comuni_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati comuni da %', v_comuni_file;
-        
-        -- Inserimento comuni nella tabella principale
-        INSERT INTO comune (nome, provincia, regione)
-        SELECT nome, provincia, regione FROM temp_comuni
-        ON CONFLICT (nome) DO NOTHING;
-        
-        -- Caricamento possessori
-        v_sql := 'COPY temp_possessori FROM ''' || v_possessori_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati possessori da %', v_possessori_file;
-        
-        -- Inserimento possessori nella tabella principale
-        INSERT INTO possessore (comune_nome, cognome_nome, paternita, nome_completo, attivo)
-        SELECT comune_nome, cognome_nome, paternita, nome_completo, attivo FROM temp_possessori;
-        
-        -- Caricamento località
-        v_sql := 'COPY temp_localita FROM ''' || v_localita_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati località da %', v_localita_file;
-        
-        -- Inserimento località nella tabella principale
-        INSERT INTO localita (comune_nome, nome, tipo, civico)
-        SELECT comune_nome, nome, tipo, civico FROM temp_localita;
-        
-        -- Caricamento partite
-        v_sql := 'COPY temp_partite FROM ''' || v_partite_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati partite da %', v_partite_file;
-        
-        -- Inserimento partite nella tabella principale
-        INSERT INTO partita (comune_nome, numero_partita, tipo, data_impianto, stato)
-        SELECT comune_nome, numero_partita, tipo, data_impianto, stato FROM temp_partite;
-        
-        -- Caricamento relazioni partita-possessore
-        v_sql := 'COPY temp_partita_possessore FROM ''' || p_csv_path || 'partita_possessore.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati relazioni partita-possessore';
-        
-        -- Inserimento relazioni partita-possessore
-        INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota)
-        SELECT 
-            p.id, 
-            pos.id, 
-            tp.tipo_partita, 
-            tp.titolo, 
-            tp.quota
-        FROM temp_partita_possessore tp
-        JOIN partita p ON p.comune_nome = tp.partita_comune AND p.numero_partita = tp.partita_numero
-        JOIN possessore pos ON pos.nome_completo = tp.possessore_nome_completo;
-        
-        -- Caricamento immobili
-        v_sql := 'COPY temp_immobili FROM ''' || v_immobili_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati immobili da %', v_immobili_file;
-        
-        -- Inserimento immobili
-        INSERT INTO immobile (partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione)
-        SELECT 
-            p.id, 
-            l.id, 
-            ti.natura, 
-            ti.numero_piani, 
-            ti.numero_vani, 
-            ti.consistenza, 
-            ti.classificazione
-        FROM temp_immobili ti
-        JOIN partita p ON p.comune_nome = ti.partita_comune AND p.numero_partita = ti.partita_numero
-        JOIN localita l ON l.comune_nome = ti.partita_comune AND l.nome = ti.localita_nome;
-        
-        -- Caricamento variazioni
-        v_sql := 'COPY temp_variazioni FROM ''' || v_variazioni_file || ''' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-        EXECUTE v_sql;
-        RAISE NOTICE 'Caricati dati variazioni da %', v_variazioni_file;
-        
-        -- Inserimento variazioni
-        INSERT INTO variazione (partita_origine_id, partita_destinazione_id, tipo, data_variazione, numero_riferimento, nominativo_riferimento)
-        SELECT 
-            po.id, 
-            pd.id, 
-            tv.tipo, 
-            tv.data_variazione, 
-            tv.numero_riferimento, 
-            tv.nominativo_riferimento
-        FROM temp_variazioni tv
-        JOIN partita po ON po.comune_nome = tv.partita_origine_comune AND po.numero_partita = tv.partita_origine_numero
-        LEFT JOIN partita pd ON pd.comune_nome = tv.partita_dest_comune AND pd.numero_partita = tv.partita_dest_numero;
-    
-    EXCEPTION WHEN OTHERS THEN
-        RAISE EXCEPTION 'Errore nel caricamento dei dati da CSV: %', SQLERRM;
-    END;
-    
-    -- Pulizia tabelle temporanee
-    DROP TABLE IF EXISTS temp_comuni;
-    DROP TABLE IF EXISTS temp_possessori;
-    DROP TABLE IF EXISTS temp_localita;
-    DROP TABLE IF EXISTS temp_partite;
-    DROP TABLE IF EXISTS temp_partita_possessore;
-    DROP TABLE IF EXISTS temp_immobili;
-    DROP TABLE IF EXISTS temp_variazioni;
-END;
-$$;
-
--- Funzione per esportare i dati verso CSV (utile per generare dataset di esempio)
-CREATE OR REPLACE PROCEDURE esporta_dati_csv(
-    p_export_path VARCHAR DEFAULT '/tmp/csv/'
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_sql TEXT;
-BEGIN
-    -- Esportazione comuni
-    v_sql := 'COPY (SELECT nome, provincia, regione FROM comune) TO ''' || 
-             p_export_path || 'comuni.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione possessori
-    v_sql := 'COPY (SELECT comune_nome, cognome_nome, paternita, nome_completo, attivo FROM possessore) TO ''' || 
-             p_export_path || 'possessori.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione località
-    v_sql := 'COPY (SELECT comune_nome, nome, tipo, civico FROM localita) TO ''' || 
-             p_export_path || 'localita.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione partite
-    v_sql := 'COPY (SELECT comune_nome, numero_partita, tipo, data_impianto, stato FROM partita) TO ''' || 
-             p_export_path || 'partite.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione relazioni partita-possessore
-    v_sql := 'COPY (
-        SELECT 
-            p.comune_nome AS partita_comune, 
-            p.numero_partita AS partita_numero, 
-            pos.nome_completo, 
-            pp.tipo_partita, 
-            pp.titolo, 
-            pp.quota 
-        FROM partita_possessore pp
-        JOIN partita p ON pp.partita_id = p.id
-        JOIN possessore pos ON pp.possessore_id = pos.id
-    ) TO ''' || p_export_path || 'partita_possessore.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione immobili
-    v_sql := 'COPY (
-        SELECT 
-            p.comune_nome AS partita_comune, 
-            p.numero_partita AS partita_numero, 
-            l.nome AS localita_nome, 
-            i.natura, 
-            i.numero_piani, 
-            i.numero_vani, 
-            i.consistenza, 
-            i.classificazione
-        FROM immobile i
-        JOIN partita p ON i.partita_id = p.id
-        JOIN localita l ON i.localita_id = l.id
-    ) TO ''' || p_export_path || 'immobili.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Esportazione variazioni
-    v_sql := 'COPY (
-        SELECT 
-            po.comune_nome AS partita_origine_comune, 
-            po.numero_partita AS partita_origine_numero, 
-            pd.comune_nome AS partita_dest_comune, 
-            pd.numero_partita AS partita_dest_numero, 
-            v.tipo, 
-            v.data_variazione, 
-            v.numero_riferimento, 
-            v.nominativo_riferimento
-        FROM variazione v
-        JOIN partita po ON v.partita_origine_id = po.id
-        LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
-    ) TO ''' || p_export_path || 'variazioni.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    RAISE NOTICE 'Dati esportati con successo nella directory %', p_export_path;
-EXCEPTION WHEN OTHERS THEN
-    RAISE EXCEPTION 'Errore nell''esportazione dei dati in CSV: %', SQLERRM;
-END;
-$$;
-
--- Procedura per generare template CSV vuoti
-CREATE OR REPLACE PROCEDURE genera_template_csv(
-    p_export_path VARCHAR DEFAULT '/tmp/csv/'
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_sql TEXT;
-BEGIN
-    -- Template comuni
-    v_sql := 'COPY (
-        SELECT 
-            ''Carcare''::VARCHAR AS nome, 
-            ''Savona''::VARCHAR AS provincia, 
-            ''Liguria''::VARCHAR AS regione
-        WHERE FALSE
-    ) TO ''' || p_export_path || 'template_comuni.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Template possessori
-    v_sql := 'COPY (
-        SELECT 
-            ''Carcare''::VARCHAR AS comune_nome, 
-            ''Rossi Mario''::VARCHAR AS cognome_nome, 
-            ''fu Antonio''::VARCHAR AS paternita, 
-            ''Rossi Mario fu Antonio''::VARCHAR AS nome_completo, 
-            TRUE::BOOLEAN AS attivo
-        WHERE FALSE
-    ) TO ''' || p_export_path || 'template_possessori.csv'' WITH (FORMAT csv, HEADER true, DELIMITER '';'')';
-    EXECUTE v_sql;
-    
-    -- Continua con gli altri template...
-    
-    RAISE NOTICE 'Template CSV generati nella directory %', p_export_path;
-EXCEPTION WHEN OTHERS THEN
-    RAISE EXCEPTION 'Errore nella generazione dei template CSV: %', SQLERRM;
-END;
-$$;
-
--- Esempio di utilizzo della procedura principale
+-- Esempio di chiamata per caricare i dati
+-- Questa chiamata può essere eseguita una sola volta dopo aver creato le tabelle e la procedura.
 DO $$
 BEGIN
-    -- Per caricare dati predefiniti:
-    -- CALL carica_dati_esempio('predefined');
-    
-    -- Per caricare dati da CSV:
-    -- CALL carica_dati_esempio('csv', '/percorso/ai/csv/');
-    
-    -- Per esportare i dati attuali in CSV:
-    -- CALL esporta_dati_csv('/percorso/di/output/');
-    
-    -- Per generare template CSV:
-    -- CALL genera_template_csv('/percorso/di/output/');
-    
-    -- Di default, carica i dati predefiniti
-    CALL carica_dati_esempio();
-END;
-$$;
+    -- Verifica se ci sono già dati significativi prima di caricare
+    -- (Questo DO block esegue la procedura definita sopra)
+    IF NOT EXISTS (SELECT 1 FROM partita LIMIT 1) THEN
+       RAISE NOTICE 'Database vuoto, caricamento dati di esempio...';
+       CALL carica_dati_esempio_completo();
+    ELSE
+       RAISE NOTICE 'Database contiene già dati, salto caricamento dati di esempio predefiniti.';
+       -- Potresti voler comunque chiamare CALL carica_dati_esempio_completo();
+       -- se la procedura usa ON CONFLICT ed è sicura da rieseguire.
+       -- CALL carica_dati_esempio_completo(); -- Decommenta se vuoi rieseguire
+    END IF;
+END $$;

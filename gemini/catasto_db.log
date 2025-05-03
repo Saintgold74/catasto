@@ -159,3 +159,20 @@ CONTEXT:  Assegnazione PL/pgSQL "v_certificato := v_certificato || 'COMUNE: ' ||
 funzione PL/pgSQL genera_certificato_proprieta(integer) riga 17 a assegnazione
 
 2025-04-30 11:55:50,315 - CatastoDB - INFO - Disconnessione completata
+2025-05-02 18:32:35,377 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-02 18:32:35,470 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-02 18:36:02,083 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  Backup ID 1 non trovato
+CONTEXT:  funzione PL/pgSQL get_restore_commands(integer) riga 9 a RAISE
+
+2025-05-02 18:36:02,083 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-05-02 18:36:02,084 - CatastoDB - ERROR - Query renderizzata: b'SELECT get_restore_commands(1) AS command'
+2025-05-02 18:36:02,085 - CatastoDB - INFO - Rollback eseguito.
+2025-05-02 18:36:02,085 - CatastoDB - ERROR - Errore DB get_restore_cmd (ID: 1): ERRORE:  Backup ID 1 non trovato
+CONTEXT:  funzione PL/pgSQL get_restore_commands(integer) riga 9 a RAISE
+
+2025-05-02 18:36:20,055 - CatastoDB - INFO - Disconnessione completata
+2025-05-03 08:05:18,224 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-03 08:05:18,322 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-03 08:07:20,909 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-05-03 08:10:22,632 - CatastoDB - INFO - Immobile ID 1100 trasferito a partita ID 1300.
+2025-05-03 08:16:20,436 - CatastoDB - INFO - Disconnessione completata

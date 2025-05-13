@@ -38,6 +38,13 @@ class DatabaseManager:
         Stabilisce la connessione al database e imposta lo schema search_path.
         Restituisce True se la connessione ha successo, False altrimenti.
         """
+        if self.conn and logged_in_user_id is not None: # Assumendo di avere logged_in_user_id
+            with self.conn.cursor() as cur:
+                cur.execute(f"SET myapp.current_user_id = '{logged_in_user_id}';")
+        if current_session_id: # Assumendo di avere current_session_id
+             cur.execute(f"SET myapp.current_session_id = '{current_session_id}';")
+        
+        
         if self.conn and not self.conn.closed:
             self.logger.info("Connessione al database già attiva.")
             return True
@@ -127,7 +134,7 @@ class DatabaseManager:
                 self.logger.debug("AUTOCOMMIT attivo, rollback esplicito non ha effetto su statement precedenti in questo modo.")
         else:
             self.logger.warning("Tentativo di rollback su connessione non attiva o chiusa.")
-
+    
     def _format_row_as_dict(self, row: tuple, cursor_desc) -> Optional[dict]:
         """
         Converte una tupla di riga in un dizionario usando la descrizione del cursore.

@@ -1,21 +1,26 @@
 # ui/console/menu_handler.py
 import logging
 from datetime import date, datetime
+from typing import List, Dict, Any, Optional, Callable 
 
 # Importa i servizi necessari
 from core.services import (
     utenti_service, anagrafiche_service, partite_service, 
-    possessore_service, immobili_service, volture_service, 
+    possessori_service, immobili_service, volture_service, 
     documenti_service, reporting_service
 )
 # Importa le utility della UI
 from .ui_utils import (
     seleziona_da_lista, chiedi_conferma, input_valore, 
-    formatta_data_utente, parse_data_utente, validatore_non_vuoto
+    formatta_data_utente, parse_data_utente, validatore_non_vuoto,
+    input_sicuro_password # Assicurati che questo sia importato se usato qui
 )
-from typing import List, Dict, Any, Optional, Callable # Aggiungiamo tutti quelli che potrebbero servire in questo modulo
 
 logger = logging.getLogger("CatastoAppLogger.MenuHandler")
+
+ADMIN_ROLE_ID = 1 # <-- DEFINISCI QUI L'ID DEL RUOLO AMMINISTRATORE
+                  # Verifica che '1' sia l'ID corretto per il ruolo admin 
+                  # nella tua tabella 'ruoli_utente'.
 
 # Variabili globali per lo stato del login (saranno gestite da main_app.py e passate ai menu)
 # NON definirle qui, ma aspettati che vengano passate come argomenti.

@@ -1,9 +1,0 @@
-{
-    "database": {
-        "dbname": "catasto_storico",
-        "user": "postgres",
-        "password": "Markus74",
-        "host": "localhost",
-        "port": 5432
-    }
-}

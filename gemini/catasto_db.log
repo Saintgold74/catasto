@@ -1,0 +1,279 @@
+2025-04-30 09:50:00,322 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 09:50:00,460 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 09:51:23,130 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione ricerca_avanzata_possessori(unknown) non esiste
+LINE 1: SELECT * FROM ricerca_avanzata_possessori('fossati')
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 09:51:23,131 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-30 09:51:23,132 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM ricerca_avanzata_possessori('fossati')"
+2025-04-30 09:51:23,133 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 09:51:23,134 - CatastoDB - WARNING - Funzione 'ricerca_avanzata_possessori' non trovata.
+2025-04-30 09:55:45,633 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 10:40:05,968 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 10:40:06,086 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 10:44:16,871 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 10:49:25,714 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 10:49:25,786 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 10:50:06,801 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-04-30 10:50:06,828 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione ricerca_avanzata_immobili(integer, unknown, unknown, unknown, unknown) non esiste
+LINE 1: SELECT * FROM ricerca_avanzata_immobili(3, 'casa', NULL, NUL...
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 10:50:06,828 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-30 10:50:06,829 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM ricerca_avanzata_immobili(3, 'casa', NULL, NULL, NULL)"
+2025-04-30 10:50:06,830 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 10:50:06,830 - CatastoDB - WARNING - Funzione 'ricerca_avanzata_immobili' non trovata.
+2025-04-30 11:14:46,289 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:14:46,492 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:14:58,774 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-04-30 11:23:24,592 - CatastoDB - INFO - Localit‡ 'Regione Bagnoli' (Comune ID: 4) inserita con ID: 7
+2025-04-30 11:24:14,683 - CatastoDB - INFO - Localit‡ 'Regione Poca' (Comune ID: 4) inserita con ID: 8
+2025-04-30 11:24:30,590 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura registra_nuova_proprieta(integer, integer, date, json, json) non esiste
+LINE 1: CALL registra_nuova_proprieta(4, 99, '2025-04-01'::date, '[{...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 11:24:30,592 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-30 11:24:30,592 - CatastoDB - ERROR - Query renderizzata: b'CALL registra_nuova_proprieta(4, 99, \'2025-04-01\'::date, \'[{"nome_completo": "Santoro Marco di Pasquale", "cognome_nome": "Santoro Marco", "paternita": "di Pasquale"}]\'::json, \'[{"natura": "Casa", "localita_id": 7, "classificazione": null, "numero_piani": 2, "numero_vani": 2, "consistenza": "120"}, {"natura": "Casa", "localita_id": 8, "classificazione": null, "numero_piani": null, "numero_vani": null, "consistenza": null}]\'::json)'
+2025-04-30 11:24:30,593 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:24:30,593 - CatastoDB - ERROR - Errore DB registrazione nuova propriet‡ (Partita 99): ERRORE:  la procedura registra_nuova_proprieta(integer, integer, date, json, json) non esiste
+LINE 1: CALL registra_nuova_proprieta(4, 99, '2025-04-01'::date, '[{...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 11:33:22,797 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 11:33:25,824 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:33:25,898 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:34:25,191 - CatastoDB - INFO - Localit‡ 'Regione Bagnoli' (Comune ID: 4) inserita con ID: 9
+2025-04-30 11:34:35,875 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura registra_nuova_proprieta(integer, integer, date, json, json) non esiste
+LINE 1: CALL registra_nuova_proprieta(4, 99, '2025-04-01'::date, '[{...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 11:34:35,876 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-04-30 11:34:35,876 - CatastoDB - ERROR - Query renderizzata: b'CALL registra_nuova_proprieta(4, 99, \'2025-04-01\'::date, \'[{"nome_completo": "Santoro Marco di Pasquale", "cognome_nome": "Santoro Marco", "paternita": "di Pasquale"}]\'::json, \'[{"natura": "casa", "localita_id": 9, "classificazione": null, "numero_piani": null, "numero_vani": null, "consistenza": null}]\'::json)'
+2025-04-30 11:34:35,877 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:34:35,878 - CatastoDB - ERROR - Errore DB registrazione nuova propriet‡ (Partita 99): ERRORE:  la procedura registra_nuova_proprieta(integer, integer, date, json, json) non esiste
+LINE 1: CALL registra_nuova_proprieta(4, 99, '2025-04-01'::date, '[{...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-04-30 11:35:04,462 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 11:35:38,140 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:35:38,209 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:37:02,260 - CatastoDB - INFO - Localit‡ 'Regione Bagnoli' (Comune ID: 3) inserita con ID: 7
+2025-04-30 11:37:10,781 - CatastoDB - INFO - Registrata nuova propriet‡: Comune ID 3, Partita N.99
+2025-04-30 11:38:46,937 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+2025-04-30 11:38:46,937 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-04-30 11:38:46,938 - CatastoDB - ERROR - Query renderizzata: b"CALL inserisci_contratto(1, 'Vendita', '2025-01-01'::date, NULL, NULL, NULL)"
+2025-04-30 11:38:46,938 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:38:46,939 - __main__ - ERROR - Errore non gestito nel menu principale: type object 'RaiseException' has no attribute 'sqlstate'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 517, in insert_contratto
+    if self.execute_query(call_proc, params): self.commit(); logger.info(f"Contratto inserito per variazione ID {variazione_id}."); return True
+       ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 162, in execute_query
+    raise db_err # RILANCIA l'eccezione per gestione specifica nel chiamante
+    ^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 140, in execute_query
+    self.cur.execute(query, params)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.RaiseException: ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1413, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 300, in menu_principale
+    elif scelta == "2": menu_inserimento(db)
+                        ~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 576, in menu_inserimento
+    elif scelta == "7": _inserisci_contratto_interattivo(db)   # Invariato
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 779, in _inserisci_contratto_interattivo
+    if db.insert_contratto(var_id, tipo_contr, data_contr, notaio, repertorio, note): print(f"Contratto inserito per Variazione ID {var_id}.")
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 520, in insert_contratto
+    if hasattr(db_err, 'pgcode') and db_err.pgcode == psycopg2.errors.RaiseException.sqlstate and 'Esiste gi‡ un contratto' in str(db_err): logger.warning(f"Contratto per variazione ID {variazione_id} esiste gi‡.")
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'RaiseException' has no attribute 'sqlstate'
+2025-04-30 11:38:47,037 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 11:45:42,033 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:45:42,140 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:45:59,486 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+2025-04-30 11:45:59,486 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-04-30 11:45:59,486 - CatastoDB - ERROR - Query renderizzata: b"CALL inserisci_contratto(1, 'Vendita', '2025-04-01'::date, NULL, NULL, NULL)"
+2025-04-30 11:45:59,487 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:45:59,487 - CatastoDB - ERROR - Errore DB inserimento contratto var ID 1: ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+2025-04-30 11:48:05,993 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 11:48:23,618 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:48:23,816 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:48:42,330 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+2025-04-30 11:48:42,330 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-04-30 11:48:42,331 - CatastoDB - ERROR - Query renderizzata: b"CALL inserisci_contratto(1, 'Successione', '2025-01-01'::date, NULL, NULL, NULL)"
+2025-04-30 11:48:42,331 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:48:42,332 - CatastoDB - ERROR - Errore DB inserimento contratto var ID 1: ERRORE:  Errore durante l'inserimento del contratto per variazione ID 1: Esiste gi√† un contratto per la variazione con ID 1
+CONTEXT:  funzione PL/pgSQL inserisci_contratto(integer,character varying,date,character varying,character varying,text) riga 21 a RAISE
+
+2025-04-30 11:49:49,821 - CatastoDB - INFO - Partita ID 1 duplicata in N.999.
+2025-04-30 11:50:51,444 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  il record "v_partita" non ha un campo "comune_nome"
+CONTEXT:  Assegnazione PL/pgSQL "v_certificato := v_certificato || 'COMUNE: ' || v_partita.comune_nome || E'\n'"
+funzione PL/pgSQL genera_certificato_proprieta(integer) riga 24 a assegnazione
+
+2025-04-30 11:50:51,444 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-30 11:50:51,444 - CatastoDB - ERROR - Query renderizzata: b'SELECT genera_certificato_proprieta(1) AS certificato'
+2025-04-30 11:50:51,445 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:50:51,445 - CatastoDB - ERROR - Errore DB gen cert prop (ID: 1): ERRORE:  il record "v_partita" non ha un campo "comune_nome"
+CONTEXT:  Assegnazione PL/pgSQL "v_certificato := v_certificato || 'COMUNE: ' || v_partita.comune_nome || E'\n'"
+funzione PL/pgSQL genera_certificato_proprieta(integer) riga 24 a assegnazione
+
+2025-04-30 11:55:15,451 - CatastoDB - INFO - Disconnessione completata
+2025-04-30 11:55:32,427 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-04-30 11:55:32,495 - CatastoDB - INFO - Connessione stabilita con successo
+2025-04-30 11:55:36,184 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedColumn - ERRORE:  il record "v_partita" non ha un campo "comune_nome"
+CONTEXT:  Assegnazione PL/pgSQL "v_certificato := v_certificato || 'COMUNE: ' || v_partita.comune_nome || E'\n'"
+funzione PL/pgSQL genera_certificato_proprieta(integer) riga 17 a assegnazione
+
+2025-04-30 11:55:36,184 - CatastoDB - ERROR - SQLSTATE: 42703
+2025-04-30 11:55:36,185 - CatastoDB - ERROR - Query renderizzata: b'SELECT genera_certificato_proprieta(1) AS certificato'
+2025-04-30 11:55:36,186 - CatastoDB - INFO - Rollback eseguito.
+2025-04-30 11:55:36,186 - CatastoDB - ERROR - Errore DB gen cert prop (ID: 1): ERRORE:  il record "v_partita" non ha un campo "comune_nome"
+CONTEXT:  Assegnazione PL/pgSQL "v_certificato := v_certificato || 'COMUNE: ' || v_partita.comune_nome || E'\n'"
+funzione PL/pgSQL genera_certificato_proprieta(integer) riga 17 a assegnazione
+
+2025-04-30 11:55:50,315 - CatastoDB - INFO - Disconnessione completata
+2025-05-02 18:32:35,377 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-02 18:32:35,470 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-02 18:36:02,083 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  Backup ID 1 non trovato
+CONTEXT:  funzione PL/pgSQL get_restore_commands(integer) riga 9 a RAISE
+
+2025-05-02 18:36:02,083 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-05-02 18:36:02,084 - CatastoDB - ERROR - Query renderizzata: b'SELECT get_restore_commands(1) AS command'
+2025-05-02 18:36:02,085 - CatastoDB - INFO - Rollback eseguito.
+2025-05-02 18:36:02,085 - CatastoDB - ERROR - Errore DB get_restore_cmd (ID: 1): ERRORE:  Backup ID 1 non trovato
+CONTEXT:  funzione PL/pgSQL get_restore_commands(integer) riga 9 a RAISE
+
+2025-05-02 18:36:20,055 - CatastoDB - INFO - Disconnessione completata
+2025-05-03 08:05:18,224 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-03 08:05:18,322 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-03 08:07:20,909 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-05-03 08:10:22,632 - CatastoDB - INFO - Immobile ID 1100 trasferito a partita ID 1300.
+2025-05-03 08:16:20,436 - CatastoDB - INFO - Disconnessione completata
+2025-05-03 21:24:27,701 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-03 21:24:27,811 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-03 21:25:14,640 - __main__ - ERROR - Errore non gestito nel menu principale: cannot access local variable 'utente_db' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1413, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 303, in menu_principale
+    elif scelta == "5": menu_audit(db)
+                        ~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1091, in menu_audit
+    logs = db.get_audit_log(tabella, op, rec_id, data_inizio, data_fine, utente_db, app_user_id, session_id_str)
+                                                                         ^^^^^^^^^
+UnboundLocalError: cannot access local variable 'utente_db' where it is not associated with a value
+2025-05-03 21:25:14,739 - CatastoDB - INFO - Disconnessione completata
+2025-05-03 21:25:36,210 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-03 21:25:36,348 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-03 21:25:42,280 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-03 21:25:42,281 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-03 21:25:42,281 - CatastoDB - ERROR - Query renderizzata: b'CALL verifica_integrita_database(NULL)'
+2025-05-03 21:25:42,282 - CatastoDB - INFO - Rollback eseguito.
+2025-05-03 21:25:42,282 - CatastoDB - ERROR - Errore DB verifica integrit‡: ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-03 21:25:56,889 - CatastoDB - INFO - Avvio aggiornamento viste materializzate...
+2025-05-03 21:25:57,519 - CatastoDB - INFO - Aggiornamento viste completato.
+2025-05-03 21:26:06,730 - CatastoDB - INFO - Avvio manutenzione database (ANALYZE, REFRESH MV)...
+2025-05-03 21:26:07,273 - CatastoDB - INFO - Manutenzione (ANALYZE, REFRESH MV) completata.
+2025-05-03 21:26:22,292 - CatastoDB - WARNING - La funzione SQL 'analizza_query_lente' potrebbe non essere definita.
+2025-05-03 21:26:22,296 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione analizza_query_lente(integer) non esiste
+LINE 1: SELECT * FROM analizza_query_lente(1000)
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-03 21:26:22,297 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-03 21:26:22,297 - CatastoDB - ERROR - Query renderizzata: b'SELECT * FROM analizza_query_lente(1000)'
+2025-05-03 21:26:22,298 - CatastoDB - INFO - Rollback eseguito.
+2025-05-03 21:26:22,299 - CatastoDB - WARNING - Funzione 'analizza_query_lente' non trovata.
+2025-05-03 21:26:31,898 - CatastoDB - WARNING - La procedura SQL 'controlla_frammentazione_indici' potrebbe non essere definita.
+2025-05-03 21:26:31,899 - CatastoDB - INFO - Avvio controllo frammentazione indici (risultati nei log DB)...
+2025-05-03 21:26:31,901 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura controlla_frammentazione_indici() non esiste
+LINE 1: CALL controlla_frammentazione_indici()
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-03 21:26:31,901 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-03 21:26:31,901 - CatastoDB - ERROR - Query renderizzata: b'CALL controlla_frammentazione_indici()'
+2025-05-03 21:26:31,902 - CatastoDB - INFO - Rollback eseguito.
+2025-05-03 21:26:31,903 - CatastoDB - WARNING - Procedura 'controlla_frammentazione_indici' non trovata.
+2025-05-03 21:26:41,752 - CatastoDB - WARNING - La funzione SQL 'suggerimenti_ottimizzazione' potrebbe non essere definita o corretta.
+2025-05-03 21:26:41,753 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione suggerimenti_ottimizzazione() non esiste
+LINE 1: SELECT suggerimenti_ottimizzazione() AS suggestions
+               ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-03 21:26:41,754 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-03 21:26:41,755 - CatastoDB - ERROR - Query renderizzata: b'SELECT suggerimenti_ottimizzazione() AS suggestions'
+2025-05-03 21:26:41,755 - CatastoDB - INFO - Rollback eseguito.
+2025-05-03 21:26:41,756 - CatastoDB - WARNING - Funzione 'suggerimenti_ottimizzazione' non trovata.
+2025-05-03 21:27:08,485 - __main__ - WARNING - Login fallito (utente 'Saintgold' non trovato/attivo).
+2025-05-03 21:27:27,589 - CatastoDB - INFO - Disconnessione completata
+2025-05-12 18:10:36,884 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-12 18:10:37,007 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-12 18:11:46,941 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-12 18:11:46,942 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-12 18:11:46,943 - CatastoDB - ERROR - Query renderizzata: b'CALL verifica_integrita_database(NULL)'
+2025-05-12 18:11:46,944 - CatastoDB - INFO - Rollback eseguito.
+2025-05-12 18:11:46,945 - CatastoDB - ERROR - Errore DB verifica integrit‡: ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-12 18:12:04,184 - CatastoDB - INFO - Disconnessione completata
+2025-05-12 18:14:20,143 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-12 18:14:20,459 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-12 18:14:56,569 - CatastoDB - INFO - Immobile ID 1 trasferito a partita ID 2.
+2025-05-12 18:17:58,632 - CatastoDB - INFO - Disconnessione completata
+2025-05-12 18:19:59,733 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-12 18:19:59,830 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-12 18:21:41,682 - CatastoDB - INFO - Localit‡ 'Regione Pizzaballa' (Comune ID: 6) inserita con ID: 101
+2025-05-12 18:23:28,117 - CatastoDB - INFO - Localit‡ 'Regione Pizzaballa' (Comune ID: 6) inserita con ID: 102
+2025-05-12 18:23:56,290 - CatastoDB - INFO - Registrata nuova propriet‡: Comune ID 6, Partita N.999
+2025-05-12 18:27:00,135 - CatastoDB - ERROR - Errore DB specifico rilevato: RaiseException - ERRORE:  [registra_passaggio_proprieta] Errore: La partita 999 gi√† esiste nel comune ID 6
+CONTEXT:  funzione PL/pgSQL registra_passaggio_proprieta(integer,integer,integer,character varying,date,character varying,date,character varying,character varying,json,integer[],text) riga 79 a RAISE
+
+2025-05-12 18:27:00,135 - CatastoDB - ERROR - SQLSTATE: P0001
+2025-05-12 18:27:00,135 - CatastoDB - ERROR - Query renderizzata: b'CALL registra_passaggio_proprieta(1, 6, 999, \'Vendita\', \'2025-05-01\'::date, \'Vendita\', \'1950-05-01\'::date, \'Licia Col\xc3\xb2\', NULL, \'[{"nome_completo": "Alfredo O\'\'Chiatt", "cognome_nome": "Chiatto Alfredo", "paternita": "di Apulio"}]\'::json, NULL, NULL)'
+2025-05-12 18:27:00,136 - CatastoDB - INFO - Rollback eseguito.
+2025-05-12 18:27:00,136 - CatastoDB - ERROR - Errore DB registrazione passaggio propriet‡ (Origine ID 1): ERRORE:  [registra_passaggio_proprieta] Errore: La partita 999 gi√† esiste nel comune ID 6
+CONTEXT:  funzione PL/pgSQL registra_passaggio_proprieta(integer,integer,integer,character varying,date,character varying,date,character varying,character varying,json,integer[],text) riga 79 a RAISE
+

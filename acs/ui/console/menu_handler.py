@@ -85,14 +85,22 @@ def _handle_service_call(service_function, *args, success_message="Operazione co
         return None
 
 # --- Menu Gestione Utenti ---
+# In ui/console/menu_handler.py
+
+# ... (gli import all'inizio del file dovrebbero già esserci, assicurati che includano:)
+# from typing import List, Dict, Any, Optional, Callable
+# from core.services import utenti_service, anagrafiche_service # e altri servizi
+# from .ui_utils import seleziona_da_lista, chiedi_conferma, input_valore, input_sicuro_password # e altri utils
+# ...
+
 def gestisci_utenti(db_manager, logged_in_user_id, current_user_role_id, current_session_id, client_ip_address):
-    audit_info = _get_user_input_for_audit(db_manager, logged_in_user_id, current_session_id, client_ip_address)
+    audit_info_dict = { # Creiamo un dizionario per passare facilmente i parametri di audit
+        "current_user_id": logged_in_user_id,
+        "client_ip_address": client_ip_address,
+        "session_id": current_session_id
+    }
     
-    # Solo amministratori (es. role_id = 1) possono gestire utenti
-    # Questa logica di autorizzazione dovrebbe essere più robusta, magari basata su permessi specifici.
-    # Per ora, un semplice controllo sul role_id.
-    # Assumiamo che il ruolo di amministratore abbia ID 1. Recuperalo dinamicamente se possibile.
-    ADMIN_ROLE_ID = 1 # Dovrebbe essere caricato da config o DB
+    ADMIN_ROLE_ID = 1 # Assumiamo che il ruolo Admin abbia ID 1 (da caricare da config o DB idealmente)
 
     if current_user_role_id != ADMIN_ROLE_ID:
         print("Accesso negato. Funzionalità riservata agli amministratori.")
@@ -101,20 +109,23 @@ def gestisci_utenti(db_manager, logged_in_user_id, current_user_role_id, current
     while True:
         print("\n--- Gestione Utenti (Admin) ---")
         print("1. Visualizza lista utenti")
-        print("2. Crea nuovo utente (da Admin)") # Diverso da registrazione self-service
-        # print("3. Modifica utente (es. ruolo, stato attivo)") # TODO
-        # print("4. Resetta password utente") # TODO
+        print("2. Crea nuovo utente (da Admin)")
+        print("3. Modifica dati utente") # Es. email, nome completo, ruolo, stato attivo
+        print("4. Disattiva (soft delete) utente")
+        print("5. Resetta password utente")
         print("0. Torna al menu principale")
         scelta = input("Scegli un'opzione: ")
 
         if scelta == '1':
             users = _handle_service_call(utenti_service.get_users_service,
                                          success_message="Lista utenti recuperata.",
-                                         db_manager=db_manager, audit_params=audit_info)
+                                         db_manager=db_manager, audit_params=audit_info_dict)
             if users:
                 print("\n--- Lista Utenti ---")
                 for user in users:
-                    print(f"ID: {user['id']}, Username: {user['username']}, Email: {user['email']}, Ruolo: {user['nome_ruolo']}, Attivo: {user['is_active']}, Creato: {formatta_data_utente(user['created_at']) if user.get('created_at') else 'N/A'}, Ultimo Login: {formatta_data_utente(user['last_login']) if user.get('last_login') else 'N/A'}")
+                    print(f"ID: {user['id']}, Username: {user['username']}, Email: {user['email']}, "
+                          f"Nome: {user.get('nome_completo', 'N/D')}, Ruolo: {user['nome_ruolo']}, "
+                          f"Attivo: {user['is_active']}, Ultimo Login: {formatta_data_utente(user.get('last_login')) if user.get('last_login') else 'N/A'}")
             elif users == []:
                 print("Nessun utente trovato.")
 
@@ -122,9 +133,12 @@ def gestisci_utenti(db_manager, logged_in_user_id, current_user_role_id, current
             print("\n--- Creazione Nuovo Utente (Admin) ---")
             username = input_valore("Username:", obbligatorio=True)
             if not username: continue
-            email = input_valore("Email:", obbligatorio=True) # Aggiungere validazione email
+            email = input_valore("Email:", obbligatorio=True)
             if not email: continue
-            plain_password = input_valore("Password temporanea:", tipo=str, obbligatorio=True) # Potrebbe essere generata
+            nome_completo = input_valore("Nome Completo:", obbligatorio=True) # Aggiunto
+            if not nome_completo: continue
+            
+            plain_password = input_valore("Password temporanea:", tipo=str, obbligatorio=True)
             if not plain_password: continue
             
             roles = utenti_service.get_user_roles_service(db_manager)
@@ -136,17 +150,185 @@ def gestisci_utenti(db_manager, logged_in_user_id, current_user_role_id, current
             role_id_to_assign = selected_role['id']
 
             _handle_service_call(utenti_service.register_user_service,
-                                 username, plain_password, email, role_id_to_assign,
+                                 username, plain_password, email, role_id_to_assign, nome_completo, # Passa nome_completo
                                  success_message=f"Utente {username} creato con successo.",
                                  db_manager=db_manager, 
-                                 # Passa chi sta creando l'utente per l'audit
-                                 audit_params={**audit_info, "created_by_user_id": logged_in_user_id})
+                                 client_ip_address=client_ip_address, # Passa i parametri di audit individualmente se la funzione li aspetta così
+                                 created_by_user_id=logged_in_user_id) # o usa audit_info_dict
 
+        elif scelta == '3': # Modifica dati utente
+            _modifica_utente_admin_menu(db_manager, logged_in_user_id, client_ip_address, current_session_id)
 
+        elif scelta == '4': # Disattiva (soft delete) utente
+            _disattiva_utente_admin_menu(db_manager, logged_in_user_id, client_ip_address, current_session_id)
+
+        elif scelta == '5': # Resetta password utente
+            _reset_password_admin_menu(db_manager, logged_in_user_id, client_ip_address, current_session_id)
+            
         elif scelta == '0':
             break
         else:
             print("Scelta non valida.")
+# Nuove funzioni helper per le opzioni di gestione utenti (da aggiungere in menu_handler.py)
+
+def _modifica_utente_admin_menu(db_manager, admin_user_id, client_ip, session_id):
+    print("\n--- Modifica Dati Utente (Admin) ---")
+    utenti = utenti_service.get_users_service(db_manager)
+    if not utenti:
+        print("Nessun utente da modificare.")
+        return
+
+    utente_selezionato = seleziona_da_lista(utenti, "Seleziona Utente da Modificare", 
+                                            desc_keys=['username', 'nome_completo', 'email', 'nome_ruolo'])
+    if not utente_selezionato:
+        return
+    
+    user_id_to_update = utente_selezionato['id']
+    dettagli_utente_attuale = utenti_service.get_user_by_id_service(db_manager, user_id_to_update)
+    if not dettagli_utente_attuale:
+        print(f"Impossibile recuperare i dettagli per l'utente ID {user_id_to_update}.")
+        return
+
+    print(f"\nModifica utente: {dettagli_utente_attuale['username']} (ID: {user_id_to_update})")
+    print("Lasciare il campo vuoto per non modificare il valore esistente (dove permesso).")
+
+    dati_da_aggiornare = {}
+    
+    nuova_email = input_valore(f"Nuova Email (attuale: {dettagli_utente_attuale.get('email')}):", obbligatorio=False)
+    if nuova_email: dati_da_aggiornare['email'] = nuova_email
+
+    nuovo_nome_completo = input_valore(f"Nuovo Nome Completo (attuale: {dettagli_utente_attuale.get('nome_completo')}):", obbligatorio=False)
+    if nuovo_nome_completo: dati_da_aggiornare['nome_completo'] = nuovo_nome_completo
+
+    # Modifica Ruolo
+    ruoli = utenti_service.get_user_roles_service(db_manager)
+    if ruoli:
+        print(f"Ruolo attuale: {dettagli_utente_attuale.get('nome_ruolo')} (ID: {dettagli_utente_attuale.get('role_id')})")
+        if chiedi_conferma("Vuoi modificare il ruolo?", default_yes=False):
+            ruolo_selezionato = seleziona_da_lista(ruoli, "Seleziona Nuovo Ruolo", desc_keys=['nome_ruolo'])
+            if ruolo_selezionato:
+                dati_da_aggiornare['role_id'] = ruolo_selezionato['id']
+    
+    # Modifica Stato Attivo
+    stato_attuale_attivo = dettagli_utente_attuale.get('is_active', True)
+    print(f"Stato Attivo attuale: {stato_attuale_attivo}")
+    if chiedi_conferma(f"Vuoi cambiare lo stato attivo (attuale: {stato_attuale_attivo})?", default_yes=False):
+        # Se l'utente vuole cambiare, chiedi quale sia il nuovo stato
+        nuovo_stato_attivo_str = input_valore(f"Imposta Attivo a (True/False, attuale {stato_attuale_attivo}):", tipo=str, obbligatorio=False, default=str(stato_attuale_attivo)).lower()
+        if nuovo_stato_attivo_str == 'true':
+            dati_da_aggiornare['is_active'] = True
+        elif nuovo_stato_attivo_str == 'false':
+            dati_da_aggiornare['is_active'] = False
+        else:
+            print("Input non valido per lo stato attivo, mantenuto il valore attuale.")
+
+
+    if not dati_da_aggiornare:
+        print("Nessuna modifica specificata.")
+        return
+
+    if chiedi_conferma(f"Confermi le modifiche per l'utente {dettagli_utente_attuale['username']}? Dati: {dati_da_aggiornare}"):
+        success = _handle_service_call(
+            utenti_service.update_user_service,
+            user_id_to_update, dati_da_aggiornare,
+            current_user_id=admin_user_id, client_ip_address=client_ip, session_id=session_id,
+            success_message="Utente aggiornato con successo.",
+            db_manager=db_manager
+        )
+        if not success: # _handle_service_call potrebbe restituire il risultato del servizio, non sempre bool
+            print("Aggiornamento utente fallito o nessuna modifica effettuata.")
+
+
+def _disattiva_utente_admin_menu(db_manager, admin_user_id, client_ip, session_id):
+    print("\n--- Disattiva Utente (Soft Delete) ---")
+    utenti_attivi = [u for u in utenti_service.get_users_service(db_manager) if u['is_active']]
+    if not utenti_attivi:
+        print("Nessun utente attivo da disattivare.")
+        return
+
+    utente_selezionato = seleziona_da_lista(utenti_attivi, "Seleziona Utente da Disattivare", 
+                                            desc_keys=['username', 'nome_completo', 'email'])
+    if not utente_selezionato:
+        return
+    
+    user_id_to_deactivate = utente_selezionato['id']
+
+    if user_id_to_deactivate == admin_user_id:
+        print("Non puoi disattivare il tuo stesso account da questo menu.")
+        # L'audit di questo caso specifico è gestito da delete_user_service
+        return
+
+    if chiedi_conferma(f"Sei sicuro di voler DISATTIVARE l'utente {utente_selezionato['username']} (ID: {user_id_to_deactivate})?"):
+        success, message = utenti_service.delete_user_service( # delete_user_service ora restituisce (bool, str)
+            db_manager, user_id_to_deactivate,
+            current_user_id=admin_user_id, client_ip_address=client_ip, session_id=session_id
+        )
+        print(message)
+
+
+def _reset_password_admin_menu(db_manager, admin_user_id, client_ip, session_id):
+    print("\n--- Resetta Password Utente (Admin) ---")
+    utenti = utenti_service.get_users_service(db_manager)
+    if not utenti:
+        print("Nessun utente disponibile.")
+        return
+
+    utente_selezionato = seleziona_da_lista(utenti, "Seleziona Utente per Resettare Password",
+                                            desc_keys=['username', 'nome_completo', 'email'])
+    if not utente_selezionato:
+        return
+        
+    user_id_to_reset = utente_selezionato['id']
+
+    if user_id_to_reset == admin_user_id:
+        print("Usa l'opzione 'Cambia la mia password' per il tuo account.")
+        return
+
+    print(f"\nReset password per l'utente: {utente_selezionato['username']} (ID: {user_id_to_reset})")
+    nuova_password = input_sicuro_password("Inserisci la nuova password per l'utente: ")
+    if not nuova_password:
+        print("Password non valida. Operazione annullata.")
+        return
+    conferma_nuova_password = input_sicuro_password("Conferma la nuova password: ")
+    if nuova_password != conferma_nuova_password:
+        print("Le password non coincidono. Operazione annullata.")
+        return
+
+    if chiedi_conferma(f"Sei sicuro di voler resettare la password per {utente_selezionato['username']}?"):
+        success, message = utenti_service.admin_reset_password_service(
+            db_manager, user_id_to_reset, nuova_password, admin_user_id,
+            client_ip_address=client_ip, session_id=session_id
+        )
+        print(message)
+def _cambia_password_utente_menu(db_manager, logged_in_user_id, client_ip, session_id):
+    print("\n--- Cambia la Tua Password ---")
+    
+    vecchia_password = input_sicuro_password("Inserisci la tua vecchia password: ")
+    if not vecchia_password:
+        print("Operazione annullata.")
+        return
+
+    nuova_password = input_sicuro_password("Inserisci la nuova password: ")
+    if not nuova_password:
+        print("Nuova password non valida. Operazione annullata.")
+        return
+        
+    if len(nuova_password) < 8: # Esempio di controllo complessità base
+        print("La nuova password deve essere di almeno 8 caratteri. Operazione annullata.")
+        return
+
+    conferma_nuova_password = input_sicuro_password("Conferma la nuova password: ")
+    if nuova_password != conferma_nuova_password:
+        print("Le password non coincidono. Operazione annullata.")
+        return
+
+    success, message = utenti_service.change_password_service(
+        db_manager, logged_in_user_id, vecchia_password, nuova_password,
+        current_user_id=logged_in_user_id, # L'utente cambia la propria password
+        client_ip_address=client_ip, 
+        session_id=session_id
+    )
+    print(message)
 
 # --- Menu Anagrafiche Base ---
 def gestisci_anagrafiche_base(db_manager, logged_in_user_id, current_session_id, client_ip_address):
@@ -750,8 +932,9 @@ def menu_principale(db_manager, logged_in_user_id, current_user_role_id, current
         print("5. Gestione Documenti")
         print("6. Gestione Anagrafiche di Base (Comuni, Sezioni, etc.)")
         print("7. Genera Report")
-        if current_user_role_id == 1: # Assumendo 1 sia Admin Role ID
-            print("8. Gestione Utenti (Admin)")
+        print("8. Cambia la mia password") # Nuova Opzione
+        if current_user_role_id == ADMIN_ROLE_ID:
+            print("9. Gestione Utenti (Admin)") # Spostato a 9 se l'opzione 8 è per tutti
         print("0. Logout e Esci")
         
         scelta = input("Scegli un'opzione: ")
@@ -775,10 +958,12 @@ def menu_principale(db_manager, logged_in_user_id, current_user_role_id, current
         elif scelta == '7':
             # menu_genera_report(db_manager, logged_in_user_id, current_session_id, client_ip_address) # Da implementare
             print("Menu Genera Report - Da implementare")
-        elif scelta == '8' and current_user_role_id == 1:
+        elif scelta == '8': # Nuova Opzione
+            _cambia_password_utente_menu(db_manager, logged_in_user_id, client_ip_address, current_session_id)
+        elif scelta == '9' and current_user_role_id == ADMIN_ROLE_ID: # Modificato a 9
             gestisci_utenti(db_manager, logged_in_user_id, current_user_role_id, current_session_id, client_ip_address)
         elif scelta == '0':
             print("Logout in corso...")
-            break # Esce dal loop del menu principale, il logout effettivo sarà in main_app.py
+            break 
         else:
             print("Scelta non valida. Riprova.")

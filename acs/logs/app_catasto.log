@@ -465,3 +465,703 @@ Traceback (most recent call last):
 psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
 DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
 
+2025-05-13 12:56:58,074 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 12:56:58,079 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 12:56:58,079 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 12:56:58,201 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 12:56:58,210 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 12:56:58,212 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 12:57:14,136 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: sa
+2025-05-13 12:57:15,224 - CatastoAppLogger.UtentiService - INFO - Utente 'sa' (ID: 3) registrato con successo.
+2025-05-13 12:57:15,240 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:57:15,287 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'REGISTER_USER_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:57:32,603 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: sa
+2025-05-13 12:57:33,584 - CatastoAppLogger.UtentiService - INFO - Utente 'sa' (ID: 3) loggato con successo. Sessione: 19dbd7e0-2d92-426a-a138-a200b12cbbab
+2025-05-13 12:57:33,586 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:57:33,590 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGIN_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:57:33,595 - CatastoAppLogger - INFO - Login successo per utente ID 3, Ruolo ID 2, Sessione 19dbd7e0-2d92-426a-a138-a200b12cbbab
+2025-05-13 12:57:33,595 - CatastoAppLogger.MenuHandler - INFO - Utente ID 3 (Ruolo ID: 2, Sessione: 19dbd7e0-2d92-426a-a138-a200b12cbbab) ha effettuato l'accesso al menu principale.
+2025-05-13 12:57:43,552 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:57:43,558 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:57:48,361 - CatastoAppLogger.MenuHandler - ERROR - Errore imprevisto durante l'operazione: search_partite_service() got an unexpected keyword argument 'current_user_id'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 67, in _handle_service_call
+    result = service_function(db_manager, *args, **audit_params if audit_params else {}, **kwargs)
+TypeError: search_partite_service() got an unexpected keyword argument 'current_user_id'
+2025-05-13 12:57:56,332 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:57:56,337 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:58:02,941 - CatastoAppLogger.MenuHandler - ERROR - Errore imprevisto durante l'operazione: search_partite_service() got an unexpected keyword argument 'current_user_id'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 67, in _handle_service_call
+    result = service_function(db_manager, *args, **audit_params if audit_params else {}, **kwargs)
+TypeError: search_partite_service() got an unexpected keyword argument 'current_user_id'
+2025-05-13 12:58:11,657 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:58:11,664 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:58:16,305 - CatastoAppLogger.MenuHandler - ERROR - Errore imprevisto durante l'operazione: search_partite_service() got an unexpected keyword argument 'current_user_id'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 67, in _handle_service_call
+    result = service_function(db_manager, *args, **audit_params if audit_params else {}, **kwargs)
+TypeError: search_partite_service() got an unexpected keyword argument 'current_user_id'
+2025-05-13 12:58:42,698 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:58:42,704 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:58:45,145 - CatastoAppLogger.MenuHandler - ERROR - Errore imprevisto durante l'operazione: search_partite_service() got an unexpected keyword argument 'current_user_id'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 67, in _handle_service_call
+    result = service_function(db_manager, *args, **audit_params if audit_params else {}, **kwargs)
+TypeError: search_partite_service() got an unexpected keyword argument 'current_user_id'
+2025-05-13 12:59:09,014 - CatastoAppLogger.MenuHandler - ERROR - Errore imprevisto durante l'operazione: get_comuni_service() got an unexpected keyword argument 'current_user_id'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 67, in _handle_service_call
+    result = service_function(db_manager, *args, **audit_params if audit_params else {}, **kwargs)
+TypeError: get_comuni_service() got an unexpected keyword argument 'current_user_id'
+2025-05-13 12:59:26,307 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:59:26,313 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:59:35,932 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome... Errore: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:59:35,937 - CatastoAppLogger.AnagraficheService - ERROR - Errore durante il recupero dei comuni: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\anagrafiche_service.py", line 67, in get_comuni_service
+    comuni = db_manager.execute_query(query, params, fetch_all=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "comuni" non esiste
+LINE 1: ..., codice_catastale, provincia, regione, note FROM comuni ORD...
+                                                             ^
+
+2025-05-13 12:59:50,363 - CatastoAppLogger - INFO - Esecuzione logout per utente ID 3, sessione 19dbd7e0-2d92-426a-a138-a200b12cbbab...
+2025-05-13 12:59:50,364 - CatastoAppLogger.UtentiService - INFO - Tentativo di logout per utente ID: 3, Sessione: 19dbd7e0-2d92-426a-a138-a200b12cbbab
+2025-05-13 12:59:50,404 - CatastoAppLogger.UtentiService - INFO - Logout utente ID 3, Sessione 19dbd7e0-2d92-426a-a138-a200b12cbbab registrato con successo.
+2025-05-13 12:59:50,406 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:59:50,413 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGOUT_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:59:50,419 - CatastoAppLogger - INFO - Chiusura connessione al database...
+2025-05-13 12:59:50,420 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 12:59:50,421 - CatastoAppLogger - INFO - Applicazione Catasto Storico terminata.
+2025-05-13 13:31:35,893 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 13:31:35,898 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 13:31:35,899 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 13:31:35,987 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 13:31:35,997 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 13:31:35,998 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 13:31:50,061 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: sa
+2025-05-13 13:31:51,022 - CatastoAppLogger.UtentiService - INFO - Utente 'sa' (ID: 3) loggato con successo. Sessione: 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32
+2025-05-13 13:31:51,037 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:31:51,059 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGIN_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:31:51,065 - CatastoAppLogger - INFO - Login successo per utente ID 3, Ruolo ID 2, Sessione 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32
+2025-05-13 13:31:51,066 - CatastoAppLogger.MenuHandler - INFO - Utente ID 3 (Ruolo ID: 2, Sessione: 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32) ha effettuato l'accesso al menu principale.
+2025-05-13 13:31:51,067 - CatastoAppLogger - ERROR - Errore non gestito nel ciclo principale dell'applicazione: name 'ADMIN_ROLE_ID' is not defined
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 209, in main
+    menu_principale(db, logged_in_user_id, current_user_role_id, current_session_id, client_ip_address)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 936, in menu_principale
+    if current_user_role_id == ADMIN_ROLE_ID:
+                               ^^^^^^^^^^^^^
+NameError: name 'ADMIN_ROLE_ID' is not defined
+2025-05-13 13:31:51,082 - CatastoAppLogger - INFO - Esecuzione logout per utente ID 3, sessione 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32...
+2025-05-13 13:31:51,082 - CatastoAppLogger.UtentiService - INFO - Tentativo di logout per utente ID: 3, Sessione: 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32
+2025-05-13 13:31:51,086 - CatastoAppLogger.UtentiService - INFO - Logout utente ID 3, Sessione 8a4b6eba-10b2-4f1c-ad0b-0cc42a59fa32 registrato con successo.
+2025-05-13 13:31:51,088 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:31:51,092 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGOUT_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:31:51,097 - CatastoAppLogger - INFO - Chiusura connessione al database...
+2025-05-13 13:31:51,097 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 13:31:51,097 - CatastoAppLogger - INFO - Applicazione Catasto Storico terminata.
+2025-05-13 13:31:58,397 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 13:31:58,399 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 13:31:58,399 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 13:31:58,613 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 13:31:58,614 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 13:31:58,616 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 13:32:07,273 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: sa
+2025-05-13 13:32:08,243 - CatastoAppLogger.UtentiService - INFO - Utente 'sa' (ID: 3) loggato con successo. Sessione: f77b6713-1e66-42d8-8f7b-3da9bebc9adc
+2025-05-13 13:32:08,248 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:32:08,275 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGIN_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:32:08,284 - CatastoAppLogger - INFO - Login successo per utente ID 3, Ruolo ID 2, Sessione f77b6713-1e66-42d8-8f7b-3da9bebc9adc
+2025-05-13 13:32:08,284 - CatastoAppLogger.MenuHandler - INFO - Utente ID 3 (Ruolo ID: 2, Sessione: f77b6713-1e66-42d8-8f7b-3da9bebc9adc) ha effettuato l'accesso al menu principale.
+2025-05-13 13:32:08,286 - CatastoAppLogger - ERROR - Errore non gestito nel ciclo principale dell'applicazione: name 'ADMIN_ROLE_ID' is not defined
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 209, in main
+    menu_principale(db, logged_in_user_id, current_user_role_id, current_session_id, client_ip_address)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 936, in menu_principale
+    if current_user_role_id == ADMIN_ROLE_ID:
+                               ^^^^^^^^^^^^^
+NameError: name 'ADMIN_ROLE_ID' is not defined
+2025-05-13 13:32:08,309 - CatastoAppLogger - INFO - Esecuzione logout per utente ID 3, sessione f77b6713-1e66-42d8-8f7b-3da9bebc9adc...
+2025-05-13 13:32:08,310 - CatastoAppLogger.UtentiService - INFO - Tentativo di logout per utente ID: 3, Sessione: f77b6713-1e66-42d8-8f7b-3da9bebc9adc
+2025-05-13 13:32:08,312 - CatastoAppLogger.UtentiService - INFO - Logout utente ID 3, Sessione f77b6713-1e66-42d8-8f7b-3da9bebc9adc registrato con successo.
+2025-05-13 13:32:08,313 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:32:08,317 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 3, Azione 'LOGOUT_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:32:08,323 - CatastoAppLogger - INFO - Chiusura connessione al database...
+2025-05-13 13:32:08,324 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 13:32:08,324 - CatastoAppLogger - INFO - Applicazione Catasto Storico terminata.
+2025-05-13 13:32:22,546 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 13:32:22,547 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 13:32:22,548 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 13:32:22,620 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 13:32:22,621 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 13:32:22,623 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 13:32:49,305 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: pippo
+2025-05-13 13:32:50,314 - CatastoAppLogger.UtentiService - INFO - Utente 'pippo' (ID: 4) registrato con successo.
+2025-05-13 13:32:50,319 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:32:50,345 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 4, Azione 'REGISTER_USER_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:33:01,326 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: pippo
+2025-05-13 13:33:02,243 - CatastoAppLogger.UtentiService - INFO - Utente 'pippo' (ID: 4) loggato con successo. Sessione: 98986337-2c57-46d5-bc7d-18554080e248
+2025-05-13 13:33:02,245 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:33:02,250 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 4, Azione 'LOGIN_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:33:02,256 - CatastoAppLogger - INFO - Login successo per utente ID 4, Ruolo ID 2, Sessione 98986337-2c57-46d5-bc7d-18554080e248
+2025-05-13 13:33:02,256 - CatastoAppLogger.MenuHandler - INFO - Utente ID 4 (Ruolo ID: 2, Sessione: 98986337-2c57-46d5-bc7d-18554080e248) ha effettuato l'accesso al menu principale.
+2025-05-13 13:33:02,257 - CatastoAppLogger - ERROR - Errore non gestito nel ciclo principale dell'applicazione: name 'ADMIN_ROLE_ID' is not defined
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 209, in main
+    menu_principale(db, logged_in_user_id, current_user_role_id, current_session_id, client_ip_address)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\catasto\acs\ui\console\menu_handler.py", line 936, in menu_principale
+    if current_user_role_id == ADMIN_ROLE_ID:
+                               ^^^^^^^^^^^^^
+NameError: name 'ADMIN_ROLE_ID' is not defined
+2025-05-13 13:33:02,275 - CatastoAppLogger - INFO - Esecuzione logout per utente ID 4, sessione 98986337-2c57-46d5-bc7d-18554080e248...
+2025-05-13 13:33:02,275 - CatastoAppLogger.UtentiService - INFO - Tentativo di logout per utente ID: 4, Sessione: 98986337-2c57-46d5-bc7d-18554080e248
+2025-05-13 13:33:02,277 - CatastoAppLogger.UtentiService - INFO - Logout utente ID 4, Sessione 98986337-2c57-46d5-bc7d-18554080e248 registrato con successo.
+2025-05-13 13:33:02,278 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:33:02,282 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User 4, Azione 'LOGOUT_SUCCESS'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 13:33:02,288 - CatastoAppLogger - INFO - Chiusura connessione al database...
+2025-05-13 13:33:02,289 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 13:33:02,289 - CatastoAppLogger - INFO - Applicazione Catasto Storico terminata.

@@ -129,16 +129,24 @@ def authenticate_user(db_manager_instance: DatabaseManager) -> bool:
                 print("Le password non coincidono. Riprova.")
                 continue
 
-            # Ruolo di default per la registrazione self-service (es. ID 2 = Utente Standard)
-            # Questo ID dovrebbe essere configurabile o recuperato dal DB.
-            DEFAULT_SELF_REGISTER_ROLE_ID = 2 
             
+            nome_completo_reg = input_valore("Nome Completo:", obbligatorio=True) # <-- CHIEDI NOME COMPLETO
+            if not nome_completo_reg: continue 
+            # Ruolo di default per la registrazione self-service (es. ID 2 = Utente Standard)
+                # Questo ID dovrebbe essere configurabile o recuperato dal DB.
+            DEFAULT_SELF_REGISTER_ROLE_ID = 2 
+
             try:
+                # Passa nome_completo_reg alla funzione di servizio
                 new_user_id = utenti_service.register_user_service(
                     db_manager_instance, username_reg, password_reg1, email_reg, 
-                    DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+                    DEFAULT_SELF_REGISTER_ROLE_ID, 
+                    nome_completo=nome_completo_reg, # <-- PASSALO QUI
+                    client_ip_address=client_ip_address,
                     created_by_user_id=None # Self-registration
+                    # Considera di passare un dizionario audit_params se necessario
                 )
+          
                 if new_user_id:
                     print(f"Registrazione per l'utente '{username_reg}' completata con successo!")
                     print("Ora puoi effettuare il login.")

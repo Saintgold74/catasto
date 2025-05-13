@@ -338,3 +338,130 @@ psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è inter
 
 2025-05-13 11:56:26,299 - CatastoAppLogger - INFO - Autenticazione fallita o utente ha scelto di uscire. Chiusura applicazione.
 2025-05-13 11:56:26,300 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 12:02:29,828 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 12:02:29,831 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 12:02:29,831 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 12:02:29,924 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 12:02:29,926 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 12:02:29,928 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 12:02:47,182 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: sa
+2025-05-13 12:02:47,583 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO utenti (username, password_hash, email, role_id, is_active, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW()) RETURNING id
+    ... Errore: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+
+2025-05-13 12:02:47,604 - CatastoDBLogger - INFO - Rollback della transazione eseguito.
+2025-05-13 12:02:47,604 - CatastoAppLogger.UtentiService - ERROR - Errore critico durante la registrazione dell'utente 'sa': ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+
+2025-05-13 12:02:47,615 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:02:47,620 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User None, Azione 'REGISTER_USER_FAIL'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 12:02:47,630 - CatastoAppLogger - ERROR - Errore critico durante la registrazione: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 137, in authenticate_user
+    new_user_id = utenti_service.register_user_service(
+        db_manager_instance, username_reg, password_reg1, email_reg,
+        DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+        created_by_user_id=None # Self-registration
+    )
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 181, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (2, sa, $2b$12$hv1E66ERk3hTzFds2Z5gieMpJf4crP1Q7WOPkTv7.a5VqE.t5pgpG, null, sa@sa.com, t, null, 2025-05-13 12:02:47.555138, 2025-05-13 12:02:47.555138, 2).
+

@@ -53,8 +53,9 @@ class DatabaseManager:
             # ISOLATION_LEVEL_AUTOCOMMIT fa sì che ogni istruzione venga commessa immediatamente.
             # Scegli quello più adatto al tuo flusso di lavoro.
             # Se i tuoi servizi gestiscono esplicitamente commit/rollback, READ_COMMITTED è preferibile.
-            self.conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
-            # self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT) # Alternativa
+            #self.conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
+            self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT) # Alternativa
+            
 
             self.logger.info(f"Connessione al database '{self.connect_params.get('dbname')}' riuscita.")
 

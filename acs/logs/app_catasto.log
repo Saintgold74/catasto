@@ -1,0 +1,340 @@
+2025-05-13 11:12:37,749 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 11:12:37,753 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 11:12:37,754 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 11:12:37,756 - CatastoDBLogger - ERROR - Errore di connessione al database: invalid dsn: invalid connection option "schema"
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 27, in connect
+    self.conn = psycopg2.connect(**self.db_config)
+                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\__init__.py", line 134, in connect
+    dsn = _ext.make_dsn(dsn, **kwargs)
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extensions.py", line 167, in make_dsn
+    parse_dsn(dsn)
+    ~~~~~~~~~^^^^^
+psycopg2.ProgrammingError: invalid dsn: invalid connection option "schema"
+
+2025-05-13 11:12:37,770 - CatastoAppLogger - CRITICAL - Fallimento connessione al database all'avvio. L'applicazione terminerà.
+2025-05-13 11:14:48,817 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 11:14:48,818 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 11:14:48,819 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 11:14:48,819 - CatastoDBLogger - ERROR - Errore di connessione al database: invalid dsn: invalid connection option "schema"
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 27, in connect
+    self.conn = psycopg2.connect(**self.db_config)
+                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\__init__.py", line 134, in connect
+    dsn = _ext.make_dsn(dsn, **kwargs)
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extensions.py", line 167, in make_dsn
+    parse_dsn(dsn)
+    ~~~~~~~~~^^^^^
+psycopg2.ProgrammingError: invalid dsn: invalid connection option "schema"
+
+2025-05-13 11:14:48,833 - CatastoAppLogger - CRITICAL - Fallimento connessione al database all'avvio. L'applicazione terminerà.
+2025-05-13 11:22:14,558 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 11:22:14,561 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 11:22:14,561 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 11:22:14,661 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 11:22:14,673 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 11:22:14,674 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 11:22:40,239 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: Saintgold
+2025-05-13 11:22:40,261 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, password_hash, role_id, is_active FROM utenti WHERE username = %s... Errore: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id, password_hash, role_id, is_active FROM utenti WHE...
+                                                          ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id, password_hash, role_id, is_active FROM utenti WHE...
+                                                          ^
+
+2025-05-13 11:22:40,277 - CatastoAppLogger - ERROR - Errore durante il tentativo di login: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id, password_hash, role_id, is_active FROM utenti WHE...
+                                                          ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 95, in authenticate_user
+    user_id, role_id, session_id, message = utenti_service.login_user_service(
+                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        db_manager_instance, username, password, client_ip_address
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 129, in login_user_service
+    user_data = db_manager.execute_query(query, (username,), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id, password_hash, role_id, is_active FROM utenti WHE...
+                                                          ^
+
+2025-05-13 11:24:05,551 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: Saintgold
+2025-05-13 11:24:05,566 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id FROM utenti WHERE username = %s OR email = %s... Errore: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:24:05,569 - CatastoAppLogger - ERROR - Errore critico durante la registrazione: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 137, in authenticate_user
+    new_user_id = utenti_service.register_user_service(
+        db_manager_instance, username_reg, password_reg1, email_reg,
+        DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+        created_by_user_id=None # Self-registration
+    )
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 51, in register_user_service
+    existing_user = db_manager.execute_query(check_query, (username, email), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:25:22,451 - CatastoAppLogger - INFO - Autenticazione fallita o utente ha scelto di uscire. Chiusura applicazione.
+2025-05-13 11:25:22,452 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 11:42:57,829 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 11:42:57,832 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 11:42:57,832 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 11:42:57,939 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 11:42:57,943 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 11:42:57,945 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 11:43:20,765 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: Saintgold
+2025-05-13 11:43:20,790 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id FROM utenti WHERE username = %s OR email = %s... Errore: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id FROM utenti WHERE username = 'Saintgold' OR email ...
+                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id FROM utenti WHERE username = 'Saintgold' OR email ...
+                       ^
+
+2025-05-13 11:43:20,816 - CatastoAppLogger - ERROR - Errore critico durante la registrazione: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id FROM utenti WHERE username = 'Saintgold' OR email ...
+                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 137, in authenticate_user
+    new_user_id = utenti_service.register_user_service(
+        db_manager_instance, username_reg, password_reg1, email_reg,
+        DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+        created_by_user_id=None # Self-registration
+    )
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 51, in register_user_service
+    existing_user = db_manager.execute_query(check_query, (username, email), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: ERRORE:  la relazione "utenti" non esiste
+LINE 1: SELECT id FROM utenti WHERE username = 'Saintgold' OR email ...
+                       ^
+
+2025-05-13 11:44:05,351 - CatastoAppLogger.UtentiService - INFO - Tentativo di login per l'utente: 0
+2025-05-13 11:44:05,353 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id, password_hash, role_id, is_active FROM utenti WHERE username = %s... Errore: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:44:05,359 - CatastoAppLogger - ERROR - Errore durante il tentativo di login: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 95, in authenticate_user
+    user_id, role_id, session_id, message = utenti_service.login_user_service(
+                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        db_manager_instance, username, password, client_ip_address
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 129, in login_user_service
+    user_data = db_manager.execute_query(query, (username,), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:44:09,193 - CatastoAppLogger - INFO - Autenticazione fallita o utente ha scelto di uscire. Chiusura applicazione.
+2025-05-13 11:44:09,194 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.
+2025-05-13 11:52:21,988 - CatastoAppLogger - INFO - Avvio Applicazione Catasto Storico...
+2025-05-13 11:52:21,991 - CatastoAppLogger.ConfigLoader - INFO - Configurazione database caricata da 'config.ini'.
+2025-05-13 11:52:21,991 - CatastoDBLogger - INFO - Tentativo di connessione al database: catasto_storico@localhost
+2025-05-13 11:52:22,085 - CatastoDBLogger - INFO - Connessione al database 'catasto_storico' riuscita.
+2025-05-13 11:52:22,086 - CatastoDBLogger - INFO - Search path impostato a: catasto, public
+2025-05-13 11:52:22,088 - CatastoAppLogger - INFO - Indirizzo IP client rilevato/usato: 192.168.0.188
+2025-05-13 11:52:43,792 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: Saintgold
+2025-05-13 11:52:44,143 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO utenti (username, password_hash, email, role_id, is_active, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW()) RETURNING id
+    ... Errore: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+
+2025-05-13 11:52:44,177 - CatastoDBLogger - INFO - Rollback della transazione eseguito.
+2025-05-13 11:52:44,177 - CatastoAppLogger.UtentiService - ERROR - Errore critico durante la registrazione dell'utente 'Saintgold': ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+
+2025-05-13 11:52:44,188 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: 
+        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
+                               table_name_affected, record_id_affected, details, success, timestamp)
+        ... Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 11:52:44,193 - CatastoAppLogger.AuditService - ERROR - FALLIMENTO REGISTRAZIONE AUDIT: User None, Azione 'REGISTER_USER_FAIL'. Errore: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\services\audit_service.py", line 26, in record_audit
+    db_manager.execute_query(query, (
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        user_id, session_id, client_ip_address, action,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        table_name, record_id_str, details, success, datetime.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^^
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: ERRORE:  la colonna "user_id" della relazione "audit_log" non esiste
+LINE 2:         INSERT INTO audit_log (user_id, session_id, client_i...
+                                       ^
+
+2025-05-13 11:52:44,202 - CatastoAppLogger - ERROR - Errore critico durante la registrazione: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 137, in authenticate_user
+    new_user_id = utenti_service.register_user_service(
+        db_manager_instance, username_reg, password_reg1, email_reg,
+        DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+        created_by_user_id=None # Self-registration
+    )
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 100, in register_user_service
+    user_record = db_manager.execute_query(insert_query, (username, hashed_pw_str_for_db, email, role_id), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: ERRORE:  il valore nullo nella colonna "nome_completo" della relazione "utenti" viola il vincolo non nullo
+DETAIL:  La riga in errore contiene (1, Saintgold, $2b$12$/q0f5CswhXNRIIOlPkdHIeugNXij28bXkkFKLMy/WSqaeXRGpKdUu, null, sa@gm.com, t, null, 2025-05-13 11:52:22.085472, 2025-05-13 11:52:22.085472, 2).
+
+2025-05-13 11:53:46,254 - CatastoAppLogger.UtentiService - INFO - Tentativo di registrazione per l'utente: Saintgold
+2025-05-13 11:53:46,255 - CatastoDBLogger - ERROR - Errore Database durante l'esecuzione della query: SELECT id FROM utenti WHERE username = %s OR email = %s... Errore: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:53:46,270 - CatastoAppLogger - ERROR - Errore critico durante la registrazione: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\acs\main_app.py", line 137, in authenticate_user
+    new_user_id = utenti_service.register_user_service(
+        db_manager_instance, username_reg, password_reg1, email_reg,
+        DEFAULT_SELF_REGISTER_ROLE_ID, client_ip_address=client_ip_address,
+        created_by_user_id=None # Self-registration
+    )
+  File "C:\Users\saint\catasto\acs\core\services\utenti_service.py", line 51, in register_user_service
+    existing_user = db_manager.execute_query(check_query, (username, email), fetch_one=True)
+  File "C:\Users\saint\catasto\acs\core\db_manager.py", line 180, in execute_query
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.InFailedSqlTransaction: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+
+2025-05-13 11:56:26,299 - CatastoAppLogger - INFO - Autenticazione fallita o utente ha scelto di uscire. Chiusura applicazione.
+2025-05-13 11:56:26,300 - CatastoDBLogger - INFO - Disconnessione dal database riuscita.

@@ -1,0 +1,38 @@
+============================================================
+                CERTIFICATO DI PROPRIETA IMMOBILIARE
+                     CATASTO STORICO ANNI '50
+============================================================
+
+COMUNE: Comune Stress Test 1
+PARTITA N.: 1323
+TIPO: principale
+DATA IMPIANTO: 2007-05-13
+STATO: attiva
+
+-------------------- INTESTATARI --------------------
+- Possessore 1-65 Rossi
+
+-------------------- IMMOBILI --------------------
+Immobile ID: 975
+  Natura: Edificio Stress 2
+  Localita: Via Stress 1-12, 52 (via)
+  Consistenza: 125 mq
+  Classificazione: Classe Stress 4
+
+Immobile ID: 974
+  Natura: Edificio Stress 1
+  Localita: Via Stress 1-13, 75 (via)
+  Consistenza: 129 mq
+  Classificazione: Classe Stress 3
+
+Immobile ID: 976
+  Natura: Edificio Stress 3
+  Localita: Via Stress 1-5, 84 (via)
+  Consistenza: 183 mq
+  Classificazione: Classe Stress 5
+
+-------------------- VARIAZIONI --------------------
+============================================================
+Certificato generato il: 2025-05-13
+Il presente certificato ha valore puramente storico e documentale.
+============================================================

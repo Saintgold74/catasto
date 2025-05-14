@@ -277,3 +277,59 @@ CONTEXT:  funzione PL/pgSQL registra_passaggio_proprieta(integer,integer,integer
 2025-05-12 18:27:00,136 - CatastoDB - ERROR - Errore DB registrazione passaggio propriet‡ (Origine ID 1): ERRORE:  [registra_passaggio_proprieta] Errore: La partita 999 gi√† esiste nel comune ID 6
 CONTEXT:  funzione PL/pgSQL registra_passaggio_proprieta(integer,integer,integer,character varying,date,character varying,date,character varying,character varying,json,integer[],text) riga 79 a RAISE
 
+2025-05-13 08:48:22,911 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-13 08:48:23,091 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-13 08:48:45,045 - CatastoDB - INFO - Disconnessione completata
+2025-05-13 09:43:16,790 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-13 09:43:16,896 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-13 09:51:46,449 - CatastoDB - INFO - Disconnessione completata
+2025-05-13 10:01:22,527 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-13 10:01:22,595 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-13 10:09:03,380 - __main__ - ERROR - Errore non gestito nel menu principale: cannot access local variable 'utente_db' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1413, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 303, in menu_principale
+    elif scelta == "5": menu_audit(db)
+                        ~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1091, in menu_audit
+    logs = db.get_audit_log(tabella, op, rec_id, data_inizio, data_fine, utente_db, app_user_id, session_id_str)
+                                                                         ^^^^^^^^^
+UnboundLocalError: cannot access local variable 'utente_db' where it is not associated with a value
+2025-05-13 10:09:03,394 - CatastoDB - INFO - Disconnessione completata
+2025-05-13 10:12:51,820 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-13 10:12:51,994 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-13 10:13:12,102 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la funzione get_record_history(unknown, integer) non esiste
+LINE 1: SELECT * FROM get_record_history('partita', 1)
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-13 10:13:12,102 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-13 10:13:12,103 - CatastoDB - ERROR - Query renderizzata: b"SELECT * FROM get_record_history('partita', 1)"
+2025-05-13 10:13:12,104 - CatastoDB - INFO - Rollback eseguito.
+2025-05-13 10:13:12,104 - CatastoDB - ERROR - Errore DB get_record_history: ERRORE:  la funzione get_record_history(unknown, integer) non esiste
+LINE 1: SELECT * FROM get_record_history('partita', 1)
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-13 10:13:22,239 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedTable - ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-13 10:13:22,240 - CatastoDB - ERROR - SQLSTATE: 42P01
+2025-05-13 10:13:22,240 - CatastoDB - ERROR - Query renderizzata: b'SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LIMIT 1000'
+2025-05-13 10:13:22,246 - CatastoDB - INFO - Rollback eseguito.
+2025-05-13 10:13:22,246 - CatastoDB - ERROR - Errore DB get_audit_log: ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-14 09:55:16,355 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-14 09:55:16,527 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-14 09:55:28,980 - CatastoDB - INFO - Disconnessione completata
+2025-05-14 10:16:44,158 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-14 10:16:44,263 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-14 10:17:07,541 - __main__ - WARNING - Login fallito (utente 'postgres' non trovato/attivo).
+2025-05-14 10:18:00,122 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-14 10:18:00,174 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-14 10:32:39,817 - CatastoDB - INFO - Avvio manutenzione database (ANALYZE, REFRESH MV)...

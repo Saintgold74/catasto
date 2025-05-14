@@ -25,18 +25,21 @@ CREATE TABLE comune (
 );
 COMMENT ON TABLE comune IS 'Tabella dei comuni catalogati nel catasto storico (con ID PK).';
 
--- Tabella SEZIONI (Nuova tabella per le sezioni catastali/amministrative)
-CREATE TABLE catasto.sezioni ( -- O semplicemente 'sezioni' se 'catasto' è nel search_path
+-- All'interno del tuo script 02_creazione-schema-tabelle.sql
+-- (dopo CREATE TABLE comune)
+
+CREATE TABLE catasto.sezioni ( -- o solo 'sezioni' se 'catasto' è il default search_path
     id SERIAL PRIMARY KEY,
     comune_id INTEGER NOT NULL REFERENCES catasto.comune(id) ON DELETE CASCADE ON UPDATE CASCADE,
     nome_sezione VARCHAR(150) NOT NULL,
-    codice_sezione VARCHAR(20), -- Adatta il tipo e la lunghezza (es. 'A', 'U', 'Foglio XX')
+    codice_sezione VARCHAR(20), 
     note TEXT,
     data_creazione TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     data_modifica TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_sezione_comune_codice UNIQUE (comune_id, codice_sezione)
-    -- CONSTRAINT uq_sezione_comune_nome UNIQUE (comune_id, nome_sezione) -- Valuta se anche il nome debba essere univoco per comune
+    CONSTRAINT uq_sezione_comune_codice UNIQUE (comune_id, codice_sezione) 
 );
+
+COMMENT ON TABLE catasto.sezioni IS 'Tabella delle sezioni catastali o amministrative appartenenti a un comune.';
 
 COMMENT ON TABLE catasto.sezioni IS 'Tabella delle sezioni catastali o amministrative appartenenti a un comune.';
 COMMENT ON COLUMN catasto.sezioni.codice_sezione IS 'Codice alfanumerico della sezione (es. A, B, U, Foglio XX).';

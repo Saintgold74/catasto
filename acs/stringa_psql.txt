@@ -1,0 +1,1 @@
+psql -U postgres -d catasto_storico -h localhost -p 5432

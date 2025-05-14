@@ -1,35 +1,57 @@
 # core/services/audit_service.py
 import logging
-from datetime import datetime
+from datetime import datetime, timezone # Assicurati che timezone sia importato se usi aware datetime
+from typing import Optional, Any
 
-# Ottieni un logger specifico per questo modulo
+# Importa il modello AuditLog e la Session SQLAlchemy
+from sqlalchemy.orm import Session
+from core.models import AuditLog # Assumendo che AuditLog sia definito in core/models.py
+
 logger = logging.getLogger("CatastoAppLogger.AuditService")
 
-def record_audit(db_manager, user_id: int, action: str, details: str = "", 
-                 table_name: str = None, record_id: any = None, 
-                 session_id: str = None, client_ip_address: str = None, success: bool = True):
-    """
-    Registra un evento di audit nel database.
-    """
-    query = """
-        INSERT INTO audit_log (user_id, session_id, client_ip_address, action_performed, 
-                               table_name_affected, record_id_affected, details, success, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    # Converti record_id in stringa se è un intero, per coerenza o se il campo DB è testuale
-    if record_id is not None and not isinstance(record_id, str):
-        record_id_str = str(record_id)
-    else:
-        record_id_str = record_id
+def record_audit(
+    db: Session, # Modificato: accetta una sessione SQLAlchemy
+    user_id: Optional[int],
+    session_id: Optional[str],
+    client_ip_address: Optional[str],
+    action: str,
+    table_name: Optional[str] = None,
+    record_id: Optional[Any] = None,
+    details: Optional[str] = None,
+    success: bool = True
+):
+    """Registra un evento di audit nel database usando SQLAlchemy."""
+
+    record_id_str = str(record_id) if record_id is not None else None
 
     try:
-        db_manager.execute_query(query, (
-            user_id, session_id, client_ip_address, action, 
-            table_name, record_id_str, details, success, datetime.now()
-        ))
-        db_manager.commit() # L'audit log spesso si auto-committa
-        logger.info(f"Audit registrato: User {user_id}, Azione '{action}', Successo: {success}, Dettagli: {details[:100]}")
-    except Exception as e:
-        # Non far fallire l'operazione principale per un errore di audit
-        logger.error(f"FALLIMENTO REGISTRAZIONE AUDIT: User {user_id}, Azione '{action}'. Errore: {e}", exc_info=True)
-        # Non fare rollback qui, potrebbe annullare l'operazione principale
+        # Crea un'istanza del modello AuditLog
+        # Assicurati che i nomi dei campi corrispondano al tuo modello AuditLog
+        # e alla tabella audit_log nel DB (user_id, client_ip_address, action, table_name, record_id)
+        audit_entry = AuditLog(
+            user_id=user_id, # Corrisponde a AuditLog.user_id nel modello
+            session_id=session_id,
+            client_ip_address=client_ip_address,
+            action=action, # Corrisponde a AuditLog.action
+            table_name=table_name, # Corrisponde a AuditLog.table_name
+            record_id=record_id_str, # Corrisponde a AuditLog.record_id
+            details=details,
+            success=success
+            # timestamp ha server_default nel modello AuditLog
+        )
+        db.add(audit_entry)
+        # Il commit NON dovrebbe essere fatto qui.
+        # L'audit dovrebbe far parte della transazione del servizio chiamante.
+        # Se il servizio chiamante fa rollback, anche l'audit verrà annullato.
+        # Se il servizio chiamante fa commit, l'audit verrà salvato insieme.
+        # db.commit() # Rimuovi o commenta questo commit
+
+        # Non loggare qui il successo dell'audit per evitare loop,
+        # a meno che non sia un logging molto specifico.
+    except SQLAlchemyError as e_sql:
+        # È importante non far fallire l'operazione principale a causa di un errore di audit.
+        # Potresti anche decidere di non fare db.rollback() qui per non impattare
+        # la transazione principale se l'audit è considerato "best-effort".
+        logger.error(f"FALLIMENTO REGISTRAZIONE AUDIT (SQLAlchemy): User {user_id}, Azione '{action}'. Errore: {e_sql}", exc_info=True)
+    except Exception as e_generic:
+        logger.error(f"Errore generico in record_audit (SQLAlchemy): {e_generic}", exc_info=True)

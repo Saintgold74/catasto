@@ -1,527 +1,467 @@
-# core/services/anagrafiche_service.py
 import logging
-from .audit_service import record_audit # Assumendo che audit_service.py sia nella stessa directory
-from datetime import date, datetime # Assicura che 'date' e 'datetime' siano importati
+from typing import List, Dict, Any, Optional
 
-# Ottieni un logger specifico per questo modulo
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+
+# Importa i modelli SQLAlchemy necessari
+from core.models import (
+    Comune,
+    Sezione,
+    TipoDocumento,
+    TipoImmobile,
+    TipoPossesso,
+    TipoVariazione
+)
+# Importa la funzione di audit (presumendo che sarà adattata)
+# from core.services.audit_service import record_audit
+
 logger = logging.getLogger("CatastoAppLogger.AnagraficheService")
 
-# --- Gestione Comuni ---
-def create_comune_service(db_manager, nome: str, codice_catastale: str, provincia: str, regione: str, note: str = None, 
-                          current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
+# === Funzioni di Servizio per COMUNI ===
+
+def get_comuni_service(db: Session) -> List[Dict[str, Any]]:
+    """Recupera tutti i comuni, ordinati per nome."""
+    logger.info("Recupero lista comuni tramite SQLAlchemy.")
+    try:
+        comuni_obj = db.query(Comune).order_by(Comune.nome).all()
+        return [
+            {
+                "id": c.id,
+                "nome": c.nome,
+                "provincia": c.provincia,
+                "regione": c.regione,
+                "data_creazione": c.data_creazione,
+                "data_modifica": c.data_modifica,
+            }
+            for c in comuni_obj
+        ]
+    except SQLAlchemyError as e:
+        logger.error(f"Errore SQLAlchemy durante il recupero dei comuni: {e}", exc_info=True)
+        return []
+    except Exception as e:
+        logger.error(f"Errore generico durante il recupero dei comuni: {e}", exc_info=True)
+        return []
+
+def get_comune_by_id_service(db: Session, comune_id: int) -> Optional[Dict[str, Any]]:
+    """Recupera un comune specifico per ID."""
+    logger.info(f"Recupero comune ID {comune_id} tramite SQLAlchemy.")
+    try:
+        comune_obj = db.query(Comune).filter(Comune.id == comune_id).first()
+        if comune_obj:
+            return {
+                "id": comune_obj.id,
+                "nome": comune_obj.nome,
+                "provincia": comune_obj.provincia,
+                "regione": comune_obj.regione,
+                "data_creazione": comune_obj.data_creazione,
+                "data_modifica": comune_obj.data_modifica,
+            }
+        return None
+    except SQLAlchemyError as e:
+        logger.error(f"Errore SQLAlchemy durante il recupero del comune ID {comune_id}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Errore generico durante il recupero del comune ID {comune_id}: {e}", exc_info=True)
+        return None
+
+def create_comune_service(
+    db: Session,
+    nome: str,
+    provincia: str,
+    regione: str,
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> Optional[Dict[str, Any]]:
     """Crea un nuovo comune."""
-    logger.info(f"Tentativo creazione comune: {nome}")
-    # Verifica se il comune esiste già (per codice catastale che dovrebbe essere unico)
-    check_query = "SELECT id FROM comuni WHERE codice_catastale = %s"
-    existing_comune = db_manager.execute_query(check_query, (codice_catastale,), fetch_one=True)
-    if existing_comune:
-        error_msg = f"Comune con codice catastale '{codice_catastale}' già esistente (ID: {existing_comune['id']})."
-        logger.warning(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "CREATE_COMUNE_FAIL", 
-                         error_msg, "comuni", client_ip_address=client_ip_address, success=False)
-        raise ValueError(error_msg)
-
-    query = """
-        INSERT INTO comuni (nome, codice_catastale, provincia, regione, note, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, NOW(), NOW()) RETURNING id
-    """
+    logger.info(f"Tentativo creazione comune '{nome}' tramite SQLAlchemy.")
     try:
-        result = db_manager.execute_query(query, (nome, codice_catastale, provincia, regione, note), fetch_one=True)
-        if result and result['id']:
-            comune_id = result['id']
-            db_manager.commit()
-            logger.info(f"Comune '{nome}' (ID: {comune_id}) creato con successo.")
-            if current_user_id:
-                record_audit(db_manager, current_user_id, "CREATE_COMUNE", 
-                             f"Comune {nome} (ID:{comune_id}) creato.", "comuni", comune_id,
-                             session_id, client_ip_address, success=True)
-            return comune_id
-        else:
-            db_manager.rollback()
-            logger.error(f"Creazione comune '{nome}' fallita (nessun ID ritornato).")
-            if current_user_id:
-                 record_audit(db_manager, current_user_id, "CREATE_COMUNE_FAIL", 
-                              f"Fallimento creazione comune {nome} (DB error).", "comuni", 
-                              session_id=session_id, client_ip_address=client_ip_address, success=False)
-            return None
-    except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service durante creazione comune '{nome}': {e}", exc_info=True)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "CREATE_COMUNE_FAIL", 
-                         f"Errore creazione comune {nome}: {str(e)[:100]}", "comuni", 
-                         session_id=session_id, client_ip_address=client_ip_address, success=False)
-        raise
+        # Verifica se esiste già un comune con lo stesso nome (UNIQUE constraint)
+        existing_comune = db.query(Comune).filter(Comune.nome == nome).first()
+        if existing_comune:
+            logger.warning(f"Comune con nome '{nome}' esiste già (ID: {existing_comune.id}).")
+            # Non registrare audit di fallimento qui, la logica chiamante potrebbe gestirlo
+            return {"error": f"Comune con nome '{nome}' esiste già.", "id": existing_comune.id}
 
-def get_comuni_service(db_manager, nome_comune_search: str = None):
-    """Recupera i comuni, opzionalmente filtrati per nome."""
-    logger.debug(f"Recupero comuni. Filtro nome: {nome_comune_search}")
-    if nome_comune_search:
-        query = "SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni WHERE nome ILIKE %s ORDER BY nome"
-        params = (f"%{nome_comune_search}%",)
-    else:
-        query = "SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni ORDER BY nome"
-        params = None
-    try:
-        comuni = db_manager.execute_query(query, params, fetch_all=True)
-        logger.debug(f"Trovati {len(comuni) if comuni else 0} comuni.")
-        return comuni
-    except Exception as e:
-        logger.error(f"Errore durante il recupero dei comuni: {e}", exc_info=True)
-        return []
-
-def get_comune_by_id_service(db_manager, comune_id: int):
-    """Recupera un comune specifico tramite il suo ID."""
-    logger.debug(f"Recupero comune con ID: {comune_id}")
-    query = "SELECT id, nome, codice_catastale, provincia, regione, note FROM comuni WHERE id = %s"
-    try:
-        comune = db_manager.execute_query(query, (comune_id,), fetch_one=True)
-        if comune:
-            logger.debug(f"Comune ID: {comune_id} trovato: {comune['nome']}")
-        else:
-            logger.debug(f"Comune ID: {comune_id} non trovato.")
-        return comune
-    except Exception as e:
-        logger.error(f"Errore durante il recupero del comune ID {comune_id}: {e}", exc_info=True)
-        return None
-
-
-def update_comune_service(db_manager, comune_id: int, nome: str, codice_catastale: str, provincia: str, regione: str, note: str = None,
-                           current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Aggiorna i dati di un comune esistente."""
-    logger.info(f"Tentativo aggiornamento comune ID: {comune_id} con nome: {nome}")
-    
-    # Opzionale: verifica se un altro comune ha già il nuovo codice catastale (se deve rimanere unico)
-    check_query = "SELECT id FROM comuni WHERE codice_catastale = %s AND id != %s"
-    existing_comune = db_manager.execute_query(check_query, (codice_catastale, comune_id), fetch_one=True)
-    if existing_comune:
-        error_msg = f"Aggiornamento fallito: un altro comune (ID: {existing_comune['id']}) utilizza già il codice catastale '{codice_catastale}'."
-        logger.warning(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "UPDATE_COMUNE_FAIL", 
-                         error_msg, "comuni", comune_id, 
-                         session_id, client_ip_address, success=False)
-        raise ValueError(error_msg)
-
-    query = """
-        UPDATE comuni SET nome = %s, codice_catastale = %s, provincia = %s, regione = %s, note = %s, updated_at = NOW()
-        WHERE id = %s
-    """
-    try:
-        # execute_query per UPDATE/DELETE di solito non ritorna dati a meno che non usi RETURNING.
-        # Se non ci sono errori, consideriamo l'operazione riuscita.
-        db_manager.execute_query(query, (nome, codice_catastale, provincia, regione, note, comune_id))
-        db_manager.commit()
-        logger.info(f"Comune ID: {comune_id} aggiornato con successo.")
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "UPDATE_COMUNE", 
-                         f"Comune {nome} (ID:{comune_id}) aggiornato.", "comuni", comune_id,
-                         session_id, client_ip_address, success=True)
-        return True
-    except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service durante aggiornamento comune ID: {comune_id}: {e}", exc_info=True)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "UPDATE_COMUNE_FAIL", 
-                         f"Errore aggiornamento comune {nome} (ID:{comune_id}): {str(e)[:100]}", "comuni", comune_id,
-                         session_id, client_ip_address, success=False)
-        raise
-
-def delete_comune_service(db_manager, comune_id: int, 
-                          current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Cancella un comune, solo se non ha dipendenze (es. sezioni)."""
-    logger.warning(f"Tentativo cancellazione comune ID: {comune_id}.")
-    
-    # 1. Controllo dipendenze (esempio: sezioni)
-    dependency_check_query = "SELECT 1 FROM sezioni WHERE comune_id = %s LIMIT 1"
-    dependency = db_manager.execute_query(dependency_check_query, (comune_id,), fetch_one=True)
-    if dependency:
-        error_msg = f"Impossibile cancellare comune ID {comune_id}: esistono sezioni associate."
-        logger.error(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "DELETE_COMUNE_FAIL", 
-                         error_msg, "comuni", comune_id, 
-                         session_id, client_ip_address, success=False)
-        raise ValueError(error_msg) # Solleva un'eccezione che l'UI può intercettare
-
-    query = "DELETE FROM comuni WHERE id = %s"
-    try:
-        db_manager.execute_query(query, (comune_id,))
-        db_manager.commit()
-        logger.info(f"Comune ID: {comune_id} cancellato con successo.")
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "DELETE_COMUNE", 
-                         f"Comune (ID:{comune_id}) cancellato.", "comuni", comune_id,
-                         session_id, client_ip_address, success=True)
-        return True
-    except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service durante cancellazione comune ID: {comune_id}: {e}", exc_info=True)
-        if current_user_id:
-             record_audit(db_manager, current_user_id, "DELETE_COMUNE_FAIL", 
-                          f"Errore cancellazione comune (ID:{comune_id}): {str(e)[:100]}", "comuni", comune_id,
-                          session_id, client_ip_address, success=False)
-        raise
-
-# --- Gestione Sezioni ---
-def create_sezione_service(db_manager, comune_id: int, nome_sezione: str, codice_sezione: str = None, note: str = None,
-                           current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Crea una nuova sezione per un comune."""
-    logger.info(f"Tentativo creazione sezione: '{nome_sezione}' per comune ID: {comune_id}")
-    # Opzionale: verifica se una sezione con lo stesso nome/codice esiste già per quel comune
-    check_query = "SELECT id FROM sezioni WHERE comune_id = %s AND (nome_sezione = %s OR (codice_sezione IS NOT NULL AND codice_sezione = %s))"
-    existing_sezione = db_manager.execute_query(check_query, (comune_id, nome_sezione, codice_sezione), fetch_one=True)
-    if existing_sezione:
-        error_msg = f"Sezione con nome '{nome_sezione}' o codice '{codice_sezione}' già esistente per comune ID {comune_id}."
-        logger.warning(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "CREATE_SEZIONE_FAIL", error_msg, "sezioni", client_ip_address=client_ip_address, success=False)
-        raise ValueError(error_msg)
+        nuovo_comune = Comune(nome=nome, provincia=provincia, regione=regione)
+        db.add(nuovo_comune)
+        db.commit()
+        db.refresh(nuovo_comune)
+        logger.info(f"Comune '{nome}' creato con ID {nuovo_comune.id}.")
         
-    query = """
-        INSERT INTO sezioni (comune_id, nome_sezione, codice_sezione, note, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, NOW(), NOW()) RETURNING id
-    """
-    try:
-        result = db_manager.execute_query(query, (comune_id, nome_sezione, codice_sezione, note), fetch_one=True)
-        if result and result['id']:
-            sezione_id = result['id']
-            db_manager.commit()
-            logger.info(f"Sezione '{nome_sezione}' (ID: {sezione_id}) creata per comune ID {comune_id}.")
-            if current_user_id:
-                record_audit(db_manager, current_user_id, "CREATE_SEZIONE", 
-                             f"Sezione {nome_sezione} (ID:{sezione_id}) creata per comune ID {comune_id}.", 
-                             "sezioni", sezione_id, session_id, client_ip_address, success=True)
-            return sezione_id
-        else:
-            db_manager.rollback()
-            logger.error(f"Creazione sezione '{nome_sezione}' fallita (nessun ID ritornato).")
-            if current_user_id:
-                record_audit(db_manager, current_user_id, "CREATE_SEZIONE_FAIL", f"Fallimento creazione sezione {nome_sezione}.", "sezioni", session_id=session_id, client_ip_address=client_ip_address, success=False)
-            return None
+        # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+        #              action="CREATE_COMUNE", table_name="comune", record_id=nuovo_comune.id,
+        #              details=f"Creato comune: {nome}", success=True)
+                     
+        return get_comune_by_id_service(db, nuovo_comune.id) # Restituisce il dizionario completo
+    except IntegrityError as e: # Cattura errori di violazione dei vincoli (es. UNIQUE)
+        db.rollback()
+        logger.error(f"Errore di integrità SQLAlchemy durante la creazione del comune '{nome}': {e}", exc_info=True)
+        # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+        #              action="CREATE_COMUNE_FAIL", table_name="comune",
+        #              details=f"Errore integrità creazione comune {nome}: {e.orig}", success=False)
+        return {"error": f"Errore di integrità: {e.orig}"} # e.orig contiene l'errore del DB driver
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy durante la creazione del comune '{nome}': {e}", exc_info=True)
+        # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+        #              action="CREATE_COMUNE_FAIL", table_name="comune",
+        #              details=f"Errore SQLAlchemy creazione comune {nome}: {str(e)}", success=False)
+        return {"error": "Errore database durante la creazione del comune."}
     except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service creazione sezione '{nome_sezione}': {e}", exc_info=True)
-        if current_user_id:
-             record_audit(db_manager, current_user_id, "CREATE_SEZIONE_FAIL", f"Errore creazione sezione {nome_sezione}: {str(e)[:100]}", "sezioni", session_id=session_id, client_ip_address=client_ip_address, success=False)
-        raise
+        db.rollback()
+        logger.error(f"Errore generico durante la creazione del comune '{nome}': {e}", exc_info=True)
+        # record_audit(...)
+        return {"error": "Errore generico durante la creazione del comune."}
 
-def get_sezioni_service(db_manager, comune_id: int = None, nome_sezione_search: str = None):
-    """Recupera le sezioni, opzionalmente filtrate per comune_id e/o nome sezione."""
-    logger.debug(f"Recupero sezioni. Filtro comune ID: {comune_id}, Filtro nome: {nome_sezione_search}")
-    
-    base_query = """
-        SELECT s.id, s.comune_id, c.nome as nome_comune, s.nome_sezione, s.codice_sezione, s.note 
-        FROM sezioni s 
-        JOIN comuni c ON s.comune_id = c.id
-    """
-    conditions = []
-    params = []
 
-    if comune_id is not None:
-        conditions.append("s.comune_id = %s")
-        params.append(comune_id)
-    if nome_sezione_search:
-        conditions.append("s.nome_sezione ILIKE %s")
-        params.append(f"%{nome_sezione_search}%")
-
-    if conditions:
-        query = base_query + " WHERE " + " AND ".join(conditions)
-    else:
-        query = base_query
-    
-    query += " ORDER BY c.nome, s.nome_sezione"
-    
+def update_comune_service(
+    db: Session,
+    comune_id: int,
+    data_to_update: Dict[str, Any],
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> bool:
+    """Aggiorna un comune esistente."""
+    logger.info(f"Tentativo aggiornamento comune ID {comune_id} tramite SQLAlchemy.")
     try:
-        sezioni = db_manager.execute_query(query, tuple(params), fetch_all=True)
-        logger.debug(f"Trovate {len(sezioni) if sezioni else 0} sezioni.")
-        return sezioni
-    except Exception as e:
-        logger.error(f"Errore recupero sezioni: {e}", exc_info=True)
-        return []
+        comune_obj = db.query(Comune).filter(Comune.id == comune_id).first()
+        if not comune_obj:
+            logger.warning(f"Comune ID {comune_id} non trovato per aggiornamento.")
+            return False
 
-def get_sezione_by_id_service(db_manager, sezione_id: int):
-    """Recupera una sezione specifica tramite il suo ID."""
-    logger.debug(f"Recupero sezione con ID: {sezione_id}")
-    query = """
-        SELECT s.id, s.comune_id, c.nome as nome_comune, s.nome_sezione, s.codice_sezione, s.note 
-        FROM sezioni s
-        JOIN comuni c ON s.comune_id = c.id
-        WHERE s.id = %s
-    """
-    try:
-        sezione = db_manager.execute_query(query, (sezione_id,), fetch_one=True)
-        if sezione:
-            logger.debug(f"Sezione ID: {sezione_id} trovata: {sezione['nome_sezione']}")
-        else:
-            logger.debug(f"Sezione ID: {sezione_id} non trovata.")
-        return sezione
-    except Exception as e:
-        logger.error(f"Errore durante il recupero della sezione ID {sezione_id}: {e}", exc_info=True)
-        return None
-
-def update_sezione_service(db_manager, sezione_id: int, comune_id: int, nome_sezione: str, codice_sezione: str = None, note: str = None,
-                           current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Aggiorna i dati di una sezione esistente."""
-    logger.info(f"Tentativo aggiornamento sezione ID: {sezione_id} con nome: {nome_sezione}")
-    # Opzionale: verifica unicità nome/codice all'interno del comune, escludendo la sezione corrente
-    check_query = "SELECT id FROM sezioni WHERE comune_id = %s AND (nome_sezione = %s OR (codice_sezione IS NOT NULL AND codice_sezione = %s)) AND id != %s"
-    existing_sezione = db_manager.execute_query(check_query, (comune_id, nome_sezione, codice_sezione, sezione_id), fetch_one=True)
-    if existing_sezione:
-        error_msg = f"Aggiornamento fallito: altra sezione (ID: {existing_sezione['id']}) con nome '{nome_sezione}' o codice '{codice_sezione}' già esistente per comune ID {comune_id}."
-        logger.warning(error_msg)
-        if current_user_id:
-             record_audit(db_manager, current_user_id, "UPDATE_SEZIONE_FAIL", error_msg, "sezioni", sezione_id, success=False)
-        raise ValueError(error_msg)
-
-    query = """
-        UPDATE sezioni SET comune_id = %s, nome_sezione = %s, codice_sezione = %s, note = %s, updated_at = NOW()
-        WHERE id = %s
-    """
-    try:
-        db_manager.execute_query(query, (comune_id, nome_sezione, codice_sezione, note, sezione_id))
-        db_manager.commit()
-        logger.info(f"Sezione ID: {sezione_id} aggiornata con successo.")
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "UPDATE_SEZIONE", 
-                         f"Sezione {nome_sezione} (ID:{sezione_id}) aggiornata.", "sezioni", sezione_id,
-                         session_id, client_ip_address, success=True)
-        return True
-    except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service durante aggiornamento sezione ID: {sezione_id}: {e}", exc_info=True)
-        if current_user_id:
-             record_audit(db_manager, current_user_id, "UPDATE_SEZIONE_FAIL", f"Errore aggiornamento sezione {nome_sezione} (ID:{sezione_id}): {str(e)[:100]}", "sezioni", sezione_id, success=False)
-        raise
-
-def delete_sezione_service(db_manager, sezione_id: int,
-                           current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Cancella una sezione, solo se non ha dipendenze (es. partite)."""
-    logger.warning(f"Tentativo cancellazione sezione ID: {sezione_id}.")
-    # 1. Controllo dipendenze (esempio: partite)
-    dependency_check_query = "SELECT 1 FROM partite WHERE sezione_id = %s LIMIT 1" # Adatta 'partite' e 'sezione_id' al tuo schema
-    dependency = db_manager.execute_query(dependency_check_query, (sezione_id,), fetch_one=True)
-    if dependency:
-        error_msg = f"Impossibile cancellare sezione ID {sezione_id}: esistono partite associate."
-        logger.error(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "DELETE_SEZIONE_FAIL", error_msg, "sezioni", sezione_id, success=False)
-        raise ValueError(error_msg)
-
-    query = "DELETE FROM sezioni WHERE id = %s"
-    try:
-        db_manager.execute_query(query, (sezione_id,))
-        db_manager.commit()
-        logger.info(f"Sezione ID: {sezione_id} cancellata con successo.")
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "DELETE_SEZIONE", 
-                         f"Sezione (ID:{sezione_id}) cancellata.", "sezioni", sezione_id,
-                         session_id, client_ip_address, success=True)
-        return True
-    except Exception as e:
-        db_manager.rollback()
-        logger.error(f"Errore Service durante cancellazione sezione ID: {sezione_id}: {e}", exc_info=True)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "DELETE_SEZIONE_FAIL", f"Errore cancellazione sezione (ID:{sezione_id}): {str(e)[:100]}", "sezioni", sezione_id, success=False)
-        raise
-
-# --- Gestione Qualifiche Possessore ---
-def create_qualifica_service(db_manager, nome_qualifica: str, descrizione: str = None,
-                             current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Crea una nuova qualifica per i possessori."""
-    logger.info(f"Tentativo creazione qualifica: {nome_qualifica}")
-    check_query = "SELECT id FROM qualifiche_possessore WHERE nome_qualifica = %s"
-    existing = db_manager.execute_query(check_query, (nome_qualifica,), fetch_one=True)
-    if existing:
-        error_msg = f"Qualifica '{nome_qualifica}' già esistente (ID: {existing['id']})."
-        logger.warning(error_msg)
-        if current_user_id:
-            record_audit(db_manager, current_user_id, "CREATE_QUALIFICA_FAIL", error_msg, "qualifiche_possessore", success=False)
-        raise ValueError(error_msg)
-
-    query = "INSERT INTO qualifiche_possessore (nome_qualifica, descrizione, created_at, updated_at) VALUES (%s, %s, NOW(), NOW()) RETURNING id"
-    try:
-        result = db_manager.execute_query(query, (nome_qualifica, descrizione), fetch_one=True)
-        if result and result['id']:
-            qualifica_id = result['id']
-            db_manager.commit()
-            logger.info(f"Qualifica '{nome_qualifica}' (ID: {qualifica_id}) creata.")
-            if current_user_id:
-                record_audit(db_manager, current_user_id, "CREATE_QUALIFICA", f"Qualifica {nome_qualifica} (ID:{qualifica_id}) creata.", "qualifiche_possessore", qualifica_id, session_id, client_ip_address, success=True)
-            return qualifica_id
-        else:
-            db_manager.rollback(); # Audit
-            return None
-    except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service creazione qualifica '{nome_qualifica}': {e}", exc_info=True); # Audit
-        raise
-
-def get_qualifiche_service(db_manager):
-    """Recupera tutte le qualifiche dei possessori."""
-    logger.debug("Recupero qualifiche possessore.")
-    query = "SELECT id, nome_qualifica, descrizione FROM qualifiche_possessore ORDER BY nome_qualifica"
-    try:
-        return db_manager.execute_query(query, fetch_all=True)
-    except Exception as e:
-        logger.error(f"Errore recupero qualifiche: {e}", exc_info=True)
-        return []
+        updated_fields_log = []
+        for key, value in data_to_update.items():
+            if hasattr(comune_obj, key) and getattr(comune_obj, key) != value:
+                setattr(comune_obj, key, value)
+                updated_fields_log.append(f"{key}='{value}'")
         
-def get_qualifica_by_id_service(db_manager, qualifica_id: int):
-    logger.debug(f"Recupero qualifica ID: {qualifica_id}")
-    query = "SELECT id, nome_qualifica, descrizione FROM qualifiche_possessore WHERE id = %s"
-    try:
-        return db_manager.execute_query(query, (qualifica_id,), fetch_one=True)
-    except Exception as e:
-        logger.error(f"Errore recupero qualifica ID {qualifica_id}: {e}", exc_info=True)
-        return None
+        if not updated_fields_log:
+            logger.info(f"Nessuna modifica effettiva per comune ID {comune_id}.")
+            return True # O False se si vuole indicare "nessuna modifica"
 
-
-def update_qualifica_service(db_manager, qualifica_id: int, nome_qualifica: str, descrizione: str = None,
-                             current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Aggiorna una qualifica esistente."""
-    logger.info(f"Tentativo aggiornamento qualifica ID: {qualifica_id} con nome: {nome_qualifica}")
-    check_query = "SELECT id FROM qualifiche_possessore WHERE nome_qualifica = %s AND id != %s"
-    existing = db_manager.execute_query(check_query, (nome_qualifica, qualifica_id), fetch_one=True)
-    if existing:
-        error_msg = f"Aggiornamento fallito: altra qualifica (ID: {existing['id']}) ha già il nome '{nome_qualifica}'."
-        logger.warning(error_msg)
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_QUALIFICA_FAIL", error_msg, "qualifiche_possessore", qualifica_id, success=False)
-        raise ValueError(error_msg)
-
-    query = "UPDATE qualifiche_possessore SET nome_qualifica = %s, descrizione = %s, updated_at = NOW() WHERE id = %s"
-    try:
-        db_manager.execute_query(query, (nome_qualifica, descrizione, qualifica_id))
-        db_manager.commit()
-        logger.info(f"Qualifica ID: {qualifica_id} aggiornata.")
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_QUALIFICA", f"Qualifica {nome_qualifica} (ID:{qualifica_id}) aggiornata.", "qualifiche_possessore", qualifica_id, session_id, client_ip_address, success=True)
+        db.commit()
+        db.refresh(comune_obj) # Opzionale, per avere l'oggetto aggiornato con eventuali trigger/default DB
+        logger.info(f"Comune ID {comune_obj.id} ('{comune_obj.nome}') aggiornato. Modifiche: {', '.join(updated_fields_log)}")
+        
+        # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+        #              action="UPDATE_COMUNE", table_name="comune", record_id=comune_id,
+        #              details=f"Aggiornato comune {comune_obj.nome}. Modifiche: {', '.join(updated_fields_log)}", success=True)
         return True
+    except IntegrityError as e:
+        db.rollback()
+        logger.error(f"Errore di integrità SQLAlchemy durante aggiornamento comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        # Potresti voler restituire un messaggio d'errore più specifico
+        raise # Rilancia per farla gestire dal chiamante se necessario
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy durante aggiornamento comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
     except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service aggiornamento qualifica ID: {qualifica_id}: {e}", exc_info=True)
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_QUALIFICA_FAIL", f"Errore aggiornamento qualifica {nome_qualifica} (ID:{qualifica_id}): {str(e)[:100]}", "qualifiche_possessore", qualifica_id, success=False)
-        raise
+        db.rollback()
+        logger.error(f"Errore generico durante aggiornamento comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
 
-def delete_qualifica_service(db_manager, qualifica_id: int,
-                             current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Cancella una qualifica, solo se non ha dipendenze."""
-    logger.warning(f"Tentativo cancellazione qualifica ID: {qualifica_id}.")
-    # Controllo dipendenze (es. tabella 'intestazioni' o 'possessori_storico' se qualifica_id è lì)
-    # Adatta il nome della tabella e del campo FK al tuo schema
-    dependency_check_query = "SELECT 1 FROM intestazioni WHERE qualifica_id = %s LIMIT 1" 
-    dependency = db_manager.execute_query(dependency_check_query, (qualifica_id,), fetch_one=True)
-    if dependency:
-        error_msg = f"Impossibile cancellare qualifica ID {qualifica_id}: è utilizzata nelle intestazioni."
-        logger.error(error_msg)
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_QUALIFICA_FAIL", error_msg, "qualifiche_possessore", qualifica_id, success=False)
-        raise ValueError(error_msg)
-
-    query = "DELETE FROM qualifiche_possessore WHERE id = %s"
+def delete_comune_service(
+    db: Session,
+    comune_id: int,
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> bool:
+    """Cancella un comune (verificare se ci sono dipendenze come Sezioni o Partite prima di cancellare)."""
+    logger.info(f"Tentativo cancellazione comune ID {comune_id} tramite SQLAlchemy.")
     try:
-        db_manager.execute_query(query, (qualifica_id,))
-        db_manager.commit()
-        logger.info(f"Qualifica ID: {qualifica_id} cancellata.")
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_QUALIFICA", f"Qualifica (ID:{qualifica_id}) cancellata.", "qualifiche_possessore", qualifica_id, session_id, client_ip_address, success=True)
+        comune_obj = db.query(Comune).filter(Comune.id == comune_id).first()
+        if not comune_obj:
+            logger.warning(f"Comune ID {comune_id} non trovato per cancellazione.")
+            return False
+
+        # CONTROLLO DIPENDENZE:
+        # Prima di cancellare un comune, verifica se ci sono sezioni o altre entità collegate.
+        # Questa logica dipende da come hai definito le relazioni e le regole di cancellazione (ON DELETE).
+        # Esempio: se ci sono sezioni che impediscono la cancellazione (es. FK senza ON DELETE CASCADE)
+        sezioni_collegate = db.query(Sezione).filter(Sezione.comune_id == comune_id).count()
+        if sezioni_collegate > 0:
+            logger.warning(f"Impossibile cancellare comune ID {comune_id} perché ha {sezioni_collegate} sezioni collegate.")
+            # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+            #              action="DELETE_COMUNE_FAIL", table_name="comune", record_id=comune_id,
+            #              details=f"Tentativo cancellazione fallito: comune {comune_obj.nome} ha sezioni collegate.", success=False)
+            raise ValueError(f"Impossibile cancellare il comune '{comune_obj.nome}' perché ha sezioni collegate.")
+
+        nome_comune_cancellato = comune_obj.nome
+        db.delete(comune_obj)
+        db.commit()
+        logger.info(f"Comune '{nome_comune_cancellato}' (ID: {comune_id}) cancellato con successo.")
+        # record_audit(db, audit_user_id, audit_session_id, audit_client_ip,
+        #              action="DELETE_COMUNE", table_name="comune", record_id=comune_id,
+        #              details=f"Cancellato comune: {nome_comune_cancellato}", success=True)
         return True
+    except IntegrityError as e: # Potrebbe accadere se il DB ha FK che impediscono il delete non gestite prima
+        db.rollback()
+        logger.error(f"Errore di integrità SQLAlchemy durante cancellazione comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        raise # Rilancia
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy durante cancellazione comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
     except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service cancellazione qualifica ID: {qualifica_id}: {e}", exc_info=True)
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_QUALIFICA_FAIL", f"Errore cancellazione qualifica (ID:{qualifica_id}): {str(e)[:100]}", "qualifiche_possessore", qualifica_id, success=False)
-        raise
+        db.rollback()
+        logger.error(f"Errore generico durante cancellazione comune ID {comune_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
 
-# --- Gestione Titoli/Diritti ---
-def create_titolo_service(db_manager, nome_titolo: str, descrizione: str = None,
-                          current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Crea un nuovo titolo/diritto."""
-    logger.info(f"Tentativo creazione titolo: {nome_titolo}")
-    check_query = "SELECT id FROM titoli_diritti WHERE nome_titolo = %s"
-    existing = db_manager.execute_query(check_query, (nome_titolo,), fetch_one=True)
-    if existing:
-        error_msg = f"Titolo '{nome_titolo}' già esistente (ID: {existing['id']})."
-        logger.warning(error_msg)
-        if current_user_id: record_audit(db_manager, current_user_id, "CREATE_TITOLO_FAIL", error_msg, "titoli_diritti", success=False)
-        raise ValueError(error_msg)
+# === Funzioni di Servizio per SEZIONI ===
 
-    query = "INSERT INTO titoli_diritti (nome_titolo, descrizione, created_at, updated_at) VALUES (%s, %s, NOW(), NOW()) RETURNING id"
+def get_sezioni_service(db: Session, comune_id_filter: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Recupera le sezioni, opzionalmente filtrate per comune_id."""
+    logger.info(f"Recupero sezioni (comune ID: {comune_id_filter}) tramite SQLAlchemy.")
     try:
-        result = db_manager.execute_query(query, (nome_titolo, descrizione), fetch_one=True)
-        if result and result['id']:
-            titolo_id = result['id']
-            db_manager.commit()
-            logger.info(f"Titolo '{nome_titolo}' (ID: {titolo_id}) creato.")
-            if current_user_id: record_audit(db_manager, current_user_id, "CREATE_TITOLO", f"Titolo {nome_titolo} (ID:{titolo_id}) creato.", "titoli_diritti", titolo_id, session_id, client_ip_address, success=True)
-            return titolo_id
-        else:
-            db_manager.rollback(); # Audit
-            return None
-    except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service creazione titolo '{nome_titolo}': {e}", exc_info=True); # Audit
-        raise
+        query = db.query(
+            Sezione.id,
+            Sezione.comune_id,
+            Comune.nome.label("nome_comune"),
+            Sezione.nome_sezione,
+            Sezione.codice_sezione,
+            Sezione.note,
+            Sezione.data_creazione,
+            Sezione.data_modifica
+        ).join(Comune, Sezione.comune_id == Comune.id)
 
-def get_titoli_service(db_manager):
-    """Recupera tutti i titoli/diritti."""
-    logger.debug("Recupero titoli/diritti.")
-    query = "SELECT id, nome_titolo, descrizione FROM titoli_diritti ORDER BY nome_titolo"
-    try:
-        return db_manager.execute_query(query, fetch_all=True)
+        if comune_id_filter is not None:
+            query = query.filter(Sezione.comune_id == comune_id_filter)
+        
+        sezioni_rows = query.order_by(Sezione.nome_sezione).all()
+        
+        return [
+            {
+                "id": s.id, "comune_id": s.comune_id, "nome_comune": s.nome_comune,
+                "nome_sezione": s.nome_sezione, "codice_sezione": s.codice_sezione,
+                "note": s.note, "data_creazione": s.data_creazione, "data_modifica": s.data_modifica
+            } for s in sezioni_rows
+        ]
+    except SQLAlchemyError as e:
+        logger.error(f"Errore SQLAlchemy recupero sezioni: {e}", exc_info=True)
+        return []
     except Exception as e:
-        logger.error(f"Errore recupero titoli: {e}", exc_info=True)
+        logger.error(f"Errore generico recupero sezioni: {e}", exc_info=True)
         return []
 
-def get_titolo_by_id_service(db_manager, titolo_id: int):
-    logger.debug(f"Recupero titolo ID: {titolo_id}")
-    query = "SELECT id, nome_titolo, descrizione FROM titoli_diritti WHERE id = %s"
+def get_sezione_by_id_service(db: Session, sezione_id: int) -> Optional[Dict[str, Any]]:
+    """Recupera una sezione specifica per ID, includendo il nome del comune."""
+    logger.info(f"Recupero sezione ID {sezione_id} tramite SQLAlchemy.")
     try:
-        return db_manager.execute_query(query, (titolo_id,), fetch_one=True)
+        sezione_row = db.query(
+            Sezione.id,
+            Sezione.comune_id,
+            Comune.nome.label("nome_comune"),
+            Sezione.nome_sezione,
+            Sezione.codice_sezione,
+            Sezione.note,
+            Sezione.data_creazione,
+            Sezione.data_modifica
+        ).join(Comune, Sezione.comune_id == Comune.id).filter(Sezione.id == sezione_id).first()
+        
+        if sezione_row:
+            return {
+                "id": sezione_row.id, "comune_id": sezione_row.comune_id, "nome_comune": sezione_row.nome_comune,
+                "nome_sezione": sezione_row.nome_sezione, "codice_sezione": sezione_row.codice_sezione,
+                "note": sezione_row.note, "data_creazione": sezione_row.data_creazione, "data_modifica": sezione_row.data_modifica
+            }
+        return None
+    except SQLAlchemyError as e:
+        logger.error(f"Errore SQLAlchemy recupero sezione ID {sezione_id}: {e}", exc_info=True)
+        return None
     except Exception as e:
-        logger.error(f"Errore recupero titolo ID {titolo_id}: {e}", exc_info=True)
+        logger.error(f"Errore generico recupero sezione ID {sezione_id}: {e}", exc_info=True)
         return None
 
-
-def update_titolo_service(db_manager, titolo_id: int, nome_titolo: str, descrizione: str = None,
-                          current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Aggiorna un titolo/diritto esistente."""
-    logger.info(f"Tentativo aggiornamento titolo ID: {titolo_id} con nome: {nome_titolo}")
-    check_query = "SELECT id FROM titoli_diritti WHERE nome_titolo = %s AND id != %s"
-    existing = db_manager.execute_query(check_query, (nome_titolo, titolo_id), fetch_one=True)
-    if existing:
-        error_msg = f"Aggiornamento fallito: altro titolo (ID: {existing['id']}) ha già il nome '{nome_titolo}'."
-        logger.warning(error_msg)
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_TITOLO_FAIL", error_msg, "titoli_diritti", titolo_id, success=False)
-        raise ValueError(error_msg)
-
-    query = "UPDATE titoli_diritti SET nome_titolo = %s, descrizione = %s, updated_at = NOW() WHERE id = %s"
+def create_sezione_service(
+    db: Session,
+    comune_id: int,
+    nome_sezione: str,
+    codice_sezione: Optional[str],
+    note: Optional[str],
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Crea una nuova sezione."""
+    logger.info(f"Tentativo creazione sezione '{nome_sezione}' per comune ID {comune_id} tramite SQLAlchemy.")
     try:
-        db_manager.execute_query(query, (nome_titolo, descrizione, titolo_id))
-        db_manager.commit()
-        logger.info(f"Titolo ID: {titolo_id} aggiornato.")
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_TITOLO", f"Titolo {nome_titolo} (ID:{titolo_id}) aggiornato.", "titoli_diritti", titolo_id, session_id, client_ip_address, success=True)
-        return True
+        # Verifica unicità (comune_id, codice_sezione) se codice_sezione è fornito
+        if codice_sezione:
+            existing_sezione = db.query(Sezione).filter_by(comune_id=comune_id, codice_sezione=codice_sezione).first()
+            if existing_sezione:
+                msg = f"Sezione con codice '{codice_sezione}' esiste già per il comune ID {comune_id}."
+                logger.warning(msg)
+                return {"error": msg, "id": existing_sezione.id}
+        
+        # Potresti voler verificare anche l'unicità di (comune_id, nome_sezione) se necessario
+        
+        nuova_sezione = Sezione(
+            comune_id=comune_id,
+            nome_sezione=nome_sezione,
+            codice_sezione=codice_sezione,
+            note=note
+        )
+        db.add(nuova_sezione)
+        db.commit()
+        db.refresh(nuova_sezione)
+        logger.info(f"Sezione '{nome_sezione}' creata con ID {nuova_sezione.id} per comune ID {comune_id}.")
+        # record_audit(...)
+        return get_sezione_by_id_service(db, nuova_sezione.id)
+    except IntegrityError as e:
+        db.rollback()
+        logger.error(f"Errore integrità SQLAlchemy creazione sezione '{nome_sezione}': {e}", exc_info=True)
+        # record_audit(...)
+        return {"error": f"Errore di integrità: {e.orig}"}
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy creazione sezione '{nome_sezione}': {e}", exc_info=True)
+        # record_audit(...)
+        return {"error": "Errore database durante la creazione della sezione."}
     except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service aggiornamento titolo ID: {titolo_id}: {e}", exc_info=True)
-        if current_user_id: record_audit(db_manager, current_user_id, "UPDATE_TITOLO_FAIL", f"Errore aggiornamento titolo {nome_titolo} (ID:{titolo_id}): {str(e)[:100]}", "titoli_diritti", titolo_id, success=False)
-        raise
+        db.rollback()
+        logger.error(f"Errore generico creazione sezione '{nome_sezione}': {e}", exc_info=True)
+        # record_audit(...)
+        return {"error": "Errore generico durante la creazione della sezione."}
 
-def delete_titolo_service(db_manager, titolo_id: int,
-                          current_user_id: int = None, session_id: str = None, client_ip_address: str = None):
-    """Cancella un titolo/diritto, solo se non ha dipendenze."""
-    logger.warning(f"Tentativo cancellazione titolo ID: {titolo_id}.")
-    # Controllo dipendenze (es. tabella 'intestazioni' o 'possessori_storico' se titolo_id è lì)
-    # Adatta il nome della tabella e del campo FK al tuo schema
-    dependency_check_query = "SELECT 1 FROM intestazioni WHERE titolo_id = %s LIMIT 1" 
-    dependency = db_manager.execute_query(dependency_check_query, (titolo_id,), fetch_one=True)
-    if dependency:
-        error_msg = f"Impossibile cancellare titolo ID {titolo_id}: è utilizzato nelle intestazioni."
-        logger.error(error_msg)
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_TITOLO_FAIL", error_msg, "titoli_diritti", titolo_id, success=False)
-        raise ValueError(error_msg)
-    
-    query = "DELETE FROM titoli_diritti WHERE id = %s"
+def update_sezione_service(
+    db: Session,
+    sezione_id: int,
+    data_to_update: Dict[str, Any],
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> bool:
+    """Aggiorna una sezione esistente."""
+    logger.info(f"Tentativo aggiornamento sezione ID {sezione_id} tramite SQLAlchemy.")
     try:
-        db_manager.execute_query(query, (titolo_id,))
-        db_manager.commit()
-        logger.info(f"Titolo ID: {titolo_id} cancellato.")
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_TITOLO", f"Titolo (ID:{titolo_id}) cancellato.", "titoli_diritti", titolo_id, session_id, client_ip_address, success=True)
+        sezione_obj = db.query(Sezione).filter(Sezione.id == sezione_id).first()
+        if not sezione_obj:
+            logger.warning(f"Sezione ID {sezione_id} non trovata per aggiornamento.")
+            return False
+
+        updated_fields_log = []
+        # Non permettere la modifica di comune_id tramite questo update semplice
+        allowed_fields = {"nome_sezione", "codice_sezione", "note"}
+
+        for key, value in data_to_update.items():
+            if key in allowed_fields and hasattr(sezione_obj, key) and getattr(sezione_obj, key) != value:
+                setattr(sezione_obj, key, value)
+                updated_fields_log.append(f"{key}='{value}'")
+        
+        if not updated_fields_log:
+            logger.info(f"Nessuna modifica effettiva per sezione ID {sezione_id}.")
+            return True
+
+        db.commit()
+        db.refresh(sezione_obj)
+        logger.info(f"Sezione ID {sezione_obj.id} ('{sezione_obj.nome_sezione}') aggiornata. Modifiche: {', '.join(updated_fields_log)}")
+        # record_audit(...)
         return True
-    except Exception as e:
-        db_manager.rollback(); logger.error(f"Errore Service cancellazione titolo ID: {titolo_id}: {e}", exc_info=True)
-        if current_user_id: record_audit(db_manager, current_user_id, "DELETE_TITOLO_FAIL", f"Errore cancellazione titolo (ID:{titolo_id}): {str(e)[:100]}", "titoli_diritti", titolo_id, success=False)
+    except IntegrityError as e: # Es. se si viola UNIQUE(comune_id, codice_sezione)
+        db.rollback()
+        logger.error(f"Errore integrità SQLAlchemy aggiornamento sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
         raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy aggiornamento sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Errore generico aggiornamento sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
+
+def delete_sezione_service(
+    db: Session,
+    sezione_id: int,
+    audit_user_id: Optional[int],
+    audit_session_id: Optional[str],
+    audit_client_ip: Optional[str],
+) -> bool:
+    """Cancella una sezione."""
+    logger.info(f"Tentativo cancellazione sezione ID {sezione_id} tramite SQLAlchemy.")
+    try:
+        sezione_obj = db.query(Sezione).filter(Sezione.id == sezione_id).first()
+        if not sezione_obj:
+            logger.warning(f"Sezione ID {sezione_id} non trovata per cancellazione.")
+            return False
+        
+        # CONTROLLO DIPENDENZE (es. immobili collegati a questa sezione)
+        # if db.query(Immobile).filter(Immobile.sezione_id == sezione_id).count() > 0:
+        #     logger.warning(f"Impossibile cancellare sezione ID {sezione_id} perché ha immobili collegati.")
+        #     raise ValueError("Impossibile cancellare la sezione perché ha immobili collegati.")
+
+        nome_sezione_cancellata = sezione_obj.nome_sezione
+        db.delete(sezione_obj)
+        db.commit()
+        logger.info(f"Sezione '{nome_sezione_cancellata}' (ID: {sezione_id}) cancellata.")
+        # record_audit(...)
+        return True
+    except IntegrityError as e:
+        db.rollback()
+        logger.error(f"Errore integrità SQLAlchemy cancellazione sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Errore SQLAlchemy cancellazione sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Errore generico cancellazione sezione ID {sezione_id}: {e}", exc_info=True)
+        # record_audit(...)
+        return False
+
+# === Funzioni di Servizio per ALTRE ANAGRAFICHE (Tipi semplici) ===
+
+def _get_anagrafica_base_service(db: Session, model_class, order_by_attr) -> List[Dict[str, Any]]:
+    """Funzione helper generica per recuperare anagrafiche semplici (id, nome, descrizione)."""
+    try:
+        items_obj = db.query(model_class).order_by(order_by_attr).all()
+        return [
+            {"id": item.id, "nome": item.nome, "descrizione": getattr(item, 'descrizione', None)}
+            for item in items_obj
+        ]
+    except SQLAlchemyError as e:
+        logger.error(f"Errore SQLAlchemy recupero {model_class.__tablename__}: {e}", exc_info=True)
+        return []
+    except Exception as e:
+        logger.error(f"Errore generico recupero {model_class.__tablename__}: {e}", exc_info=True)
+        return []
+
+def get_tipi_documento_service(db: Session) -> List[Dict[str, Any]]:
+    logger.info("Recupero tipi documento tramite SQLAlchemy.")
+    return _get_anagrafica_base_service(db, TipoDocumento, TipoDocumento.nome)
+
+def get_tipi_immobile_service(db: Session) -> List[Dict[str, Any]]:
+    logger.info("Recupero tipi immobile tramite SQLAlchemy.")
+    return _get_anagrafica_base_service(db, TipoImmobile, TipoImmobile.nome)
+
+def get_tipi_possesso_service(db: Session) -> List[Dict[str, Any]]:
+    logger.info("Recupero tipi possesso tramite SQLAlchemy.")
+    return _get_anagrafica_base_service(db, TipoPossesso, TipoPossesso.nome)
+
+def get_tipi_variazione_service(db: Session) -> List[Dict[str, Any]]:
+    logger.info("Recupero tipi variazione tramite SQLAlchemy.")
+    return _get_anagrafica_base_service(db, TipoVariazione, TipoVariazione.nome)
+
+# Le funzioni CRUD generiche dell'originale anagrafiche_service.py (create_anagrafica_service, etc.)
+# che operavano su nomi di tabella dinamici sono state omesse.
+# Con SQLAlchemy ORM, è prassi comune avere servizi specifici per modello
+# o, per operazioni veramente generiche, usare session.execute(text(...)) con cautela.
+# Se hai bisogno di CRUD per TipoDocumento, TipoImmobile, etc., dovresti creare funzioni
+# specifiche simili a quelle per Comune e Sezione.

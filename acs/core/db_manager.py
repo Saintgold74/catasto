@@ -1,199 +1,218 @@
 # core/db_manager.py
-import psycopg2
-from psycopg2.extras import DictCursor # Per accedere ai risultati come dizionari
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, ISOLATION_LEVEL_READ_COMMITTED 
-# Importa quote_ident per gestire nomi di schema in modo sicuro
-from psycopg2.extensions import quote_ident 
 import logging
-from typing import Optional, Any # Aggiungiamo Optional e Any (usato in execute_query)
-# from datetime import datetime # Non sembra essere usato direttamente in questa classe refactored
+import os
+import psycopg2
+from psycopg2 import pool, extras
+from typing import Optional, Any
 
+# Import per SQLAlchemy
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session # Aggiunto Session per type hinting
+from sqlalchemy.ext.declarative import declarative_base
+
+# Importa la funzione corretta per caricare la configurazione
+from utils.config_loader import load_db_config # MODIFICATO QUI
+
+logger = logging.getLogger("CatastoDBLogger") # Logger per questo modulo
+
+# --- Configurazione Iniziale Percorsi e Caricamento Configurazione ---
+# Determina il percorso base del progetto (la cartella 'acs')
+# Questo assume che db_manager.py sia in acs/core/
+try:
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    CONFIG_FILE_PATH = os.path.join(PROJECT_ROOT, 'config.ini')
+    db_config = load_db_config(file_path=CONFIG_FILE_PATH) # CHIAMATA CORRETTA
+except (FileNotFoundError, ValueError, TypeError) as e:
+    # TypeError aggiunto nel caso load_db_config sollevi problemi con i parametri non trovati
+    logger.critical(f"Errore fatale nel caricamento della configurazione del database: {e}", exc_info=True)
+    # In un'applicazione reale, potresti voler uscire o sollevare un'eccezione personalizzata
+    # che l'applicazione principale può gestire per terminare in modo pulito.
+    raise RuntimeError(f"Impossibile caricare la configurazione del database da '{CONFIG_FILE_PATH}': {e}") from e
+except Exception as e:
+    logger.critical(f"Errore imprevisto nel caricamento della configurazione del database: {e}", exc_info=True)
+    raise RuntimeError(f"Errore imprevisto durante il caricamento della configurazione: {e}") from e
+
+
+# --- Setup SQLAlchemy ---
+DB_USER = db_config.get('user')
+DB_PASSWORD = db_config.get('password')
+DB_HOST = db_config.get('host', 'localhost')
+DB_PORT = db_config.get('port', '5432') # load_db_config ora dovrebbe restituire port come int
+DB_NAME = db_config.get('dbname')
+DB_SCHEMA = db_config.get('schema', 'catasto') # Default a 'catasto' se non specificato
+
+if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME]):
+    msg = "Parametri database mancanti (user, password, host, port, dbname) in config.ini."
+    logger.critical(msg)
+    raise ValueError(msg)
+
+DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Opzioni di connessione per SQLAlchemy per impostare search_path e altre opzioni se necessario
+connect_args = {}
+if DB_SCHEMA:
+    connect_args["options"] = f"-csearch_path={DB_SCHEMA},public"
+# Potresti aggiungere altre opzioni qui, ad esempio:
+# connect_args["connect_timeout"] = 10
+
+try:
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False,  # Imposta a True per vedere le query SQL generate durante lo sviluppo
+        connect_args=connect_args,
+        pool_pre_ping=True # Verifica la connessione prima di usarla dal pool
+        # Altre opzioni utili per il pool:
+        # pool_size=5, # Numero di connessioni da tenere nel pool
+        # max_overflow=10, # Numero massimo di connessioni extra oltre pool_size
+        # pool_recycle=3600 # Ricicla connessioni dopo 1 ora (3600 secondi)
+    )
+except Exception as e:
+    logger.critical(f"Errore durante la creazione dell'engine SQLAlchemy: {e}", exc_info=True)
+    raise RuntimeError(f"Impossibile creare l'engine SQLAlchemy: {e}") from e
+
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+# Funzione di utilità per ottenere una sessione DB (dependency injector pattern)
+def get_db() -> Session:
+    """
+    Fornisce una sessione SQLAlchemy.
+    Da usare con un context manager implicito (es. FastAPI Depends) o esplicito (try/finally).
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Funzione per creare le tabelle definite nei modelli SQLAlchemy (se non usi Alembic)
+def create_all_tables():
+    """
+    Crea nel database tutte le tabelle definite come sottoclassi di Base.
+    Questa funzione dovrebbe essere chiamata con cautela, idealmente solo una volta
+    per l'impostazione iniziale o in un ambiente di sviluppo/test.
+    Per modifiche allo schema (migrazioni) in produzione, usare Alembic.
+    """
+    logger.info("Tentativo di creare le tabelle SQLAlchemy definite nei modelli (se non esistono già)...")
+    try:
+        # Assicurati che tutti i moduli contenenti i modelli siano importati prima di chiamare create_all
+        # Ad esempio, se i modelli sono in core.models:
+        # from core import models # Questo potrebbe essere necessario se Base.metadata non è popolato
+        Base.metadata.create_all(bind=engine)
+        logger.info("Creazione/verifica tabelle SQLAlchemy completata.")
+    except Exception as e:
+        logger.error(f"Errore durante Base.metadata.create_all: {e}", exc_info=True)
+        # In un'applicazione reale, questo potrebbe essere un errore fatale all'avvio
+        # se le tabelle sono essenziali e non possono essere create.
+
+
+# --- VECCHIA CLASSE DBManager (per compatibilità temporanea o parti non migrate) ---
+# Man mano che migri i servizi a SQLAlchemy, l'uso diretto di questa classe dovrebbe diminuire.
+# Potresti decidere di rimuoverla completamente una volta che la migrazione è completa.
 class DatabaseManager:
     """
-    Gestore di basso livello per la connessione e l'esecuzione di query
-    sul database PostgreSQL.
+    Gestore legacy per connessioni dirette psycopg2.
+    Da usare per le parti dell'applicazione non ancora migrate a SQLAlchemy.
     """
-    def __init__(self, db_config: dict):
-        """
-        Inizializza il DatabaseManager.
-        'db_config' è un dizionario con i parametri di connessione,
-        potenzialmente includendo una chiave 'schema'.
-        """
-        # Crea una copia di db_config per non modificare l'originale
-        self.connect_params = db_config.copy()
-        
-        # Estrai 'schema' dai parametri di connessione e rimuovilo, 
-        # poiché non è un parametro diretto di psycopg2.connect().
-        # Default a 'catasto' se 'schema' non è specificato in db_config.
-        self.schema_to_set = self.connect_params.pop('schema', 'catasto') 
-        
-        self.conn = None
-        # Usa il logger configurato centralmente da logger_setup.py
-        self.logger = logging.getLogger("CatastoDBLogger") 
-        # Per debug dettagliato delle query, puoi impostare il livello qui o globalmente
-        # self.logger.setLevel(logging.DEBUG) 
+    _pool = None
 
-    def connect(self) -> bool:
-        """
-        Stabilisce la connessione al database e imposta lo schema search_path.
-        Restituisce True se la connessione ha successo, False altrimenti.
-        """
-        if self.conn and not self.conn.closed:
-            self.logger.info("Connessione al database già attiva.")
-            return True
-        try:
-            self.logger.info(f"Tentativo di connessione al database: {self.connect_params.get('dbname')}@{self.connect_params.get('host')}")
-            
-            # Usa self.connect_params che NON CONTIENE PIÙ 'schema'
-            self.conn = psycopg2.connect(**self.connect_params)
-            
-            # Impostazione del livello di isolamento:
-            # ISOLATION_LEVEL_READ_COMMITTED è un buon default per molte applicazioni,
-            # richiede commit/rollback espliciti per le transazioni.
-            # ISOLATION_LEVEL_AUTOCOMMIT fa sì che ogni istruzione venga commessa immediatamente.
-            # Scegli quello più adatto al tuo flusso di lavoro.
-            # Se i tuoi servizi gestiscono esplicitamente commit/rollback, READ_COMMITTED è preferibile.
-            #self.conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
-            self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT) # Alternativa
-            
-
-            self.logger.info(f"Connessione al database '{self.connect_params.get('dbname')}' riuscita.")
-
-            # Imposta lo search_path per la sessione corrente se uno schema è specificato
-            if self.schema_to_set:
-                with self.conn.cursor() as cur:
-                    # Usa quote_ident per gestire in modo sicuro i nomi degli schemi
-                    # che potrebbero contenere caratteri speciali o essere case-sensitive.
-                    safe_schema_name = quote_ident(self.schema_to_set, self.conn)
-                    cur.execute(f"SET search_path TO {safe_schema_name}, public;")
-                self.logger.info(f"Search path impostato a: {self.schema_to_set}, public")
-            
-            return True
-            
-        except psycopg2.Error as db_err:
-            self.logger.error(f"Errore di connessione al database: {db_err}", exc_info=True)
-            self.conn = None # Assicura che conn sia None se la connessione fallisce
-            return False
-        except Exception as e: # Cattura altre eccezioni impreviste
-            self.logger.error(f"Errore generico non-DB durante la connessione: {e}", exc_info=True)
-            self.conn = None
-            return False
-
-    def disconnect(self):
-        """Chiude la connessione al database, se attiva."""
-        if self.conn and not self.conn.closed:
+    def __init__(self):
+        self.logger = logging.getLogger("CatastoDBLogger.LegacyPsycopg2Manager")
+        if not DatabaseManager._pool:
             try:
-                self.conn.close()
-                self.logger.info("Disconnessione dal database riuscita.")
-            except psycopg2.Error as db_err:
-                self.logger.error(f"Errore durante la disconnessione dal database: {db_err}", exc_info=True)
-            finally:
-                self.conn = None # Imposta a None in ogni caso dopo il tentativo di chiusura
-        else:
-            self.logger.info("Nessuna connessione attiva da chiudere o già chiusa.")
-
-    def commit(self):
-        """
-        Esegue il commit della transazione corrente.
-        Ha effetto solo se il livello di isolamento non è AUTOCOMMIT.
-        """
-        if self.conn and not self.conn.closed:
-            if self.conn.isolation_level != ISOLATION_LEVEL_AUTOCOMMIT:
-                try:
-                    self.conn.commit()
-                    self.logger.debug("Commit della transazione eseguito.")
-                except psycopg2.Error as db_err:
-                    self.logger.error(f"Errore durante il commit della transazione: {db_err}", exc_info=True)
-                    raise # Rilancia per permettere al servizio chiamante di gestire l'errore
-            else:
-                self.logger.debug("AUTOCOMMIT attivo, commit esplicito non necessario/applicabile.")
-        else:
-            self.logger.warning("Tentativo di commit su connessione non attiva o chiusa.")
-
-    def rollback(self):
-        """
-        Esegue il rollback della transazione corrente.
-        Ha effetto solo se il livello di isolamento non è AUTOCOMMIT.
-        """
-        if self.conn and not self.conn.closed:
-            if self.conn.isolation_level != ISOLATION_LEVEL_AUTOCOMMIT:
-                try:
-                    self.conn.rollback()
-                    self.logger.info("Rollback della transazione eseguito.")
-                except psycopg2.Error as db_err:
-                    self.logger.error(f"Errore durante il rollback della transazione: {db_err}", exc_info=True)
-                    # Generalmente non si rilancia l'eccezione qui, poiché il rollback è spesso l'ultima risorsa
-            else:
-                self.logger.debug("AUTOCOMMIT attivo, rollback esplicito non ha effetto su statement precedenti in questo modo.")
-        else:
-            self.logger.warning("Tentativo di rollback su connessione non attiva o chiusa.")
-
-    def _format_row_as_dict(self, row: tuple, cursor_desc) -> Optional[dict]:
-        """
-        Converte una tupla di riga in un dizionario usando la descrizione del cursore.
-        Utile se non si usa DictCursor o si necessita di una conversione personalizzata.
-        Con DictCursor, questo metodo è meno necessario per l'uso standard.
-        """
-        if row is None:
-            return None
-        return dict(zip([col.name for col in cursor_desc], row))
-
-    def execute_query(self, query: str, params: Optional[tuple] = None, 
-                      fetch_one: bool = False, fetch_all: bool = False, 
-                      use_dict_cursor: bool = True) -> Any:
-        """
-        Esegue una query SQL.
-
-        Args:
-            query: La stringa SQL della query.
-            params: Una tupla di parametri per la query (opzionale).
-            fetch_one: True se si deve recuperare una sola riga.
-            fetch_all: True se si devono recuperare tutte le righe.
-            use_dict_cursor: True per usare DictCursor (risultati come dizionari), 
-                             False per usare un cursore standard (risultati come tuple).
-
-        Returns:
-            - Una singola riga (come dizionario o tupla) se fetch_one è True.
-            - Una lista di righe (come dizionari o tuple) se fetch_all è True.
-            - Il numero di righe affette (rowcount) per operazioni DML (INSERT, UPDATE, DELETE)
-              se né fetch_one né fetch_all sono True.
-            - Solleva eccezioni psycopg2.Error in caso di problemi con il database.
-        """
-        if not self.conn or self.conn.closed:
-            self.logger.error("Tentativo di esecuzione query su connessione non attiva o chiusa.")
-            raise psycopg2.OperationalError("Connessione al database non attiva.")
-
-        cursor_factory_to_use = DictCursor if use_dict_cursor else None
+                # Assicurati che db_config sia stato caricato correttamente all'inizio del modulo
+                DatabaseManager._pool = psycopg2.pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=10, # Adatta secondo necessità
+                    user=db_config.get('user'),
+                    password=db_config.get('password'),
+                    host=db_config.get('host'),
+                    port=db_config.get('port'), # Assicurati sia int
+                    database=db_config.get('dbname')
+                )
+                self.logger.info("Pool di connessioni Psycopg2 (legacy) inizializzato.")
+            except (psycopg2.Error, KeyError) as e:
+                self.logger.critical(f"Errore inizializzazione pool di connessioni Psycopg2 (legacy): {e}", exc_info=True)
+                DatabaseManager._pool = None # Assicura che sia None in caso di fallimento
+                raise RuntimeError(f"Impossibile inizializzare il pool di connessioni legacy: {e}") from e
         
-        try:
-            with self.conn.cursor(cursor_factory=cursor_factory_to_use) as cur:
-                # Logging della query (opzionale e attenzione con dati sensibili)
-                if self.logger.isEnabledFor(logging.DEBUG): # Controlla il livello prima di mogrify
-                     try:
-                         # cur.mogrify() mostra la query come sarebbe eseguita, utile per debug
-                         self.logger.debug(f"Esecuzione Query: {cur.mogrify(query, params).decode(self.conn.encoding, 'ignore')}")
-                     except Exception as mogrify_err:
-                         # Mogrify può fallire con alcuni tipi di dati non standard o errori di encoding
-                         self.logger.debug(f"Esecuzione Query (mogrify fallito: {mogrify_err}): {query} con params: {params}")
-                # else: # Log più sintetico se non in DEBUG
-                #    self.logger.info(f"Esecuzione Query (sommario): {query[:100]}...")
+        self.schema = db_config.get('schema', 'catasto') # Per SET search_path
 
+    def _get_connection(self):
+        if not DatabaseManager._pool:
+            self.logger.error("Tentativo di ottenere una connessione dal pool Psycopg2 (legacy) non inizializzato.")
+            raise RuntimeError("Pool di connessioni Psycopg2 (legacy) non disponibile.")
+        try:
+            conn = DatabaseManager._pool.getconn()
+            if conn:
+                # Imposta search_path per questa connessione
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {self.schema}, public;")
+                conn.commit() # Commit per SET search_path
+            return conn
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore nell'ottenere una connessione Psycopg2 (legacy) dal pool: {e}", exc_info=True)
+            raise
+
+    def _put_connection(self, conn):
+        if DatabaseManager._pool and conn:
+            DatabaseManager._pool.putconn(conn)
+
+    def execute_query(self, query: str, params: Optional[tuple] = None, fetch_one: bool = False, fetch_all: bool = False, is_ddl: bool = False):
+        """Esegue una query SQL usando il pool di connessioni psycopg2 legacy."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            # Usa RealDictCursor per ottenere risultati come dizionari
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                self.logger.debug(f"Esecuzione query legacy: {query} con parametri: {params}")
                 cur.execute(query, params)
                 
+                if is_ddl or query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+                    conn.commit()
+                    # Per INSERT RETURNING id, o UPDATE/DELETE che potrebbero non modificare righe
+                    if fetch_one and cur.description: # Se c'è qualcosa da leggere (es. RETURNING)
+                        return cur.fetchone()
+                    # Per DELETE/UPDATE senza RETURNING, rowcount potrebbe essere interessante
+                    return cur.rowcount # Restituisce il numero di righe affette
+
                 if fetch_one:
-                    return cur.fetchone() # Restituisce un DictRow o una tupla
+                    return cur.fetchone()
                 if fetch_all:
-                    return cur.fetchall() # Restituisce una lista di DictRow o tuple
-                
-                # Per INSERT, UPDATE, DELETE, se non è specificato fetch_one/fetch_all,
-                # restituiamo il numero di righe affette.
-                # Questo è utile per confermare che un'operazione DML ha avuto l'effetto atteso.
-                # Per DDL (CREATE, ALTER, DROP), rowcount è spesso -1 o non significativo.
-                return cur.rowcount 
-        except psycopg2.Error as db_err:
-            self.logger.error(f"Errore Database durante l'esecuzione della query: {query[:200]}... Errore: {db_err}", exc_info=True)
-            # Il rollback dovrebbe essere gestito dal servizio chiamante, che ha iniziato la transazione.
-            raise  # Rilancia l'eccezione per essere gestita dal servizio
-        except Exception as e: # Cattura altre eccezioni Python impreviste
-            self.logger.error(f"Errore Python generico durante l'esecuzione della query: {e}", exc_info=True)
+                    return cur.fetchall()
+                # Se nessuna opzione di fetch è True, e non è un'operazione di modifica,
+                # potrebbe essere un'operazione che non restituisce dati (es. SET, o una stored procedure senza output).
+                # O semplicemente un errore logico del chiamante. Per ora, ritorniamo None.
+                return None
+        except psycopg2.Error as e:
+            if conn: conn.rollback() # Annulla la transazione in caso di errore DB
+            self.logger.error(f"Errore Database (legacy) durante l'esecuzione della query: {query} ... Errore: {e}", exc_info=True)
+            # Potresti voler rilanciare un'eccezione personalizzata
+            raise # Rilancia l'eccezione psycopg2 originale per ora
+        except Exception as e:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore generico (legacy) durante l'esecuzione della query: {query} ... Errore: {e}", exc_info=True)
             raise
+        finally:
+            if conn:
+                self._put_connection(conn)
+
+    def close_all_connections(self):
+        """Chiude tutte le connessioni nel pool legacy."""
+        if DatabaseManager._pool:
+            self.logger.info("Chiusura di tutte le connessioni nel pool Psycopg2 (legacy)...")
+            DatabaseManager._pool.closeall()
+            DatabaseManager._pool = None # Resetta il pool
+            self.logger.info("Pool Psycopg2 (legacy) chiuso.")
+
+    # Metodi commit e rollback espliciti (per la gestione delle transazioni legacy se necessario)
+    # Questi metodi richiederebbero che la connessione sia gestita esternamente o passata,
+    # il che complica l'uso del pool. È meglio che execute_query gestisca il commit per singole operazioni.
+    # Per transazioni multi-statement con la vecchia logica, la gestione diventa più complessa.
+
+    # def commit(self, conn): # Esempio se la connessione fosse gestita esternamente
+    #     if conn: conn.commit()
+    # def rollback(self, conn):
+    #     if conn: conn.rollback()

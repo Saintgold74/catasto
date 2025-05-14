@@ -1,10 +1,218 @@
 # ui/console/ui_utils.py
-import getpass # Per nascondere l'input della password
+import getpass
 import logging
-from typing import List, Dict, Any, Optional
-from datetime import date, datetime # Assicura che 'date' e 'datetime' siano importati
+from typing import List, Dict, Any, Optional, Callable
+from datetime import date, datetime
 
 logger = logging.getLogger("CatastoAppLogger.UIUtils")
+
+# --- Funzioni di Stampa Formattata (NUOVE) ---
+def stampa_titolo(titolo: str):
+    """Stampa un titolo formattato."""
+    print("\n" + "=" * 40)
+    print(f" {titolo.upper()} ".center(40, "="))
+    print("=" * 40)
+
+def stampa_messaggio(messaggio: str):
+    """Stampa un messaggio informativo."""
+    print(f"INFO: {messaggio}")
+
+def stampa_avviso(messaggio: str):
+    """Stampa un messaggio di avviso."""
+    print(f"AVVISO: {messaggio}")
+
+def stampa_errore(messaggio: str):
+    """Stampa un messaggio di errore."""
+    print(f"ERRORE: {messaggio}")
+
+def stampa_generale(messaggio: str):
+    """Stampa un messaggio generico."""
+    print(messaggio)
+
+# --- Funzioni Esistenti (da ui_utils.py fornito) ---
+def stampa_locandina_introduzione():
+    """Stampa una locandina di introduzione testuale."""
+    print("*" * 80)
+    print("*" + " " * 78 + "*")
+    print("*" + "ARCHIVIO CATASTALE STORICO - GESTIONALE".center(78) + "*")
+    print("*" + " " * 78 + "*")
+    print("*" + "Progetto di Marco Santoro".center(78) + "*")
+    print("*" + f"Versione Applicazione: 1.5 - Modular".center(78) + "*") 
+    print("*" + " " * 78 + "*")
+    print("*" * 80)
+    print("\nBenvenuto nel sistema di gestione dell'Archivio Catastale Storico.")
+
+def input_sicuro_password(prompt: str = "Password: ") -> str:
+    """Richiede l'input di una password in modo sicuro (nascondendo i caratteri)."""
+    while True:
+        try:
+            password = getpass.getpass(prompt)
+            if not password: 
+                print("La password non può essere vuota. Riprova.")
+                continue
+            return password
+        except Exception as e:
+            logger.error(f"Errore durante l'input sicuro della password: {e}")
+            print(f"Si è verificato un errore: {e}. Riprova.")
+        except KeyboardInterrupt:
+            print("\nInput password annullato.")
+            return "" 
+
+def seleziona_da_lista(lista: List[Dict[str, Any]], 
+                       titolo: str = "Seleziona un elemento",
+                       id_key: str = 'id', 
+                       desc_keys: List[str] = None,
+                       prompt_utente: str = "Scegli un numero (0 per annullare): ",
+                       mostra_annulla: bool = True) -> Optional[Dict[str, Any]]:
+    if not lista:
+        print(f"Nessun elemento disponibile in '{titolo}'.")
+        return None
+
+    if desc_keys is None: 
+        first_item_keys = lista[0].keys()
+        if 'nome' in first_item_keys: desc_keys = ['nome']
+        elif 'descrizione' in first_item_keys: desc_keys = ['descrizione']
+        elif 'numero_partita' in first_item_keys: desc_keys = ['numero_partita']
+        elif 'tipo_documento' in first_item_keys: desc_keys = ['tipo_documento', 'data_documento']
+        elif 'username' in first_item_keys: desc_keys = ['username', 'email']
+        else: 
+            desc_keys = [k for k in first_item_keys if k != id_key][:1] 
+            if not desc_keys and len(first_item_keys) > 0 : desc_keys = [list(first_item_keys)[0]]
+
+    print(f"\n--- {titolo} ---")
+    for i, item in enumerate(lista):
+        desc_parts = []
+        for key in desc_keys:
+            val = item.get(key)
+            if val is not None:
+                if isinstance(val, (datetime, date)):
+                    desc_parts.append(val.strftime('%d/%m/%Y'))
+                else:
+                    desc_parts.append(str(val))
+        desc_str = " - ".join(filter(None, desc_parts))
+        if not desc_str: 
+            desc_str = f"Elemento {item.get(id_key, 'N/A')}"
+        print(f"{i+1}. {desc_str} (ID: {item.get(id_key, 'N/A')})")
+    
+    if mostra_annulla:
+        print("0. Annulla")
+
+    while True:
+        try:
+            scelta_str = input(prompt_utente)
+            if not scelta_str.strip(): 
+                continue
+            scelta = int(scelta_str)
+            if mostra_annulla and scelta == 0:
+                return None
+            if 1 <= scelta <= len(lista):
+                return lista[scelta-1]
+            else:
+                print(f"Scelta non valida. Inserisci un numero tra {1 if not mostra_annulla else 0} e {len(lista)}.")
+        except ValueError:
+            print("Input non valido. Inserisci un numero.")
+        except KeyboardInterrupt:
+            print("\nSelezione annullata dall'utente.")
+            return None
+
+def chiedi_conferma(messaggio: str = "Sei sicuro?", default_yes: bool = False) -> bool:
+    prompt = f"{messaggio} [{'S/n' if default_yes else 's/N'}]: "
+    while True:
+        try:
+            risposta = input(prompt).strip().lower()
+            if not risposta: 
+                return default_yes
+            if risposta in ['s', 'si', 'yes', 'y']:
+                return True
+            if risposta in ['n', 'no']:
+                return False
+            print("Risposta non valida. Inserisci 's' o 'n'.")
+        except KeyboardInterrupt:
+            print("\nConferma annullata.")
+            return False
+
+def input_valore(prompt: str, tipo_atteso: type = str, obbligatorio: bool = True, default: Any = None, validatore: Optional[Callable[[Any], bool]] = None) -> Optional[Any]:
+    """
+    Funzione generica per richiedere un input all'utente con tipo, opzionalità e validazione.
+    `tipo_atteso` può essere str, int, float, date.
+    `validatore` è una funzione che prende il valore e restituisce True se valido, False altrimenti.
+    Rinominato 'tipo' a 'tipo_atteso' per evitare shadowing con built-in type.
+    """
+    while True:
+        try:
+            if default is not None and not obbligatorio:
+                val_str = input(f"{prompt} (default: {default}): ").strip()
+                if not val_str:
+                    return default
+            else:
+                val_str = input(f"{prompt}: ").strip()
+
+            if not val_str and obbligatorio:
+                print("Questo campo è obbligatorio.")
+                continue
+            elif not val_str and not obbligatorio: 
+                return None
+
+            valore_convertito: Any = None
+            if tipo_atteso == str:
+                valore_convertito = val_str
+            elif tipo_atteso == int:
+                valore_convertito = int(val_str)
+            elif tipo_atteso == float:
+                valore_convertito = float(val_str)
+            elif tipo_atteso == date:
+                try: 
+                    valore_convertito = datetime.strptime(val_str, '%d/%m/%Y').date()
+                except ValueError:
+                    try:
+                        valore_convertito = datetime.strptime(val_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        print("Formato data non valido. Usa GG/MM/AAAA o AAAA-MM-GG.")
+                        continue
+            else: 
+                valore_convertito = val_str
+            
+            if validatore:
+                if not validatore(valore_convertito):
+                    continue
+            
+            return valore_convertito
+
+        except ValueError as ve:
+            if tipo_atteso == int: print("Input non valido. Inserisci un numero intero.")
+            elif tipo_atteso == float: print("Input non valido. Inserisci un numero (es. 123.45).")
+            else: print(f"Errore di conversione: {ve}")
+        except KeyboardInterrupt:
+            print("\nInput annullato.")
+            return None 
+
+def formatta_data_utente(data_obj: Optional[date]) -> str:
+    if data_obj:
+        return data_obj.strftime('%d/%m/%Y')
+    return ''
+
+def parse_data_utente(data_str: Optional[str]) -> Optional[date]:
+    if not data_str or not data_str.strip():
+        return None
+    try:
+        return datetime.strptime(data_str.strip(), '%d/%m/%Y').date()
+    except ValueError:
+        try:
+            return datetime.strptime(data_str.strip(), '%Y-%m-%d').date()
+        except ValueError:
+            return None 
+
+def validatore_non_vuoto(valore: Any) -> bool:
+    if isinstance(valore, str) and not valore.strip():
+        print("Il campo non può essere vuoto.")
+        return False
+    if valore is None: 
+        print("Il campo non può essere nullo (se obbligatorio).")
+        return False
+    return True
+
+# Rinominata funzione 'ottieni_scelta_menu' in 'input_valore' con gestione tipo int e prompt specifico.
+# 'conferma_uscita' è gestita da 'chiedi_conferma'.
 
 def stampa_locandina_introduzione():
     """Stampa una locandina di introduzione testuale."""
@@ -116,7 +324,7 @@ def chiedi_conferma(messaggio: str = "Sei sicuro?", default_yes: bool = False) -
             print("\nConferma annullata.")
             return False # O solleva eccezione
 
-def input_valore(prompt: str, tipo: type = str, obbligatorio: bool = True, default: Any = None, validatore: callable = None):
+def input_valore(prompt: str, tipo_atteso: type = str, obbligatorio: bool = True, default: Any = None, validatore: Optional[Callable[[Any], bool]] = None) -> Optional[Any]:
     """
     Funzione generica per richiedere un input all'utente con tipo, opzionalità e validazione.
     `tipo` può essere str, int, float, date.
@@ -138,13 +346,13 @@ def input_valore(prompt: str, tipo: type = str, obbligatorio: bool = True, defau
                 return None
 
             valore_convertito: Any = None
-            if tipo == str:
+            if tipo_atteso == str:
                 valore_convertito = val_str
-            elif tipo == int:
+            elif tipo_atteso == int:
                 valore_convertito = int(val_str)
-            elif tipo == float:
+            elif tipo_atteso == float:
                 valore_convertito = float(val_str)
-            elif tipo == date:
+            elif tipo_atteso == date:
                 try: # Prova formati comuni
                     valore_convertito = datetime.strptime(val_str, '%d/%m/%Y').date()
                 except ValueError:
@@ -164,8 +372,8 @@ def input_valore(prompt: str, tipo: type = str, obbligatorio: bool = True, defau
             return valore_convertito
 
         except ValueError as ve:
-            if tipo == int: print("Input non valido. Inserisci un numero intero.")
-            elif tipo == float: print("Input non valido. Inserisci un numero (es. 123.45).")
+            if tipo_atteso == int: print("Input non valido. Inserisci un numero intero.")
+            elif tipo_atteso == float: print("Input non valido. Inserisci un numero (es. 123.45).")
             else: print(f"Errore di conversione: {ve}")
         except KeyboardInterrupt:
             print("\nInput annullato.")

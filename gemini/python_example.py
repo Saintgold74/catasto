@@ -23,6 +23,17 @@ import logging # Per logging
 import bcrypt  # Per hashing sicuro password
 from typing import Optional, List, Dict, Any # Per type hinting
 
+# --- Configurazione Logging ---
+# Configura il logging se non già fatto a livello globale
+logging.basicConfig(
+    level=logging.INFO, # O DEBUG per maggiori dettagli
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("python_example.log"), # Log separato per l'esempio
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # --- Variabili Globali per Sessione Utente (SEMPLIFICATE) ---
 # In un'app reale, usare meccanismi di sessione più robusti

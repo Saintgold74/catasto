@@ -25,6 +25,25 @@ CREATE TABLE comune (
 );
 COMMENT ON TABLE comune IS 'Tabella dei comuni catalogati nel catasto storico (con ID PK).';
 
+-- All'interno del tuo script 02_creazione-schema-tabelle.sql
+-- (dopo CREATE TABLE comune)
+
+CREATE TABLE catasto.sezioni ( -- o solo 'sezioni' se 'catasto' è il default search_path
+    id SERIAL PRIMARY KEY,
+    comune_id INTEGER NOT NULL REFERENCES catasto.comune(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    nome_sezione VARCHAR(150) NOT NULL,
+    codice_sezione VARCHAR(20), 
+    note TEXT,
+    data_creazione TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_sezione_comune_codice UNIQUE (comune_id, codice_sezione) 
+);
+
+COMMENT ON TABLE catasto.sezioni IS 'Tabella delle sezioni catastali o amministrative appartenenti a un comune.';
+
+COMMENT ON TABLE catasto.sezioni IS 'Tabella delle sezioni catastali o amministrative appartenenti a un comune.';
+COMMENT ON COLUMN catasto.sezioni.codice_sezione IS 'Codice alfanumerico della sezione (es. A, B, U, Foglio XX).';
+
 -- Tabella REGISTRO_PARTITE (Modificata per usare comune_id)
 CREATE TABLE registro_partite (
     id SERIAL PRIMARY KEY,
@@ -196,23 +215,28 @@ CREATE INDEX IF NOT EXISTS idx_partita_possessore_possessore ON partita_possesso
 
 -- === Creazione Tabella AUDIT_LOG ===
 -- (Spostata qui da script 06/15 per assicurare l'esistenza prima di ALTER/VIEW)
+-- Assicurati di essere nello schema corretto se usi schemi diversi da 'public'
+-- Esempio: SET search_path TO catasto, public;
 
-CREATE TABLE IF NOT EXISTS catasto.audit_log (
+DROP TABLE IF EXISTS catasto.audit_log; -- O solo audit_log se non usi lo schema 'catasto' esplicitamente qui
+
+CREATE TABLE catasto.audit_log (
     id SERIAL PRIMARY KEY,
-    tabella VARCHAR(100) NOT NULL,
-    operazione CHAR(1) NOT NULL CHECK (operazione IN ('I', 'U', 'D')),
-    record_id INTEGER, -- Permette NULL per PK non standard o non 'id'
-    dati_prima JSONB,
-    dati_dopo JSONB,
-    utente VARCHAR(100), -- Nome utente DB che ha eseguito l'operazione
-    ip_address VARCHAR(40),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Colonne per integrazione utenti
-    session_id VARCHAR(100), -- Aggiunto da script 15
-    app_user_id INTEGER      -- Aggiunto da script 15
-    -- NON aggiungere FK a utente qui, verrà aggiunto nello script 15
+    app_user_id INTEGER REFERENCES catasto.utenti(id) ON DELETE SET NULL, -- Adatta 'catasto.utenti(id)' se la tua tabella utenti o la colonna ID si chiamano diversamente
+    session_id VARCHAR(255),
+    ip_address VARCHAR(45),
+    action_performed VARCHAR(255) NOT NULL,
+    table_name_affected VARCHAR(100),
+    record_id_affected VARCHAR(255), -- Considera INTEGER se sai che sarà sempre numerico
+    details TEXT,
+    success BOOLEAN DEFAULT TRUE,
+    "timestamp" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Potresti voler aggiungere degli indici per migliorare le performance delle query sull'audit log
+CREATE INDEX IF NOT EXISTS idx_audit_log_app_user_id ON catasto.audit_log(app_user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action_performed ON catasto.audit_log(action_performed);
+CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON catasto.audit_log("timestamp");
 CREATE INDEX IF NOT EXISTS idx_audit_tabella ON catasto.audit_log(tabella);
 CREATE INDEX IF NOT EXISTS idx_audit_operazione ON catasto.audit_log(operazione);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON catasto.audit_log(timestamp);
@@ -220,7 +244,6 @@ CREATE INDEX IF NOT EXISTS idx_audit_record_id ON catasto.audit_log(record_id) W
 CREATE INDEX IF NOT EXISTS idx_audit_app_user_id ON catasto.audit_log(app_user_id) WHERE app_user_id IS NOT NULL; -- Indice opzionale
 
 COMMENT ON TABLE catasto.audit_log IS 'Tabella per la registrazione delle modifiche ai dati (audit trail).';
-
 -- Inserimento primo comune come esempio (ora inserisce anche ID automaticamente)
 -- Lasciato commentato se si usa lo script 04 per i dati
 -- INSERT INTO comune (nome, provincia, regione) VALUES ('Carcare', 'Savona', 'Liguria');

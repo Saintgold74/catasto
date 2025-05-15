@@ -1,33 +1,19 @@
 -- Imposta lo schema
 SET search_path TO catasto;
 
--- Tabella per i ruoli degli utenti
-CREATE TABLE catasto.ruoli_utente (
-    id SERIAL PRIMARY KEY,
-    nome_ruolo VARCHAR(50) UNIQUE NOT NULL,
-    descrizione TEXT
-);
-INSERT INTO catasto.ruoli_utente (nome_ruolo, descrizione) VALUES 
-('admin', 'Amministratore del sistema'),
-('archivista', 'Archivista con permessi di modifica dati'),
-('consultatore', 'Utente con permessi di sola lettura')
-ON CONFLICT (nome_ruolo) DO NOTHING;
-
 -- Tabella per gli utenti
-CREATE TABLE utenti (
+CREATE TABLE utente (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL, -- Hash della password (NON salvare password in chiaro!)
     nome_completo VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    --ruolo VARCHAR(20) NOT NULL CHECK (ruolo IN ('admin', 'archivista', 'consultatore')),
-    is_active BOOLEAN DEFAULT TRUE,
-    last_login TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ruolo VARCHAR(20) NOT NULL CHECK (ruolo IN ('admin', 'archivista', 'consultatore')),
+    attivo BOOLEAN DEFAULT TRUE,
+    ultimo_accesso TIMESTAMP,
+    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-ALTER TABLE catasto.utenti ADD COLUMN role_id INTEGER REFERENCES catasto.ruoli_utente(id);
--- Potrebbe essere necessario renderla NOT NULL a seconda della logica
 
 CREATE INDEX idx_utente_username ON utente(username);
 CREATE INDEX idx_utente_ruolo ON utente(ruolo);
@@ -149,24 +135,3 @@ VALUES ('admin', 'password_hash_qui', 'Amministratore Sistema', 'admin@example.c
 CREATE TRIGGER update_utente_modifica
 BEFORE UPDATE ON utente
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TABLE catasto.sessioni_utente (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES catasto.utenti(id) ON DELETE CASCADE,
-    session_id VARCHAR(255) UNIQUE NOT NULL,
-    client_ip_address VARCHAR(45),
-    login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    logout_time TIMESTAMP WITH TIME ZONE
-);
-CREATE TABLE catasto.audit_log (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES catasto.utenti(id) ON DELETE SET NULL, -- O non referenziare se vuoi loggare anche azioni anonime
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    action VARCHAR(100) NOT NULL,         -- Es. LOGIN_SUCCESS, CREATE_PARTITA
-    table_name VARCHAR(100),             -- Tabella interessata
-    record_id VARCHAR(255),                 -- ID del record interessato (può essere stringa o int a seconda della tabella)
-    details TEXT,                        -- Dettagli aggiuntivi (JSON o testo)
-    session_id VARCHAR(255),             -- ID della sessione utente
-    client_ip_address VARCHAR(45),
-    success BOOLEAN
-);

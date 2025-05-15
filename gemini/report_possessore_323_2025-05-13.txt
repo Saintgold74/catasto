@@ -1,0 +1,73 @@
+============================================================
+              REPORT STORICO DEL POSSESSORE
+                CATASTO STORICO ANNI '50
+============================================================
+
+POSSESSORE: Possessore 4-16 Rossi
+PATERNITA: fu Stress Test
+COMUNE: Comune Stress Test 4
+STATO: Attivo
+
+-------------------- PARTITE INTESTATE --------------------
+Partita n. 1077 (Comune Stress Test 4)
+  Tipo: principale
+  Periodo: 2003-05-13 - attiva
+  Stato: attiva
+  Titolo: proprietÃ  esclusiva
+  Immobili associati: 3
+    Immobili:
+      - Edificio Stress 3 in Via Stress 4-1 (Classe Stress 5)
+      - Edificio Stress 2 in Via Stress 4-15 (Classe Stress 5)
+      - Edificio Stress 1 in Via Stress 4-19 (Classe Stress 2)
+
+Partita n. 1080 (Comune Stress Test 4)
+  Tipo: principale
+  Periodo: 1998-05-13 - attiva
+  Stato: attiva
+  Titolo: proprietÃ  esclusiva
+  Immobili associati: 3
+    Immobili:
+      - Edificio Stress 2 in Via Stress 4-1 (Classe Stress 3)
+      - Edificio Stress 3 in Via Stress 4-13 (Classe Stress 4)
+      - Edificio Stress 1 in Via Stress 4-9 (Classe Stress 4)
+
+Partita n. 1078 (Comune Stress Test 4)
+  Tipo: principale
+  Periodo: 1986-05-13 - 2025-03-15
+  Stato: inattiva
+  Titolo: proprietÃ  esclusiva
+  Immobili associati: 0
+    Immobili:
+
+Partita n. 1079 (Comune Stress Test 4)
+  Tipo: principale
+  Periodo: 1983-05-13 - attiva
+  Stato: attiva
+  Titolo: proprietÃ  esclusiva
+  Immobili associati: 3
+    Immobili:
+      - Edificio Stress 2 in Via Stress 4-13 (Classe Stress 3)
+      - Edificio Stress 3 in Via Stress 4-15 (Classe Stress 4)
+      - Edificio Stress 1 in Via Stress 4-18 (Classe Stress 5)
+
+Partita n. 1076 (Comune Stress Test 4)
+  Tipo: principale
+  Periodo: 1977-05-13 - attiva
+  Stato: attiva
+  Titolo: proprietÃ  esclusiva
+  Immobili associati: 3
+    Immobili:
+      - Edificio Stress 1 in Via Stress 4-13 (Classe Stress 4)
+      - Edificio Stress 2 in Via Stress 4-2 (Classe Stress 1)
+      - Edificio Stress 3 in Via Stress 4-6 (Classe Stress 4)
+
+-------------------- VARIAZIONI CORRELATE --------------------
+Variazione: Vendita del 2025-03-15
+  Da: Partita n. 1078 (Comune Stress Test 4)
+  A: Partita n. 1508 (Comune Stress Test 4)
+  Contratto: Vendita del 2025-02-13
+  Notaio: Notaio Stress Test
+
+============================================================
+Report generato il: 2025-05-13
+============================================================

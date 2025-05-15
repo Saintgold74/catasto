@@ -1251,6 +1251,1224 @@ class StatisticheWidget(QWidget):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.status_text.append(f"[{timestamp}] {message}")
 
+
+
+
+# --- Scheda per Registrazione Nuova Proprietà ---
+class RegistrazioneProprietaWidget(QWidget):
+    def __init__(self, db_manager, parent=None):
+        super(RegistrazioneProprietaWidget, self).__init__(parent)
+        self.db_manager = db_manager
+        
+        layout = QVBoxLayout()
+        
+        # Form di inserimento
+        form_group = QGroupBox("Registrazione Nuova Proprietà")
+        form_layout = QGridLayout()
+        
+        # Comune
+        comune_label = QLabel("Comune:")
+        self.comune_button = QPushButton("Seleziona Comune...")
+        self.comune_button.clicked.connect(self.select_comune)
+        self.comune_id = None
+        self.comune_display = QLabel("Nessun comune selezionato")
+        
+        form_layout.addWidget(comune_label, 0, 0)
+        form_layout.addWidget(self.comune_button, 0, 1)
+        form_layout.addWidget(self.comune_display, 0, 2)
+        
+        # Numero partita
+        num_partita_label = QLabel("Numero Partita:")
+        self.num_partita_edit = QSpinBox()
+        self.num_partita_edit.setMinimum(1)
+        self.num_partita_edit.setMaximum(9999)
+        
+        form_layout.addWidget(num_partita_label, 1, 0)
+        form_layout.addWidget(self.num_partita_edit, 1, 1)
+        
+        # Data impianto
+        data_label = QLabel("Data Impianto:")
+        self.data_edit = QDateEdit()
+        self.data_edit.setCalendarPopup(True)
+        self.data_edit.setDate(QDate.currentDate())
+        
+        form_layout.addWidget(data_label, 2, 0)
+        form_layout.addWidget(self.data_edit, 2, 1)
+        
+        form_group.setLayout(form_layout)
+        layout.addWidget(form_group)
+        
+        # Possessori
+        possessori_group = QGroupBox("Possessori")
+        possessori_layout = QVBoxLayout()
+        
+        self.possessori_table = QTableWidget()
+        self.possessori_table.setColumnCount(4)
+        self.possessori_table.setHorizontalHeaderLabels(["Nome Completo", "Cognome e Nome", "Paternità", "Quota"])
+        self.possessori_table.horizontalHeader().setStretchLastSection(True)
+        
+        self.add_possessore_button = QPushButton("Aggiungi Possessore")
+        self.add_possessore_button.clicked.connect(self.add_possessore)
+        self.remove_possessore_button = QPushButton("Rimuovi Possessore Selezionato")
+        self.remove_possessore_button.clicked.connect(self.remove_possessore)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.add_possessore_button)
+        button_layout.addWidget(self.remove_possessore_button)
+        
+        possessori_layout.addWidget(self.possessori_table)
+        possessori_layout.addLayout(button_layout)
+        
+        possessori_group.setLayout(possessori_layout)
+        layout.addWidget(possessori_group)
+        
+        # Immobili
+        immobili_group = QGroupBox("Immobili")
+        immobili_layout = QVBoxLayout()
+        
+        self.immobili_table = QTableWidget()
+        self.immobili_table.setColumnCount(5)
+        self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
+        self.immobili_table.horizontalHeader().setStretchLastSection(True)
+        
+        self.add_immobile_button = QPushButton("Aggiungi Immobile")
+        self.add_immobile_button.clicked.connect(self.add_immobile)
+        self.remove_immobile_button = QPushButton("Rimuovi Immobile Selezionato")
+        self.remove_immobile_button.clicked.connect(self.remove_immobile)
+        
+        button_immobili_layout = QHBoxLayout()
+        button_immobili_layout.addWidget(self.add_immobile_button)
+        button_immobili_layout.addWidget(self.remove_immobile_button)
+        
+        immobili_layout.addWidget(self.immobili_table)
+        immobili_layout.addLayout(button_immobili_layout)
+        
+        immobili_group.setLayout(immobili_layout)
+        layout.addWidget(immobili_group)
+        
+        # Pulsante registrazione
+        self.register_button = QPushButton("Registra Nuova Proprietà")
+        self.register_button.clicked.connect(self.register_property)
+        layout.addWidget(self.register_button)
+        
+        self.setLayout(layout)
+        
+        # Array per memorizzare i dati
+        self.possessori_data = []
+        self.immobili_data = []
+    
+    def select_comune(self):
+        """Apre il selettore di comuni."""
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_comune_id:
+            self.comune_id = dialog.selected_comune_id
+            self.comune_display.setText(dialog.selected_comune_name)
+    
+    def add_possessore(self):
+        """Aggiunge un possessore alla lista."""
+        dialog = PossessoreSelectionDialog(self.db_manager, self.comune_id, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_possessore:
+            self.possessori_data.append(dialog.selected_possessore)
+            self.update_possessori_table()
+    
+    def remove_possessore(self):
+        """Rimuove il possessore selezionato dalla lista."""
+        selected_rows = self.possessori_table.selectedIndexes()
+        if not selected_rows:
+            QMessageBox.warning(self, "Attenzione", "Seleziona un possessore da rimuovere.")
+            return
+        
+        row = selected_rows[0].row()
+        if 0 <= row < len(self.possessori_data):
+            del self.possessori_data[row]
+            self.update_possessori_table()
+    
+    def update_possessori_table(self):
+        """Aggiorna la tabella dei possessori."""
+        self.possessori_table.setRowCount(len(self.possessori_data))
+        
+        for i, possessore in enumerate(self.possessori_data):
+            self.possessori_table.setItem(i, 0, QTableWidgetItem(possessore.get('nome_completo', '')))
+            self.possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('cognome_nome', '')))
+            self.possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('paternita', '')))
+            self.possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
+    
+    def add_immobile(self):
+        """Aggiunge un immobile alla lista."""
+        dialog = ImmobileDialog(self.db_manager, self.comune_id, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.immobile_data:
+            self.immobili_data.append(dialog.immobile_data)
+            self.update_immobili_table()
+    
+    def remove_immobile(self):
+        """Rimuove l'immobile selezionato dalla lista."""
+        selected_rows = self.immobili_table.selectedIndexes()
+        if not selected_rows:
+            QMessageBox.warning(self, "Attenzione", "Seleziona un immobile da rimuovere.")
+            return
+        
+        row = selected_rows[0].row()
+        if 0 <= row < len(self.immobili_data):
+            del self.immobili_data[row]
+            self.update_immobili_table()
+    
+    def update_immobili_table(self):
+        """Aggiorna la tabella degli immobili."""
+        self.immobili_table.setRowCount(len(self.immobili_data))
+        
+        for i, immobile in enumerate(self.immobili_data):
+            self.immobili_table.setItem(i, 0, QTableWidgetItem(immobile.get('natura', '')))
+            self.immobili_table.setItem(i, 1, QTableWidgetItem(immobile.get('localita_nome', '')))
+            self.immobili_table.setItem(i, 2, QTableWidgetItem(immobile.get('classificazione', '')))
+            self.immobili_table.setItem(i, 3, QTableWidgetItem(immobile.get('consistenza', '')))
+            
+            piani_vani = ""
+            if 'numero_piani' in immobile and immobile['numero_piani']:
+                piani_vani += f"Piani: {immobile['numero_piani']}"
+            if 'numero_vani' in immobile and immobile['numero_vani']:
+                if piani_vani:
+                    piani_vani += ", "
+                piani_vani += f"Vani: {immobile['numero_vani']}"
+            
+            self.immobili_table.setItem(i, 4, QTableWidgetItem(piani_vani))
+    
+    def register_property(self):
+        """Registra la nuova proprietà nel database."""
+        # Validazione input
+        if not self.comune_id:
+            QMessageBox.warning(self, "Errore", "Seleziona un comune.")
+            return
+        
+        if not self.possessori_data:
+            QMessageBox.warning(self, "Errore", "Aggiungi almeno un possessore.")
+            return
+        
+        if not self.immobili_data:
+            QMessageBox.warning(self, "Errore", "Aggiungi almeno un immobile.")
+            return
+        
+        # Raccoglie i dati
+        numero_partita = self.num_partita_edit.value()
+        data_impianto = self.data_edit.date().toPyDate()
+        
+        # Chiama la funzione del DB manager
+        result = self.db_manager.registra_nuova_proprieta(
+            self.comune_id,
+            numero_partita,
+            data_impianto,
+            self.possessori_data,
+            self.immobili_data
+        )
+        
+        if result:
+            QMessageBox.information(self, "Successo", "Nuova proprietà registrata con successo.")
+            
+            # Pulisce i campi
+            self.comune_id = None
+            self.comune_display.setText("Nessun comune selezionato")
+            self.num_partita_edit.setValue(1)
+            self.data_edit.setDate(QDate.currentDate())
+            self.possessori_data = []
+            self.immobili_data = []
+            self.update_possessori_table()
+            self.update_immobili_table()
+        else:
+            QMessageBox.critical(self, "Errore", "Errore durante la registrazione della proprietà.")
+
+
+# --- Dialog per la Selezione dei Possessori ---
+class PossessoreSelectionDialog(QDialog):
+    def __init__(self, db_manager, comune_id, parent=None):
+        super(PossessoreSelectionDialog, self).__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.selected_possessore = None
+        
+        self.setWindowTitle("Seleziona Possessore")
+        self.setMinimumSize(600, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Tab per selezione o creazione
+        tabs = QTabWidget()
+        
+        # Tab Seleziona
+        select_tab = QWidget()
+        select_layout = QVBoxLayout()
+        
+        # Filtro
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Filtra per nome:")
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Digita per filtrare...")
+        self.filter_edit.textChanged.connect(self.filter_possessori)
+        
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_edit)
+        
+        select_layout.addLayout(filter_layout)
+        
+        # Tabella possessori
+        self.possessori_table = QTableWidget()
+        self.possessori_table.setColumnCount(4)
+        self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Paternità", "Stato"])
+        self.possessori_table.setAlternatingRowColors(True)
+        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.possessori_table.itemDoubleClicked.connect(self.select_from_table)
+        
+        select_layout.addWidget(self.possessori_table)
+        
+        select_tab.setLayout(select_layout)
+        tabs.addTab(select_tab, "Seleziona Esistente")
+        
+        # Tab Crea
+        create_tab = QWidget()
+        create_layout = QGridLayout()
+        
+        # Cognome e nome
+        cognome_label = QLabel("Cognome e nome:")
+        self.cognome_edit = QLineEdit()
+        
+        create_layout.addWidget(cognome_label, 0, 0)
+        create_layout.addWidget(self.cognome_edit, 0, 1)
+        
+        # Paternità
+        paternita_label = QLabel("Paternità:")
+        self.paternita_edit = QLineEdit()
+        
+        create_layout.addWidget(paternita_label, 1, 0)
+        create_layout.addWidget(self.paternita_edit, 1, 1)
+        
+        # Nome completo
+        nome_completo_label = QLabel("Nome completo:")
+        self.nome_completo_edit = QLineEdit()
+        self.nome_completo_update_button = QPushButton("Genera da cognome+paternità")
+        self.nome_completo_update_button.clicked.connect(self.update_nome_completo)
+        
+        create_layout.addWidget(nome_completo_label, 2, 0)
+        create_layout.addWidget(self.nome_completo_edit, 2, 1)
+        create_layout.addWidget(self.nome_completo_update_button, 2, 2)
+        
+        # Quota
+        quota_label = QLabel("Quota (vuoto per esclusiva):")
+        self.quota_edit = QLineEdit()
+        self.quota_edit.setPlaceholderText("Es. 1/2, 1/3, ecc.")
+        
+        create_layout.addWidget(quota_label, 3, 0)
+        create_layout.addWidget(self.quota_edit, 3, 1)
+        
+        create_tab.setLayout(create_layout)
+        tabs.addTab(create_tab, "Crea Nuovo")
+        
+        layout.addWidget(tabs)
+        
+        # Pulsanti
+        buttons_layout = QHBoxLayout()
+        
+        self.ok_button = QPushButton("Seleziona")
+        self.ok_button.clicked.connect(self.handle_selection)
+        
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        
+        buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        self.setLayout(layout)
+        
+        # Carica i possessori iniziali
+        self.current_tab = 0
+        tabs.currentChanged.connect(self.tab_changed)
+        self.load_possessori()
+    
+    def tab_changed(self, index):
+        """Gestisce il cambio di tab."""
+        self.current_tab = index
+        if index == 0:
+            self.ok_button.setText("Seleziona")
+        else:
+            self.ok_button.setText("Crea e Seleziona")
+    
+    def load_possessori(self, filter_text=None):
+        """Carica i possessori dal database con filtro opzionale."""
+        self.possessori_table.setRowCount(0)
+        
+        if self.comune_id:
+            possessori = self.db_manager.get_possessori_by_comune(self.comune_id)
+            
+            if possessori:
+                # Filtra se necessario
+                if filter_text:
+                    possessori = [p for p in possessori if filter_text.lower() in p.get('nome_completo', '').lower()]
+                
+                self.possessori_table.setRowCount(len(possessori))
+                
+                for i, pos in enumerate(possessori):
+                    self.possessori_table.setItem(i, 0, QTableWidgetItem(str(pos.get('id', ''))))
+                    self.possessori_table.setItem(i, 1, QTableWidgetItem(pos.get('nome_completo', '')))
+                    self.possessori_table.setItem(i, 2, QTableWidgetItem(pos.get('paternita', '')))
+                    
+                    stato = "Attivo" if pos.get('attivo') else "Non Attivo"
+                    self.possessori_table.setItem(i, 3, QTableWidgetItem(stato))
+                
+                self.possessori_table.resizeColumnsToContents()
+    
+    def filter_possessori(self):
+        """Filtra i possessori in base al testo inserito."""
+        filter_text = self.filter_edit.text().strip()
+        self.load_possessori(filter_text if filter_text else None)
+    
+    def update_nome_completo(self):
+        """Aggiorna il nome completo in base a cognome e paternità."""
+        cognome = self.cognome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        
+        if cognome:
+            nome_completo = cognome
+            if paternita:
+                nome_completo += f" {paternita}"
+            
+            self.nome_completo_edit.setText(nome_completo)
+    
+    def select_from_table(self, item):
+        """Gestisce la selezione dalla tabella dei possessori."""
+        row = item.row()
+        self.handle_selection()
+    
+    def handle_selection(self):
+        """Gestisce la selezione o creazione del possessore."""
+        if self.current_tab == 0:  # Seleziona esistente
+            selected_rows = self.possessori_table.selectedIndexes()
+            if not selected_rows:
+                QMessageBox.warning(self, "Attenzione", "Seleziona un possessore dalla tabella.")
+                return
+            
+            row = selected_rows[0].row()
+            
+            # Recupera i dati del possessore selezionato
+            possessore_id = int(self.possessori_table.item(row, 0).text())
+            nome_completo = self.possessori_table.item(row, 1).text()
+            paternita = self.possessori_table.item(row, 2).text() if self.possessori_table.item(row, 2) else ""
+            
+            # Dialogo per la quota
+            quota, ok = QInputDialog.getText(
+                self, "Quota", "Inserisci la quota (vuoto per esclusiva):",
+                QLineEdit.Normal, ""
+            )
+            
+            if ok:
+                self.selected_possessore = {
+                    'id': possessore_id,
+                    'nome_completo': nome_completo,
+                    'paternita': paternita,
+                    'quota': quota
+                }
+                self.accept()
+        
+        else:  # Crea nuovo
+            cognome_nome = self.cognome_edit.text().strip()
+            paternita = self.paternita_edit.text().strip()
+            nome_completo = self.nome_completo_edit.text().strip()
+            quota = self.quota_edit.text().strip()
+            
+            if not cognome_nome or not nome_completo:
+                QMessageBox.warning(self, "Errore", "Cognome e nome e Nome completo sono obbligatori.")
+                return
+            
+            # Inserisci nuovo possessore
+            possessore_id = self.db_manager.insert_possessore(
+                self.comune_id, cognome_nome, paternita, nome_completo, True
+            )
+            
+            if possessore_id:
+                self.selected_possessore = {
+                    'id': possessore_id,
+                    'nome_completo': nome_completo,
+                    'cognome_nome': cognome_nome,
+                    'paternita': paternita,
+                    'quota': quota
+                }
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Errore", "Errore durante l'inserimento del possessore.")
+
+     # --- Dialog per l'Inserimento degli Immobili ---
+class ImmobileDialog(QDialog):
+    def __init__(self, db_manager, comune_id, parent=None):
+        super(ImmobileDialog, self).__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.immobile_data = None
+        
+        self.setWindowTitle("Inserisci Immobile")
+        self.setMinimumSize(500, 400)
+        
+        layout = QVBoxLayout()
+        
+        form_layout = QGridLayout()
+        
+        # Natura
+        natura_label = QLabel("Natura:")
+        self.natura_edit = QLineEdit()
+        self.natura_edit.setPlaceholderText("Es. Casa, Terreno, Garage, ecc.")
+        
+        form_layout.addWidget(natura_label, 0, 0)
+        form_layout.addWidget(self.natura_edit, 0, 1)
+        
+        # Località
+        localita_label = QLabel("Località:")
+        self.localita_button = QPushButton("Seleziona Località...")
+        self.localita_button.clicked.connect(self.select_localita)
+        self.localita_id = None
+        self.localita_display = QLabel("Nessuna località selezionata")
+        
+        form_layout.addWidget(localita_label, 1, 0)
+        form_layout.addWidget(self.localita_button, 1, 1)
+        form_layout.addWidget(self.localita_display, 1, 2)
+        
+        # Classificazione
+        classificazione_label = QLabel("Classificazione:")
+        self.classificazione_edit = QLineEdit()
+        self.classificazione_edit.setPlaceholderText("Es. Abitazione civile, Deposito, ecc.")
+        
+        form_layout.addWidget(classificazione_label, 2, 0)
+        form_layout.addWidget(self.classificazione_edit, 2, 1)
+        
+        # Consistenza
+        consistenza_label = QLabel("Consistenza:")
+        self.consistenza_edit = QLineEdit()
+        self.consistenza_edit.setPlaceholderText("Es. 120 mq")
+        
+        form_layout.addWidget(consistenza_label, 3, 0)
+        form_layout.addWidget(self.consistenza_edit, 3, 1)
+        
+        # Numero piani
+        piani_label = QLabel("Numero piani:")
+        self.piani_edit = QSpinBox()
+        self.piani_edit.setMinimum(0)
+        self.piani_edit.setMaximum(99)
+        self.piani_edit.setSpecialValueText("Non specificato")
+        
+        form_layout.addWidget(piani_label, 4, 0)
+        form_layout.addWidget(self.piani_edit, 4, 1)
+        
+        # Numero vani
+        vani_label = QLabel("Numero vani:")
+        self.vani_edit = QSpinBox()
+        self.vani_edit.setMinimum(0)
+        self.vani_edit.setMaximum(99)
+        self.vani_edit.setSpecialValueText("Non specificato")
+        
+        form_layout.addWidget(vani_label, 5, 0)
+        form_layout.addWidget(self.vani_edit, 5, 1)
+        
+        layout.addLayout(form_layout)
+        
+        # Pulsanti
+        buttons_layout = QHBoxLayout()
+        
+        self.ok_button = QPushButton("Inserisci")
+        self.ok_button.clicked.connect(self.handle_insert)
+        
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        
+        buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        self.setLayout(layout)
+    
+    def select_localita(self):
+        """Apre un dialogo per selezionare la località."""
+        dialog = LocalitaSelectionDialog(self.db_manager, self.comune_id, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_localita_id:
+            self.localita_id = dialog.selected_localita_id
+            self.localita_display.setText(dialog.selected_localita_name)
+    
+    def handle_insert(self):
+        """Gestisce l'inserimento dell'immobile."""
+        # Validazione input
+        natura = self.natura_edit.text().strip()
+        if not natura:
+            QMessageBox.warning(self, "Errore", "La natura dell'immobile è obbligatoria.")
+            return
+        
+        if not self.localita_id:
+            QMessageBox.warning(self, "Errore", "Seleziona una località.")
+            return
+        
+        # Raccoglie i dati
+        classificazione = self.classificazione_edit.text().strip() or None
+        consistenza = self.consistenza_edit.text().strip() or None
+        numero_piani = self.piani_edit.value() if self.piani_edit.value() > 0 else None
+        numero_vani = self.vani_edit.value() if self.vani_edit.value() > 0 else None
+        
+        # Crea il dizionario dei dati dell'immobile
+        self.immobile_data = {
+            'natura': natura,
+            'localita_id': self.localita_id,
+            'localita_nome': self.localita_display.text(),
+            'classificazione': classificazione,
+            'consistenza': consistenza,
+            'numero_piani': numero_piani,
+            'numero_vani': numero_vani
+        }
+        
+        self.accept()
+
+      # --- Dialog per la Selezione delle Località ---
+class LocalitaSelectionDialog(QDialog):
+    def __init__(self, db_manager, comune_id, parent=None):
+        super(LocalitaSelectionDialog, self).__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.selected_localita_id = None
+        self.selected_localita_name = None
+        
+        self.setWindowTitle("Seleziona Località")
+        self.setMinimumSize(600, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Tab per selezione o creazione
+        tabs = QTabWidget()
+        
+        # Tab Seleziona
+        select_tab = QWidget()
+        select_layout = QVBoxLayout()
+        
+        # Filtro
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Filtra per nome:")
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Digita per filtrare...")
+        self.filter_edit.textChanged.connect(self.filter_localita)
+        
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_edit)
+        
+        select_layout.addLayout(filter_layout)
+        
+        # Tabella località
+        self.localita_table = QTableWidget()
+        self.localita_table.setColumnCount(4)
+        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
+        self.localita_table.setAlternatingRowColors(True)
+        self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.localita_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.localita_table.itemDoubleClicked.connect(self.select_from_table)
+        
+        select_layout.addWidget(self.localita_table)
+        
+        select_tab.setLayout(select_layout)
+        tabs.addTab(select_tab, "Seleziona Esistente")
+        
+        # Tab Crea
+        create_tab = QWidget()
+        create_layout = QGridLayout()
+        
+        # Nome
+        nome_label = QLabel("Nome località:")
+        self.nome_edit = QLineEdit()
+        
+        create_layout.addWidget(nome_label, 0, 0)
+        create_layout.addWidget(self.nome_edit, 0, 1)
+        
+        # Tipo
+        tipo_label = QLabel("Tipo:")
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["regione", "via", "borgata"])
+        
+        create_layout.addWidget(tipo_label, 1, 0)
+        create_layout.addWidget(self.tipo_combo, 1, 1)
+        
+        # Civico
+        civico_label = QLabel("Civico (solo per vie):")
+        self.civico_edit = QSpinBox()
+        self.civico_edit.setMinimum(0)
+        self.civico_edit.setMaximum(9999)
+        self.civico_edit.setSpecialValueText("Nessun civico")
+        
+        create_layout.addWidget(civico_label, 2, 0)
+        create_layout.addWidget(self.civico_edit, 2, 1)
+        
+        create_tab.setLayout(create_layout)
+        tabs.addTab(create_tab, "Crea Nuova")
+        
+        layout.addWidget(tabs)
+        
+        # Pulsanti
+        buttons_layout = QHBoxLayout()
+        
+        self.ok_button = QPushButton("Seleziona")
+        self.ok_button.clicked.connect(self.handle_selection)
+        
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        
+        buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        self.setLayout(layout)
+        
+        # Carica le località iniziali
+        self.current_tab = 0
+        tabs.currentChanged.connect(self.tab_changed)
+        self.load_localita()
+    
+    def tab_changed(self, index):
+        """Gestisce il cambio di tab."""
+        self.current_tab = index
+        if index == 0:
+            self.ok_button.setText("Seleziona")
+        else:
+            self.ok_button.setText("Crea e Seleziona")
+    
+    def load_localita(self, filter_text=None):
+        """Carica le località dal database con filtro opzionale."""
+        self.localita_table.setRowCount(0)
+        
+        if self.comune_id:
+            # Esegue una query diretta per le località
+            query = "SELECT id, nome, tipo, civico FROM localita WHERE comune_id = %s ORDER BY tipo, nome, civico"
+            if self.db_manager.execute_query(query, (self.comune_id,)):
+                localita = self.db_manager.fetchall()
+                
+                if localita:
+                    # Filtra se necessario
+                    if filter_text:
+                        localita = [l for l in localita if filter_text.lower() in l.get('nome', '').lower()]
+                    
+                    self.localita_table.setRowCount(len(localita))
+                    
+                    for i, loc in enumerate(localita):
+                        self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                        self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '')))
+                        self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                        
+                        civico_text = str(loc.get('civico', '')) if loc.get('civico') is not None else "-"
+                        self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
+                
+                self.localita_table.resizeColumnsToContents()
+    
+    def filter_localita(self):
+        """Filtra le località in base al testo inserito."""
+        filter_text = self.filter_edit.text().strip()
+        self.load_localita(filter_text if filter_text else None)
+    
+    def select_from_table(self, item):
+        """Gestisce la selezione dalla tabella delle località."""
+        row = item.row()
+        self.handle_selection()
+    
+    def handle_selection(self):
+        """Gestisce la selezione o creazione della località."""
+        if self.current_tab == 0:  # Seleziona esistente
+            selected_rows = self.localita_table.selectedIndexes()
+            if not selected_rows:
+                QMessageBox.warning(self, "Attenzione", "Seleziona una località dalla tabella.")
+                return
+            
+            row = selected_rows[0].row()
+            
+            # Recupera i dati della località selezionata
+            self.selected_localita_id = int(self.localita_table.item(row, 0).text())
+            self.selected_localita_name = self.localita_table.item(row, 1).text()
+            
+            # Include il tipo e il civico nel nome visualizzato
+            tipo = self.localita_table.item(row, 2).text()
+            civico = self.localita_table.item(row, 3).text()
+            if civico != "-":
+                self.selected_localita_name += f", {civico}"
+            self.selected_localita_name += f" ({tipo})"
+            
+            self.accept()
+        
+        else:  # Crea nuova
+            nome = self.nome_edit.text().strip()
+            tipo = self.tipo_combo.currentText()
+            civico = self.civico_edit.value() if self.civico_edit.value() > 0 else None
+            
+            if not nome:
+                QMessageBox.warning(self, "Errore", "Il nome della località è obbligatorio.")
+                return
+            
+            # Inserisci nuova località
+            localita_id = self.db_manager.insert_localita(
+                self.comune_id, nome, tipo, civico
+            )
+            
+            if localita_id:
+                self.selected_localita_id = localita_id
+                self.selected_localita_name = nome
+                
+                # Include il tipo e il civico nel nome visualizzato
+                if civico:
+                    self.selected_localita_name += f", {civico}"
+                self.selected_localita_name += f" ({tipo})"
+                
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Errore", "Errore durante l'inserimento della località.")
+
+          # --- Scheda per Reportistica ---
+class ReportisticaWidget(QWidget):
+    def __init__(self, db_manager, parent=None):
+        super(ReportisticaWidget, self).__init__(parent)
+        self.db_manager = db_manager
+        
+        layout = QVBoxLayout()
+        
+        # Tabs per i diversi tipi di report
+        tabs = QTabWidget()
+        
+        # Tab Certificato Proprietà
+        certificato_tab = QWidget()
+        certificato_layout = QVBoxLayout()
+        
+        # Input per ID partita
+        input_layout = QHBoxLayout()
+        partita_id_label = QLabel("ID della partita:")
+        self.partita_id_edit = QSpinBox()
+        self.partita_id_edit.setMinimum(1)
+        self.partita_id_edit.setMaximum(999999)
+        self.search_partita_button = QPushButton("Cerca...")
+        self.search_partita_button.clicked.connect(self.search_partita)
+        
+        input_layout.addWidget(partita_id_label)
+        input_layout.addWidget(self.partita_id_edit)
+        input_layout.addWidget(self.search_partita_button)
+        
+        # Pulsante genera report
+        self.generate_cert_button = QPushButton("Genera Certificato")
+        self.generate_cert_button.clicked.connect(self.generate_certificato)
+        
+        # Area di visualizzazione
+        self.certificato_text = QTextEdit()
+        self.certificato_text.setReadOnly(True)
+        
+        # Pulsante esporta
+        self.export_cert_button = QPushButton("Esporta in File")
+        self.export_cert_button.clicked.connect(lambda: self.export_report(self.certificato_text.toPlainText(), "certificato"))
+        
+        certificato_layout.addLayout(input_layout)
+        certificato_layout.addWidget(self.generate_cert_button)
+        certificato_layout.addWidget(self.certificato_text)
+        certificato_layout.addWidget(self.export_cert_button)
+        
+        certificato_tab.setLayout(certificato_layout)
+        tabs.addTab(certificato_tab, "Certificato Proprietà")
+        
+        # Tab Report Genealogico
+        genealogico_tab = QWidget()
+        genealogico_layout = QVBoxLayout()
+        
+        # Input per ID partita
+        input_gen_layout = QHBoxLayout()
+        partita_id_gen_label = QLabel("ID della partita:")
+        self.partita_id_gen_edit = QSpinBox()
+        self.partita_id_gen_edit.setMinimum(1)
+        self.partita_id_gen_edit.setMaximum(999999)
+        self.search_partita_gen_button = QPushButton("Cerca...")
+        self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
+        
+        input_gen_layout.addWidget(partita_id_gen_label)
+        input_gen_layout.addWidget(self.partita_id_gen_edit)
+        input_gen_layout.addWidget(self.search_partita_gen_button)
+        
+        # Pulsante genera report
+        self.generate_gen_button = QPushButton("Genera Report Genealogico")
+        self.generate_gen_button.clicked.connect(self.generate_genealogico)
+        
+        # Area di visualizzazione
+        self.genealogico_text = QTextEdit()
+        self.genealogico_text.setReadOnly(True)
+        
+        # Pulsante esporta
+        self.export_gen_button = QPushButton("Esporta in File")
+        self.export_gen_button.clicked.connect(lambda: self.export_report(self.genealogico_text.toPlainText(), "genealogico"))
+        
+        genealogico_layout.addLayout(input_gen_layout)
+        genealogico_layout.addWidget(self.generate_gen_button)
+        genealogico_layout.addWidget(self.genealogico_text)
+        genealogico_layout.addWidget(self.export_gen_button)
+        
+        genealogico_tab.setLayout(genealogico_layout)
+        tabs.addTab(genealogico_tab, "Report Genealogico")
+        
+        # Tab Report Possessore
+        possessore_tab = QWidget()
+        possessore_layout = QVBoxLayout()
+        
+        # Input per ID possessore
+        input_pos_layout = QHBoxLayout()
+        possessore_id_label = QLabel("ID del possessore:")
+        self.possessore_id_edit = QSpinBox()
+        self.possessore_id_edit.setMinimum(1)
+        self.possessore_id_edit.setMaximum(999999)
+        self.search_possessore_button = QPushButton("Cerca...")
+        self.search_possessore_button.clicked.connect(self.search_possessore)
+        
+        input_pos_layout.addWidget(possessore_id_label)
+        input_pos_layout.addWidget(self.possessore_id_edit)
+        input_pos_layout.addWidget(self.search_possessore_button)
+        
+        # Pulsante genera report
+        self.generate_pos_button = QPushButton("Genera Report Possessore")
+        self.generate_pos_button.clicked.connect(self.generate_possessore)
+        
+        # Area di visualizzazione
+        self.possessore_text = QTextEdit()
+        self.possessore_text.setReadOnly(True)
+        
+        # Pulsante esporta
+        self.export_pos_button = QPushButton("Esporta in File")
+        self.export_pos_button.clicked.connect(lambda: self.export_report(self.possessore_text.toPlainText(), "possessore"))
+        
+        possessore_layout.addLayout(input_pos_layout)
+        possessore_layout.addWidget(self.generate_pos_button)
+        possessore_layout.addWidget(self.possessore_text)
+        possessore_layout.addWidget(self.export_pos_button)
+        
+        possessore_tab.setLayout(possessore_layout)
+        tabs.addTab(possessore_tab, "Report Possessore")
+        
+        # Tab Report Consultazioni
+        consultazioni_tab = QWidget()
+        consultazioni_layout = QVBoxLayout()
+        
+        # Input per filtri
+        filters_layout = QGridLayout()
+        
+        data_inizio_label = QLabel("Data inizio:")
+        self.data_inizio_edit = QDateEdit()
+        self.data_inizio_edit.setCalendarPopup(True)
+        self.data_inizio_edit.setDate(QDate.currentDate().addYears(-1))
+        self.data_inizio_check = QCheckBox("Usa filtro")
+        self.data_inizio_check.setChecked(True)
+        
+        data_fine_label = QLabel("Data fine:")
+        self.data_fine_edit = QDateEdit()
+        self.data_fine_edit.setCalendarPopup(True)
+        self.data_fine_edit.setDate(QDate.currentDate())
+        self.data_fine_check = QCheckBox("Usa filtro")
+        self.data_fine_check.setChecked(True)
+        
+        richiedente_label = QLabel("Richiedente:")
+        self.richiedente_edit = QLineEdit()
+        self.richiedente_edit.setPlaceholderText("Qualsiasi richiedente")
+        
+        filters_layout.addWidget(data_inizio_label, 0, 0)
+        filters_layout.addWidget(self.data_inizio_edit, 0, 1)
+        filters_layout.addWidget(self.data_inizio_check, 0, 2)
+        
+        filters_layout.addWidget(data_fine_label, 1, 0)
+        filters_layout.addWidget(self.data_fine_edit, 1, 1)
+        filters_layout.addWidget(self.data_fine_check, 1, 2)
+        
+        filters_layout.addWidget(richiedente_label, 2, 0)
+        filters_layout.addWidget(self.richiedente_edit, 2, 1, 1, 2)
+        
+        # Pulsante genera report
+        self.generate_cons_button = QPushButton("Genera Report Consultazioni")
+        self.generate_cons_button.clicked.connect(self.generate_consultazioni)
+        
+        # Area di visualizzazione
+        self.consultazioni_text = QTextEdit()
+        self.consultazioni_text.setReadOnly(True)
+        
+        # Pulsante esporta
+        self.export_cons_button = QPushButton("Esporta in File")
+        self.export_cons_button.clicked.connect(lambda: self.export_report(self.consultazioni_text.toPlainText(), "consultazioni"))
+        
+        consultazioni_layout.addLayout(filters_layout)
+        consultazioni_layout.addWidget(self.generate_cons_button)
+        consultazioni_layout.addWidget(self.consultazioni_text)
+        consultazioni_layout.addWidget(self.export_cons_button)
+        
+        consultazioni_tab.setLayout(consultazioni_layout)
+        tabs.addTab(consultazioni_tab, "Report Consultazioni")
+        
+        layout.addWidget(tabs)
+        self.setLayout(layout)
+    
+    def search_partita(self):
+        """Apre un dialogo per cercare una partita."""
+        dialog = PartitaSearchDialog(self.db_manager, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_partita_id:
+            self.partita_id_edit.setValue(dialog.selected_partita_id)
+    
+    def search_partita_gen(self):
+        """Apre un dialogo per cercare una partita per il report genealogico."""
+        dialog = PartitaSearchDialog(self.db_manager, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_partita_id:
+            self.partita_id_gen_edit.setValue(dialog.selected_partita_id)
+    
+    def search_possessore(self):
+        """Apre un dialogo per cercare un possessore."""
+        dialog = PossessoreSearchDialog(self.db_manager, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_possessore_id:
+            self.possessore_id_edit.setValue(dialog.selected_possessore_id)
+    
+    def generate_certificato(self):
+        """Genera un certificato di proprietà."""
+        partita_id = self.partita_id_edit.value()
+        
+        if partita_id <= 0:
+            QMessageBox.warning(self, "Errore", "Inserisci un ID partita valido.")
+            return
+        
+        certificato = self.db_manager.genera_certificato_proprieta(partita_id)
+        
+        if certificato:
+            self.certificato_text.setText(certificato)
+        else:
+            QMessageBox.warning(self, "Errore", f"Impossibile generare il certificato per la partita ID {partita_id}.")
+    
+    def generate_genealogico(self):
+        """Genera un report genealogico."""
+        partita_id = self.partita_id_gen_edit.value()
+        
+        if partita_id <= 0:
+            QMessageBox.warning(self, "Errore", "Inserisci un ID partita valido.")
+            return
+        
+        report = self.db_manager.genera_report_genealogico(partita_id)
+        
+        if report:
+            self.genealogico_text.setText(report)
+        else:
+            QMessageBox.warning(self, "Errore", f"Impossibile generare il report genealogico per la partita ID {partita_id}.")
+    
+    def generate_possessore(self):
+        """Genera un report sul possessore."""
+        possessore_id = self.possessore_id_edit.value()
+        
+        if possessore_id <= 0:
+            QMessageBox.warning(self, "Errore", "Inserisci un ID possessore valido.")
+            return
+        
+        report = self.db_manager.genera_report_possessore(possessore_id)
+        
+        if report:
+            self.possessore_text.setText(report)
+        else:
+            QMessageBox.warning(self, "Errore", f"Impossibile generare il report per il possessore ID {possessore_id}.")
+    
+    def generate_consultazioni(self):
+        """Genera un report sulle consultazioni."""
+        data_inizio = self.data_inizio_edit.date().toPyDate() if self.data_inizio_check.isChecked() else None
+        data_fine = self.data_fine_edit.date().toPyDate() if self.data_fine_check.isChecked() else None
+        richiedente = self.richiedente_edit.text().strip() or None
+        
+        report = self.db_manager.genera_report_consultazioni(data_inizio, data_fine, richiedente)
+        
+        if report:
+            self.consultazioni_text.setText(report)
+        else:
+            QMessageBox.warning(self, "Errore", "Impossibile generare il report consultazioni.")
+    
+    def export_report(self, text, report_type):
+        """Esporta un report in un file di testo."""
+        if not text:
+            QMessageBox.warning(self, "Attenzione", "Nessun report da esportare.")
+            return
+        
+        oggi = datetime.now().strftime("%Y%m%d")
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Salva Report", f"report_{report_type}_{oggi}.txt", "File di testo (*.txt)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(text)
+                QMessageBox.information(self, "Esportazione Completata", f"Report salvato in {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Errore", f"Errore durante l'esportazione: {str(e)}")
+
+           # --- Dialog di Ricerca Partite ---
+class PartitaSearchDialog(QDialog):
+    def __init__(self, db_manager, parent=None):
+        super(PartitaSearchDialog, self).__init__(parent)
+        self.db_manager = db_manager
+        self.selected_partita_id = None
+        
+        self.setWindowTitle("Ricerca Partita")
+        self.setMinimumSize(700, 500)
+        
+        layout = QVBoxLayout()
+        
+        # Form di ricerca
+        form_group = QGroupBox("Criteri di Ricerca")
+        form_layout = QGridLayout()
+        
+        # Comune
+        comune_label = QLabel("Comune:")
+        self.comune_button = QPushButton("Seleziona Comune...")
+        self.comune_button.clicked.connect(self.select_comune)
+        self.comune_id = None
+        self.comune_display = QLabel("Tutti i comuni")
+        self.clear_comune_button = QPushButton("Cancella")
+        self.clear_comune_button.clicked.connect(self.clear_comune)
+        
+        form_layout.addWidget(comune_label, 0, 0)
+        form_layout.addWidget(self.comune_button, 0, 1)
+        form_layout.addWidget(self.comune_display, 0, 2)
+        form_layout.addWidget(self.clear_comune_button, 0, 3)
+        
+        # Numero partita
+        numero_label = QLabel("Numero Partita:")
+        self.numero_edit = QSpinBox()
+        self.numero_edit.setMinimum(0)
+        self.numero_edit.setMaximum(9999)
+        self.numero_edit.setSpecialValueText("Qualsiasi")
+        
+        form_layout.addWidget(numero_label, 1, 0)
+        form_layout.addWidget(self.numero_edit, 1, 1)
+        
+        # Possessore
+        possessore_label = QLabel("Nome Possessore:")
+        self.possessore_edit = QLineEdit()
+        self.possessore_edit.setPlaceholderText("Qualsiasi possessore")
+        
+        form_layout.addWidget(possessore_label, 2, 0)
+        form_layout.addWidget(self.possessore_edit, 2, 1, 1, 3)
+        
+        # Natura immobile
+        natura_label = QLabel("Natura Immobile:")
+        self.natura_edit = QLineEdit()
+        self.natura_edit.setPlaceholderText("Qualsiasi natura immobile")
+        
+        form_layout.addWidget(natura_label, 3, 0)
+        form_layout.addWidget(self.natura_edit, 3, 1, 1, 3)
+        
+        form_group.setLayout(form_layout)
+        layout.addWidget(form_group)
+        
+        # Pulsante ricerca
+        search_button = QPushButton("Cerca")
+        search_button.clicked.connect(self.do_search)
+        layout.addWidget(search_button)
+        
+        # Tabella risultati
+        results_group = QGroupBox("Risultati")
+        results_layout = QVBoxLayout()
+        
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(5)
+        self.results_table.setHorizontalHeaderLabels(["ID", "Comune", "Numero", "Tipo", "Stato"])
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.results_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.results_table.itemDoubleClicked.connect(self.select_partita)
+        
+        results_layout.addWidget(self.results_table)
+        
+        results_group.setLayout(results_layout)
+        layout.addWidget(results_group)
+        
+        # Pulsanti
+        buttons_layout = QHBoxLayout()
+        
+        self.select_button = QPushButton("Seleziona")
+        self.select_button.clicked.connect(self.select_partita)
+        
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        
+        buttons_layout.addWidget(self.select_button)
+        buttons_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        self.setLayout(layout)
+    
+    def select_comune(self):
+        """Apre il selettore di comuni."""
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        result = dialog.exec_()
+        
+        if result == QDialog.Accepted and dialog.selected_comune_id:
+            self.comune_id = dialog.selected_comune_id
+            self.comune_display.setText(dialog.selected_comune_name)
+    
+    def clear_comune(self):
+        """Cancella il comune selezionato."""
+        self.comune_id = None
+        self.comune_display.setText("Tutti i comuni")
+    
+    def do_search(self):
+        """Esegue la ricerca partite in base ai criteri."""
+        # Prepara i parametri
+        comune_id = self.comune_id
+        numero_partita = self.numero_edit.value() if self.numero_edit.value() > 0 else None
+        possessore = self.possessore_edit.text().strip() or None
+        natura = self.natura_edit.text().strip() or None
+        
+        # Esegue la ricerca
+        partite = self.db_manager.search_partite(
+            comune_id=comune_id,
+            numero_partita=numero_partita,
+            possessore=possessore,
+            immobile_natura=natura
+        )
+        
+        # Popola la tabella risultati
+        self.results_table.setRowCount(0)
+        
+        for partita in partite:
+            row_position = self.results_table.rowCount()
+            self.results_table.insertRow(row_position)
+            
+            self.results_table.setItem(row_position, 0, QTableWidgetItem(str(partita.get('id', ''))))
+            self.results_table.setItem(row_position, 1, QTableWidgetItem(partita.get('comune_nome', '')))
+            self.results_table.setItem(row_position, 2, QTableWidgetItem(str(partita.get('numero_partita', ''))))
+            self.results_table.setItem(row_position, 3, QTableWidgetItem(partita.get('tipo', '')))
+            self.results_table.setItem(row_position, 4, QTableWidgetItem(partita.get('stato', '')))
+        
+        # Adatta le colonne al contenuto
+        self.results_table.resizeColumnsToContents()
+    
+    def select_partita(self):
+        """Seleziona la partita e accetta il dialogo."""
+        selected_rows = self.results_table.selectedIndexes()
+        if not selected_rows:
+            QMessageBox.warning(self, "Attenzione", "Seleziona una partita dalla tabella.")
+            return
+        
+        row = selected_rows[0].row()
+        partita_id_item = self.results_table.item(row, 0)
+        
+        if partita_id_item and partita_id_item.text().isdigit():
+            self.selected_partita_id = int(partita_id_item.text())
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Errore", "ID partita non valido.")
+
+
+
 # --- Finestra principale ---
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
@@ -1364,17 +2582,14 @@ class CatastoMainWindow(QMainWindow):
         # Sotto-tab di Inserimento
         inserimento_tab.addTab(InserimentoPossessoreWidget(self.db_manager), "Inserisci Possessore")
         inserimento_tab.addTab(InserimentoLocalitaWidget(self.db_manager), "Inserisci Località")
+        inserimento_tab.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Nuova Proprietà")
         
         # Aggiungi altri sotto-tab di inserimento qui...
         
         self.tabs.addTab(inserimento_tab, "Inserimento")
         
         # Tab Reportistica
-        reportistica_tab = QTabWidget()
-        
-        # Aggiungi sotto-tab di reportistica qui...
-        
-        self.tabs.addTab(reportistica_tab, "Reportistica")
+        self.tabs.addTab(ReportisticaWidget(self.db_manager), "Reportistica")
         
         # Tab Statistiche
         self.tabs.addTab(StatisticheWidget(self.db_manager), "Statistiche")

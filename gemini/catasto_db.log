@@ -333,3 +333,30 @@ LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
 2025-05-14 10:18:00,122 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
 2025-05-14 10:18:00,174 - CatastoDB - INFO - Connessione stabilita con successo
 2025-05-14 10:32:39,817 - CatastoDB - INFO - Avvio manutenzione database (ANALYZE, REFRESH MV)...
+2025-05-14 10:54:27,621 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-14 10:54:27,680 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-14 10:55:12,311 - CatastoDB - INFO - Utente 'antongiulio' creato.
+2025-05-14 10:55:27,476 - __main__ - INFO - Login OK per ID: 3
+2025-05-14 10:55:27,480 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura registra_accesso(integer, unknown, unknown, unknown, boolean, unknown, unknown) non esiste
+LINE 1: CALL registra_accesso(3, 'login', '127.0.0.1', NULL, true, '...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-14 10:55:27,481 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-14 10:55:27,481 - CatastoDB - ERROR - Query renderizzata: b"CALL registra_accesso(3, 'login', '127.0.0.1', NULL, true, '9fdf65fd-98b3-46fc-9e86-c990084bb894', 'CatastoApp')"
+2025-05-14 10:55:27,482 - CatastoDB - INFO - Rollback eseguito.
+2025-05-14 10:55:27,482 - CatastoDB - ERROR - Errore DB registrazione accesso utente ID 3: ERRORE:  la procedura registra_accesso(integer, unknown, unknown, unknown, boolean, unknown, unknown) non esiste
+LINE 1: CALL registra_accesso(3, 'login', '127.0.0.1', NULL, true, '...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-14 10:55:29,044 - __main__ - ERROR - Login OK per ID 3 ma fallita reg. accesso.
+2025-05-14 10:55:49,592 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-14 10:55:49,750 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-14 10:55:51,459 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 09:08:19,236 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 09:08:19,345 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 09:08:50,068 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 10:18:20,492 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 10:18:20,603 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 10:21:01,331 - CatastoDB - INFO - Disconnessione completata

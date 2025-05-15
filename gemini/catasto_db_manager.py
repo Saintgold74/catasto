@@ -995,14 +995,23 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB creazione utente '{username}': {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python creazione utente '{username}': {e}"); self.rollback(); return False
 
-    def get_user_credentials(self, username: str) -> Optional[Dict]:
-        """Recupera ID e hash password per un utente attivo."""
+    def get_user_credentials(self, username_param: str) -> Optional[Dict]: # Rinominato parametro per chiarezza
+        """Recupera ID, hash password, username e nome_completo per un utente attivo."""
         try:
-            query = "SELECT id, password_hash FROM utente WHERE username = %s AND attivo = TRUE"
-            if self.execute_query(query, (username,)): return self.fetchone()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_user_credentials per '{username}': {db_err}")
-        except Exception as e: logger.error(f"Errore Python get_user_credentials per '{username}': {e}")
-        return None
+            # Aggiunto username e nome_completo alla SELECT
+            query = "SELECT id, username, password_hash, nome_completo FROM utente WHERE username = %s AND attivo = TRUE"
+            if self.execute_query(query, (username_param,)): # Usato username_param
+                user_data = self.fetchone()
+                if user_data:
+                    logger.info(f"Credenziali recuperate per utente: {user_data['username']}")
+                return user_data # Restituisce l'intero dizionario
+            return None
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB get_user_credentials per '{username_param}': {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python get_user_credentials per '{username_param}': {e}")
+            return None
 
     def register_access(self, utente_id: int, azione: str, indirizzo_ip: Optional[str] = None,
                         user_agent: Optional[str] = None, esito: bool = True,
@@ -1042,6 +1051,37 @@ class CatastoDBManager:
             return False
         except psycopg2.Error as db_err: logger.error(f"Errore DB verifica permesso '{permesso_nome}' per utente ID {utente_id}: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python verifica permesso '{permesso_nome}' per utente ID {utente_id}: {e}"); return False
+
+    def get_utenti(self, solo_attivi: Optional[bool] = None) -> List[Dict]:
+        """
+        Recupera un elenco di utenti dal database.
+        È possibile filtrare per utenti solo attivi.
+        """
+        try:
+            query = "SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM utente"
+            conditions = []
+            params = []
+
+            if solo_attivi is not None:
+                conditions.append("attivo = %s")
+                params.append(solo_attivi)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY username"
+
+            if self.execute_query(query, tuple(params) if params else None):
+                utenti = self.fetchall()
+                logger.info(f"Recuperati {len(utenti)} utenti.")
+                return utenti
+            return []
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB durante il recupero degli utenti: {db_err}")
+            return []
+        except Exception as e:
+            logger.error(f"Errore Python durante il recupero degli utenti: {e}")
+            return []
 
     # --- Metodi Sistema Backup (Invariati rispetto a comune_id) ---
 

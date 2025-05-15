@@ -382,3 +382,162 @@ HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe 
 2025-05-15 17:04:18,647 - CatastoDB - INFO - Avvio aggiornamento viste materializzate...
 2025-05-15 17:04:18,780 - CatastoDB - INFO - Aggiornamento viste completato.
 2025-05-15 17:04:34,619 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:00:37,205 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:00:37,305 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:03:39,684 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-05-15 18:05:51,731 - CatastoDB - INFO - Immobile ID 1 trasferito a partita ID 2.
+2025-05-15 18:07:17,550 - CatastoDB - ERROR - Errore DB specifico rilevato: UniqueViolation - ERRORE:  un valore chiave duplicato viola il vincolo univoco "utente_username_key"
+DETAIL:  La chiave (username)=(pippo) esiste già.
+CONTEXT:  istruzione SQL "INSERT INTO utente (username, password_hash, nome_completo, email, ruolo)
+    VALUES (p_username, p_password, p_nome_completo, p_email, p_ruolo)"
+funzione PL/pgSQL crea_utente(character varying,character varying,character varying,character varying,character varying) riga 3 a istruzione SQL
+
+2025-05-15 18:07:17,550 - CatastoDB - ERROR - SQLSTATE: 23505
+2025-05-15 18:07:17,550 - CatastoDB - ERROR - Query renderizzata: b"CALL crea_utente('pippo', '$2b$12$ATiRsJFv4Mw6Td5vgLvWWOruhEeLgQ9S/42/88D7txmAAAkMhVJ.6', 'pippo', 'pippo', 'admin')"
+2025-05-15 18:07:17,551 - CatastoDB - INFO - Rollback eseguito.
+2025-05-15 18:07:17,551 - CatastoDB - ERROR - Errore creazione utente: Username 'pippo' o Email 'pippo' già esistente.
+2025-05-15 18:07:44,539 - __main__ - INFO - Login OK per ID: 2
+2025-05-15 18:07:44,541 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura registra_accesso(integer, unknown, unknown, unknown, boolean, unknown, unknown) non esiste
+LINE 1: CALL registra_accesso(2, 'login', '127.0.0.1', NULL, true, '...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:07:44,541 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-15 18:07:44,541 - CatastoDB - ERROR - Query renderizzata: b"CALL registra_accesso(2, 'login', '127.0.0.1', NULL, true, '31b9fbfa-04dc-425f-ad2c-b5c143d22f51', 'CatastoApp')"
+2025-05-15 18:07:44,541 - CatastoDB - INFO - Rollback eseguito.
+2025-05-15 18:07:44,541 - CatastoDB - ERROR - Errore DB registrazione accesso utente ID 2: ERRORE:  la procedura registra_accesso(integer, unknown, unknown, unknown, boolean, unknown, unknown) non esiste
+LINE 1: CALL registra_accesso(2, 'login', '127.0.0.1', NULL, true, '...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:07:44,542 - __main__ - ERROR - Login OK per ID 2 ma fallita reg. accesso.
+2025-05-15 18:09:37,413 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:32:26,289 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:32:26,351 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:32:36,745 - __main__ - ERROR - Errore non gestito nel menu principale: cannot access local variable 'utente_db' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1413, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 303, in menu_principale
+    elif scelta == "5": menu_audit(db)
+                        ~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1091, in menu_audit
+    logs = db.get_audit_log(tabella, op, rec_id, data_inizio, data_fine, utente_db, app_user_id, session_id_str)
+                                                                         ^^^^^^^^^
+UnboundLocalError: cannot access local variable 'utente_db' where it is not associated with a value
+2025-05-15 18:32:36,759 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:32:44,936 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:32:45,010 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:32:57,108 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 18:33:24,388 - CatastoDB - INFO - Utente 'pippo' creato.
+2025-05-15 18:33:40,850 - __main__ - INFO - Login OK per ID: 3
+2025-05-15 18:33:40,854 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione e367fbab...
+2025-05-15 18:41:26,163 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura logout_utente(integer, unknown, unknown) non esiste
+LINE 1: CALL logout_utente(3, 'e367fbab-8e9e-4391-9d49-bb3e172d09b5'...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:41:26,164 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-15 18:41:26,164 - CatastoDB - ERROR - Query renderizzata: b"CALL logout_utente(3, 'e367fbab-8e9e-4391-9d49-bb3e172d09b5', '127.0.0.1')"
+2025-05-15 18:41:26,164 - CatastoDB - INFO - Rollback eseguito.
+2025-05-15 18:41:26,164 - CatastoDB - ERROR - Errore DB logout utente ID 3: ERRORE:  la procedura logout_utente(integer, unknown, unknown) non esiste
+LINE 1: CALL logout_utente(3, 'e367fbab-8e9e-4391-9d49-bb3e172d09b5'...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:41:26,165 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:41:36,961 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:41:37,022 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:41:55,561 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-15 18:51:26,975 - CatastoDB - INFO - Utente 'santoro' creato.
+2025-05-15 18:51:37,558 - __main__ - INFO - Login OK per ID: 4
+2025-05-15 18:51:37,560 - CatastoDB - INFO - Registrato accesso: Utente ID 4, Azione login, Esito True, Sessione cea5427e...
+2025-05-15 18:51:57,181 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura logout_utente(integer, unknown, unknown) non esiste
+LINE 1: CALL logout_utente(4, 'cea5427e-0f7f-4126-82fb-0c7832aa9e27'...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:51:57,181 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-15 18:51:57,181 - CatastoDB - ERROR - Query renderizzata: b"CALL logout_utente(4, 'cea5427e-0f7f-4126-82fb-0c7832aa9e27', '127.0.0.1')"
+2025-05-15 18:51:57,181 - CatastoDB - INFO - Rollback eseguito.
+2025-05-15 18:51:57,181 - CatastoDB - ERROR - Errore DB logout utente ID 4: ERRORE:  la procedura logout_utente(integer, unknown, unknown) non esiste
+LINE 1: CALL logout_utente(4, 'cea5427e-0f7f-4126-82fb-0c7832aa9e27'...
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-15 18:51:57,182 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:58:36,051 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:58:36,114 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:58:38,358 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 18:58:47,269 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 18:58:47,331 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 18:59:06,467 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-15 19:00:21,099 - CatastoDB - INFO - Registrata consultazione: Richiedente 'Antongiulio', Data 2025-05-15
+2025-05-15 19:01:01,878 - __main__ - ERROR - Errore non gestito nel menu principale: cannot access local variable 'utente_db' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1439, in main
+    menu_principale(db)
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 303, in menu_principale
+    elif scelta == "5": menu_audit(db)
+                        ~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1091, in menu_audit
+    logs = db.get_audit_log(tabella, op, rec_id, data_inizio, data_fine, utente_db, app_user_id, session_id_str)
+                                                                         ^^^^^^^^^
+UnboundLocalError: cannot access local variable 'utente_db' where it is not associated with a value
+2025-05-15 19:01:01,893 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 19:01:49,728 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 19:01:49,790 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 19:02:02,792 - __main__ - INFO - Login OK per ID: 3
+2025-05-15 19:02:02,803 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione ab67a918...
+2025-05-15 19:06:08,632 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione ab67a918...
+2025-05-15 19:06:08,632 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 19:06:19,457 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 19:06:19,518 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 19:06:30,804 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-15 19:06:31,024 - __main__ - INFO - Login OK per ID: 3
+2025-05-15 19:06:31,040 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 15dcd4f7...
+2025-05-15 19:14:06,321 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione 15dcd4f7...
+2025-05-15 19:14:06,322 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 19:14:10,535 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 19:14:10,597 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 19:14:28,837 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-15 19:14:29,059 - __main__ - INFO - Login OK per ID: 3
+2025-05-15 19:14:29,070 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 525ef173...
+2025-05-15 19:18:46,143 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:18:46,149 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione d9bbb2bc...
+2025-05-15 19:18:48,207 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:18:48,208 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione bea41487...
+2025-05-15 19:18:51,391 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:18:51,392 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 342dbddc...
+2025-05-15 19:18:59,415 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:18:59,421 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 7a5ab7da...
+2025-05-15 19:19:04,920 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione 7a5ab7da...
+2025-05-15 19:19:04,921 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 19:19:07,809 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 19:19:07,978 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 19:19:29,569 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-15 19:19:29,789 - __main__ - INFO - Login OK per ID: 3
+2025-05-15 19:19:29,818 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 4ddb62ce...
+2025-05-15 19:19:42,383 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:19:42,384 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione db86bb78...
+2025-05-15 19:19:47,687 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:19:47,688 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione f333211d...
+2025-05-15 19:19:50,288 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:19:50,293 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione e19876ef...
+2025-05-15 19:20:04,463 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:20:04,464 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 367dbf16...
+2025-05-15 19:20:14,567 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:20:14,573 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione ac97f7a4...
+2025-05-15 19:20:16,655 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:20:16,656 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 6720ba51...
+2025-05-15 19:20:22,951 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:20:22,952 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 47816622...
+2025-05-15 19:26:36,147 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-15 19:26:36,153 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 78ecdfe7...
+2025-05-15 19:26:37,710 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione 78ecdfe7...
+2025-05-15 19:26:37,712 - CatastoDB - INFO - Disconnessione completata
+2025-05-15 19:27:30,067 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-15 19:27:30,227 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-15 19:27:38,409 - CatastoDB - INFO - Disconnessione completata

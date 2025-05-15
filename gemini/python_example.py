@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # --- Variabili Globali per Sessione Utente (SEMPLIFICATE) ---
 # In un'app reale, usare meccanismi di sessione più robusti
 logged_in_user_id: Optional[int] = None
+logged_in_user_info: Optional[Dict] = None
 current_session_id: Optional[str] = None
 # Simula IP client, da ottenere dinamicamente in un'app reale (es. da richiesta web)
 client_ip_address: str = "127.0.0.1"
@@ -286,11 +287,16 @@ def _esporta_entita_json(db: CatastoDBManager, tipo_entita: str, etichetta_id: s
 # --- Menu Principale (invariato nella struttura) ---
 def menu_principale(db: CatastoDBManager):
     """Menu principale dell'applicazione."""
-    global logged_in_user_id, current_session_id
+    global logged_in_user_id, logged_in_user_info, current_session_id # Aggiunto logged_in_user_info
     while True:
         stampa_intestazione("MENU PRINCIPALE")
-        if logged_in_user_id: print(f"--- Utente connesso: ID {logged_in_user_id} (Sessione: {current_session_id[:8]}...) ---")
-        else: print("--- Nessun utente connesso ---")
+        if logged_in_user_id and logged_in_user_info:
+            user_display = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
+            print(f"--- Utente connesso: {user_display} (ID: {logged_in_user_id}, Sessione: {current_session_id[:8]}...) ---")
+        elif logged_in_user_id: # Fallback se logged_in_user_info non fosse popolato per qualche motivo
+            print(f"--- Utente connesso: ID {logged_in_user_id} (Sessione: {current_session_id[:8]}...) ---")
+        else:
+            print("--- Nessun utente connesso ---")
         print("1. Consultazione dati"); print("2. Inserimento e gestione dati"); print("3. Generazione report")
         print("4. Manutenzione database"); print("5. Sistema di audit"); print("6. Gestione Utenti e Sessione")
         print("7. Sistema di Backup"); print("8. Funzionalità Storiche Avanzate"); print("9. Esci")
@@ -1140,14 +1146,23 @@ def menu_audit(db: CatastoDBManager):
 # --- Menu Utenti e Sessione (Usa bcrypt, invariato rispetto a comune_id) ---
 def menu_utenti(db: CatastoDBManager):
     """Menu per la gestione degli utenti, login e logout."""
-    global logged_in_user_id, current_session_id, client_ip_address
+    global logged_in_user_id, logged_in_user_info, current_session_id, client_ip_address # Aggiunto logged_in_user_info
     while True:
         stampa_intestazione("GESTIONE UTENTI E SESSIONE")
-        if logged_in_user_id: print(f"--- Utente Attivo: ID {logged_in_user_id} (Sessione: {current_session_id[:8]}...) ---")
-        else: print("--- Nessun utente connesso ---")
-        print("1. Crea nuovo utente"); print("2. Login Utente"); print("3. Logout Utente")
-        print("4. Verifica Permesso Utente"); print("5. Torna al menu principale")
-        scelta = input("\nSeleziona un'opzione (1-5): ").strip()
+        if logged_in_user_id and logged_in_user_info:
+            user_display = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
+            print(f"--- Utente Attivo: {user_display} (ID: {logged_in_user_id}, Sessione: {current_session_id[:8]}...) ---")
+        elif logged_in_user_id:
+             print(f"--- Utente Attivo: ID {logged_in_user_id} (Sessione: {current_session_id[:8]}...) ---")
+        else:
+            print("--- Nessun utente connesso ---")
+        print("1. Crea nuovo utente")
+        print("2. Login Utente")
+        print("3. Logout Utente")
+        print("4. Verifica Permesso Utente")
+        print("5. Elenca Utenti Registrati") # NUOVA OPZIONE
+        print("0. Torna al menu principale") # Opzione precedente "5" diventa "0"
+        scelta = input("\nSeleziona un'opzione (0-5): ").strip() # Aggiornato range
         _set_session_context(db)
         if scelta == "1": # Crea nuovo utente
             stampa_intestazione("CREA NUOVO UTENTE")
@@ -1163,31 +1178,72 @@ def menu_utenti(db: CatastoDBManager):
             if db.create_user(username, password_hash, nome_completo, email, ruolo): print(f"Utente '{username}' creato.")
             else: print(f"Errore creazione utente '{username}' (controllare log - es. duplicato).")
         elif scelta == "2": # Login Utente
-            if logged_in_user_id: print("Già connesso. Logout prima."); continue
-            stampa_intestazione("LOGIN UTENTE"); username = input("Username: ").strip(); password = getpass.getpass("Password: ")
-            if not username or not password: print("Username e password obbligatori."); continue
-            credentials = db.get_user_credentials(username); login_success = False; user_id = None
+            if logged_in_user_id:
+                print("Già connesso. Logout prima.")
+                # input("\nPremi INVIO per continuare...") # Già presente alla fine del loop
+                continue
+
+            stampa_intestazione("LOGIN UTENTE")
+            username_login = input("Username: ").strip() # Usiamo un nome variabile locale
+            password_login = getpass.getpass("Password: ") # Usiamo un nome variabile locale
+
+            if not username_login or not password_login:
+                print("Username e password obbligatori.")
+                # input("\nPremi INVIO per continuare...") # Già presente alla fine del loop
+                continue
+
+            credentials = db.get_user_credentials(username_login)
+            login_success_local = False # Variabile locale per il successo di questo tentativo
+            user_id_local = None      # Variabile locale per l'ID di questo tentativo
+
             if credentials:
-                user_id = credentials['id']; stored_hash = credentials['password_hash']
-                logger.debug(f"Tentativo login per user ID {user_id}. Hash: {stored_hash[:10]}...")
-                if _verify_password(stored_hash, password): login_success = True; print(f"Login riuscito per utente ID: {user_id}"); logger.info(f"Login OK per ID: {user_id}")
-                else: print("Password errata."); logger.warning(f"Login fallito (pwd errata) per ID: {user_id}")
-            else: print("Utente non trovato o non attivo."); logger.warning(f"Login fallito (utente '{username}' non trovato/attivo).")
-            if user_id is not None: # Registra accesso se utente trovato
-                session_id_returned = db.register_access(user_id, 'login', indirizzo_ip=client_ip_address, esito=login_success)
-                if login_success and session_id_returned:
-                    logged_in_user_id = user_id; current_session_id = session_id_returned
-                    if not db.set_session_app_user(logged_in_user_id, client_ip_address): logger.error("Impossibile impostare contesto DB post-login!")
+                user_id_local = credentials['id']
+                stored_hash = credentials['password_hash']
+                logger.debug(f"Tentativo login per user ID {user_id_local}. Hash: {stored_hash[:10]}...")
+
+                if _verify_password(stored_hash, password_login):
+                    login_success_local = True
+                    # NON impostare variabili globali qui, ma solo dopo la registrazione dell'accesso
+                else:
+                    print("Password errata.")
+                    logger.warning(f"Login fallito (pwd errata) per user ID: {user_id_local}")
+            else:
+                print("Utente non trovato o non attivo.")
+                logger.warning(f"Login fallito (utente '{username_login}' non trovato/attivo).")
+
+            # Registra il tentativo di accesso (successo o fallimento),
+            # solo se l'utente è stato trovato nel DB (user_id_local non è None)
+            print(f"[DEBUG] Prima di register_access: user_id_local={user_id_local}, login_success_local={login_success_local}")
+            if user_id_local is not None:
+                session_id_returned = db.register_access(user_id_local, 'login', indirizzo_ip=client_ip_address, esito=login_success_local)
+                print(f"[DEBUG] Dopo register_access: session_id_returned={session_id_returned}")
+            
+                if login_success_local and session_id_returned:
+                    # Solo ora, se tutto è andato a buon fine, aggiorniamo le variabili globali
+                    #global logged_in_user_id, logged_in_user_info, current_session_id # Necessario per modificarle "OKKIO"
+                    logged_in_user_id = user_id_local
+                    logged_in_user_info = {'id': user_id_local,
+                                           'username': credentials.get('username'),
+                                           'nome_completo': credentials.get('nome_completo')}
+                    current_session_id = session_id_returned
+                    if not db.set_session_app_user(logged_in_user_id, client_ip_address):
+                        logger.error("Impossibile impostare contesto DB post-login!")
+                    print(f"Login riuscito per utente ID: {logged_in_user_id} ({logged_in_user_info.get('username', 'N/D')})")
                     print(f"Sessione {current_session_id[:8]}... avviata.")
-                elif login_success and not session_id_returned:
-                    print("Errore critico: Impossibile registrare sessione accesso."); logger.error(f"Login OK per ID {user_id} ma fallita reg. accesso.")
-                    logged_in_user_id = None; current_session_id = None # Non loggare utente
+                elif login_success_local and not session_id_returned: # Login tecnicamente ok, ma registrazione sessione fallita
+                    print("Errore critico: Impossibile registrare sessione accesso.")
+                    logger.error(f"Login OK per ID {user_id_local} ma fallita reg. accesso.")
+                    # Non impostiamo le variabili globali di sessione utente
+                # else: login_success_local è False, l'errore è già stato stampato
+            # else: l'utente non è stato trovato (credentials era None), l'errore è già stato stampato
         elif scelta == "3": # Logout Utente
-             if not logged_in_user_id: print("Nessun utente connesso."); continue
-             stampa_intestazione("LOGOUT UTENTE"); print(f"Disconnessione utente ID: {logged_in_user_id}...")
-             if db.logout_user(logged_in_user_id, current_session_id, client_ip_address): print("Logout eseguito.")
-             else: print("Errore registrazione logout (controllare log).")
-             logged_in_user_id = None; current_session_id = None
+                if not logged_in_user_id: print("Nessun utente connesso."); continue
+                stampa_intestazione("LOGOUT UTENTE"); print(f"Disconnessione utente ID: {logged_in_user_id} ({logged_in_user_info.get('username', '') if logged_in_user_info else ''})...")
+                if db.logout_user(logged_in_user_id, current_session_id, client_ip_address): print("Logout eseguito.")
+                else: print("Errore registrazione logout (controllare log).")
+                logged_in_user_id = None
+                logged_in_user_info = None # RESETTA INFO UTENTE
+                current_session_id = None
         elif scelta == "4": # Verifica Permesso
              stampa_intestazione("VERIFICA PERMESSO UTENTE"); utente_id_str = input("ID Utente (vuoto per utente corrente): ").strip(); utente_id_to_check = None
              if utente_id_str.isdigit():
@@ -1203,7 +1259,29 @@ def menu_utenti(db: CatastoDBManager):
                      if ha_permesso: print(f"Utente ID {utente_id_to_check} HA il permesso '{permesso}'.")
                      else: print(f"Utente ID {utente_id_to_check} NON HA il permesso '{permesso}' o errore.")
                  except Exception as perm_err: logger.error(f"Errore verifica permesso '{permesso}' user ID {utente_id_to_check}: {perm_err}"); print("Errore verifica permesso.")
-        elif scelta == "5": break
+        elif scelta == "5": # NUOVA OPZIONE: Elenca Utenti Registrati
+            stampa_intestazione("ELENCO UTENTI REGISTRATI")
+            filtro_attivi_str = input("Vuoi visualizzare solo gli utenti attivi? (s/n, INVIO per tutti): ").strip().lower()
+            solo_attivi_filter = None
+            if filtro_attivi_str == 's':
+                solo_attivi_filter = True
+            elif filtro_attivi_str == 'n':
+                solo_attivi_filter = False
+
+            utenti = db.get_utenti(solo_attivi=solo_attivi_filter)
+            if utenti:
+                print(f"\n--- Trovati {len(utenti)} utenti ---")
+                print("-" * 80)
+                print(f"{'ID':<5} | {'Username':<20} | {'Nome Completo':<25} | {'Ruolo':<12} | {'Stato':<8} | {'Ultimo Accesso'}")
+                print("-" * 80)
+                for utente in utenti:
+                    stato = "Attivo" if utente['attivo'] else "Non Attivo"
+                    ultimo_accesso_str = utente['ultimo_accesso'].strftime('%Y-%m-%d %H:%M:%S') if utente['ultimo_accesso'] else "Mai"
+                    print(f"{utente['id']:<5} | {utente['username']:<20} | {utente['nome_completo']:<25} | {utente['ruolo']:<12} | {stato:<8} | {ultimo_accesso_str}")
+                print("-" * 80)
+            else:
+                print("Nessun utente trovato con i criteri specificati.")
+        elif scelta == "0": break
         else: print("Opzione non valida!")
         input("\nPremi INVIO per continuare...")
 
@@ -1418,12 +1496,14 @@ def main():
         logger.exception(f"Errore non gestito nel menu principale: {e}")
         print(f"ERRORE IMPREVISTO: {e}")
     finally:
+        global logged_in_user_info # Assicurati che sia accessibile
         # Esegui logout se necessario prima di chiudere
         if logged_in_user_id and current_session_id and db.conn and not db.conn.closed:
              print("\nEsecuzione logout prima della chiusura...")
              db.logout_user(logged_in_user_id, current_session_id, client_ip_address)
         # Resetta le variabili globali (anche se l'app termina)
         logged_in_user_id = None
+        logged_in_user_info = None # RESETTA INFO UTENTE
         current_session_id = None
         # Chiudi la connessione
         if db:

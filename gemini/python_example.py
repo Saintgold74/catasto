@@ -209,7 +209,9 @@ def esegui_login(db: CatastoDBManager) -> bool:
 # --- Funzioni dei Sottomenu ---
 
 def menu_consultazione(db: CatastoDBManager):
-    _set_session_context(db)
+    """Menu per operazioni di consultazione dati."""
+    _set_session_context(db) # Imposta contesto per audit all'ingresso del menu
+
     while True:
         stampa_intestazione("CONSULTAZIONE DATI")
         print("1. Elenco comuni")
@@ -228,31 +230,37 @@ def menu_consultazione(db: CatastoDBManager):
         print("0. Torna al menu principale")
         scelta = input("\nSeleziona un'opzione (0-13): ").strip()
 
-        if scelta == "1":
+        if scelta == "1": # Elenco comuni
             search_term = input("Termine di ricerca nome comune (lascia vuoto per tutti): ").strip()
             comuni = db.get_comuni(search_term or None)
             stampa_intestazione(f"COMUNI TROVATI ({len(comuni)})")
             if comuni:
-                for c in comuni: print(f"- ID: {c['id']} Nome: {c['nome']} ({c['provincia']}, {c['regione']})")
-            else: print("Nessun comune trovato.")
-        elif scelta == "2":
+                for c_item in comuni: # Rinominato per evitare conflitto con 'c' in _seleziona_comune
+                    print(f"- ID: {c_item['id']} Nome: {c_item['nome']} ({c_item['provincia']}, {c_item['regione']})")
+            else:
+                print("Nessun comune trovato.")
+
+        elif scelta == "2": # Elenco partite per comune
             comune_id = _seleziona_comune(db, "Seleziona il comune per visualizzare le partite:")
             if comune_id is not None:
                 partite = db.get_partite_by_comune(comune_id)
-                # Tenta di ottenere il nome del comune in modo più robusto
                 comune_info = next((c for c in db.get_comuni() if c['id'] == comune_id), None)
                 comune_nome_display = comune_info['nome'] if comune_info else (partite[0]['comune_nome'] if partite else "N/D")
                 stampa_intestazione(f"PARTITE DI {comune_nome_display.upper()} ({len(partite)})")
                 if partite:
-                    for p in partite:
-                        stato = p['stato'].upper()
-                        possessori_str = p.get('possessori', 'N/D') or 'Nessuno'
-                        print(f"ID: {p['id']} - N.{p['numero_partita']} ({p['tipo']}) - Stato: {stato}")
+                    for p_item in partite: # Rinominato
+                        stato = p_item['stato'].upper()
+                        possessori_str = p_item.get('possessori', 'N/D') or 'Nessuno'
+                        indirizzi_str = p_item.get('indirizzi_immobili', 'N/D') or 'Nessuno' # Per modifica suggerita
+                        print(f"ID: {p_item['id']} - N.{p_item['numero_partita']} ({p_item['tipo']}) - Stato: {stato}")
                         print(f"  Possessori: {possessori_str}")
-                        print(f"  Num. Immobili: {p.get('num_immobili', 0)}")
+                        print(f"  Num. Immobili: {p_item.get('num_immobili', 0)}")
+                        # print(f"  Indirizzi: {indirizzi_str}") # Decommentare se si implementa l'aggiunta indirizzi
                         print("-" * 20)
-                else: print("Nessuna partita trovata.")
-        elif scelta == "3":
+                else:
+                    print("Nessuna partita trovata.")
+
+        elif scelta == "3": # Elenco possessori per comune
             comune_id = _seleziona_comune(db, "Seleziona il comune per visualizzare i possessori:")
             if comune_id is not None:
                 possessori = db.get_possessori_by_comune(comune_id)
@@ -260,11 +268,13 @@ def menu_consultazione(db: CatastoDBManager):
                 comune_nome_display = comune_info['nome'] if comune_info else (possessori[0]['comune_nome'] if possessori else "N/D")
                 stampa_intestazione(f"POSSESSORI DI {comune_nome_display.upper()} ({len(possessori)})")
                 if possessori:
-                    for p in possessori:
-                        stato_p = "Attivo" if p.get('attivo') else "Non Attivo" # Rinominato variabile
-                        print(f"ID: {p['id']} - {p['nome_completo']} - Stato: {stato_p}")
-                else: print("Nessun possessore trovato.")
-        elif scelta == "4":
+                    for p_item in possessori: # Rinominato
+                        stato_p = "Attivo" if p_item.get('attivo') else "Non Attivo"
+                        print(f"ID: {p_item['id']} - {p_item['nome_completo']} - Stato: {stato_p}")
+                else:
+                    print("Nessun possessore trovato.")
+
+        elif scelta == "4": # Ricerca partite (Semplice)
             stampa_intestazione("RICERCA PARTITE (SEMPLICE)")
             comune_id_filter = None
             if _confirm_action("Filtrare per comune?"):
@@ -274,45 +284,51 @@ def menu_consultazione(db: CatastoDBManager):
             possessore_filter = input("Nome possessore (anche parziale, opzionale): ").strip()
             natura_filter = input("Natura immobile (anche parziale, opzionale): ").strip()
             numero_partita_filter = int(numero_str) if numero_str.isdigit() else None
-            partite = db.search_partite(
+            partite_ricerca = db.search_partite( # Rinominato variabile
                 comune_id=comune_id_filter, numero_partita=numero_partita_filter,
                 possessore=possessore_filter or None, immobile_natura=natura_filter or None)
-            stampa_intestazione(f"RISULTATI RICERCA PARTITE ({len(partite)})")
-            if partite:
-                for p in partite: print(f"ID: {p['id']} - {p['comune_nome']} - Partita N.{p['numero_partita']} ({p['tipo']}) - Stato: {p['stato']}")
-            else: print("Nessuna partita trovata con questi criteri.")
-        elif scelta == "5":
+            stampa_intestazione(f"RISULTATI RICERCA PARTITE ({len(partite_ricerca)})")
+            if partite_ricerca:
+                for p_item in partite_ricerca: # Rinominato
+                    print(f"ID: {p_item['id']} - {p_item['comune_nome']} - Partita N.{p_item['numero_partita']} ({p_item['tipo']}) - Stato: {p_item['stato']}")
+            else:
+                print("Nessuna partita trovata con questi criteri.")
+
+        elif scelta == "5": # Dettagli partita
             id_partita_str = input("ID della partita per dettagli: ").strip()
             if id_partita_str.isdigit():
                 partita_id_int = int(id_partita_str)
-                partita = db.get_partita_details(partita_id_int)
-                if partita:
-                    stampa_intestazione(f"DETTAGLI PARTITA N.{partita['numero_partita']} (Comune: {partita['comune_nome']})")
-                    # ... (stampa dettagli partita come prima) ...
-                    print(f"ID: {partita['id']} - Tipo: {partita['tipo']} - Stato: {partita['stato']}")
-                    print(f"Data Impianto: {partita['data_impianto']} - Data Chiusura: {partita.get('data_chiusura') or 'N/D'}")
+                partita_dettaglio = db.get_partita_details(partita_id_int) # Rinominato
+                if partita_dettaglio:
+                    stampa_intestazione(f"DETTAGLI PARTITA N.{partita_dettaglio['numero_partita']} (Comune: {partita_dettaglio['comune_nome']})")
+                    print(f"ID: {partita_dettaglio['id']} - Tipo: {partita_dettaglio['tipo']} - Stato: {partita_dettaglio['stato']}")
+                    print(f"Data Impianto: {partita_dettaglio['data_impianto']} - Data Chiusura: {partita_dettaglio.get('data_chiusura') or 'N/D'}")
                     print("\nPOSSESSORI:")
-                    if partita.get('possessori'):
-                        for pos in partita['possessori']: print(f"- ID:{pos['id']} {pos['nome_completo']}{f' (Quota: {pos.get('quota')})' if pos.get('quota') else ''}")
+                    if partita_dettaglio.get('possessori'):
+                        for pos_item in partita_dettaglio['possessori']: # Rinominato
+                            print(f"- ID:{pos_item['id']} {pos_item['nome_completo']}{f' (Quota: {pos_item.get('quota')})' if pos_item.get('quota') else ''}")
                     else: print("  Nessuno")
                     print("\nIMMOBILI:")
-                    if partita.get('immobili'):
-                        for imm in partita['immobili']:
-                            loc_str = f"{imm['localita_nome']}{f', {imm['civico']}' if imm.get('civico') else ''} ({imm['localita_tipo']})"
-                            print(f"- ID:{imm['id']} {imm['natura']} in {loc_str}")
-                            print(f"  Class: {imm.get('classificazione') or 'N/D'} - Cons: {imm.get('consistenza') or 'N/D'} - Piani: {imm.get('numero_piani') or 'N/D'} - Vani: {imm.get('numero_vani') or 'N/D'}")
+                    if partita_dettaglio.get('immobili'):
+                        for imm_item in partita_dettaglio['immobili']: # Rinominato
+                            loc_str = f"{imm_item['localita_nome']}{f', {imm_item['civico']}' if imm_item.get('civico') else ''} ({imm_item['localita_tipo']})"
+                            print(f"- ID:{imm_item['id']} {imm_item['natura']} in {loc_str}")
+                            print(f"  Class: {imm_item.get('classificazione') or 'N/D'} - Cons: {imm_item.get('consistenza') or 'N/D'} - Piani: {imm_item.get('numero_piani') or 'N/D'} - Vani: {imm_item.get('numero_vani') or 'N/D'}")
                     else: print("  Nessuno")
                     print("\nVARIAZIONI:")
-                    if partita.get('variazioni'):
-                        for var in partita['variazioni']:
-                             dest_partita_str = f" -> Partita Dest. ID {var.get('partita_destinazione_id')}" if var.get('partita_destinazione_id') else ""
-                             print(f"- ID:{var['id']} Tipo:{var['tipo']} Data:{var['data_variazione']}{dest_partita_str}")
-                             if var.get('tipo_contratto'): print(f"  Contratto: {var['tipo_contratto']} del {var['data_contratto']} (Notaio: {var.get('notaio') or 'N/D'}, Rep: {var.get('repertorio') or 'N/D'})")
-                             if var.get('contratto_note'): print(f"  Note Contratto: {var['contratto_note']}")
+                    if partita_dettaglio.get('variazioni'):
+                        for var_item in partita_dettaglio['variazioni']: # Rinominato
+                             dest_partita_str = f" -> Partita Dest. ID {var_item.get('partita_destinazione_id')}" if var_item.get('partita_destinazione_id') else ""
+                             print(f"- ID:{var_item['id']} Tipo:{var_item['tipo']} Data:{var_item['data_variazione']}{dest_partita_str}")
+                             if var_item.get('tipo_contratto'): print(f"  Contratto: {var_item['tipo_contratto']} del {var_item['data_contratto']} (Notaio: {var_item.get('notaio') or 'N/D'}, Rep: {var_item.get('repertorio') or 'N/D'})")
+                             if var_item.get('contratto_note'): print(f"  Note Contratto: {var_item['contratto_note']}")
                     else: print("  Nessuna")
-                else: print(f"Partita con ID {partita_id_int} non trovata.")
-            else: print("ID partita non valido.")
-        elif scelta == "6":
+                else:
+                    print(f"Partita con ID {partita_id_int} non trovata.")
+            else:
+                print("ID partita non valido.")
+
+        elif scelta == "6": # Elenco località per comune
              comune_id = _seleziona_comune(db, "Seleziona il comune per visualizzare le località:")
              if comune_id is not None:
                  comune_info = next((c for c in db.get_comuni() if c['id'] == comune_id), {'nome': 'N/D'})
@@ -322,23 +338,43 @@ def menu_consultazione(db: CatastoDBManager):
                       localita_list = db.fetchall()
                       stampa_intestazione(f"LOCALITÀ DI {comune_nome_display.upper()} ({len(localita_list)})")
                       if localita_list:
-                           for loc in localita_list: print(f"ID: {loc['id']} - {loc['nome']} ({loc['tipo']}){f', civico {loc['civico']}' if loc['civico'] is not None else ''}")
-                      else: print("Nessuna località trovata.")
-                 else: print("Errore nella ricerca delle località.")
-        elif scelta == "7":
+                           for loc_item in localita_list: # Rinominato
+                               print(f"ID: {loc_item['id']} - {loc_item['nome']} ({loc_item['tipo']}){f', civico {loc_item['civico']}' if loc_item['civico'] is not None else ''}")
+                      else:
+                           print("Nessuna località trovata.")
+                 else:
+                      print("Errore nella ricerca delle località.")
+
+        elif scelta == "7": # Ricerca Avanzata Possessori
              stampa_intestazione("RICERCA AVANZATA POSSESSORI (Similarità)")
              query_text = input("Termine di ricerca (nome/cognome/paternità): ").strip()
              if query_text:
-                  results = db.ricerca_avanzata_possessori(query_text)
-                  if results:
-                       print(f"\nTrovati {len(results)} risultati (ordinati per similarità):")
-                       for r_item in results: # Rinominato
+                  # Chiamata corretta con il secondo parametro opzionale (threshold)
+                  soglia_str = input("Soglia di similarità (0.0-1.0, INVIO per default 0.2): ").strip()
+                  soglia = 0.2
+                  if soglia_str:
+                      try:
+                          soglia = float(soglia_str)
+                          if not (0.0 <= soglia <= 1.0):
+                              print("Soglia non valida, uso default 0.2.")
+                              soglia = 0.2
+                      except ValueError:
+                          print("Input soglia non numerico, uso default 0.2.")
+                          soglia = 0.2
+                  
+                  results_possessori = db.ricerca_avanzata_possessori(query_text, similarity_threshold=soglia) # Rinominato
+                  if results_possessori:
+                       print(f"\nTrovati {len(results_possessori)} risultati (ordinati per similarità):")
+                       for r_item in results_possessori:
                             sim_perc = round(r_item.get('similarity', 0) * 100, 1)
                             print(f"- ID: {r_item['id']} {r_item['nome_completo']} (Comune: {r_item.get('comune_nome', '?')})")
                             print(f"  Similarità: {sim_perc}% - Partite: {r_item.get('num_partite', 0)}")
-                  else: print("Nessun risultato trovato.")
-             else: print("Termine di ricerca obbligatorio.")
-        elif scelta == "8":
+                  else:
+                       print("Nessun risultato trovato.")
+             else:
+                 print("Termine di ricerca obbligatorio.")
+
+        elif scelta == "8": # Ricerca Avanzata Immobili
              stampa_intestazione("RICERCA AVANZATA IMMOBILI")
              comune_id_filter = None
              if _confirm_action("Filtrare per comune?"):
@@ -348,15 +384,18 @@ def menu_consultazione(db: CatastoDBManager):
              localita_nome_filter = input("Nome Località (parziale, vuoto per tutti): ").strip() or None
              classif_filter = input("Classificazione (esatta, vuoto per tutti): ").strip() or None
              possessore_nome_filter = input("Nome Possessore (parziale, vuoto per tutti): ").strip() or None
-             results = db.ricerca_avanzata_immobili(comune_id_filter, natura_filter, localita_nome_filter, classif_filter, possessore_nome_filter)
-             if results:
-                  print(f"\nTrovati {len(results)} immobili:")
-                  for r_item in results: # Rinominato
+             results_immobili = db.ricerca_avanzata_immobili( # Rinominato
+                 comune_id_filter, natura_filter, localita_nome_filter, classif_filter, possessore_nome_filter)
+             if results_immobili:
+                  print(f"\nTrovati {len(results_immobili)} immobili:")
+                  for r_item in results_immobili:
                        print(f"- Imm.ID: {r_item['immobile_id']} - {r_item['natura']} in {r_item['localita_nome']} (Comune: {r_item.get('comune_nome','?')})")
                        print(f"  Partita N.{r_item['partita_numero']} - Class: {r_item.get('classificazione') or 'N/D'}")
                        print(f"  Possessori: {r_item.get('possessori') or 'N/D'}")
-             else: print("Nessun immobile trovato.")
-        elif scelta == "9":
+             else:
+                 print("Nessun immobile trovato.")
+
+        elif scelta == "9": # Cerca Immobili Specifici
              stampa_intestazione("CERCA IMMOBILI SPECIFICI")
              part_id_str = input("Filtra per ID Partita (vuoto per non filtrare): ").strip()
              comune_id_filter = None
@@ -369,13 +408,18 @@ def menu_consultazione(db: CatastoDBManager):
              try:
                   part_id_filter = int(part_id_str) if part_id_str else None
                   loc_id_filter = int(loc_id_str) if loc_id_str else None
-                  immobili_list = db.search_immobili(part_id_filter, comune_id_filter, loc_id_filter, natura_filter, classif_filter)
+                  immobili_list = db.search_immobili(
+                      part_id_filter, comune_id_filter, loc_id_filter, natura_filter, classif_filter)
                   if immobili_list:
                        print(f"\nTrovati {len(immobili_list)} immobili:")
-                       for imm_item in immobili_list: print(f"- ID: {imm_item['id']}, Nat:{imm_item['natura']}, Loc:{imm_item['localita_nome']} (Comune:{imm_item.get('comune_nome','?')}), Part:{imm_item['numero_partita']}, Class:{imm_item.get('classificazione','-')}")
-                  else: print("Nessun immobile trovato.")
-             except ValueError: print("ID non valido.")
-        elif scelta == "10":
+                       for imm_item in immobili_list:
+                           print(f"- ID: {imm_item['id']}, Nat:{imm_item['natura']}, Loc:{imm_item['localita_nome']} (Comune:{imm_item.get('comune_nome','?')}), Part:{imm_item['numero_partita']}, Class:{imm_item.get('classificazione','-')}")
+                  else:
+                       print("Nessun immobile trovato.")
+             except ValueError:
+                 print("ID non valido.")
+
+        elif scelta == "10": # Cerca Variazioni
              stampa_intestazione("CERCA VARIAZIONI")
              tipo_filter = input("Tipo (Acquisto/Successione/..., vuoto per tutti): ").strip().capitalize() or None
              data_i_str = input("Data inizio (YYYY-MM-DD, vuoto per non filtrare): ").strip()
@@ -391,15 +435,19 @@ def menu_consultazione(db: CatastoDBManager):
                   data_f_filter = datetime.strptime(data_f_str, "%Y-%m-%d").date() if data_f_str else None
                   part_o_id_filter = int(part_o_id_str) if part_o_id_str else None
                   part_d_id_filter = int(part_d_id_str) if part_d_id_str else None
-                  variazioni_list = db.search_variazioni(tipo_filter, data_i_filter, data_f_filter, part_o_id_filter, part_d_id_filter, comune_id_filter)
+                  variazioni_list = db.search_variazioni(
+                      tipo_filter, data_i_filter, data_f_filter, part_o_id_filter, part_d_id_filter, comune_id_filter)
                   if variazioni_list:
                        print(f"\nTrovate {len(variazioni_list)} variazioni:")
-                       for v_item in variazioni_list: # Rinominato
+                       for v_item in variazioni_list:
                             dest_str = f" -> Dest.Partita:{v_item.get('partita_destinazione_numero', '-')}" if v_item.get('partita_destinazione_id') else ""
                             print(f"- ID:{v_item['id']} {v_item['data_variazione']} {v_item['tipo']} Orig.Partita:{v_item['partita_origine_numero']}(Comune:{v_item.get('comune_nome','?')}){dest_str} Rif:{v_item.get('numero_riferimento') or '-'}/{v_item.get('nominativo_riferimento') or '-'}")
-                  else: print("Nessuna variazione trovata.")
-             except ValueError: print("Input ID o Data non validi.")
-        elif scelta == "11":
+                  else:
+                       print("Nessuna variazione trovata.")
+             except ValueError:
+                 print("Input ID o Data non validi.")
+
+        elif scelta == "11": # Cerca Consultazioni
              stampa_intestazione("CERCA CONSULTAZIONI")
              data_i_str = input("Data inizio (YYYY-MM-DD, vuoto per non filtrare): ").strip()
              data_f_str = input("Data fine (YYYY-MM-DD, vuoto per non filtrare): ").strip()
@@ -411,14 +459,17 @@ def menu_consultazione(db: CatastoDBManager):
                   consultazioni_list = db.search_consultazioni(data_i_filter, data_f_filter, richiedente_filter, funzionario_filter)
                   if consultazioni_list:
                        print(f"\nTrovate {len(consultazioni_list)} consultazioni:")
-                       for c_item in consultazioni_list: # Rinominato
+                       for c_item in consultazioni_list:
                             print(f"- ID:{c_item['id']} {c_item['data']} Rich:{c_item['richiedente']} Funz:{c_item['funzionario_autorizzante']}")
                             print(f"  Mat: {c_item['materiale_consultato']}")
-                  else: print("Nessuna consultazione trovata.")
-             except ValueError: print("Formato Data non valido.")
-        elif scelta == "12":
+                  else:
+                       print("Nessuna consultazione trovata.")
+             except ValueError:
+                 print("Formato Data non valido.")
+
+        elif scelta == "12": # Esporta Partita
             _esporta_entita_json(db, tipo_entita='partita', etichetta_id='ID della Partita', nome_file_prefix='partita')
-        elif scelta == "13":
+        elif scelta == "13": # Esporta Possessore
             _esporta_entita_json(db, tipo_entita='possessore', etichetta_id='ID del Possessore', nome_file_prefix='possessore')
         elif scelta == "0":
             break 

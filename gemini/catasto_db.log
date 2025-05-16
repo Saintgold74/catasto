@@ -567,3 +567,21 @@ LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
                       ^
 
 2025-05-16 16:07:34,241 - __main__ - WARNING - Login fallito (utente 'santoro' non trovato/attivo).
+2025-05-16 16:26:25,654 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 16:26:25,889 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 16:27:50,640 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 16:28:14,694 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 16:34:05,083 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 16:34:05,195 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 16:34:21,117 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 16:35:23,986 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 16:35:24,091 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 16:35:26,019 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 17:20:21,722 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 17:20:21,936 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 17:22:51,384 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 17:22:51,614 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 17:22:56,590 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 17:23:04,689 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 17:23:09,328 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 17:23:09,343 - CatastoDB - INFO - Disconnessione completata

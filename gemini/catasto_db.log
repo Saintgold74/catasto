@@ -541,3 +541,29 @@ UnboundLocalError: cannot access local variable 'utente_db' where it is not asso
 2025-05-15 19:27:30,067 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
 2025-05-15 19:27:30,227 - CatastoDB - INFO - Connessione stabilita con successo
 2025-05-15 19:27:38,409 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 15:50:16,398 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 15:50:16,506 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 15:50:23,862 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-16 15:50:24,294 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 7fe0f6b5...
+2025-05-16 15:50:58,203 - __main__ - INFO - Uscita inattesa da menu_principale con utente ancora loggato. Terminazione.
+2025-05-16 16:05:54,704 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 16:05:54,776 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 16:06:02,540 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-16 16:06:02,893 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 4764c31e...
+2025-05-16 16:06:13,014 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 16:06:15,780 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 16:06:15,847 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 16:06:22,098 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-16 16:06:22,499 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 1efdf3e3...
+2025-05-16 16:06:33,594 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedTable - ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-16 16:06:33,594 - CatastoDB - ERROR - SQLSTATE: 42P01
+2025-05-16 16:06:33,595 - CatastoDB - ERROR - Query renderizzata: b'SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LIMIT 100'
+2025-05-16 16:06:33,595 - CatastoDB - INFO - Rollback eseguito.
+2025-05-16 16:06:33,596 - CatastoDB - ERROR - Errore DB get_audit_log: ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-16 16:07:34,241 - __main__ - WARNING - Login fallito (utente 'santoro' non trovato/attivo).

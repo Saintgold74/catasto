@@ -197,7 +197,17 @@ class CatastoDBManager:
                  return None
         logger.warning("Tentativo di fetchone senza cursore valido.")
         return None
-
+    
+    def is_connected(self) -> bool:
+        """Verifica se la connessione al database è attiva."""
+        if self.conn and not self.conn.closed:
+            try:
+                # Esegue una query semplice per testare la connessione
+                # self.cur.execute("SELECT 1") # Potrebbe essere troppo invasivo se il cursore è occupato
+                return True # Se conn non è None e non è closed, assumiamo sia ok per questo contesto
+            except (psycopg2.InterfaceError, psycopg2.OperationalError):
+                return False
+        return False
     # --- Metodi CRUD e Ricerca Base (MODIFICATI per comune_id) ---
 
     def get_comuni(self, search_term: Optional[str] = None) -> List[Dict]:

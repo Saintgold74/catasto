@@ -585,3 +585,19 @@ LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
 2025-05-16 17:23:04,689 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
 2025-05-16 17:23:09,328 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
 2025-05-16 17:23:09,343 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 18:31:04,322 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 18:31:04,528 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 18:31:10,973 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-16 18:31:11,065 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-16 18:31:11,157 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-16 18:31:11,257 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 8fcda1f7...
+2025-05-16 18:31:27,787 - __main__ - WARNING - Login fallito (utente 'santoro' non trovato/attivo).
+2025-05-16 18:31:40,419 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-16 18:31:40,519 - CatastoDB - INFO - Disconnessione completata
+2025-05-16 18:31:58,196 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-16 18:31:58,343 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-16 18:32:09,421 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-16 18:32:09,426 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-16 18:32:09,433 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-16 18:32:09,441 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 506e56e1...
+2025-05-16 18:32:15,606 - CatastoDB - INFO - Disconnessione completata

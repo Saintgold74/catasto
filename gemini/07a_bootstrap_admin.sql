@@ -13,7 +13,7 @@ DECLARE
     admin_username TEXT := 'admin';
     admin_email TEXT := 'admin@archivio.savona.it'; -- Modificare se necessario
     -- Esempio di hash bcrypt per 'admin123' (QUESTO È SOLO UN ESEMPIO, GENERANE UNO TUO!)
-    admin_password_hash TEXT := '$2b$12$abcdefghijklmnopqrstuvqxyzABCDEFGHI'; -- SOSTITUIRE CON UN HASH REALE
+    admin_password_hash TEXT := '$2b$12$GlnDTN.RXmc81Q4ysHmBUO67WGEnQ8BzLgSFsq78ASDpNsSCM1T8C'; -- SOSTITUIRE CON UN HASH REALE
     user_exists BOOLEAN;
 BEGIN
     SELECT EXISTS(SELECT 1 FROM catasto.utente WHERE username = admin_username) INTO user_exists;

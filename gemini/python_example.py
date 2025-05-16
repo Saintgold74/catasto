@@ -8,40 +8,35 @@ la classe CatastoDBManager per interagire con il database,
 includendo gestione utenti e audit.
 
 Autore: Marco Santoro
-Data: 29/04/2025 (Versione completa e aggiornata 1.4)
+Data: 16/05/2025 (Versione con login all'avvio)
 """
 
-# Assicurati che catasto_db_manager sia la versione aggiornata per comune_id
 from catasto_db_manager import CatastoDBManager
 from datetime import date, datetime
 import json
 import os
 import sys
-import hashlib # Non più usato per password, ma potrebbe servire per altro
-import getpass # Per nascondere input password
-import logging # Per logging
-import bcrypt  # Per hashing sicuro password
-from typing import Optional, List, Dict, Any # Per type hinting
+import getpass
+import logging
+import bcrypt
+from typing import Optional, List, Dict, Any
 
 # --- Configurazione Logging ---
-# Configura il logging se non già fatto a livello globale
 logging.basicConfig(
-    level=logging.INFO, # O DEBUG per maggiori dettagli
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("python_example.log"), # Log separato per l'esempio
+        logging.FileHandler("python_example.log"),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
 
-# --- Variabili Globali per Sessione Utente (SEMPLIFICATE) ---
-# In un'app reale, usare meccanismi di sessione più robusti
+# --- Variabili Globali per Sessione Utente ---
 logged_in_user_id: Optional[int] = None
 logged_in_user_info: Optional[Dict] = None
 current_session_id: Optional[str] = None
-# Simula IP client, da ottenere dinamicamente in un'app reale (es. da richiesta web)
-client_ip_address: str = "127.0.0.1"
+client_ip_address: str = "127.0.0.1" # Simula IP client
 
 # --- Funzioni Helper per Interfaccia Utente ---
 
@@ -139,6 +134,75 @@ def _seleziona_comune(db: CatastoDBManager, prompt: str = "Seleziona il comune:"
         else:
             print("Input non numerico. Riprova.")
 
+# --- Funzione di Login dedicata (da chiamare all'avvio) ---
+def esegui_login(db: CatastoDBManager) -> bool:
+    """
+    Gestisce il processo di login dell'utente.
+    Restituisce True se il login ha successo, False altrimenti.
+    """
+    global logged_in_user_id, logged_in_user_info, current_session_id # Necessario per modificarle
+
+    max_tentativi = 3
+    tentativi = 0
+
+    while tentativi < max_tentativi:
+        stampa_intestazione("LOGIN UTENTE")
+        username_login = input("Username: ").strip()
+        password_login = getpass.getpass("Password: ")
+
+        if not username_login or not password_login:
+            print("Username e password sono obbligatori.")
+            tentativi += 1
+            if tentativi < max_tentativi:
+                print(f"Tentativi rimasti: {max_tentativi - tentativi}")
+                input("Premi INVIO per riprovare...")
+            continue
+
+        credentials = db.get_user_credentials(username_login)
+        login_success_local = False
+        user_id_local = None
+
+        if credentials:
+            user_id_local = credentials['id']
+            stored_hash = credentials['password_hash']
+            logger.debug(f"Tentativo login per user ID {user_id_local}. Hash: {stored_hash[:10]}...")
+
+            if _verify_password(stored_hash, password_login):
+                login_success_local = True
+            else:
+                print("Password errata.")
+                logger.warning(f"Login fallito (pwd errata) per user ID: {user_id_local}")
+        else:
+            print("Utente non trovato o non attivo.")
+            logger.warning(f"Login fallito (utente '{username_login}' non trovato/attivo).")
+
+        if user_id_local is not None: # Utente esiste nel DB, registriamo il tentativo
+            session_id_returned = db.register_access(user_id_local, 'login', indirizzo_ip=client_ip_address, esito=login_success_local)
+
+            if login_success_local and session_id_returned:
+                logged_in_user_id = user_id_local
+                logged_in_user_info = {'id': user_id_local,
+                                       'username': credentials.get('username'),
+                                       'nome_completo': credentials.get('nome_completo')}
+                current_session_id = session_id_returned
+                if not db.set_session_app_user(logged_in_user_id, client_ip_address):
+                    logger.error("Impossibile impostare contesto DB post-login!")
+                print(f"\nLogin riuscito per utente: {logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')} (ID: {logged_in_user_id})")
+                print(f"Sessione {current_session_id[:8]}... avviata.")
+                return True # Login riuscito
+            elif login_success_local and not session_id_returned:
+                print("Errore critico: Impossibile registrare sessione accesso.")
+                logger.error(f"Login OK per ID {user_id_local} ma fallita reg. accesso.")
+                # Non esce, permette un altro tentativo
+            # else: login fallito, l'errore è già stato stampato
+        
+        tentativi += 1
+        if tentativi < max_tentativi:
+            print(f"Tentativi rimasti: {max_tentativi - tentativi}")
+            input("Premi INVIO per riprovare...")
+
+    print("Numero massimo di tentativi di login raggiunto. Uscita dal programma.")
+    return False # Login fallito dopo max tentativi
 
 # --- Funzioni di Inserimento Dati (MODIFICATE per comune_id) ---
 
@@ -318,9 +382,9 @@ def menu_principale(db: CatastoDBManager):
         else: print("Opzione non valida!")
 
 # --- Menu Consultazione (MODIFICATO per comune_id) ---
-def menu_consultazione(db: CatastoDBManager):
-    """Menu per operazioni di consultazione dati."""
-    while True:
+def menu_consultazione(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Consultazione")
+"""Menu per operazioni di consultazione dati."""
+while True:
         stampa_intestazione("CONSULTAZIONE DATI")
         print("1. Elenco comuni"); print("2. Elenco partite per comune"); print("3. Elenco possessori per comune")
         print("4. Ricerca partite (Semplice)"); print("5. Dettagli partita"); print("6. Elenco localita per comune")
@@ -562,9 +626,9 @@ def menu_consultazione(db: CatastoDBManager):
         input("\nPremi INVIO per continuare...")
 
 # --- Menu Inserimento (MODIFICATO per comune_id) ---
-def menu_inserimento(db: CatastoDBManager):
-    """Menu per operazioni di inserimento e gestione dati."""
-    while True:
+def menu_inserimento(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Inserimento")
+"""Menu per operazioni di inserimento e gestione dati."""
+while True:
         stampa_intestazione("INSERIMENTO E GESTIONE DATI")
         print("1. Aggiungi nuovo comune"); print("2. Aggiungi nuovo possessore"); print("3. Aggiungi nuova localita")
         print("4. Registra nuova proprieta (Workflow)"); print("5. Registra passaggio di proprieta (Workflow)")
@@ -828,9 +892,9 @@ def _trasferisci_immobile_interattivo(db: CatastoDBManager):
 
 
 # --- Menu Report (MODIFICATO per comune_id) ---
-def menu_report(db: CatastoDBManager):
-    """Menu per la generazione di report."""
-    while True:
+def menu_report(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Report")
+"""Menu per la generazione di report."""
+while True:
         stampa_intestazione("GENERAZIONE REPORT")
         print("1. Certificato di proprieta"); print("2. Report genealogico"); print("3. Report possessore")
         print("4. Report consultazioni"); print("5. Statistiche per comune (Vista)"); print("6. Riepilogo immobili per tipologia (Vista)")
@@ -1023,9 +1087,9 @@ def menu_report(db: CatastoDBManager):
         input("\nPremi INVIO per continuare...")
 
 # --- Menu Manutenzione (invariato) ---
-def menu_manutenzione(db: CatastoDBManager):
-    """Menu per la manutenzione del database."""
-    while True:
+def menu_manutenzione(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Manutenzione")
+"""Menu per la manutenzione del database."""
+while True:
         stampa_intestazione("MANUTENZIONE DATABASE")
         print("1. Verifica integrita database"); print("2. Aggiorna Viste Materializzate"); print("3. Esegui Manutenzione Generale (ANALYZE)")
         print("4. Analizza Query Lente (Richiede pg_stat_statements)"); print("5. Controlla Frammentazione Indici")
@@ -1075,9 +1139,9 @@ def menu_manutenzione(db: CatastoDBManager):
         input("\nPremi INVIO per continuare...")
 
 # --- Menu Audit (invariato) ---
-def menu_audit(db: CatastoDBManager):
-    """Menu per la gestione e consultazione del sistema di audit."""
-    while True:
+def menu_audit(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Audit") 
+"""Menu per la gestione e consultazione del sistema di audit."""
+while True:
         stampa_intestazione("SISTEMA DI AUDIT")
         print("1. Consulta log di audit"); print("2. Visualizza cronologia di un record")
         print("3. Genera report di audit"); print("4. Torna al menu principale")
@@ -1146,7 +1210,7 @@ def menu_audit(db: CatastoDBManager):
 # --- Menu Utenti e Sessione (Usa bcrypt, invariato rispetto a comune_id) ---
 def menu_utenti(db: CatastoDBManager):
     """Menu per la gestione degli utenti, login e logout."""
-    global logged_in_user_id, logged_in_user_info, current_session_id, client_ip_address # Aggiunto logged_in_user_info
+    global logged_in_user_id, logged_in_user_info, current_session_id # Aggiunto logged_in_user_info
     while True:
         stampa_intestazione("GESTIONE UTENTI E SESSIONE")
         if logged_in_user_id and logged_in_user_info:
@@ -1156,7 +1220,7 @@ def menu_utenti(db: CatastoDBManager):
              print(f"--- Utente Attivo: ID {logged_in_user_id} (Sessione: {current_session_id[:8]}...) ---")
         else:
             print("--- Nessun utente connesso ---")
-        print("1. Crea nuovo utente")
+        print("1. Crea nuovo utente (Richiedi privilegi admin)")
         print("2. Login Utente")
         print("3. Logout Utente")
         print("4. Verifica Permesso Utente")
@@ -1349,9 +1413,9 @@ def menu_backup(db: CatastoDBManager):
         input("\nPremi INVIO per continuare...")
 
 # --- Menu Storico Avanzato (MODIFICATO per comune_id) ---
-def menu_storico_avanzato(db: CatastoDBManager):
-    """Menu per le funzionalità storiche avanzate."""
-    while True:
+def menu_storico_avanzato(db: CatastoDBManager): _set_session_context(db); print("TODO: Menu Storico Avanzato")
+"""Menu per le funzionalità storiche avanzate."""
+while True:
         stampa_intestazione("FUNZIONALITÀ STORICHE AVANZATE")
         print("1. Visualizza Periodi Storici"); print("2. Ottieni Nome Storico Entità per Anno"); print("3. Registra Nome Storico Entità")
         print("4. Ricerca Documenti Storici"); print("5. Visualizza Albero Genealogico Proprietà"); print("6. Statistiche Catastali per Periodo")

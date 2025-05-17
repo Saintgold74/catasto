@@ -660,3 +660,305 @@ LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
                       ^
 
 2025-05-17 08:15:05,561 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 10:37:28,649 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 10:37:28,785 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 10:37:33,759 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-17 10:37:42,947 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-17 10:37:45,803 - __main__ - WARNING - Login fallito (utente 'sa' non trovato/attivo).
+2025-05-17 10:37:45,810 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 10:37:49,738 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 10:37:49,950 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 10:37:58,150 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:37:58,155 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:37:58,161 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:37:58,187 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 726ef06b...
+2025-05-17 10:38:05,891 - __main__ - WARNING - Login fallito (utente 'Admin' non trovato/attivo).
+2025-05-17 10:38:08,590 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 10:46:02,315 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 10:46:02,429 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 10:46:07,756 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:46:07,762 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:46:07,767 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:46:07,776 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione ee1520c8...
+2025-05-17 10:47:51,238 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 10:49:32,624 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 10:49:32,838 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 10:49:38,414 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:49:38,419 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:49:38,425 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:49:38,435 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione a6b9839b...
+2025-05-17 10:49:43,918 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 10:55:55,175 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 10:55:55,288 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 10:56:01,153 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:56:01,158 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:56:01,164 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:56:01,173 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 5420aba4...
+2025-05-17 10:56:19,359 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:56:19,365 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:56:19,370 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:56:19,377 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 69f6dc22...
+2025-05-17 10:56:30,311 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 10:56:30,317 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 10:56:30,323 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 10:56:30,329 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 2fa2180c...
+2025-05-17 10:56:30,338 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 11:12:53,920 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 11:12:54,160 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 11:12:59,079 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 11:12:59,335 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 11:12:59,344 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 60c27911...
+2025-05-17 11:13:13,917 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 11:13:14,194 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 11:13:14,201 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 5b821f4a...
+2025-05-17 11:13:18,975 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 11:30:29,297 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 11:30:29,415 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 11:30:35,851 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 11:30:36,114 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 76495234...
+2025-05-17 12:32:06,194 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 12:32:10,796 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 12:32:10,966 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 12:32:21,770 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 12:32:51,118 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 12:32:51,229 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 12:32:55,842 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 12:32:55,865 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 12:32:55,881 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 12:32:55,913 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 38a8a2d6...
+2025-05-17 12:33:13,907 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 12:58:24,947 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 12:58:25,114 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 12:58:30,362 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 12:58:30,627 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 39443c3d...
+2025-05-17 12:58:42,609 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 12:59:23,405 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 12:59:23,622 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 12:59:27,827 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 12:59:28,091 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 898a5ae2...
+2025-05-17 12:59:44,032 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-17 13:09:16,531 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 13:10:16,820 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 13:10:17,037 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 13:10:20,905 - __main__ - ERROR - Errore non gestito nel programma: 'CatastoDBManager' object has no attribute 'get_user_credentials'
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 1255, in main
+    if not esegui_login(db):
+           ~~~~~~~~~~~~^^^^
+  File "U:\catasto\gemini\python_example.py", line 159, in esegui_login
+    credentials = db.get_user_credentials(username_login) # Assumiamo restituisca id, username, password_hash, nome_completo
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'get_user_credentials'
+2025-05-17 13:10:21,057 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 13:11:45,117 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 13:11:45,246 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 13:11:50,261 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 13:11:50,522 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 1bd89b5d...
+2025-05-17 13:12:53,254 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 13:12:55,982 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 13:12:56,200 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 13:13:00,727 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 13:13:00,987 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 13f3bedd...
+2025-05-17 13:13:37,321 - CatastoDB - INFO - Utente 'santoro' creato.
+2025-05-17 13:13:52,359 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-17 13:14:33,554 - __main__ - ERROR - Errore non gestito nel programma: _seleziona_utente_da_elenco() got an unexpected keyword argument 'exclude_user_id'
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 1259, in main
+    menu_principale(db) # Entra nel menu principale dopo login riuscito
+    ~~~~~~~~~~~~~~~^^^^
+  File "U:\catasto\gemini\python_example.py", line 1219, in menu_principale
+    utente_ancora_loggato = menu_utenti(db) # menu_utenti ora restituisce False se l'utente fa logout
+  File "U:\catasto\gemini\python_example.py", line 1113, in menu_utenti
+    user_id_to_toggle = _seleziona_utente_da_elenco(db, "Seleziona l'utente da disattivare/riattivare:", exclude_user_id=logged_in_user_id)
+TypeError: _seleziona_utente_da_elenco() got an unexpected keyword argument 'exclude_user_id'
+2025-05-17 13:14:33,701 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 13f3bedd...
+2025-05-17 13:14:33,707 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 13:18:00,436 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 13:18:00,573 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 13:18:05,067 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-17 13:18:05,342 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 5ad54c9c...
+2025-05-17 13:18:09,569 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-17 13:18:39,153 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 15:15:09,210 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 15:15:09,342 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 15:15:14,404 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 15:15:14,670 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 9d865890...
+2025-05-17 15:15:26,824 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-17 15:16:00,654 - CatastoDB - INFO - Utente 'pippo' creato.
+2025-05-17 15:16:08,584 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:16:17,609 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 15:40:23,007 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 15:40:23,120 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 15:40:27,435 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: pippo, Ruolo: consultatore
+2025-05-17 15:40:27,710 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 791271c0...
+2025-05-17 15:40:35,707 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:40:55,999 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione 791271c0...
+2025-05-17 15:41:04,370 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-17 15:41:04,628 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 981daba6...
+2025-05-17 15:41:13,452 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:41:40,616 - CatastoDB - INFO - Dettagli utente ID 3 aggiornati.
+2025-05-17 15:41:49,265 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:42:18,129 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:42:33,527 - CatastoDB - INFO - Password resettata per utente ID 3.
+2025-05-17 15:42:40,823 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 981daba6...
+2025-05-17 15:42:43,461 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 15:42:48,084 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 15:42:48,294 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 15:42:53,920 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: pippo, Ruolo: archivista
+2025-05-17 15:42:54,182 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 9210f438...
+2025-05-17 15:43:54,538 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione 9210f438...
+2025-05-17 15:44:03,551 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-17 15:44:03,812 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 9e449315...
+2025-05-17 15:44:19,380 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:44:25,139 - CatastoDB - INFO - Utente ID 3 disattivato.
+2025-05-17 15:44:45,806 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 15:44:52,338 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 9e449315...
+2025-05-17 15:45:00,335 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-17 15:45:44,623 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 16:39:05,827 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 16:39:06,076 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 16:39:12,579 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 16:39:12,851 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 9ceef3a7...
+2025-05-17 16:39:30,844 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-17 16:39:47,140 - CatastoDB - ERROR - Errore DB specifico rilevato: ForeignKeyViolation - ERRORE:  l'istruzione UPDATE o DELETE sulla tabella "utente" viola il vincolo di chiave esterna "accesso_log_utente_id_fkey" sulla tabella "accesso_log"
+DETAIL:  La chiave (id)=(3) è ancora referenziata dalla tabella "accesso_log".
+
+2025-05-17 16:39:47,146 - CatastoDB - ERROR - SQLSTATE: 23503
+2025-05-17 16:39:47,151 - CatastoDB - ERROR - Query renderizzata: b'DELETE FROM utente WHERE id = 3'
+2025-05-17 16:39:47,157 - CatastoDB - INFO - Rollback eseguito.
+2025-05-17 16:39:47,162 - CatastoDB - ERROR - Errore DB durante l'eliminazione fisica dell'utente ID 3: ERRORE:  l'istruzione UPDATE o DELETE sulla tabella "utente" viola il vincolo di chiave esterna "accesso_log_utente_id_fkey" sulla tabella "accesso_log"
+DETAIL:  La chiave (id)=(3) è ancora referenziata dalla tabella "accesso_log".
+
+2025-05-17 16:39:47,168 - CatastoDB - INFO - Rollback eseguito.
+2025-05-17 16:42:02,140 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 16:44:38,584 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 16:44:38,701 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 16:44:44,992 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 16:44:45,252 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 629b832d...
+2025-05-17 16:45:15,691 - CatastoDB - INFO - Utente 'santoro' creato.
+2025-05-17 16:45:28,578 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-17 16:45:43,297 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-17 16:45:56,940 - CatastoDB - INFO - Utente ID 2 eliminato fisicamente con successo.
+2025-05-17 16:46:39,938 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-17 16:48:29,107 - __main__ - INFO - Uscita inattesa da menu_principale con utente ancora loggato. Terminazione.
+2025-05-17 16:48:29,117 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 629b832d...
+2025-05-17 16:48:29,124 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 18:34:21,888 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 18:34:22,022 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 18:34:28,971 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 18:34:29,232 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 1e6f20ed...
+2025-05-17 18:34:53,935 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 1e6f20ed...
+2025-05-17 18:35:06,271 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 18:38:33,965 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 18:38:34,078 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 18:38:39,024 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 18:38:39,289 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione b1b57cd0...
+2025-05-17 18:49:13,664 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 18:49:41,725 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 18:49:41,838 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 18:49:51,409 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 18:49:51,671 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 96252fa3...
+2025-05-17 18:50:30,053 - __main__ - ERROR - Errore esportazione PDF partita
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 318, in _esporta_partita_pdf
+    pdf.chapter_body({
+    ~~~~~~~~~~~~~~~~^^
+        'ID Partita': p.get('id'), 'Comune': p.get('comune_nome'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        'Data Chiusura': p.get('data_chiusura')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    })
+    ^^
+  File "U:\catasto\gemini\python_example.py", line 289, in chapter_body
+    self.multi_cell(0, 5, f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 221, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\deprecation.py", line 32, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 4172, in multi_cell
+    text_line = multi_line_break.get_line()
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\line_break.py", line 792, in get_line
+    raise FPDFException(
+        "Not enough horizontal space to render a single character"
+    )
+fpdf.errors.FPDFException: Not enough horizontal space to render a single character
+2025-05-17 19:52:11,842 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 19:52:16,838 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 19:52:16,952 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 19:52:22,137 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 19:52:22,400 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 45b40f39...
+2025-05-17 19:52:36,112 - __main__ - ERROR - Errore esportazione PDF partita
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 323, in _esporta_partita_pdf
+    pdf.add_page()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 1079, in add_page
+    self.header()
+    ~~~~~~~~~~~^^
+  File "U:\catasto\gemini\python_example.py", line 273, in header
+    self.cell(0, 10, 'Dettaglio Partita Catastale', 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+                                                             ^^^^
+NameError: name 'XPos' is not defined
+2025-05-17 19:54:26,393 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 19:54:31,456 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 19:54:31,669 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 19:54:39,137 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 19:54:39,406 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 76f9ef99...
+2025-05-17 19:56:23,832 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 19:56:29,869 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 19:56:29,988 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 19:56:34,584 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 19:56:34,848 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione e16be22a...
+2025-05-17 19:56:45,089 - __main__ - ERROR - Errore esportazione PDF partita
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 353, in _esporta_partita_pdf
+    pdf.output(filename, 'F')
+    ~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 5659, in output
+    Path(name).write_bytes(self.buffer)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_abc.py", line 641, in write_bytes
+    with self.open(mode='wb') as f:
+         ~~~~~~~~~^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
+2025-05-17 19:57:03,668 - __main__ - ERROR - Errore esportazione PDF partita
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 353, in _esporta_partita_pdf
+    pdf.output(filename, 'F')
+    ~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 5659, in output
+    Path(name).write_bytes(self.buffer)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_abc.py", line 641, in write_bytes
+    with self.open(mode='wb') as f:
+         ~~~~~~~~~^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
+2025-05-17 20:00:11,001 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 20:13:19,958 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 20:13:20,199 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 20:15:18,266 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-17 20:15:18,546 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6cae06e3...
+2025-05-17 20:15:29,898 - __main__ - ERROR - Errore esportazione PDF partita
+Traceback (most recent call last):
+  File "U:\catasto\gemini\python_example.py", line 411, in _esporta_partita_pdf
+    pdf.output(filename) # Rimosso 'F'
+    ^^^^^^^^^^^^^^^^
+  File "C:\Users\ipabcrmm\AppData\Roaming\Python\Python313\site-packages\fpdf\fpdf.py", line 5659, in output
+    Path(name).write_bytes(self.buffer)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_abc.py", line 641, in write_bytes
+    with self.open(mode='wb') as f:
+         ~~~~~~~~~^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
+2025-05-17 20:16:26,416 - CatastoDB - INFO - Disconnessione completata

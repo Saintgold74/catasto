@@ -838,6 +838,46 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB export_possessore_json (ID: {possessore_id}): {db_err}")
         except Exception as e: logger.error(f"Errore Python export_possessore_json (ID: {possessore_id}): {e}")
         return None
+    def get_partita_data_for_export(self, partita_id: int) -> Optional[Dict]:
+        """
+        Recupera i dati completi di una partita come dizionario Python per l'esportazione.
+        Chiama la funzione SQL esporta_partita_json che restituisce JSON.
+        """
+        try:
+            query = "SELECT esporta_partita_json(%s) AS partita_data" # La funzione SQL restituisce JSON
+            if self.execute_query(query, (partita_id,)):
+                result = self.fetchone()
+                if result and result.get('partita_data'):
+                    # psycopg2 dovrebbe aver già convertito il tipo JSON di PostgreSQL in un dict Python
+                    return result['partita_data'] 
+            logger.warning(f"Nessun dato trovato per partita ID {partita_id} per l'esportazione.")
+            return None
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB get_partita_data_for_export (ID: {partita_id}): {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python get_partita_data_for_export (ID: {partita_id}): {e}")
+            return None
+
+    def get_possessore_data_for_export(self, possessore_id: int) -> Optional[Dict]:
+        """
+        Recupera i dati completi di un possessore come dizionario Python per l'esportazione.
+        Chiama la funzione SQL esporta_possessore_json che restituisce JSON.
+        """
+        try:
+            query = "SELECT esporta_possessore_json(%s) AS possessore_data" # La funzione SQL restituisce JSON
+            if self.execute_query(query, (possessore_id,)):
+                result = self.fetchone()
+                if result and result.get('possessore_data'):
+                    return result['possessore_data']
+            logger.warning(f"Nessun dato trovato per possessore ID {possessore_id} per l'esportazione.")
+            return None
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB get_possessore_data_for_export (ID: {possessore_id}): {db_err}")
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python get_possessore_data_for_export (ID: {possessore_id}): {e}")
+            return None
 
     # --- Metodi Manutenzione e Ottimizzazione (Invariati rispetto a comune_id) ---
 
@@ -1005,16 +1045,18 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB creazione utente '{username}': {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python creazione utente '{username}': {e}"); self.rollback(); return False
 
-    def get_user_credentials(self, username_param: str) -> Optional[Dict]: # Rinominato parametro per chiarezza
-        """Recupera ID, hash password, username e nome_completo per un utente attivo."""
+    # In catasto_db_manager.py, dentro la classe CatastoDBManager
+
+    def get_user_credentials(self, username_param: str) -> Optional[Dict]:
+        """Recupera ID, username, hash password, nome_completo e ruolo per un utente attivo."""
         try:
-            # Aggiunto username e nome_completo alla SELECT
-            query = "SELECT id, username, password_hash, nome_completo FROM utente WHERE username = %s AND attivo = TRUE"
-            if self.execute_query(query, (username_param,)): # Usato username_param
+            # AGGIUNGERE 'ruolo' ALLA SELECT
+            query = "SELECT id, username, password_hash, nome_completo, ruolo FROM utente WHERE username = %s AND attivo = TRUE"
+            if self.execute_query(query, (username_param,)):
                 user_data = self.fetchone()
                 if user_data:
-                    logger.info(f"Credenziali recuperate per utente: {user_data['username']}")
-                return user_data # Restituisce l'intero dizionario
+                    logger.info(f"Credenziali (incluso ruolo) recuperate per utente: {user_data.get('username')}, Ruolo: {user_data.get('ruolo')}")
+                return user_data # Restituisce l'intero dizionario che ora include 'ruolo'
             return None
         except psycopg2.Error as db_err:
             logger.error(f"Errore DB get_user_credentials per '{username_param}': {db_err}")
@@ -1195,6 +1237,53 @@ class CatastoDBManager:
             return False
         except Exception as e:
             logger.error(f"Errore durante la riattivazione dell'utente ID {utente_id}: {e}")
+            self.rollback()
+            return False
+    def delete_user_permanently(self, utente_id: int) -> bool:
+        """
+        Elimina fisicamente un utente dal database.
+        ATTENZIONE: Operazione distruttiva. Considerare le implicazioni per i log.
+        """
+        # Controllo preliminare per evitare di eliminare l'unico admin o utenti speciali
+        # Questa logica potrebbe essere più complessa (es. controllare se è l'UNICO admin)
+        utente_da_eliminare = self.get_utente_by_id(utente_id)
+        if utente_da_eliminare and utente_da_eliminare.get('ruolo') == 'admin':
+            # Conta quanti admin ci sono
+            admin_count_query = "SELECT COUNT(*) AS count FROM utente WHERE ruolo = 'admin' AND attivo = TRUE"
+            if self.execute_query(admin_count_query):
+                count_result = self.fetchone()
+                if count_result and count_result['count'] <= 1:
+                    logger.error(f"Tentativo di eliminare l'unico utente amministratore (ID: {utente_id}). Operazione negata.")
+                    return False
+    
+        try:
+            # Opzionale: prima di eliminare l'utente, si potrebbero gestire i record dipendenti
+            # in accesso_log e audit_log se non si usa ON DELETE SET NULL o CASCADE.
+            # Esempio: ANNULLARE utente_id / app_user_id nei log (se si preferisce non avere ID orfani)
+            # self.execute_query("UPDATE accesso_log SET utente_id = NULL WHERE utente_id = %s", (utente_id,))
+            # self.execute_query("UPDATE audit_log SET app_user_id = NULL WHERE app_user_id = %s", (utente_id,))
+            # self.commit() # Se si eseguono queste query
+
+            query = "DELETE FROM utente WHERE id = %s"
+            if self.execute_query(query, (utente_id,)):
+                # execute_query dovrebbe aver già fatto commit se la query è andata a buon fine
+                # ma se l'operazione DELETE non solleva eccezioni e rowcount è > 0, si assume successo.
+                # Per DELETE, rowcount è importante. self.cur.rowcount dopo execute_query
+                if self.cur and self.cur.rowcount > 0:
+                    self.commit() # Commit esplicito dopo il DELETE
+                    logger.info(f"Utente ID {utente_id} eliminato fisicamente con successo.")
+                    return True
+                else:
+                    logger.warning(f"Nessun utente trovato con ID {utente_id} per l'eliminazione fisica, o rowcount non disponibile.")
+                    self.rollback() # Rollback se nessun utente è stato effettivamente eliminato
+                    return False
+            return False
+        except psycopg2.Error as db_err: # Specificamente per errori DB come violazioni FK
+            logger.error(f"Errore DB durante l'eliminazione fisica dell'utente ID {utente_id}: {db_err}")
+            self.rollback()
+            return False
+        except Exception as e:
+            logger.error(f"Errore Python durante l'eliminazione fisica dell'utente ID {utente_id}: {e}")
             self.rollback()
             return False
 

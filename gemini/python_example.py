@@ -13,6 +13,9 @@ Data: 16/05/2025 (Versione completa riscritta con login all'avvio e struttura me
 
 from catasto_db_manager import CatastoDBManager
 from datetime import date, datetime
+import csv
+from fpdf import FPDF
+from fpdf.enums import XPos, YPos # # Per PDF
 import json
 import os
 import sys
@@ -184,16 +187,18 @@ def esegui_login(db: CatastoDBManager) -> bool:
             if login_success_local and session_id_returned:
                 logged_in_user_id = user_id_local
                 logged_in_user_info = {'id': user_id_local,
-                                       'username': credentials.get('username'),
-                                       'nome_completo': credentials.get('nome_completo')}
-                current_session_id = session_id_returned
-                if not db.set_session_app_user(logged_in_user_id, client_ip_address): # Imposta contesto per audit
+                                   'username': credentials.get('username'),
+                                   'nome_completo': credentials.get('nome_completo'),
+                                   'ruolo': credentials.get('ruolo') # <<< AGGIUNGERE QUESTA RIGA
+                                  }
+            current_session_id = session_id_returned
+            if not db.set_session_app_user(logged_in_user_id, client_ip_address): # Imposta contesto per audit
                     logger.error("Impossibile impostare contesto DB post-login!")
-                user_display_name = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
-                print(f"\nLogin riuscito per utente: {user_display_name} (ID: {logged_in_user_id})")
-                print(f"Sessione {current_session_id[:8]}... avviata.")
-                return True # Login riuscito
-            elif login_success_local and not session_id_returned:
+                    user_display_name = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
+                    print(f"\nLogin riuscito per utente: {user_display_name} (ID: {logged_in_user_id})")
+                    print(f"Sessione {current_session_id[:8]}... avviata.")
+            return True # Login riuscito
+        elif login_success_local and not session_id_returned:
                 print("Errore critico: Impossibile registrare sessione accesso.")
                 logger.error(f"Login OK per ID {user_id_local} ma fallita reg. accesso.")
             # else: login fallito, l'errore è già stato stampato
@@ -205,6 +210,211 @@ def esegui_login(db: CatastoDBManager) -> bool:
 
     print("Numero massimo di tentativi di login raggiunto. Uscita dal programma.")
     return False
+
+# --- Funzioni di Esportazione Avanzate ---
+
+def _esporta_partita_csv(partita_data: Dict, filename: str):
+    """Esporta i dati di una partita in formato CSV, con controllo sovrascrittura."""
+    if not partita_data or 'partita' not in partita_data:
+        print("Dati partita non validi per l'esportazione CSV.")
+        return False
+    
+    if os.path.exists(filename):
+        if not _confirm_action(f"Il file '{filename}' esiste già. Sovrascriverlo?"):
+            print("Esportazione CSV annullata.")
+            return False
+    
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            p = partita_data['partita']
+            writer.writerow(['--- DETTAGLI PARTITA ---'])
+            writer.writerow(['ID Partita', p.get('id')])
+            writer.writerow(['Comune', p.get('comune_nome')])
+            writer.writerow(['Numero Partita', p.get('numero_partita')])
+            writer.writerow(['Tipo', p.get('tipo')])
+            writer.writerow(['Data Impianto', p.get('data_impianto')])
+            writer.writerow(['Stato', p.get('stato')])
+            if p.get('data_chiusura'):
+                writer.writerow(['Data Chiusura', p.get('data_chiusura')])
+            writer.writerow([]) # Riga vuota
+
+            if partita_data.get('possessori'):
+                writer.writerow(['--- POSSESSORI ---'])
+                writer.writerow(['ID Poss.', 'Nome Completo', 'Titolo', 'Quota'])
+                for pos in partita_data['possessori']:
+                    writer.writerow([pos.get('id'), pos.get('nome_completo'), pos.get('titolo'), pos.get('quota')])
+                writer.writerow([])
+
+            if partita_data.get('immobili'):
+                writer.writerow(['--- IMMOBILI ---'])
+                writer.writerow(['ID Imm.', 'Natura', 'Località', 'Civico', 'Tipo Loc.', 'Class.', 'Consist.'])
+                for imm in partita_data['immobili']:
+                    writer.writerow([
+                        imm.get('id'), imm.get('natura'), imm.get('localita_nome'), 
+                        imm.get('civico', ''), imm.get('localita_tipo'),
+                        imm.get('classificazione'), imm.get('consistenza')
+                    ])
+                writer.writerow([])
+            
+            if partita_data.get('variazioni'): # Esempio ultima sezione
+                writer.writerow(['--- VARIAZIONI ---'])
+                writer.writerow(['ID Var.', 'Tipo Var.', 'Data Var.', 'Part. Dest. ID', 'Tipo Contratto', 'Data Contratto', 'Notaio'])
+                for var in partita_data['variazioni']:
+                    writer.writerow([
+                        var.get('id'), var.get('tipo'), var.get('data_variazione'),
+                        var.get('partita_destinazione_id', ''), var.get('contratto_tipo'),
+                        var.get('data_contratto'), var.get('notaio')
+                    ])
+        print(f"Dati partita esportati con successo in {filename}")
+        return True
+    except Exception as e:
+        print(f"Errore durante l'esportazione CSV della partita: {e}")
+        return False
+
+class PDFPartita(FPDF):
+    def header(self):
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 10, 'Dettaglio Partita Catastale', 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Helvetica', 'B', 8)
+        self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
+
+    def chapter_title(self, title):
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 6, title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+        self.ln(2)
+
+    def chapter_body(self, data_dict):
+        self.set_font('Helvetica', '', 10) # Cambiato font per warning
+        for key, value in data_dict.items():
+            text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
+            # Calcola larghezza effettiva disponibile sulla pagina
+            page_width = self.w - self.l_margin - self.r_margin
+            try:
+                self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            except FPDFException as e:
+                if "Not enough horizontal space" in str(e):
+                    logger.warning(f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
+                    self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [ERRORE DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                else:
+                    raise e
+        
+    def simple_table(self, headers, data_rows):
+        self.set_font('Helvetica', '', 9)
+        col_widths = [max(self.get_string_width(h) + 6, max(self.get_string_width(str(row[i])) + 6 if i < len(row) and row[i] is not None else 0 for row in data_rows) if data_rows else 0) for i, h in enumerate(headers)]
+        
+        for i, header in enumerate(headers):
+            self.cell(col_widths[i], 7, header, 1, 0, 'C')
+        self.ln()
+        self.set_font('Helvetica', '', 8)
+        for row in data_rows:
+            for i, item in enumerate(row):
+                self.cell(col_widths[i], 6, str(item) if item is not None else '', 1)
+            self.ln()
+        self.ln()
+        
+    def _esporta_entita_json(db: CatastoDBManager, tipo_entita: str, etichetta_id: str, nome_file_prefix: str):
+        """Funzione generica per esportare un'entità in formato JSON, con controllo sovrascrittura."""
+        stampa_intestazione(f"ESPORTA {tipo_entita.upper()} IN JSON")
+        id_entita_str = input(f"{etichetta_id} da esportare: ").strip()
+        if not id_entita_str.isdigit():
+            print("ID non valido.")
+            return
+        entita_id = int(id_entita_str)
+        
+        dict_data = None
+        if tipo_entita == 'partita':
+            dict_data = db.get_partita_data_for_export(entita_id)
+        elif tipo_entita == 'possessore':
+            dict_data = db.get_possessore_data_for_export(entita_id) # Assumendo che questo metodo esista e restituisca un dict
+        else:
+            print(f"Tipo entità '{tipo_entita}' non supportato per l'esportazione JSON.")
+            return
+
+        if dict_data:
+            json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False)
+            print(f"\n--- DATI JSON {tipo_entita.upper()} ID {entita_id} ---")
+            print(json_data_str)
+            print("-" * (len(tipo_entita) + 20))
+            
+            filename = f"{nome_file_prefix}_{entita_id}_{date.today()}.json" # Aggiunta data per unicità
+            
+            salva_file = False
+            if os.path.exists(filename):
+                if _confirm_action(f"Il file '{filename}' esiste già. Sovrascriverlo?"):
+                    salva_file = True
+                else:
+                    print("Salvataggio annullato.")
+            else:
+                if _confirm_action(f"Salvare in '{filename}'?"):
+                    salva_file = True
+
+            if salva_file:
+                try:
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(json_data_str)
+                    print(f"Dati salvati con successo in {filename}")
+                except Exception as e:
+                    print(f"Errore nel salvataggio del file '{filename}': {e}")
+        else:
+            print(f"{tipo_entita.capitalize()} con ID {entita_id} non trovato/a o errore durante il recupero dei dati.")
+
+
+
+def _esporta_partita_pdf(partita_data: Dict, filename: str):
+    """Esporta i dati di una partita in formato PDF, con controllo sovrascrittura."""
+    if not partita_data or 'partita' not in partita_data:
+        print("Dati partita non validi per l'esportazione PDF.")
+        return False
+
+    if os.path.exists(filename):
+        if not _confirm_action(f"Il file '{filename}' esiste già. Sovrascriverlo?"):
+            print("Esportazione PDF annullata.")
+            return False
+    
+    try:
+        pdf = PDFPartita()
+        pdf.add_page()
+        
+        p = partita_data['partita']
+        pdf.chapter_title('Dettagli Partita')
+        pdf.chapter_body({
+            'ID Partita': p.get('id'), 'Comune': p.get('comune_nome'), 
+            'Numero Partita': p.get('numero_partita'), 'Tipo': p.get('tipo'),
+            'Data Impianto': p.get('data_impianto'), 'Stato': p.get('stato'),
+            'Data Chiusura': p.get('data_chiusura')
+        })
+
+        if partita_data.get('possessori'):
+            pdf.chapter_title('Possessori')
+            headers = ['ID', 'Nome Completo', 'Titolo', 'Quota']
+            data_rows = [[pos.get('id'), pos.get('nome_completo'), pos.get('titolo'), pos.get('quota')] for pos in partita_data['possessori']]
+            pdf.simple_table(headers, data_rows)
+
+        if partita_data.get('immobili'):
+            pdf.chapter_title('Immobili')
+            headers = ['ID', 'Natura', 'Località', 'Class.', 'Consist.']
+            data_rows = [[imm.get('id'), imm.get('natura'), f"{imm.get('localita_nome')} {imm.get('civico','')}", imm.get('classificazione'), imm.get('consistenza')] for imm in partita_data['immobili']]
+            pdf.simple_table(headers, data_rows)
+
+        if partita_data.get('variazioni'):
+            pdf.chapter_title('Variazioni')
+            headers = ['ID', 'Tipo', 'Data Var.', 'Contratto', 'Notaio']
+            data_rows = [[var.get('id'), var.get('tipo'), var.get('data_variazione'), f"{var.get('contratto_tipo','')} del {var.get('data_contratto','')}", var.get('notaio')] for var in partita_data['variazioni']]
+            pdf.simple_table(headers, data_rows)
+            
+            pdf.output(filename) # Rimosso 'F'
+            print(f"Dati partita esportati con successo in {filename}")
+        return True
+    except Exception as e:
+        print(f"Errore durante l'esportazione PDF della partita: {e}")
+        logger.exception("Errore esportazione PDF partita")
+        return False
 
 # --- Funzioni dei Sottomenu ---
 
@@ -225,10 +435,13 @@ def menu_consultazione(db: CatastoDBManager):
         print("9. Cerca Immobili Specifici")
         print("10. Cerca Variazioni")
         print("11. Cerca Consultazioni")
-        print("12. Esporta Partita in JSON")
-        print("13. Esporta Possessore in JSON")
+        print("--- Opzioni di Esportazione ---")
+        print("12. Esporta Dettaglio Partita in JSON")
+        print("13. Esporta Dettaglio Partita in CSV")
+        print("14. Esporta Dettaglio Partita in PDF")
+        # Aggiungere opzioni simili per possessore se necessario
         print("0. Torna al menu principale")
-        scelta = input("\nSeleziona un'opzione (0-13): ").strip()
+        scelta = input("\nSeleziona un'opzione (0-14): ").strip() # Range aggiornato
 
         if scelta == "1": # Elenco comuni
             search_term = input("Termine di ricerca nome comune (lascia vuoto per tutti): ").strip()
@@ -467,15 +680,57 @@ def menu_consultazione(db: CatastoDBManager):
              except ValueError:
                  print("Formato Data non valido.")
 
-        elif scelta == "12": # Esporta Partita
-            _esporta_entita_json(db, tipo_entita='partita', etichetta_id='ID della Partita', nome_file_prefix='partita')
-        elif scelta == "13": # Esporta Possessore
-            _esporta_entita_json(db, tipo_entita='possessore', etichetta_id='ID del Possessore', nome_file_prefix='possessore')
+        elif scelta == "12": # Esporta Partita JSON
+                esporta_entita_json(db, tipo_entita='partita', etichetta_id='ID della Partita', nome_file_prefix='partita')
+
+        elif scelta == "13": # Esporta Partita CSV
+            id_partita_str = input("ID della Partita da esportare in CSV: ").strip()
+            if id_partita_str.isdigit():
+                partita_id = int(id_partita_str)
+                partita_dict_data = db.get_partita_data_for_export(partita_id)
+                if partita_dict_data:
+                    filename = f"partita_{partita_id}_{date.today()}.csv" # Aggiunta data
+                    # La richiesta di sovrascrittura è ora dentro _esporta_partita_csv
+                    _esporta_partita_csv(partita_dict_data, filename)
+                else:
+                    print(f"Partita ID {partita_id} non trovata o errore esportazione dati.")
+            else:
+                print("ID non valido.")
+
+        elif scelta == "14": # Esporta Partita PDF
+            id_partita_str = input("ID della Partita da esportare in PDF: ").strip()
+            if id_partita_str.isdigit():
+                partita_id = int(id_partita_str)
+                partita_dict_data = db.get_partita_data_for_export(partita_id)
+                if partita_dict_data:
+                    filename = f"partita_{partita_id}_{date.today()}.pdf" # Aggiunta data
+                    # La richiesta di sovrascrittura è ora dentro _esporta_partita_pdf
+                    _esporta_partita_pdf(partita_dict_data, filename)
+                else:
+                    print(f"Partita ID {partita_id} non trovata o errore esportazione dati.")
+            else:
+                print("ID non valido.")
+        
         elif scelta == "0":
             break 
         else:
-            print("Opzione non valida!")
+            # Gestisci le opzioni da 1 a 11 qui se non già fatto sopra
+            if scelta not in [str(i) for i in range(1,12)]: # Se non è una delle opzioni numeriche gestite
+                 print("Opzione non valida!")
+            else:
+                # Inserisci qui la logica per le scelte da 1 a 11 se non l'hai già fatto
+                # Esempio:
+                # if scelta == "1": _gestisci_elenco_comuni(db)
+                # ...
+                # Per ora, lascio un pass se la logica è già presente sopra questa sezione
+                if scelta in [str(i) for i in range(1,12)]:
+                    # La logica per queste scelte dovrebbe essere già sopra questo blocco elif
+                    # Questo è solo per evitare "Opzione non valida!" per scelte valide 1-11
+                    pass 
+                else:
+                    print("Opzione non valida!")
         input("\nPremi INVIO per continuare...")
+
 
 def menu_inserimento(db: CatastoDBManager):
     _set_session_context(db)
@@ -672,22 +927,34 @@ def _registra_passaggio_proprieta_interattivo(db: CatastoDBManager):
                print("Passaggio di proprietà registrato con successo.")
           else:
                print("Errore durante la registrazione del passaggio (controllare log).")
-def _seleziona_utente_da_elenco(db: CatastoDBManager, prompt: str = "Seleziona utente:") -> Optional[int]:
-    """Mostra elenco utenti e permette la selezione tramite ID."""
+def _seleziona_utente_da_elenco(db: CatastoDBManager, prompt: str = "Seleziona utente:", exclude_user_id: Optional[int] = None) -> Optional[int]:
+                                                                                    # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ # <<-- PARAMETRO AGGIUNTO QUI
+    """
+    Mostra elenco utenti e permette la selezione tramite ID.
+    Può escludere un utente specifico dall'elenco (es. l'utente corrente).
+    """
     utenti = db.get_utenti() # Mostra tutti per la selezione
     if not utenti:
         print("Nessun utente registrato nel sistema.")
         return None
     
     print(f"\n{prompt} (inserisci l'ID)")
-    print("-" * 50)
+    print("-" * 70) # Aumentato per potenziale colonna email
     print(f"{'ID':<5} | {'Username':<20} | {'Nome Completo':<25} | {'Stato':<8}")
-    print("-" * 50)
-    for u in utenti:
-        stato = "Attivo" if u['attivo'] else "Non Attivo"
-        print(f"{u['id']:<5} | {u['username']:<20} | {u['nome_completo']:<25} | {stato:<8}")
-    print("-" * 50)
+    print("-" * 70)
+    display_utenti = []
+    for u_item in utenti:
+        if exclude_user_id and u_item['id'] == exclude_user_id: # Se l'ID utente matcha quello da escludere
+            continue # Salta questo utente e non lo aggiunge a display_utenti né lo stampa
+        display_utenti.append(u_item)
+        stato = "Attivo" if u_item['attivo'] else "Non Attivo"
+        print(f"{u_item['id']:<5} | {u_item['username']:<20} | {u_item['nome_completo']:<25} | {stato:<8}")
+    print("-" * 70)
     print("0. Annulla")
+
+    if not display_utenti: # Se dopo il filtro non ci sono utenti da selezionare
+        print("Nessun altro utente disponibile per la selezione.")
+        return None
 
     while True:
         scelta_id_str = input("ID utente (0 per annullare): ").strip()
@@ -695,15 +962,15 @@ def _seleziona_utente_da_elenco(db: CatastoDBManager, prompt: str = "Seleziona u
             return None
         if scelta_id_str.isdigit():
             scelta_id = int(scelta_id_str)
-            utente_selezionato = next((u for u in utenti if u['id'] == scelta_id), None)
+            # Cerca nell'elenco filtrato 'display_utenti'
+            utente_selezionato = next((u_sel for u_sel in display_utenti if u_sel['id'] == scelta_id), None) # Rinominato variabile
             if utente_selezionato:
                 print(f"--> Utente selezionato: {utente_selezionato['username']} (ID: {utente_selezionato['id']})")
                 return utente_selezionato['id']
             else:
-                print("ID utente non trovato nell'elenco. Riprova.")
+                print("ID utente non valido o non presente nell'elenco filtrato. Riprova.")
         else:
             print("Input non numerico. Riprova.")
-
 
 # --- Funzioni Invariate rispetto a comune_id ---
 def _registra_consultazione_interattivo(db: CatastoDBManager):
@@ -969,14 +1236,14 @@ def menu_utenti(db: CatastoDBManager) -> bool:
         print("3. Modifica Dettagli Utente")
         print("4. Resetta Password Utente")
         print("5. Disattiva/Riattiva Utente")
-        print("6. Verifica Permesso (proprio o altrui)")
-        print("7. Logout Utente")
+        print("6. ELIMINA UTENTE PERMANENTEMENTE (admin)") # NUOVA OPZIONE
+        print("7. Verifica Permesso (proprio o altrui)")   # Era 6
+        print("8. Logout Utente")                          # Era 7
         print("0. Torna al menu principale")
-        scelta = input("\nSeleziona un'opzione (0-7): ").strip()
+        scelta = input("\nSeleziona un'opzione (0-8): ").strip() # Aggiornato range
 
-        # Verifica dei privilegi per azioni amministrative
         is_admin = logged_in_user_info.get('ruolo') == 'admin' if logged_in_user_info else False
-        # In un sistema più complesso, useremmo db.check_permission(logged_in_user_id, 'nome_permesso_specifico')
+# In un sistema più complesso, useremmo db.check_permission(logged_in_user_id, 'nome_permesso_specifico')
 
         if scelta == "1": # Crea nuovo utente
             if not is_admin:
@@ -1062,7 +1329,6 @@ def menu_utenti(db: CatastoDBManager) -> bool:
                     if new_attivo_str == 'attivo': new_attivo_val = True
                     elif new_attivo_str == 'nonattivo': new_attivo_val = False
                     elif new_attivo_str: print("Input stato non valido. Lo stato non verrà modificato.")
-
                     # Prepara i parametri per l'aggiornamento solo se è stato fornito un nuovo valore
                     update_params = {}
                     if new_nome: update_params['nome_completo'] = new_nome
@@ -1125,7 +1391,35 @@ def menu_utenti(db: CatastoDBManager) -> bool:
                             else:
                                 print("Errore durante la riattivazione.")
         
-        elif scelta == "6": # Verifica Permesso Utente
+        elif scelta == "6": # NUOVA OPZIONE: ELIMINA UTENTE
+            if not is_admin:
+                print("Accesso negato. Solo gli amministratori possono eliminare utenti.")
+            else:
+                stampa_intestazione("ELIMINA UTENTE PERMANENTEMENTE")
+                print("ATTENZIONE: QUESTA OPERAZIONE È IRREVERSIBILE!")
+                print("L'eliminazione fisica di un utente potrebbe compromettere la tracciabilità dei log di audit.")
+                print("Si consiglia di disattivare l'utente a meno che non si sia sicuri.")
+                
+                user_id_to_delete = _seleziona_utente_da_elenco(db, "Seleziona l'utente da ELIMINARE PERMANENTEMENTE:", exclude_user_id=logged_in_user_id)
+                
+                if user_id_to_delete is not None:
+                    utente_target = db.get_utente_by_id(user_id_to_delete)
+                    if not utente_target: print("Utente non trovato."); continue
+
+                    # Ulteriore conferma critica
+                    confirm_username = input(f"Per confermare l'eliminazione PERMANENTE dell'utente '{utente_target['username']}' (ID: {user_id_to_delete}), riscrivi il suo username: ").strip()
+                    if confirm_username == utente_target['username']:
+                        if _confirm_action(f"SEI ASSOLUTAMENTE SICURO di voler eliminare PERMANENTEMENTE l'utente '{utente_target['username']}'?"):
+                            if db.delete_user_permanently(user_id_to_delete):
+                                print(f"Utente '{utente_target['username']}' eliminato permanentemente con successo.")
+                            else:
+                                print(f"Errore durante l'eliminazione permanente dell'utente '{utente_target['username']}'. Controllare i log (es. è l'unico admin?).")
+                        else:
+                            print("Eliminazione annullata.")
+                    else:
+                        print("Username non corrispondente. Eliminazione annullata.")
+        
+        elif scelta == "7": # Verifica Permesso Utente (ex opzione 4 o 6)
              stampa_intestazione("VERIFICA PERMESSO UTENTE")
              id_utente_perm_str = input(f"ID Utente (INVIO per utente corrente: {logged_in_user_id if logged_in_user_id else 'N/A'}): ").strip()
              id_utente_da_verificare = None
@@ -1137,23 +1431,26 @@ def menu_utenti(db: CatastoDBManager) -> bool:
              else:
                  print("Nessun utente corrente e ID non specificato."); input("\nPremi INVIO per continuare..."); continue
             
-             permesso_da_verificare = input("Nome del permesso (es. 'modifica_partite'): ").strip()
+             permesso_da_verificare = input("Nome del permesso (es. 'modifica_partite', 'gestione_utenti'): ").strip()
              if not permesso_da_verificare: print("Nome permesso obbligatorio."); input("\nPremi INVIO per continuare..."); continue
              
              if id_utente_da_verificare is not None:
+                 # Recuperiamo le info dell'utente target per mostrare il nome/ruolo
+                 utente_target_info = db.get_utente_by_id(id_utente_da_verificare)
+                 nome_utente_target = utente_target_info['username'] if utente_target_info else f"ID {id_utente_da_verificare}"
+                 ruolo_utente_target = utente_target_info.get('ruolo', 'N/D') if utente_target_info else 'N/D'
+
                  try:
                      ha_permesso = db.check_permission(id_utente_da_verificare, permesso_da_verificare)
-                     utente_target_info = db.get_utente_by_id(id_utente_da_verificare)
-                     nome_utente_target = utente_target_info['username'] if utente_target_info else f"ID {id_utente_da_verificare}"
                      if ha_permesso:
-                         print(f"L'utente {nome_utente_target} HA il permesso '{permesso_da_verificare}'.")
+                         print(f"L'utente {nome_utente_target} (Ruolo: {ruolo_utente_target}) HA il permesso '{permesso_da_verificare}'.")
                      else:
-                         print(f"L'utente {nome_utente_target} NON HA il permesso '{permesso_da_verificare}'.")
+                         print(f"L'utente {nome_utente_target} (Ruolo: {ruolo_utente_target}) NON HA il permesso '{permesso_da_verificare}'.")
                  except Exception as perm_err:
                      logger.error(f"Errore verifica permesso '{permesso_da_verificare}' user ID {id_utente_da_verificare}: {perm_err}")
                      print("Errore durante la verifica del permesso.")
 
-        elif scelta == "7": # Logout Utente
+        elif scelta == "8": # Logout Utente (ex opzione 3 o 7)
              stampa_intestazione("LOGOUT UTENTE")
              user_display_logout = "N/D"
              if logged_in_user_info:
@@ -1165,10 +1462,11 @@ def menu_utenti(db: CatastoDBManager) -> bool:
              else:
                  print("Errore durante la registrazione del logout (controllare log).")
              
+             # Resetta le variabili globali di sessione
              logged_in_user_id = None
              logged_in_user_info = None
              current_session_id = None
-             db.clear_session_app_user()
+             db.clear_session_app_user() # Pulisce anche il contesto DB per l'audit
              print("Verrai reindirizzato alla schermata di login.")
              input("\nPremi INVIO per continuare...") 
              return False # Segnala logout al chiamante (menu_principale)
@@ -1177,8 +1475,11 @@ def menu_utenti(db: CatastoDBManager) -> bool:
             break 
         else:
             print("Opzione non valida!")
-        input("\nPremi INVIO per continuare...")
-    return True # Ritorna True se l'utente non ha fatto logout esplicito da questo menu
+        
+        if scelta != "7": # Non attendere input se si è fatto logout e si sta per uscire dal menu
+            input("\nPremi INVIO per continuare...")
+            
+    return True # Ritorna True se l'utente non ha fatto logout esplicito da questo menu (es. ha scelto "0")
 # --- Menu Principale (MODIFICATO per gestire stato login da menu_utenti) ---
 def menu_principale(db: CatastoDBManager):
     """Menu principale dell'applicazione."""
@@ -1205,8 +1506,6 @@ def menu_principale(db: CatastoDBManager):
         print("9. Esci (Logout e chiusura programma)")
         scelta = input("\nSeleziona un'opzione (1-9): ").strip()
         
-        # _set_session_context(db) # Ora chiamato all'inizio di ogni sottomenu
-
         if scelta == "1": menu_consultazione(db)
         elif scelta == "2": menu_inserimento(db)
         elif scelta == "3": menu_report(db)

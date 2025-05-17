@@ -21,14 +21,14 @@ CREATE INDEX idx_utente_ruolo ON utente(ruolo);
 -- Tabella per il log degli accessi
 CREATE TABLE accesso_log (
     id SERIAL PRIMARY KEY,
-    utente_id INTEGER REFERENCES utente(id),
+    utente_id INTEGER REFERENCES utente(id) ON DELETE SET NULL, -- <<< MODIFICA QUI
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    azione VARCHAR(50) NOT NULL, -- 'login', 'logout', 'password_change', ecc.
+    azione VARCHAR(50) NOT NULL,
     indirizzo_ip VARCHAR(40),
     user_agent TEXT,
-    esito BOOLEAN, -- successo o fallimento
-    session_id VARCHAR(100) NULL,       -- AGGIUNTO: ID univoco di sessione
-    application_name VARCHAR(100) NULL  -- AGGIUNTO: Nome dell'applicazione client
+    esito BOOLEAN,
+    session_id VARCHAR(100) NULL,
+    application_name VARCHAR(100) NULL
 );
 
 COMMENT ON COLUMN accesso_log.session_id IS 'ID univoco della sessione utente, se applicabile.';
@@ -193,8 +193,24 @@ INSERT INTO permesso (nome, descrizione) VALUES
 ('gestione_utenti', 'Permesso di gestire gli utenti');
 
 -- Utente amministratore di default (password: admin123 - in produzione usare un hash sicuro!)
-INSERT INTO utente (username, password_hash, nome_completo, email, ruolo)
-VALUES ('admin', 'password_hash_qui', 'Amministratore Sistema', 'admin@example.com', 'admin');
+DO $$
+DECLARE
+    admin_username TEXT := 'admin';
+    admin_email TEXT := 'admin@archivio.savona.it';
+    -- METTA QUI L'HASH BCRYPT VALIDO E GENERATO DA LEI
+    admin_password_hash TEXT := '$2b$12$r0aa.7569LtbyofetxSRtOWZzWAQDbD9XTC1SQ4bHVXDURlQwXszy'; 
+    user_exists BOOLEAN;
+BEGIN
+    SET LOCAL search_path TO catasto, public;
+    SELECT EXISTS(SELECT 1 FROM utente WHERE username = admin_username) INTO user_exists;
+    IF NOT user_exists THEN
+        INSERT INTO utente (username, password_hash, nome_completo, email, ruolo, attivo)
+        VALUES (admin_username, admin_password_hash, 'Amministratore Sistema', admin_email, 'admin', TRUE);
+        RAISE NOTICE 'Utente amministratore di default "%" creato (da 07_user-management.sql).', admin_username;
+    ELSE
+        RAISE NOTICE 'Utente amministratore di default "%" già esistente (controllato da 07_user-management.sql).', admin_username;
+    END IF;
+END $$;
 
 -- Applicazione del trigger per l'aggiornamento del timestamp di modifica
 CREATE TRIGGER update_utente_modifica

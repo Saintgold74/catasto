@@ -672,6 +672,38 @@ def _registra_passaggio_proprieta_interattivo(db: CatastoDBManager):
                print("Passaggio di proprietà registrato con successo.")
           else:
                print("Errore durante la registrazione del passaggio (controllare log).")
+def _seleziona_utente_da_elenco(db: CatastoDBManager, prompt: str = "Seleziona utente:") -> Optional[int]:
+    """Mostra elenco utenti e permette la selezione tramite ID."""
+    utenti = db.get_utenti() # Mostra tutti per la selezione
+    if not utenti:
+        print("Nessun utente registrato nel sistema.")
+        return None
+    
+    print(f"\n{prompt} (inserisci l'ID)")
+    print("-" * 50)
+    print(f"{'ID':<5} | {'Username':<20} | {'Nome Completo':<25} | {'Stato':<8}")
+    print("-" * 50)
+    for u in utenti:
+        stato = "Attivo" if u['attivo'] else "Non Attivo"
+        print(f"{u['id']:<5} | {u['username']:<20} | {u['nome_completo']:<25} | {stato:<8}")
+    print("-" * 50)
+    print("0. Annulla")
+
+    while True:
+        scelta_id_str = input("ID utente (0 per annullare): ").strip()
+        if scelta_id_str == '0':
+            return None
+        if scelta_id_str.isdigit():
+            scelta_id = int(scelta_id_str)
+            utente_selezionato = next((u for u in utenti if u['id'] == scelta_id), None)
+            if utente_selezionato:
+                print(f"--> Utente selezionato: {utente_selezionato['username']} (ID: {utente_selezionato['id']})")
+                return utente_selezionato['id']
+            else:
+                print("ID utente non trovato nell'elenco. Riprova.")
+        else:
+            print("Input non numerico. Riprova.")
+
 
 # --- Funzioni Invariate rispetto a comune_id ---
 def _registra_consultazione_interattivo(db: CatastoDBManager):
@@ -912,108 +944,241 @@ def menu_storico_avanzato(db: CatastoDBManager):
 
 
 # --- Menu Utenti e Sessione (MODIFICATO: Rimosso Login, aggiornato per tornare False su Logout) ---
-def menu_utenti(db: CatastoDBManager) -> bool: # Aggiunto tipo di ritorno
-    """Menu per la gestione degli utenti e logout. Ritorna False se l'utente fa logout, True altrimenti."""
+# --- Menu Utenti e Sessione ---
+def menu_utenti(db: CatastoDBManager) -> bool:
+    """
+    Menu per la gestione degli utenti e logout.
+    Ritorna False se l'utente fa logout, True altrimenti (torna al menu principale).
+    """
+    global logged_in_user_id, logged_in_user_info, current_session_id # Per leggere e resettare
+
     # _set_session_context(db) # Già chiamato da menu_principale prima di entrare qui
-
-    global logged_in_user_id, logged_in_user_info, current_session_id # Dichiarazione global all'inizio
-
 
     while True:
         stampa_intestazione("GESTIONE UTENTI E SESSIONE")
         if logged_in_user_id and logged_in_user_info:
             user_display = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
-            print(f"--- Utente Attivo: {user_display} (ID: {logged_in_user_id}, Sessione: {current_session_id[:8]}...) ---")
+            print(f"--- Utente Attivo: {user_display} (ID: {logged_in_user_id}, Ruolo: {logged_in_user_info.get('ruolo','N/D')}, Sessione: {current_session_id[:8]}...) ---")
         else:
-            print("--- ERRORE: Nessun utente connesso ---") # Non dovrebbe accadere
-            return False # Forza uscita se si arriva qui in uno stato anomalo
+            print("--- ERRORE: Nessun utente connesso. Impossibile accedere a Gestione Utenti. ---")
+            return True # Torna al menu principale, che dovrebbe forzare il re-login
 
-        print("1. Crea nuovo utente (richiede privilegi admin)")
-        print("2. Logout Utente")
-        print("3. Verifica Permesso Utente")
-        print("4. Elenca Utenti Registrati")
+        print("\nOpzioni disponibili:")
+        print("1. Crea nuovo utente")
+        print("2. Elenca Utenti Registrati")
+        print("3. Modifica Dettagli Utente")
+        print("4. Resetta Password Utente")
+        print("5. Disattiva/Riattiva Utente")
+        print("6. Verifica Permesso (proprio o altrui)")
+        print("7. Logout Utente")
         print("0. Torna al menu principale")
-        scelta = input("\nSeleziona un'opzione (0-4): ").strip()
+        scelta = input("\nSeleziona un'opzione (0-7): ").strip()
 
-        if scelta == "1":
-            stampa_intestazione("CREA NUOVO UTENTE")
-            username_new = input("Username: ").strip() # Rinominato per evitare conflitti
-            password_new = getpass.getpass("Password: ")
-            password_confirm = getpass.getpass("Conferma Password: ")
-            if not password_new: print("Password obbligatoria."); input("\nPremi INVIO per continuare..."); continue
-            if password_new != password_confirm: print("Le password non coincidono."); input("\nPremi INVIO per continuare..."); continue
-            nome_completo_new = input("Nome completo: ").strip()
-            email_new = input("Email: ").strip()
-            print("Ruoli disponibili: admin, archivista, consultatore")
-            ruolo_new = input("Ruolo: ").strip().lower()
-            if not all([username_new, nome_completo_new, email_new, ruolo_new]): print("Tutti i campi sono obbligatori."); input("\nPremi INVIO per continuare..."); continue
-            if ruolo_new not in ['admin', 'archivista', 'consultatore']: print("Ruolo non valido."); input("\nPremi INVIO per continuare..."); continue
-            try:
-                password_hash = _hash_password(password_new)
-                logger.debug(f"Hash generato per {username_new}")
-            except Exception as hash_err:
-                logger.error(f"Errore hashing password per {username_new}: {hash_err}"); print("Errore tecnico hashing."); input("\nPremi INVIO per continuare..."); continue
-            if db.create_user(username_new, password_hash, nome_completo_new, email_new, ruolo_new):
-                print(f"Utente '{username_new}' creato.")
+        # Verifica dei privilegi per azioni amministrative
+        is_admin = logged_in_user_info.get('ruolo') == 'admin' if logged_in_user_info else False
+        # In un sistema più complesso, useremmo db.check_permission(logged_in_user_id, 'nome_permesso_specifico')
+
+        if scelta == "1": # Crea nuovo utente
+            if not is_admin:
+                print("Accesso negato. Solo gli amministratori possono creare nuovi utenti.")
             else:
-                print(f"Errore creazione utente '{username_new}' (controllare log).")
-        elif scelta == "2":
-             stampa_intestazione("LOGOUT UTENTE")
-             user_display_logout = "N/D"
-             if logged_in_user_info:
-                 user_display_logout = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
-             print(f"Disconnessione utente: {user_display_logout} (ID: {logged_in_user_id})...")
-             if db.logout_user(logged_in_user_id, current_session_id, client_ip_address):
-                 print("Logout eseguito con successo.")
-             else:
-                 print("Errore durante la registrazione del logout (controllare log).")
-             logged_in_user_id = None
-             logged_in_user_info = None
-             current_session_id = None
-             db.clear_session_app_user()
-             print("Verrai reindirizzato alla schermata di login.")
-             input("\nPremi INVIO per continuare...") # Attende prima di tornare al ciclo di login
-             return False # Segnala logout
-        elif scelta == "3":
-             stampa_intestazione("VERIFICA PERMESSO UTENTE")
-             utente_id_str = input(f"ID Utente (INVIO per utente corrente: {logged_in_user_id if logged_in_user_id else 'N/A'}): ").strip()
-             utente_id_to_check = None
-             if utente_id_str.isdigit():
-                 try: utente_id_to_check = int(utente_id_str)
-                 except ValueError: print("ID utente non valido."); input("\nPremi INVIO per continuare..."); continue
-             elif logged_in_user_id: utente_id_to_check = logged_in_user_id
-             else: print("Nessun utente corrente e ID non specificato."); input("\nPremi INVIO per continuare..."); continue
-             permesso_check = input("Nome del permesso (es. 'modifica_partite'): ").strip() # Rinominato
-             if not permesso_check: print("Nome permesso obbligatorio."); input("\nPremi INVIO per continuare..."); continue
-             if utente_id_to_check is not None:
-                 try:
-                     ha_permesso = db.check_permission(utente_id_to_check, permesso_check)
-                     if ha_permesso: print(f"Utente ID {utente_id_to_check} HA il permesso '{permesso_check}'.")
-                     else: print(f"Utente ID {utente_id_to_check} NON HA il permesso '{permesso_check}' o errore.")
-                 except Exception as perm_err: logger.error(f"Errore verifica permesso '{permesso_check}' user ID {utente_id_to_check}: {perm_err}"); print("Errore verifica permesso.")
-        elif scelta == "4":
+                stampa_intestazione("CREA NUOVO UTENTE")
+                username_new = input("Username: ").strip()
+                if not username_new: print("Username obbligatorio."); input("\nPremi INVIO per continuare..."); continue
+                
+                password_new = getpass.getpass("Password: ")
+                if not password_new: print("Password obbligatoria."); input("\nPremi INVIO per continuare..."); continue
+                password_confirm = getpass.getpass("Conferma Password: ")
+                if password_new != password_confirm: print("Le password non coincidono."); input("\nPremi INVIO per continuare..."); continue
+                
+                nome_completo_new = input("Nome completo: ").strip()
+                if not nome_completo_new: print("Nome completo obbligatorio."); input("\nPremi INVIO per continuare..."); continue
+                
+                email_new = input("Email: ").strip()
+                if not email_new: print("Email obbligatoria."); input("\nPremi INVIO per continuare..."); continue # Aggiunta validazione base
+                
+                print("Ruoli disponibili: admin, archivista, consultatore")
+                ruolo_new = input("Ruolo (default 'consultatore'): ").strip().lower() or 'consultatore'
+                if ruolo_new not in ['admin', 'archivista', 'consultatore']: 
+                    print("Ruolo non valido. Sarà impostato a 'consultatore'."); ruolo_new = 'consultatore'
+                
+                try:
+                    password_hash = _hash_password(password_new)
+                except Exception as e:
+                    logger.error(f"Errore hashing password per {username_new}: {e}")
+                    print("Errore tecnico durante l'hashing della password.")
+                    input("\nPremi INVIO per continuare..."); continue
+                
+                if db.create_user(username_new, password_hash, nome_completo_new, email_new, ruolo_new):
+                    print(f"Utente '{username_new}' creato con successo.")
+                else:
+                    print(f"Errore durante la creazione dell'utente '{username_new}'. Controllare i log (es. username o email duplicati).")
+
+        elif scelta == "2": # Elenca Utenti Registrati
             stampa_intestazione("ELENCO UTENTI REGISTRATI")
             filtro_attivi_str = input("Vuoi visualizzare solo gli utenti attivi? (s/n, INVIO per tutti): ").strip().lower()
             solo_attivi_filter = None
             if filtro_attivi_str == 's': solo_attivi_filter = True
             elif filtro_attivi_str == 'n': solo_attivi_filter = False
-            utenti_list = db.get_utenti(solo_attivi=solo_attivi_filter) # Rinominato
+
+            utenti_list = db.get_utenti(solo_attivi=solo_attivi_filter)
             if utenti_list:
-                print(f"\n--- Trovati {len(utenti_list)} utenti ---"); print("-" * 80)
-                print(f"{'ID':<5} | {'Username':<20} | {'Nome Completo':<25} | {'Ruolo':<12} | {'Stato':<8} | {'Ultimo Accesso'}"); print("-" * 80)
+                print(f"\n--- Trovati {len(utenti_list)} utenti ---")
+                print("-" * 90)
+                print(f"{'ID':<5} | {'Username':<20} | {'Nome Completo':<25} | {'Email':<25} | {'Ruolo':<12} | {'Stato':<8}")
+                print("-" * 90)
                 for utente_item in utenti_list:
-                    stato_utente = "Attivo" if utente_item['attivo'] else "Non Attivo" # Rinominato
-                    ultimo_accesso_str = utente_item['ultimo_accesso'].strftime('%Y-%m-%d %H:%M:%S') if utente_item['ultimo_accesso'] else "Mai"
-                    print(f"{utente_item['id']:<5} | {utente_item['username']:<20} | {utente_item['nome_completo']:<25} | {utente_item['ruolo']:<12} | {stato_utente:<8} | {ultimo_accesso_str}")
-                print("-" * 80)
-            else: print("Nessun utente trovato con i criteri specificati.")
-        elif scelta == "0":
-            break # Esce dal loop di menu_utenti
+                    stato_utente = "Attivo" if utente_item['attivo'] else "Non Attivo"
+                    # ultimo_accesso_str = utente_item['ultimo_accesso'].strftime('%Y-%m-%d %H:%M:%S') if utente_item['ultimo_accesso'] else "Mai" # Rimosso per brevità riga
+                    print(f"{utente_item['id']:<5} | {utente_item['username']:<20} | {utente_item['nome_completo']:<25} | {utente_item.get('email','N/D'):<25} | {utente_item['ruolo']:<12} | {stato_utente:<8}")
+                print("-" * 90)
+            else:
+                print("Nessun utente trovato con i criteri specificati.")
+
+        elif scelta == "3": # Modifica Dettagli Utente
+            if not is_admin:
+                print("Accesso negato. Solo gli amministratori possono modificare i dettagli degli utenti.")
+            else:
+                stampa_intestazione("MODIFICA DETTAGLI UTENTE")
+                user_id_to_edit = _seleziona_utente_da_elenco(db, "Seleziona l'utente da modificare:")
+                if user_id_to_edit is not None:
+                    utente_attuale = db.get_utente_by_id(user_id_to_edit)
+                    if not utente_attuale: print("Utente non trovato."); continue
+
+                    print(f"\nModifica utente: {utente_attuale['username']} (ID: {utente_attuale['id']})")
+                    print(f"Lasciare il campo vuoto per non modificare il valore esistente.")
+                    
+                    new_nome = input(f"Nuovo nome completo (attuale: '{utente_attuale['nome_completo']}'): ").strip()
+                    new_email = input(f"Nuova email (attuale: '{utente_attuale['email']}'): ").strip()
+                    
+                    print(f"Ruolo attuale: {utente_attuale['ruolo']}. Ruoli disponibili: admin, archivista, consultatore")
+                    new_ruolo = input("Nuovo ruolo: ").strip().lower()
+                    if new_ruolo and new_ruolo not in ['admin', 'archivista', 'consultatore']:
+                        print("Ruolo non valido. Il ruolo non verrà modificato."); new_ruolo = None
+                    
+                    stato_attuale_str = "Attivo" if utente_attuale['attivo'] else "Non Attivo"
+                    new_attivo_str = input(f"Nuovo stato (attuale: {stato_attuale_str}) (attivo/nonattivo): ").strip().lower()
+                    new_attivo_val = None # Usiamo None per indicare "nessuna modifica"
+                    if new_attivo_str == 'attivo': new_attivo_val = True
+                    elif new_attivo_str == 'nonattivo': new_attivo_val = False
+                    elif new_attivo_str: print("Input stato non valido. Lo stato non verrà modificato.")
+
+                    # Prepara i parametri per l'aggiornamento solo se è stato fornito un nuovo valore
+                    update_params = {}
+                    if new_nome: update_params['nome_completo'] = new_nome
+                    if new_email: update_params['email'] = new_email
+                    if new_ruolo: update_params['ruolo'] = new_ruolo
+                    if new_attivo_val is not None: update_params['attivo'] = new_attivo_val
+                    
+                    if update_params: # Se c'è almeno un campo da aggiornare
+                        if db.update_user_details(user_id_to_edit, **update_params):
+                            print("Dettagli utente aggiornati con successo.")
+                        else:
+                            print("Errore durante l'aggiornamento dei dettagli utente (controllare log o input, es. email duplicata).")
+                    else:
+                        print("Nessuna modifica specificata.")
+
+        elif scelta == "4": # Resetta Password Utente
+            if not is_admin:
+                print("Accesso negato. Solo gli amministratori possono resettare le password.")
+            else:
+                stampa_intestazione("RESETTA PASSWORD UTENTE")
+                user_id_to_reset = _seleziona_utente_da_elenco(db, "Seleziona l'utente a cui resettare la password:", exclude_user_id=logged_in_user_id)
+                if user_id_to_reset is not None:
+                    # Non è più necessario il controllo user_id_to_reset == logged_in_user_id grazie a exclude_user_id
+                    
+                    new_password = getpass.getpass("Inserisci la nuova password temporanea: ")
+                    if not new_password: print("La password non può essere vuota."); continue
+                    new_password_confirm = getpass.getpass("Conferma la nuova password temporanea: ")
+                    if new_password != new_password_confirm: print("Le password non coincidono."); continue
+                    
+                    try:
+                        new_password_hash = _hash_password(new_password)
+                        if db.reset_user_password(user_id_to_reset, new_password_hash):
+                            print(f"Password per utente ID {user_id_to_reset} resettata con successo. L'utente dovrà usare questa nuova password al prossimo login.")
+                        else:
+                            print("Errore durante il reset della password.")
+                    except Exception as e:
+                        logger.error(f"Errore hashing password per reset: {e}")
+                        print("Errore tecnico durante l'hashing della nuova password.")
+        
+        elif scelta == "5": # Disattiva/Riattiva Utente
+            if not is_admin:
+                print("Accesso negato. Solo gli amministratori possono modificare lo stato degli utenti.")
+            else:
+                stampa_intestazione("DISATTIVA/RIATTIVA UTENTE")
+                user_id_to_toggle = _seleziona_utente_da_elenco(db, "Seleziona l'utente da disattivare/riattivare:", exclude_user_id=logged_in_user_id)
+                if user_id_to_toggle is not None:
+                    utente_target = db.get_utente_by_id(user_id_to_toggle)
+                    if not utente_target: print("Utente non trovato."); continue
+
+                    if utente_target['attivo']:
+                        if _confirm_action(f"L'utente '{utente_target['username']}' è ATTIVO. Vuoi DISATTIVARLO?"):
+                            if db.deactivate_user(user_id_to_toggle):
+                                print(f"Utente '{utente_target['username']}' disattivato con successo.")
+                            else:
+                                print("Errore durante la disattivazione.")
+                    else:
+                        if _confirm_action(f"L'utente '{utente_target['username']}' è NON ATTIVO. Vuoi RIATTIVARLO?"):
+                            if db.activate_user(user_id_to_toggle):
+                                print(f"Utente '{utente_target['username']}' riattivato con successo.")
+                            else:
+                                print("Errore durante la riattivazione.")
+        
+        elif scelta == "6": # Verifica Permesso Utente
+             stampa_intestazione("VERIFICA PERMESSO UTENTE")
+             id_utente_perm_str = input(f"ID Utente (INVIO per utente corrente: {logged_in_user_id if logged_in_user_id else 'N/A'}): ").strip()
+             id_utente_da_verificare = None
+             if id_utente_perm_str.isdigit():
+                 try: id_utente_da_verificare = int(id_utente_perm_str)
+                 except ValueError: print("ID utente non valido."); input("\nPremi INVIO per continuare..."); continue
+             elif logged_in_user_id:
+                 id_utente_da_verificare = logged_in_user_id
+             else:
+                 print("Nessun utente corrente e ID non specificato."); input("\nPremi INVIO per continuare..."); continue
+            
+             permesso_da_verificare = input("Nome del permesso (es. 'modifica_partite'): ").strip()
+             if not permesso_da_verificare: print("Nome permesso obbligatorio."); input("\nPremi INVIO per continuare..."); continue
+             
+             if id_utente_da_verificare is not None:
+                 try:
+                     ha_permesso = db.check_permission(id_utente_da_verificare, permesso_da_verificare)
+                     utente_target_info = db.get_utente_by_id(id_utente_da_verificare)
+                     nome_utente_target = utente_target_info['username'] if utente_target_info else f"ID {id_utente_da_verificare}"
+                     if ha_permesso:
+                         print(f"L'utente {nome_utente_target} HA il permesso '{permesso_da_verificare}'.")
+                     else:
+                         print(f"L'utente {nome_utente_target} NON HA il permesso '{permesso_da_verificare}'.")
+                 except Exception as perm_err:
+                     logger.error(f"Errore verifica permesso '{permesso_da_verificare}' user ID {id_utente_da_verificare}: {perm_err}")
+                     print("Errore durante la verifica del permesso.")
+
+        elif scelta == "7": # Logout Utente
+             stampa_intestazione("LOGOUT UTENTE")
+             user_display_logout = "N/D"
+             if logged_in_user_info:
+                 user_display_logout = logged_in_user_info.get('nome_completo') or logged_in_user_info.get('username', 'N/D')
+             
+             print(f"Disconnessione utente: {user_display_logout} (ID: {logged_in_user_id})...")
+             if db.logout_user(logged_in_user_id, current_session_id, client_ip_address):
+                 print("Logout eseguito con successo.")
+             else:
+                 print("Errore durante la registrazione del logout (controllare log).")
+             
+             logged_in_user_id = None
+             logged_in_user_info = None
+             current_session_id = None
+             db.clear_session_app_user()
+             print("Verrai reindirizzato alla schermata di login.")
+             input("\nPremi INVIO per continuare...") 
+             return False # Segnala logout al chiamante (menu_principale)
+
+        elif scelta == "0": # Torna al menu principale
+            break 
         else:
             print("Opzione non valida!")
         input("\nPremi INVIO per continuare...")
     return True # Ritorna True se l'utente non ha fatto logout esplicito da questo menu
-
 # --- Menu Principale (MODIFICATO per gestire stato login da menu_utenti) ---
 def menu_principale(db: CatastoDBManager):
     """Menu principale dell'applicazione."""

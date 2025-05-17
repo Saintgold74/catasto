@@ -1092,6 +1092,111 @@ class CatastoDBManager:
         except Exception as e:
             logger.error(f"Errore Python durante il recupero degli utenti: {e}")
             return []
+    def get_utente_by_id(self, utente_id: int) -> Optional[Dict]:
+        """Recupera i dettagli di un singolo utente tramite ID."""
+        try:
+            query = "SELECT id, username, nome_completo, email, ruolo, attivo FROM utente WHERE id = %s"
+            if self.execute_query(query, (utente_id,)):
+                return self.fetchone()
+            return None
+        except Exception as e:
+            logger.error(f"Errore durante il recupero dell'utente ID {utente_id}: {e}")
+            return None
+
+    def update_user_details(self, utente_id: int, nome_completo: Optional[str] = None, 
+                            email: Optional[str] = None, ruolo: Optional[str] = None, 
+                            attivo: Optional[bool] = None) -> bool:
+        """
+        Aggiorna i dettagli di un utente (nome_completo, email, ruolo, stato attivo).
+        Non aggiorna lo username o la password qui.
+        """
+        if not any([nome_completo, email, ruolo, attivo is not None]):
+            logger.warning("Nessun dettaglio fornito per l'aggiornamento utente.")
+            return False
+        
+        fields_to_update = []
+        params = []
+
+        if nome_completo is not None:
+            fields_to_update.append("nome_completo = %s")
+            params.append(nome_completo)
+        if email is not None:
+            fields_to_update.append("email = %s")
+            params.append(email)
+        if ruolo is not None:
+            if ruolo not in ['admin', 'archivista', 'consultatore']:
+                logger.error(f"Ruolo non valido: {ruolo}")
+                return False
+            fields_to_update.append("ruolo = %s")
+            params.append(ruolo)
+        if attivo is not None:
+            fields_to_update.append("attivo = %s")
+            params.append(attivo)
+        
+        if not fields_to_update: # Dovrebbe essere già gestito dal controllo any() sopra
+            return False
+
+        params.append(utente_id)
+        query = f"UPDATE utente SET {', '.join(fields_to_update)}, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+        
+        try:
+            if self.execute_query(query, tuple(params)):
+                self.commit()
+                logger.info(f"Dettagli utente ID {utente_id} aggiornati.")
+                return True
+            return False
+        except psycopg2.errors.UniqueViolation:
+            logger.error(f"Errore aggiornamento utente ID {utente_id}: Email '{email}' potrebbe essere già in uso.")
+            self.rollback()
+            return False
+        except Exception as e:
+            logger.error(f"Errore durante l'aggiornamento dell'utente ID {utente_id}: {e}")
+            self.rollback()
+            return False
+
+    def reset_user_password(self, utente_id: int, new_password_hash: str) -> bool:
+        """Resetta la password di un utente (tipicamente da un admin)."""
+        try:
+            query = "UPDATE utente SET password_hash = %s, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+            if self.execute_query(query, (new_password_hash, utente_id)):
+                self.commit()
+                logger.info(f"Password resettata per utente ID {utente_id}.")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Errore durante il reset password per utente ID {utente_id}: {e}")
+            self.rollback()
+            return False
+
+    def deactivate_user(self, utente_id: int) -> bool:
+        """Disattiva un utente (soft delete)."""
+        try:
+            # Potremmo anche voler invalidare sessioni attive qui, ma è più complesso.
+            query = "UPDATE utente SET attivo = FALSE, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+            if self.execute_query(query, (utente_id,)):
+                self.commit()
+                logger.info(f"Utente ID {utente_id} disattivato.")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Errore durante la disattivazione dell'utente ID {utente_id}: {e}")
+            self.rollback()
+            return False
+
+    # Potrebbe essere utile anche un activate_user se si vuole riattivare
+    def activate_user(self, utente_id: int) -> bool:
+        """Riattiva un utente precedentemente disattivato."""
+        try:
+            query = "UPDATE utente SET attivo = TRUE, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+            if self.execute_query(query, (utente_id,)):
+                self.commit()
+                logger.info(f"Utente ID {utente_id} riattivato.")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Errore durante la riattivazione dell'utente ID {utente_id}: {e}")
+            self.rollback()
+            return False
 
     # --- Metodi Sistema Backup (Invariati rispetto a comune_id) ---
 

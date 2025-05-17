@@ -601,3 +601,62 @@ LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
 2025-05-16 18:32:09,433 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
 2025-05-16 18:32:09,441 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 506e56e1...
 2025-05-16 18:32:15,606 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 07:38:34,710 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 07:38:34,850 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 07:38:43,239 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-17 07:38:44,269 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione d326ab53...
+2025-05-17 07:40:24,653 - __main__ - ERROR - Errore non gestito nel programma: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1091, in main
+    menu_principale(db) # Entra nel menu principale dopo login riuscito
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1045, in menu_principale
+    if scelta == "1": menu_consultazione(db)
+                      ~~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 365, in menu_consultazione
+    results_possessori = db.ricerca_avanzata_possessori(query_text, similarity_threshold=soglia) # Rinominato
+TypeError: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+2025-05-17 07:40:24,764 - CatastoDB - INFO - Logout registrato per utente ID 3, sessione d326ab53...
+2025-05-17 07:40:24,766 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 07:40:42,226 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 07:40:42,308 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 07:40:47,416 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-17 07:40:48,340 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione 3b8b1a59...
+2025-05-17 07:41:01,982 - CatastoDB - INFO - Recuperati 4 utenti.
+2025-05-17 07:41:32,824 - CatastoDB - INFO - Disconnessione completata
+2025-05-17 08:09:28,930 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-17 08:09:29,098 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-17 08:09:34,693 - CatastoDB - INFO - Credenziali recuperate per utente: pippo
+2025-05-17 08:09:35,608 - CatastoDB - INFO - Registrato accesso: Utente ID 3, Azione login, Esito True, Sessione c8a9ed1c...
+2025-05-17 08:10:25,737 - CatastoDB - INFO - Recuperati 4 utenti.
+2025-05-17 08:11:08,516 - CatastoDB - INFO - Credenziali recuperate per utente: admin
+2025-05-17 08:11:08,516 - __main__ - ERROR - Tentativo di verifica con hash non valido: password_h...
+2025-05-17 08:11:08,517 - __main__ - WARNING - Login fallito (pwd errata) per user ID: 1
+2025-05-17 08:11:08,519 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito False, Sessione 1a52a2cc...
+2025-05-17 08:11:15,447 - CatastoDB - INFO - Credenziali recuperate per utente: sa
+2025-05-17 08:11:16,370 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 470f2a75...
+2025-05-17 08:12:50,871 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedFunction - ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-17 08:12:50,873 - CatastoDB - ERROR - SQLSTATE: 42883
+2025-05-17 08:12:50,874 - CatastoDB - ERROR - Query renderizzata: b'CALL verifica_integrita_database(NULL)'
+2025-05-17 08:12:50,875 - CatastoDB - INFO - Rollback eseguito.
+2025-05-17 08:12:50,876 - CatastoDB - ERROR - Errore DB verifica integrità: ERRORE:  la procedura verifica_integrita_database(unknown) non esiste
+LINE 1: CALL verifica_integrita_database(NULL)
+             ^
+HINT:  Nessuna procedura trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-17 08:13:36,344 - CatastoDB - ERROR - Errore DB specifico rilevato: UndefinedTable - ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-17 08:13:36,345 - CatastoDB - ERROR - SQLSTATE: 42P01
+2025-05-17 08:13:36,345 - CatastoDB - ERROR - Query renderizzata: b'SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LIMIT 100'
+2025-05-17 08:13:36,346 - CatastoDB - INFO - Rollback eseguito.
+2025-05-17 08:13:36,346 - CatastoDB - ERROR - Errore DB get_audit_log: ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-17 08:15:05,561 - CatastoDB - INFO - Disconnessione completata

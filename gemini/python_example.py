@@ -415,6 +415,160 @@ def _esporta_partita_pdf(partita_data: Dict, filename: str):
         print(f"Errore durante l'esportazione PDF della partita: {e}")
         logger.exception("Errore esportazione PDF partita")
         return False
+def _esporta_possessore_csv(possessore_data: Dict, filename: str):
+    """Esporta i dati di un possessore in formato CSV, con controllo sovrascrittura."""
+    if not possessore_data or 'possessore' not in possessore_data:
+        print("Dati possessore non validi per l'esportazione CSV.")
+        return False
+    
+    if os.path.exists(filename):
+        if not _confirm_action(f"Il file '{filename}' esiste già. Sovrascriverlo?"):
+            print("Esportazione CSV annullata.")
+            return False
+            
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            p_info = possessore_data['possessore'] # Dati principali del possessore
+            writer.writerow(['--- DETTAGLI POSSESSORE ---'])
+            writer.writerow(['ID Possessore', p_info.get('id')])
+            writer.writerow(['Nome Completo', p_info.get('nome_completo')])
+            writer.writerow(['Codice Fiscale', p_info.get('codice_fiscale', 'N/D')])
+            writer.writerow(['Data Nascita', p_info.get('data_nascita', 'N/D')])
+            writer.writerow(['Luogo Nascita', p_info.get('luogo_nascita', 'N/D')])
+            writer.writerow(['Paternità', p_info.get('paternita', 'N/D')])
+            writer.writerow(['Indirizzo', p_info.get('indirizzo_residenza', 'N/D')])
+            writer.writerow(['Comune Residenza', p_info.get('comune_residenza_nome', 'N/D')])
+            writer.writerow(['Stato', "Attivo" if p_info.get('attivo') else "Non Attivo"])
+            writer.writerow(['Note', p_info.get('note', '')])
+            writer.writerow([]) 
+
+            if possessore_data.get('partite_associate'):
+                writer.writerow(['--- PARTITE ASSOCIATE ---'])
+                writer.writerow(['ID Partita', 'Numero Partita', 'Comune', 'Tipo', 'Quota', 'Titolo'])
+                for part in possessore_data['partite_associate']:
+                    writer.writerow([
+                        part.get('id_partita'), part.get('numero_partita'), part.get('comune_nome'),
+                        part.get('tipo_partita'), part.get('quota'), part.get('titolo_possesso')
+                    ])
+            print(f"Dati possessore esportati con successo in {filename}")
+            return True
+    except Exception as e:
+        print(f"Errore durante l'esportazione CSV del possessore: {e}")
+        return False
+
+class PDFPossessore(FPDF): # Nuova classe per il report del possessore
+    def header(self):
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Helvetica', 'I', 8)
+        self.cell(0, 10, f'Pagina {self.page_no()}', border=0, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
+
+    def chapter_title(self, title):
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 6, title, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+        self.ln(2)
+
+    def chapter_body(self, data_dict):
+        self.set_font('Helvetica', '', 10)
+        page_width = self.w - self.l_margin - self.r_margin
+        for key, value in data_dict.items():
+            text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
+            try:
+                self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+            except FPDFException as e:
+                if "Not enough horizontal space" in str(e):
+                    logger.warning(f"FPDFException (chapter_body possessore): {e} per testo: {text_to_write[:100]}...")
+                    self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+                else: raise e
+        # self.ln() # Già gestito da YPos.NEXT
+
+    def simple_table(self, headers, data_rows, col_widths_percent=None): # Aggiunto col_widths_percent
+        self.set_font('Helvetica', 'B', 9)
+        effective_page_width = self.w - self.l_margin - self.r_margin
+        
+        if col_widths_percent:
+            col_widths = [effective_page_width * (p/100) for p in col_widths_percent]
+        else: # Calcolo automatico semplice (potrebbe necessitare di aggiustamenti)
+            num_cols = len(headers)
+            default_col_width = effective_page_width / num_cols if num_cols > 0 else effective_page_width
+            col_widths = [default_col_width] * num_cols
+            # Si potrebbe migliorare il calcolo automatico come fatto per PDFPartita se necessario
+
+        for i, header in enumerate(headers):
+            align = 'L' if i == 1 else 'C' # Esempio: allinea a sx il nome partita
+            if i == len(headers) - 1:
+                self.cell(col_widths[i], 7, header, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+            else:
+                self.cell(col_widths[i], 7, header, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+
+        self.set_font('Helvetica', '', 8)
+        for row in data_rows:
+            for i, item in enumerate(row):
+                text = str(item) if item is not None else ''
+                align = 'L' if i == 1 else 'L' # Allinea a sx i dati
+                if i == len(row) - 1:
+                    self.cell(col_widths[i], 6, text, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+                else:
+                    self.cell(col_widths[i], 6, text, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+        self.ln(4)
+
+
+def _esporta_possessore_pdf(possessore_data: Dict, filename: str):
+    if not possessore_data or 'possessore' not in possessore_data:
+        print("Dati possessore non validi per l'esportazione PDF.")
+        return False
+
+    if os.path.exists(filename):
+        if not _confirm_action(f"Il file '{filename}' esiste già. Sovrascriverlo?"):
+            print("Esportazione PDF annullata.")
+            return False
+            
+    try:
+        pdf = PDFPossessore()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_left_margin(10)
+        pdf.set_right_margin(10)
+        pdf.add_page()
+        
+        p_info = possessore_data['possessore']
+        pdf.chapter_title('Dettagli Possessore')
+        details = {
+            'ID Possessore': p_info.get('id'), 'Nome Completo': p_info.get('nome_completo'),
+            'Codice Fiscale': p_info.get('codice_fiscale'), 'Data Nascita': p_info.get('data_nascita'),
+            'Luogo Nascita': p_info.get('luogo_nascita'), 'Paternità': p_info.get('paternita'),
+            'Indirizzo Residenza': p_info.get('indirizzo_residenza'),
+            'Comune Residenza': p_info.get('comune_residenza_nome'),
+            'Stato': "Attivo" if p_info.get('attivo') else "Non Attivo",
+            'Note': p_info.get('note')
+        }
+        pdf.chapter_body(details)
+
+        if possessore_data.get('partite_associate'):
+            pdf.chapter_title('Partite Associate')
+            headers = ['ID Part.', 'Num. Partita', 'Comune', 'Tipo', 'Quota', 'Titolo Poss.']
+            # Definisci percentuali per le larghezze delle colonne per la tabella delle partite
+            col_widths_percent = [10, 20, 25, 15, 15, 15] 
+            data_rows = []
+            for part in possessore_data['partite_associate']:
+                data_rows.append([
+                    part.get('id_partita'), part.get('numero_partita'), part.get('comune_nome'),
+                    part.get('tipo_partita'), part.get('quota'), part.get('titolo_possesso')
+                ])
+            pdf.simple_table(headers, data_rows, col_widths_percent=col_widths_percent)
+            
+        pdf.output(filename)
+        print(f"Dati possessore esportati con successo in {filename}")
+        return True
+    except Exception as e:
+        print(f"Errore durante l'esportazione PDF del possessore: {e}")
+        logger.exception("Errore esportazione PDF possessore")
+        return False
 
 # --- Funzioni dei Sottomenu ---
 
@@ -435,13 +589,9 @@ def menu_consultazione(db: CatastoDBManager):
         print("9. Cerca Immobili Specifici")
         print("10. Cerca Variazioni")
         print("11. Cerca Consultazioni")
-        print("--- Opzioni di Esportazione ---")
-        print("12. Esporta Dettaglio Partita in JSON")
-        print("13. Esporta Dettaglio Partita in CSV")
-        print("14. Esporta Dettaglio Partita in PDF")
-        # Aggiungere opzioni simili per possessore se necessario
-        print("0. Torna al menu principale")
-        scelta = input("\nSeleziona un'opzione (0-14): ").strip() # Range aggiornato
+        print("12. Esportazioni Dati...") # Nuova opzione per accedere al sottomenu
+        print("0. Torna al menu principale") # Era 12, 13, 14. Ora 0 è solo per uscire da questo menu.
+        scelta = input("\nSeleziona un'opzione (0-12): ").strip() # Range aggiornato
 
         if scelta == "1": # Elenco comuni
             search_term = input("Termine di ricerca nome comune (lascia vuoto per tutti): ").strip()
@@ -680,57 +830,85 @@ def menu_consultazione(db: CatastoDBManager):
              except ValueError:
                  print("Formato Data non valido.")
 
-        elif scelta == "12": # Esporta Partita JSON
-                esporta_entita_json(db, tipo_entita='partita', etichetta_id='ID della Partita', nome_file_prefix='partita')
+        elif scelta == "12": # Chiama il sottomenu esportazioni
+            menu_esportazioni(db)
+        elif scelta == "0":
+            break 
+        else:
+            # Qui va la logica per le opzioni da 1 a 11 se non sono state
+            # gestite individualmente sopra, o un messaggio di opzione non valida.
+            # Assumendo che siano gestite sopra:
+            if scelta not in [str(i) for i in range(1,12)]: # Se non è una delle opzioni numeriche 1-11
+                 print("Opzione non valida!")
 
-        elif scelta == "13": # Esporta Partita CSV
+        input("\nPremi INVIO per continuare...")
+
+def menu_esportazioni(db: CatastoDBManager):
+    """Sottomenu per le opzioni di esportazione."""
+    _set_session_context(db)
+    while True:
+        stampa_intestazione("ESPORTAZIONI")
+        print("--- Esporta Partita ---")
+        print("1. Esporta Dettaglio Partita in JSON")
+        print("2. Esporta Dettaglio Partita in CSV")
+        print("3. Esporta Dettaglio Partita in PDF")
+        print("--- Esporta Possessore ---")
+        print("4. Esporta Dettaglio Possessore in JSON")
+        print("5. Esporta Dettaglio Possessore in CSV")
+        print("6. Esporta Dettaglio Possessore in PDF")
+        print("--------------------")
+        print("0. Torna al Menu Consultazione (o Menu Principale)") # Decidere dove torna
+        scelta = input("\nSeleziona un'opzione di esportazione (0-6): ").strip()
+
+        if scelta == "1": # Partita JSON
+            _esporta_entita_json(db, tipo_entita='partita', etichetta_id='ID della Partita', nome_file_prefix='partita')
+        elif scelta == "2": # Partita CSV
             id_partita_str = input("ID della Partita da esportare in CSV: ").strip()
             if id_partita_str.isdigit():
                 partita_id = int(id_partita_str)
                 partita_dict_data = db.get_partita_data_for_export(partita_id)
                 if partita_dict_data:
-                    filename = f"partita_{partita_id}_{date.today()}.csv" # Aggiunta data
-                    # La richiesta di sovrascrittura è ora dentro _esporta_partita_csv
+                    filename = f"partita_{partita_id}_{date.today()}.csv"
                     _esporta_partita_csv(partita_dict_data, filename)
-                else:
-                    print(f"Partita ID {partita_id} non trovata o errore esportazione dati.")
-            else:
-                print("ID non valido.")
-
-        elif scelta == "14": # Esporta Partita PDF
+                else: print(f"Partita ID {partita_id} non trovata o errore.")
+            else: print("ID non valido.")
+        elif scelta == "3": # Partita PDF
             id_partita_str = input("ID della Partita da esportare in PDF: ").strip()
             if id_partita_str.isdigit():
                 partita_id = int(id_partita_str)
                 partita_dict_data = db.get_partita_data_for_export(partita_id)
                 if partita_dict_data:
-                    filename = f"partita_{partita_id}_{date.today()}.pdf" # Aggiunta data
-                    # La richiesta di sovrascrittura è ora dentro _esporta_partita_pdf
+                    filename = f"partita_{partita_id}_{date.today()}.pdf"
                     _esporta_partita_pdf(partita_dict_data, filename)
-                else:
-                    print(f"Partita ID {partita_id} non trovata o errore esportazione dati.")
-            else:
-                print("ID non valido.")
-        
+                else: print(f"Partita ID {partita_id} non trovata o errore.")
+            else: print("ID non valido.")
+        elif scelta == "4": # Possessore JSON
+            _esporta_entita_json(db, tipo_entita='possessore', etichetta_id='ID del Possessore', nome_file_prefix='possessore')
+        elif scelta == "5": # Possessore CSV
+            id_poss_str = input("ID del Possessore da esportare in CSV: ").strip()
+            if id_poss_str.isdigit():
+                poss_id = int(id_poss_str)
+                poss_dict_data = db.get_possessore_data_for_export(poss_id)
+                if poss_dict_data:
+                    filename = f"possessore_{poss_id}_{date.today()}.csv"
+                    _esporta_possessore_csv(poss_dict_data, filename)
+                else: print(f"Possessore ID {poss_id} non trovato o errore.")
+            else: print("ID non valido.")
+        elif scelta == "6": # Possessore PDF
+            id_poss_str = input("ID del Possessore da esportare in PDF: ").strip()
+            if id_poss_str.isdigit():
+                poss_id = int(id_poss_str)
+                poss_dict_data = db.get_possessore_data_for_export(poss_id)
+                if poss_dict_data:
+                    filename = f"possessore_{poss_id}_{date.today()}.pdf"
+                    _esporta_possessore_pdf(poss_dict_data, filename)
+                else: print(f"Possessore ID {poss_id} non trovato o errore.")
+            else: print("ID non valido.")
         elif scelta == "0":
-            break 
+            break # Esce dal sottomenu esportazioni
         else:
-            # Gestisci le opzioni da 1 a 11 qui se non già fatto sopra
-            if scelta not in [str(i) for i in range(1,12)]: # Se non è una delle opzioni numeriche gestite
-                 print("Opzione non valida!")
-            else:
-                # Inserisci qui la logica per le scelte da 1 a 11 se non l'hai già fatto
-                # Esempio:
-                # if scelta == "1": _gestisci_elenco_comuni(db)
-                # ...
-                # Per ora, lascio un pass se la logica è già presente sopra questa sezione
-                if scelta in [str(i) for i in range(1,12)]:
-                    # La logica per queste scelte dovrebbe essere già sopra questo blocco elif
-                    # Questo è solo per evitare "Opzione non valida!" per scelte valide 1-11
-                    pass 
-                else:
-                    print("Opzione non valida!")
+            print("Opzione non valida!")
         input("\nPremi INVIO per continuare...")
-
 
 def menu_inserimento(db: CatastoDBManager):
     _set_session_context(db)

@@ -1,0 +1,164 @@
+Applicazione Gestione Catasto Storico (CLI)
+│
+├── LOGIN UTENTE (eseguito all'avvio da main() tramite esegui_login())
+│   └── Input: Username, Password
+│   └── Azioni: Verifica credenziali, Registra accesso (con application_name='CatastoAppCLI'), Imposta sessione globale (user_id, user_info con ruolo, session_id)
+│
+└── MENU PRINCIPALE (chiamato da main() dopo login successful)
+    │
+    ├── 1. Consultazione dati (menu_consultazione)
+    │   ├── 1. Elenco comuni
+    │   │   └── Input: Termine ricerca (opz.)
+    │   ├── 2. Elenco partite per comune
+    │   │   └── Input: Selezione Comune
+    │   ├── 3. Elenco possessori per comune
+    │   │   └── Input: Selezione Comune
+    │   ├── 4. Ricerca partite (Semplice)
+    │   │   └── Input: Comune (opz.), N.Partita (opz.), Possessore (opz.), Natura Immobile (opz.)
+    │   ├── 5. Dettagli partita
+    │   │   └── Input: ID Partita
+    │   ├── 6. Elenco localita per comune
+    │   │   └── Input: Selezione Comune
+    │   ├── 7. Ricerca Avanzata Possessori (Similarità)
+    │   │   └── Input: Termine ricerca, Soglia similarità (opz., default 0.2)
+    │   ├── 8. Ricerca Avanzata Immobili
+    │   │   └── Input: Comune (opz.), Natura (opz.), Località (opz.), Classificazione (opz.), Possessore (opz.)
+    │   ├── 9. Cerca Immobili Specifici
+    │   │   └── Input: ID Partita (opz.), Comune (opz.), ID Località (opz.), Natura (opz.), Classificazione (opz.)
+    │   ├── 10. Cerca Variazioni
+    │   │   └── Input: Tipo (opz.), Data Inizio/Fine (opz.), ID Partita Orig./Dest. (opz.), Comune Origine (opz.)
+    │   ├── 11. Cerca Consultazioni
+    │   │   └── Input: Data Inizio/Fine (opz.), Richiedente (opz.), Funzionario (opz.)
+    │   ├── 12. Esportazioni Dati... (chiama menu_esportazioni)
+    │   │   └── SOTTOMENU ESPORTAZIONI
+    │   │       ├── --- Esporta Partita ---
+    │   │       ├── 1. Esporta Dettaglio Partita in JSON
+    │   │       │   └── Input: ID Partita, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── 2. Esporta Dettaglio Partita in CSV
+    │   │       │   └── Input: ID Partita, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── 3. Esporta Dettaglio Partita in PDF
+    │   │       │   └── Input: ID Partita, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── --- Esporta Possessore ---
+    │   │       ├── 4. Esporta Dettaglio Possessore in JSON
+    │   │       │   └── Input: ID Possessore, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── 5. Esporta Dettaglio Possessore in CSV
+    │   │       │   └── Input: ID Possessore, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── 6. Esporta Dettaglio Possessore in PDF
+    │   │       │   └── Input: ID Possessore, Conferma salvataggio (con controllo sovrascrittura)
+    │   │       ├── --------------------
+    │   │       └── 0. Torna al Menu Consultazione
+    │   └── 0. Torna al menu principale
+    │
+    ├── 2. Inserimento e gestione dati (menu_inserimento)
+    │   ├── 1. Aggiungi nuovo comune
+    │   │   └── Input: Nome, Provincia, Regione
+    │   ├── 2. Aggiungi nuovo possessore
+    │   │   └── Input: Selezione Comune, Cognome/Nome, Paternità, Nome Completo (auto/manuale)
+    │   ├── 3. Aggiungi nuova localita
+    │   │   └── Input: Selezione Comune, Nome Località, Tipo, Civico (opz.)
+    │   ├── 4. Registra nuova proprieta (Workflow) (chiama _registra_nuova_proprieta_interattivo)
+    │   │   └── Input: Selezione Comune, N.Partita, Data impianto, Dettagli Possessori (JSON), Dettagli Immobili (JSON)
+    │   ├── 5. Registra passaggio di proprieta (Workflow) (chiama _registra_passaggio_proprieta_interattivo)
+    │   │   └── Input: ID Partita Origine, Selezione Comune Dest., N.Partita Dest., Dati Variazione, Dati Contratto, Nuovi Possessori (opz., JSON), Immobili da trasferire (opz., lista ID)
+    │   ├── 6. Registra consultazione (chiama _registra_consultazione_interattivo)
+    │   │   └── Input: Data, Richiedente, Doc.ID (opz.), Motivazione (opz.), Materiale, Funzionario
+    │   ├── 7. Inserisci Contratto per Variazione (chiama _inserisci_contratto_interattivo)
+    │   │   └── Input: ID Variazione, Tipo Contratto, Data Contratto, Notaio (opz.), Repertorio (opz.), Note (opz.)
+    │   ├── 8. Duplica Partita (chiama _duplica_partita_interattivo)
+    │   │   └── Input: ID Partita Origine, Nuovo Numero Partita, Conferma Mantenere Possessori/Immobili
+    │   ├── 9. Trasferisci Immobile a Nuova Partita (chiama _trasferisci_immobile_interattivo)
+    │   │   └── Input: ID Immobile, ID Partita Destinazione, Conferma Registra Variazione
+    │   └── 0. Torna al menu principale
+    │
+    ├── 3. Generazione report (menu_report)
+    │   ├── 1. Certificato di proprieta
+    │   │   └── Input: ID Partita, Conferma salvataggio
+    │   ├── 2. Report genealogico
+    │   │   └── Input: ID Partita, Conferma salvataggio
+    │   ├── 3. Report possessore
+    │   │   └── Input: ID Possessore, Conferma salvataggio
+    │   ├── 4. Report consultazioni
+    │   │   └── Input: Data Inizio/Fine (opz.), Richiedente (opz.), Conferma salvataggio
+    │   ├── 5. Statistiche per comune (Vista)
+    │   ├── 6. Riepilogo immobili per tipologia (Vista)
+    │   │   └── Input: Comune (opz.)
+    │   ├── 7. Visualizza Partite Complete (Vista)
+    │   │   └── Input: Comune (opz.), Stato (opz.)
+    │   ├── 8. Cronologia Variazioni (Vista)
+    │   │   └── Input: Comune Origine (opz.), Tipo Variazione (opz.)
+    │   ├── 9. Report Annuale Partite per Comune (Funzione)
+    │   │   └── Input: Selezione Comune, Anno
+    │   ├── 10. Report Proprietà Possessore per Periodo (Funzione)
+    │   │   └── Input: ID Possessore, Data Inizio, Data Fine
+    │   ├── 11. Report Statistico Comune (Funzione)
+    │   │   └── Input: Selezione Comune
+    │   └── 0. Torna al menu principale
+    │
+    ├── 4. Manutenzione database (menu_manutenzione)
+    │   ├── 1. Verifica integrita database
+    │   ├── 2. Aggiorna Viste Materializzate
+    │   ├── 3. Esegui Manutenzione Generale (ANALYZE)
+    │   ├── 4. Analizza Query Lente
+    │   │   └── Input: Durata minima (ms)
+    │   ├── 5. Controlla Frammentazione Indici
+    │   ├── 6. Ottieni Suggerimenti Ottimizzazione
+    │   └── 0. Torna al menu principale
+    │
+    ├── 5. Sistema di audit (menu_audit)
+    │   ├── 1. Consulta log di audit
+    │   │   └── Input: Tabella (opz.), Operazione (opz.), ID Record (opz.), ID Utente App (opz.), ID Sessione (opz.), Utente DB (opz.), Data Inizio/Fine (opz.)
+    │   ├── 2. Visualizza cronologia di un record
+    │   │   └── Input: Nome Tabella, ID Record
+    │   ├── 3. Genera report di audit
+    │   │   └── Input: Filtri simili a Consulta Log, Conferma salvataggio
+    │   └── 0. Torna al menu principale
+    │
+    ├── 6. Gestione Utenti e Sessione (menu_utenti) -> Restituisce bool per logout
+    │   ├── 1. Crea nuovo utente (solo admin)
+    │   │   └── Input: Username, Password, Conferma Pass, Nome Completo, Email, Ruolo
+    │   ├── 2. Elenca Utenti Registrati
+    │   │   └── Input: Filtro Solo Attivi (opz.)
+    │   ├── 3. Modifica Dettagli Utente (solo admin)
+    │   │   └── Input: Selezione Utente, Nuovo Nome (opz.), Nuova Email (opz.), Nuovo Ruolo (opz.), Nuovo Stato (opz.)
+    │   ├── 4. Resetta Password Utente (solo admin)
+    │   │   └── Input: Selezione Utente (non sé stesso), Nuova Password, Conferma Nuova Password
+    │   ├── 5. Disattiva/Riattiva Utente (solo admin)
+    │   │   └── Input: Selezione Utente (non sé stesso), Conferma Azione
+    │   ├── 6. ELIMINA UTENTE PERMANENTEMENTE (solo admin)
+    │   │   └── Input: Selezione Utente (non sé stesso), Conferma Username, Conferma Finale
+    │   ├── 7. Verifica Permesso (proprio o altrui)
+    │   │   └── Input: ID Utente (opz., default corrente), Nome Permesso
+    │   ├── 8. Logout Utente -> Causa ritorno a schermata di LOGIN
+    │   └── 0. Torna al menu principale
+    │
+    ├── 7. Sistema di Backup (menu_backup)
+    │   ├── 1. Ottieni comando per Backup
+    │   │   └── Input: Tipo Backup (completo, schema, dati)
+    │   ├── 2. Visualizza Log Backup Recenti
+    │   ├── 3. Ottieni comando per Restore (da ID Log)
+    │   │   └── Input: ID Log Backup
+    │   ├── 4. Registra manualmente un Backup eseguito
+    │   │   └── Input: Nome File, Percorso, Utente, Tipo, Esito, Messaggio (opz.), Dimensione (opz.)
+    │   ├── 5. Genera Script Bash per Backup Automatico
+    │   │   └── Input: Directory Destinazione, Nome Script
+    │   ├── 6. Pulisci Log Backup vecchi
+    │   │   └── Input: Giorni Conservazione (default 30)
+    │   └── 0. Torna al menu principale
+    │
+    ├── 8. Funzionalità Storiche Avanzate (menu_storico_avanzato)
+    │   ├── 1. Visualizza Periodi Storici
+    │   ├── 2. Ottieni Nome Storico Entità per Anno
+    │   │   └── Input: Tipo Entità (comune/localita), ID Entità, Anno (opz.)
+    │   ├── 3. Registra Nome Storico Entità
+    │   │   └── Input: Tipo Entità, ID Entità, Nome Storico, ID Periodo, Anno Inizio, Anno Fine (opz.), Note (opz.)
+    │   ├── 4. Ricerca Documenti Storici
+    │   │   └── Input: Titolo (opz.), Tipo Doc (opz.), ID Periodo (opz.), Anno Inizio/Fine (opz.), ID Partita (opz.)
+    │   ├── 5. Visualizza Albero Genealogico Proprietà
+    │   │   └── Input: ID Partita
+    │   ├── 6. Statistiche Catastali per Periodo
+    │   │   └── Input: Comune (opz.), Anno Inizio, Anno Fine (opz.)
+    │   ├── 7. Collega Documento a Partita
+    │   │   └── Input: ID Documento, ID Partita, Rilevanza, Note (opz.)
+    │   └── 0. Torna al menu principale
+    │
+    └── 9. Esci (Logout e chiusura programma)

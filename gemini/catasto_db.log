@@ -991,3 +991,47 @@ PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
 2025-05-18 12:06:16,248 - CatastoDB - INFO - Recuperati 2 utenti.
 2025-05-18 12:06:32,979 - CatastoDB - INFO - Utente ID 3 eliminato fisicamente con successo.
 2025-05-18 12:06:33,790 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 12:25:51,222 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 12:25:51,372 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 12:25:59,644 - CatastoGUI - WARNING - Login GUI fallito (utente 'santoro' non trovato/attivo).
+2025-05-18 12:26:09,023 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 12:26:09,290 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 12:26:09,304 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione daf1d77e...
+2025-05-18 12:26:11,072 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 12:31:07,698 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione daf1d77e...
+2025-05-18 12:31:09,337 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 12:31:09,346 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-18 14:48:08,500 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 14:48:08,644 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 14:48:16,032 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 14:48:16,282 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 14:48:16,302 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione ac2bf37f...
+2025-05-18 14:48:18,446 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 14:50:59,243 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione ac2bf37f...
+2025-05-18 14:51:00,509 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 14:51:00,514 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-18 15:17:02,056 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 15:17:02,160 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 15:17:07,848 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 15:17:08,103 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 15:17:08,112 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6218f953...
+2025-05-18 15:17:09,144 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 15:17:22,980 - CatastoDB - INFO - Avvio aggiornamento viste materializzate...
+2025-05-18 15:17:23,128 - CatastoDB - INFO - Aggiornamento viste completato.
+2025-05-18 15:17:27,085 - CatastoDB - INFO - Avvio manutenzione database (ANALYZE, REFRESH MV)...
+2025-05-18 15:17:27,293 - CatastoDB - INFO - Manutenzione (ANALYZE, REFRESH MV) completata.
+2025-05-18 15:55:50,574 - CatastoGUI - INFO - Esecuzione logout di sicurezza per utente ID: 1 prima della chiusura...
+2025-05-18 15:55:50,588 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 6218f953...
+2025-05-18 15:55:50,595 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 15:55:50,600 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-18 15:56:35,852 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 15:56:35,980 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 15:56:41,881 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 15:56:42,142 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione cf80e6cd...
+2025-05-18 16:16:53,288 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 16:38:58,010 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 16:38:58,118 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 16:39:02,470 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 16:39:02,732 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 68812a4a...
+2025-05-18 16:39:12,466 - CatastoDB - WARNING - Nessun dato trovato per possessore ID 1 per l'esportazione.
+2025-05-18 16:39:36,326 - CatastoDB - INFO - Disconnessione completata

@@ -4,19 +4,21 @@
 Interfaccia Grafica per Gestionale Catasto Storico
 =================================================
 Autore: Marco Santoro
-Data: 17/05/2025
-Versione: 1.1 (con login all'avvio e struttura base migliorata)
+Data: 18/05/2025
+Versione: 1.2 (con integrazione menu esportazioni)
 """
 
 import sys
 import os
 import logging
-import getpass # Ancora utile per input password se non si usa sempre QPasswordLineEdit
+import getpass 
 import json
 import bcrypt
+import csv # Aggiunto per esportazione CSV
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
+# Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QLabel, QLineEdit,
                             QComboBox, QTabWidget, QTextEdit, QMessageBox,
@@ -24,14 +26,24 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QTableWidgetItem, QDateEdit, QScrollArea,
                             QDialog, QListWidget,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame) # Aggiunto QInputDialog, QHeaderView, QFrame
-from PyQt5.QtCore import Qt, QDate, QSettings # Aggiunto QSettings
+                            QInputDialog, QHeaderView,QFrame) 
+from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
+
+# Importazione FPDF per esportazione PDF
+try:
+    from fpdf import FPDF
+    from fpdf.enums import XPos, YPos
+    FPDF_AVAILABLE = True
+except ImportError:
+    FPDF_AVAILABLE = False
+    # QMessageBox.warning(None, "Avviso Dipendenza", "La libreria FPDF non è installata. L'esportazione in PDF non sarà disponibile.")
+    # Non mostrare il messaggio qui, ma gestire la disabilitazione dei pulsanti PDF.
+
 
 try:
     from catasto_db_manager import CatastoDBManager
 except ImportError:
-    # Tentativo di importazione da una directory genitore se lo script è in una sottocartella
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     try:
         from catasto_db_manager import CatastoDBManager
@@ -43,14 +55,12 @@ except ImportError:
 
 
 # --- Configurazione Logging per GUI ---
-# (Può essere diversa da quella della CLI se necessario)
 gui_logger = logging.getLogger("CatastoGUI")
 if not gui_logger.hasHandlers():
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     gui_log_handler = logging.FileHandler("catasto_gui.log")
     gui_log_handler.setFormatter(logging.Formatter(log_format))
     
-    # Aggiungi handler console solo se non si è in un ambiente "congelato" (es. PyInstaller)
     if not getattr(sys, 'frozen', False): 
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(logging.Formatter(log_format))
@@ -59,16 +69,9 @@ if not gui_logger.hasHandlers():
     gui_logger.addHandler(gui_log_handler)
     gui_logger.setLevel(logging.INFO)
 
+client_ip_address_gui: str = "127.0.0.1"
 
-# --- Variabili Globali/Stato Applicazione (meglio incapsularle in una classe AppState se crescono) ---
-# Queste verranno impostate dopo il login e usate dalla MainWindow
-# Spostate queste dentro CatastoMainWindow come attributi di istanza
-# logged_in_user_id_gui: Optional[int] = None
-# logged_in_user_info_gui: Optional[Dict] = None
-# current_session_id_gui: Optional[str] = None
-client_ip_address_gui: str = "127.0.0.1" # Simula IP client
-
-# --- Funzioni Helper per Password (identiche a python_example.py) ---
+# --- Funzioni Helper per Password ---
 def _hash_password(password: str) -> str:
     password_bytes = password.encode('utf-8')
     salt = bcrypt.gensalt()
@@ -87,18 +90,11 @@ def _verify_password(stored_hash: str, provided_password: str) -> bool:
         gui_logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
         return False
 
-# --- Password LineEdit personalizzato (identico a prova.py precedente) ---
-# --- Password LineEdit personalizzato (SENZA ICONE DI TOGGLE) ---
 class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
-        # Non aggiungiamo più l'azione di toggle con icona
-        # self.toggleAction = self.addAction(...)
-        # self.toggleAction.triggered.connect(self.toggle_password_visibility)
-        # self._update_toggle_icon_state()osta icona iniziale corretta
-    
-# --- Finestra di Login (simile a prova.py precedente, ma ora chiamata all'avvio) ---
+
 class LoginDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super(LoginDialog, self).__init__(parent)
@@ -109,9 +105,9 @@ class LoginDialog(QDialog):
         
         self.setWindowTitle("Login - Catasto Storico")
         self.setMinimumWidth(350)
-        self.setModal(True) # Blocca la finestra principale finché non si fa login o si annulla
+        self.setModal(True)
 
-        layout = QVBoxLayout(self) # Aggiunto self per il layout principale del dialogo
+        layout = QVBoxLayout(self)
         
         form_layout = QGridLayout()
         form_layout.addWidget(QLabel("Username:"), 0, 0)
@@ -120,12 +116,8 @@ class LoginDialog(QDialog):
         form_layout.addWidget(self.username_edit, 0, 1)
         
         form_layout.addWidget(QLabel("Password:"), 1, 0)
-        self.password_edit = QPasswordLineEdit() # Usa il widget personalizzato
+        self.password_edit = QPasswordLineEdit()
         form_layout.addWidget(self.password_edit, 1, 1)
-        
-        # Opzionale: Ricorda credenziali (richiede gestione sicura)
-        # self.remember_checkbox = QCheckBox("Ricorda username")
-        # form_layout.addWidget(self.remember_checkbox, 2, 0, 1, 2)
         
         layout.addLayout(form_layout)
         
@@ -135,7 +127,7 @@ class LoginDialog(QDialog):
         self.login_button.clicked.connect(self.handle_login)
         
         self.cancel_button = QPushButton("Esci")
-        self.cancel_button.clicked.connect(self.reject) # Chiude il dialogo e l'app se annullato
+        self.cancel_button.clicked.connect(self.reject)
         
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.login_button)
@@ -152,11 +144,11 @@ class LoginDialog(QDialog):
             QMessageBox.warning(self, "Login Fallito", "Username e password sono obbligatori.")
             return
         
-        credentials = self.db_manager.get_user_credentials(username) # Questo metodo ora restituisce anche il ruolo
+        credentials = self.db_manager.get_user_credentials(username)
         login_success = False
         
         if credentials:
-            user_id_local = credentials['id'] # Rinominato per chiarezza locale
+            user_id_local = credentials['id']
             stored_hash = credentials['password_hash']
             
             if _verify_password(stored_hash, password):
@@ -175,18 +167,17 @@ class LoginDialog(QDialog):
             self.username_edit.setFocus()
             return
         
-        # Se la verifica password è andata a buon fine
         if login_success and user_id_local is not None:
             session_id_returned = self.db_manager.register_access(
                 user_id_local, 'login', 
-                indirizzo_ip=client_ip_address_gui, # Usa variabile globale per GUI
-                esito=True, # login_success è True qui
-                application_name='CatastoAppGUI' # Nome specifico per l'app GUI
+                indirizzo_ip=client_ip_address_gui,
+                esito=True,
+                application_name='CatastoAppGUI'
             )
             
             if session_id_returned:
                 self.logged_in_user_id = user_id_local
-                self.logged_in_user_info = credentials # Salva tutte le info, incluso il ruolo
+                self.logged_in_user_info = credentials
                 self.current_session_id = session_id_returned
                 
                 if not self.db_manager.set_session_app_user(self.logged_in_user_id, client_ip_address_gui):
@@ -194,10 +185,505 @@ class LoginDialog(QDialog):
                 
                 QMessageBox.information(self, "Login Riuscito", 
                                         f"Benvenuto {self.logged_in_user_info.get('nome_completo', username)}!")
-                self.accept() # Chiude il dialogo con successo
+                self.accept()
             else:
                 QMessageBox.critical(self, "Login Fallito", "Errore critico: Impossibile registrare la sessione di accesso.")
                 gui_logger.error(f"Login GUI OK per ID {user_id_local} ma fallita reg. accesso.")
+
+# --- Classi PDF (da python_example.py) ---
+if FPDF_AVAILABLE:
+    class PDFPartita(FPDF):
+        def header(self):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 10, 'Dettaglio Partita Catastale', 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.ln(5)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'B', 8) # Cambiato in Bold per coerenza
+            self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
+
+        def chapter_title(self, title):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 6, title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+            self.ln(2)
+
+        def chapter_body(self, data_dict):
+            self.set_font('Helvetica', '', 10)
+            page_width = self.w - self.l_margin - self.r_margin
+            for key, value in data_dict.items():
+                text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
+                try:
+                    self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                except Exception as e: # FPDFException non è definita se FPDF non è importato
+                    if "Not enough horizontal space" in str(e):
+                        gui_logger.warning(f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
+                        self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [ERRORE DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    else:
+                        raise e
+            self.ln(2) # Aggiungo un po' di spazio
+
+        def simple_table(self, headers, data_rows, col_widths_percent=None):
+            self.set_font('Helvetica', 'B', 9) # Header in grassetto
+            effective_page_width = self.w - self.l_margin - self.r_margin
+            
+            if col_widths_percent:
+                col_widths = [effective_page_width * (p/100) for p in col_widths_percent]
+            else:
+                num_cols = len(headers)
+                default_col_width = effective_page_width / num_cols if num_cols > 0 else effective_page_width
+                col_widths = [default_col_width] * num_cols
+            
+            for i, header in enumerate(headers):
+                align = 'C' # Centra gli header
+                if i == len(headers) - 1: # Ultima cella della riga header
+                    self.cell(col_widths[i], 7, header, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+                else:
+                    self.cell(col_widths[i], 7, header, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+
+            self.set_font('Helvetica', '', 8)
+            for row in data_rows:
+                for i, item in enumerate(row):
+                    text = str(item) if item is not None else ''
+                    align = 'L' # Dati allineati a sinistra
+                    if i == len(row) - 1: # Ultima cella della riga dati
+                        self.cell(col_widths[i], 6, text, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+                    else:
+                        self.cell(col_widths[i], 6, text, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+            self.ln(4)
+
+    class PDFPossessore(FPDF):
+        def header(self):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.ln(5)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'I', 8) # Originale era 'I'
+            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
+
+        def chapter_title(self, title):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 6, title, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+            self.ln(2)
+
+        def chapter_body(self, data_dict):
+            self.set_font('Helvetica', '', 10)
+            page_width = self.w - self.l_margin - self.r_margin
+            for key, value in data_dict.items():
+                text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
+                try:
+                    self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+                except Exception as e: # FPDFException
+                    if "Not enough horizontal space" in str(e):
+                        gui_logger.warning(f"FPDFException (chapter_body possessore): {e} per testo: {text_to_write[:100]}...")
+                        self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
+                    else: raise e
+            self.ln(2)
+
+
+        def simple_table(self, headers, data_rows, col_widths_percent=None):
+            self.set_font('Helvetica', 'B', 9)
+            effective_page_width = self.w - self.l_margin - self.r_margin
+            
+            if col_widths_percent:
+                col_widths = [effective_page_width * (p/100) for p in col_widths_percent]
+            else:
+                num_cols = len(headers)
+                default_col_width = effective_page_width / num_cols if num_cols > 0 else effective_page_width
+                col_widths = [default_col_width] * num_cols
+
+            for i, header in enumerate(headers):
+                align = 'C'
+                if i == len(headers) - 1:
+                    self.cell(col_widths[i], 7, header, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+                else:
+                    self.cell(col_widths[i], 7, header, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+
+            self.set_font('Helvetica', '', 8)
+            for row in data_rows:
+                for i, item in enumerate(row):
+                    text = str(item) if item is not None else ''
+                    align = 'L'
+                    if i == len(row) - 1:
+                        self.cell(col_widths[i], 6, text, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=align)
+                    else:
+                        self.cell(col_widths[i], 6, text, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align=align)
+            self.ln(4)
+else: # FPDF non disponibile
+    class PDFPartita: pass # Definizioni vuote per evitare errori di NameError
+    class PDFPossessore: pass
+
+
+# --- Funzioni di esportazione adattate per GUI ---
+def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
+    dict_data = db_manager.get_partita_data_for_export(partita_id)
+    if dict_data:
+        json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False)
+        default_filename = f"partita_{partita_id}_{date.today()}.json"
+        filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva JSON Partita", default_filename, "JSON Files (*.json)")
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(json_data_str)
+                QMessageBox.information(parent_widget, "Esportazione JSON", f"Partita esportata con successo in:\n{filename}")
+            except Exception as e:
+                QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
+    else:
+        QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore recupero dati.")
+
+def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita_id: int):
+    partita_data = db_manager.get_partita_data_for_export(partita_id)
+    if not partita_data or 'partita' not in partita_data:
+        QMessageBox.warning(parent_widget, "Errore Dati", "Dati partita non validi per l'esportazione CSV.")
+        return
+
+    default_filename = f"partita_{partita_id}_{date.today()}.csv"
+    filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva CSV Partita", default_filename, "CSV Files (*.csv)")
+    if not filename: return
+
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            p = partita_data['partita']
+            writer.writerow(['--- DETTAGLI PARTITA ---'])
+            for key, value in p.items(): writer.writerow([key.replace('_', ' ').title(), value])
+            writer.writerow([])
+
+            if partita_data.get('possessori'):
+                writer.writerow(['--- POSSESSORI ---'])
+                headers = list(partita_data['possessori'][0].keys()) if partita_data['possessori'] else []
+                if headers: writer.writerow([h.replace('_', ' ').title() for h in headers])
+                for pos in partita_data['possessori']: writer.writerow([pos.get(h) for h in headers])
+                writer.writerow([])
+
+            if partita_data.get('immobili'):
+                writer.writerow(['--- IMMOBILI ---'])
+                headers = list(partita_data['immobili'][0].keys()) if partita_data['immobili'] else []
+                if headers: writer.writerow([h.replace('_', ' ').title() for h in headers])
+                for imm in partita_data['immobili']: writer.writerow([imm.get(h) for h in headers])
+                writer.writerow([])
+            
+            if partita_data.get('variazioni'):
+                writer.writerow(['--- VARIAZIONI ---'])
+                headers = list(partita_data['variazioni'][0].keys()) if partita_data['variazioni'] else []
+                if headers: writer.writerow([h.replace('_', ' ').title() for h in headers])
+                for var in partita_data['variazioni']: writer.writerow([var.get(h) for h in headers])
+        QMessageBox.information(parent_widget, "Esportazione CSV", f"Partita esportata con successo in:\n{filename}")
+    except Exception as e:
+        QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione CSV:\n{e}")
+
+def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita_id: int):
+    if not FPDF_AVAILABLE:
+        QMessageBox.warning(parent_widget, "Funzionalità non disponibile", "La libreria FPDF è necessaria per l'esportazione in PDF, ma non è installata.")
+        return
+        
+    partita_data = db_manager.get_partita_data_for_export(partita_id)
+    if not partita_data or 'partita' not in partita_data:
+        QMessageBox.warning(parent_widget, "Errore Dati", "Dati partita non validi per l'esportazione PDF.")
+        return
+
+    default_filename = f"partita_{partita_id}_{date.today()}.pdf"
+    filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva PDF Partita", default_filename, "PDF Files (*.pdf)")
+    if not filename: return
+
+    try:
+        pdf = PDFPartita()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_left_margin(10)
+        pdf.set_right_margin(10)
+        pdf.add_page()
+        
+        p = partita_data['partita']
+        pdf.chapter_title('Dettagli Partita')
+        pdf.chapter_body({k: p.get(k) for k in ['id', 'comune_nome', 'numero_partita', 'tipo', 'data_impianto', 'stato', 'data_chiusura', 'numero_provenienza']})
+
+        if partita_data.get('possessori'):
+            pdf.chapter_title('Possessori')
+            headers = ['ID', 'Nome Completo', 'Titolo', 'Quota']
+            data_rows = [[pos.get('id'), pos.get('nome_completo'), pos.get('titolo'), pos.get('quota')] for pos in partita_data['possessori']]
+            pdf.simple_table(headers, data_rows)
+
+        if partita_data.get('immobili'):
+            pdf.chapter_title('Immobili')
+            headers = ['ID', 'Natura', 'Località', 'Class.', 'Consist.']
+            data_rows = [[imm.get('id'), imm.get('natura'), f"{imm.get('localita_nome','')} {imm.get('civico','')}".strip(), imm.get('classificazione'), imm.get('consistenza')] for imm in partita_data['immobili']]
+            pdf.simple_table(headers, data_rows)
+
+        if partita_data.get('variazioni'):
+            pdf.chapter_title('Variazioni')
+            headers = ['ID', 'Tipo', 'Data Var.', 'Contratto', 'Notaio']
+            data_rows = []
+            for var in partita_data['variazioni']:
+                contr_str = f"{var.get('contratto_tipo','')} del {var.get('data_contratto','')}" if var.get('contratto_tipo') else ''
+                data_rows.append([var.get('id'), var.get('tipo'), var.get('data_variazione'), contr_str, var.get('notaio')])
+            pdf.simple_table(headers, data_rows)
+            
+        pdf.output(filename)
+        QMessageBox.information(parent_widget, "Esportazione PDF", f"Partita esportata con successo in:\n{filename}")
+    except Exception as e:
+        gui_logger.exception("Errore esportazione PDF partita (GUI)")
+        QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione PDF:\n{e}")
+
+
+def gui_esporta_possessore_json(parent_widget, db_manager: CatastoDBManager, possessore_id: int):
+    dict_data = db_manager.get_possessore_data_for_export(possessore_id)
+    if dict_data:
+        json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False)
+        default_filename = f"possessore_{possessore_id}_{date.today()}.json"
+        filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva JSON Possessore", default_filename, "JSON Files (*.json)")
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f: f.write(json_data_str)
+                QMessageBox.information(parent_widget, "Esportazione JSON", f"Possessore esportato con successo in:\n{filename}")
+            except Exception as e: QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
+    else: QMessageBox.warning(parent_widget, "Errore Dati", f"Possessore con ID {possessore_id} non trovato o errore recupero dati.")
+
+def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, possessore_id: int):
+    possessore_data = db_manager.get_possessore_data_for_export(possessore_id)
+    if not possessore_data or 'possessore' not in possessore_data:
+        QMessageBox.warning(parent_widget, "Errore Dati", "Dati possessore non validi per l'esportazione CSV.")
+        return
+
+    default_filename = f"possessore_{possessore_id}_{date.today()}.csv"
+    filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva CSV Possessore", default_filename, "CSV Files (*.csv)")
+    if not filename: return
+
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            p_info = possessore_data['possessore']
+            writer.writerow(['--- DETTAGLI POSSESSORE ---'])
+            for key, value in p_info.items(): writer.writerow([key.replace('_', ' ').title(), value])
+            writer.writerow([])
+
+            if possessore_data.get('partite'): # La chiave è 'partite' dal JSON, non 'partite_associate'
+                writer.writerow(['--- PARTITE ASSOCIATE ---'])
+                headers = list(possessore_data['partite'][0].keys()) if possessore_data['partite'] else []
+                if headers: writer.writerow([h.replace('_', ' ').title() for h in headers])
+                for part in possessore_data['partite']: writer.writerow([part.get(h) for h in headers])
+                writer.writerow([])
+            
+            if possessore_data.get('immobili'):
+                writer.writerow(['--- IMMOBILI ASSOCIATI (TRAMITE PARTITE) ---'])
+                headers = list(possessore_data['immobili'][0].keys()) if possessore_data['immobili'] else []
+                if headers: writer.writerow([h.replace('_', ' ').title() for h in headers])
+                for imm in possessore_data['immobili']: writer.writerow([imm.get(h) for h in headers])
+
+        QMessageBox.information(parent_widget, "Esportazione CSV", f"Possessore esportato con successo in:\n{filename}")
+    except Exception as e:
+        QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione CSV:\n{e}")
+
+def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, possessore_id: int):
+    if not FPDF_AVAILABLE:
+        QMessageBox.warning(parent_widget, "Funzionalità non disponibile", "La libreria FPDF è necessaria per l'esportazione in PDF, ma non è installata.")
+        return
+        
+    possessore_data = db_manager.get_possessore_data_for_export(possessore_id)
+    if not possessore_data or 'possessore' not in possessore_data:
+        QMessageBox.warning(parent_widget, "Errore Dati", "Dati possessore non validi per l'esportazione PDF.")
+        return
+
+    default_filename = f"possessore_{possessore_id}_{date.today()}.pdf"
+    filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva PDF Possessore", default_filename, "PDF Files (*.pdf)")
+    if not filename: return
+
+    try:
+        pdf = PDFPossessore()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_left_margin(10)
+        pdf.set_right_margin(10)
+        pdf.add_page()
+        
+        p_info = possessore_data['possessore']
+        pdf.chapter_title('Dettagli Possessore')
+        details_poss = {
+            'ID Possessore': p_info.get('id'), 'Nome Completo': p_info.get('nome_completo'),
+            'Comune Riferimento': p_info.get('comune_nome'), # Aggiunto comune_nome
+            'Paternità': p_info.get('paternita'),
+            'Stato': "Attivo" if p_info.get('attivo') else "Non Attivo",
+        }
+        pdf.chapter_body(details_poss)
+
+        if possessore_data.get('partite'):
+            pdf.chapter_title('Partite Associate')
+            headers = ['ID Part.', 'Num. Partita', 'Comune', 'Tipo', 'Quota', 'Titolo']
+            col_widths_percent = [10, 15, 25, 15, 15, 20] 
+            data_rows = []
+            for part in possessore_data['partite']:
+                data_rows.append([
+                    part.get('id'), part.get('numero_partita'), part.get('comune_nome'),
+                    part.get('tipo'), part.get('quota'), part.get('titolo')
+                ])
+            pdf.simple_table(headers, data_rows, col_widths_percent=col_widths_percent)
+        
+        if possessore_data.get('immobili'):
+            pdf.chapter_title('Immobili Associati (tramite Partite)')
+            headers = ['ID Imm.', 'Natura', 'Località', 'Part. N.', 'Comune Part.']
+            col_widths_percent_imm = [10, 30, 25, 15, 20]
+            data_rows_imm = []
+            for imm in possessore_data['immobili']:
+                data_rows_imm.append([
+                    imm.get('id'), imm.get('natura'), imm.get('localita_nome'),
+                    imm.get('numero_partita'), imm.get('comune_nome')
+                ])
+            pdf.simple_table(headers, data_rows_imm, col_widths_percent_imm)
+
+        pdf.output(filename)
+        QMessageBox.information(parent_widget, "Esportazione PDF", f"Possessore esportato con successo in:\n{filename}")
+    except Exception as e:
+        gui_logger.exception("Errore esportazione PDF possessore (GUI)")
+        QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione PDF:\n{e}")
+
+# --- Widget per Esportazioni ---
+class EsportazioniWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.selected_partita_id_export: Optional[int] = None
+        self.selected_possessore_id_export: Optional[int] = None
+
+        main_layout = QVBoxLayout(self)
+        
+        # Sotto-Tab
+        sub_tabs = QTabWidget()
+        
+        # Sotto-tab Esporta Partita
+        esporta_partita_widget = QWidget()
+        ep_layout = QVBoxLayout(esporta_partita_widget)
+        
+        ep_input_group = QGroupBox("Seleziona Partita da Esportare")
+        ep_input_layout = QGridLayout(ep_input_group)
+        ep_input_layout.addWidget(QLabel("ID Partita:"), 0, 0)
+        self.partita_id_export_edit = QSpinBox()
+        self.partita_id_export_edit.setMinimum(1); self.partita_id_export_edit.setMaximum(999999)
+        ep_input_layout.addWidget(self.partita_id_export_edit, 0, 1)
+        self.btn_cerca_partita_export = QPushButton("Cerca Partita...")
+        self.btn_cerca_partita_export.clicked.connect(self._cerca_partita_per_export)
+        ep_input_layout.addWidget(self.btn_cerca_partita_export, 0, 2)
+        self.partita_info_export_label = QLabel("Nessuna partita selezionata.")
+        ep_input_layout.addWidget(self.partita_info_export_label, 1, 0, 1, 3)
+        ep_layout.addWidget(ep_input_group)
+
+        ep_btn_layout = QHBoxLayout()
+        self.btn_export_partita_json = QPushButton("Esporta JSON")
+        self.btn_export_partita_json.clicked.connect(self._handle_export_partita_json)
+        self.btn_export_partita_csv = QPushButton("Esporta CSV")
+        self.btn_export_partita_csv.clicked.connect(self._handle_export_partita_csv)
+        self.btn_export_partita_pdf = QPushButton("Esporta PDF")
+        self.btn_export_partita_pdf.clicked.connect(self._handle_export_partita_pdf)
+        self.btn_export_partita_pdf.setEnabled(FPDF_AVAILABLE) # Disabilita se FPDF non c'è
+        ep_btn_layout.addWidget(self.btn_export_partita_json)
+        ep_btn_layout.addWidget(self.btn_export_partita_csv)
+        ep_btn_layout.addWidget(self.btn_export_partita_pdf)
+        ep_layout.addLayout(ep_btn_layout)
+        ep_layout.addStretch()
+        sub_tabs.addTab(esporta_partita_widget, "Esporta Partita")
+
+        # Sotto-tab Esporta Possessore
+        esporta_possessore_widget = QWidget()
+        eposs_layout = QVBoxLayout(esporta_possessore_widget)
+        
+        eposs_input_group = QGroupBox("Seleziona Possessore da Esportare")
+        eposs_input_layout = QGridLayout(eposs_input_group)
+        eposs_input_layout.addWidget(QLabel("ID Possessore:"), 0, 0)
+        self.possessore_id_export_edit = QSpinBox()
+        self.possessore_id_export_edit.setMinimum(1); self.possessore_id_export_edit.setMaximum(999999)
+        eposs_input_layout.addWidget(self.possessore_id_export_edit, 0, 1)
+        self.btn_cerca_possessore_export = QPushButton("Cerca Possessore...")
+        self.btn_cerca_possessore_export.clicked.connect(self._cerca_possessore_per_export)
+        eposs_input_layout.addWidget(self.btn_cerca_possessore_export, 0, 2)
+        self.possessore_info_export_label = QLabel("Nessun possessore selezionato.")
+        eposs_input_layout.addWidget(self.possessore_info_export_label, 1, 0, 1, 3)
+        eposs_layout.addWidget(eposs_input_group)
+        
+        eposs_btn_layout = QHBoxLayout()
+        self.btn_export_poss_json = QPushButton("Esporta JSON")
+        self.btn_export_poss_json.clicked.connect(self._handle_export_possessore_json)
+        self.btn_export_poss_csv = QPushButton("Esporta CSV")
+        self.btn_export_poss_csv.clicked.connect(self._handle_export_possessore_csv)
+        self.btn_export_poss_pdf = QPushButton("Esporta PDF")
+        self.btn_export_poss_pdf.clicked.connect(self._handle_export_possessore_pdf)
+        self.btn_export_poss_pdf.setEnabled(FPDF_AVAILABLE) # Disabilita se FPDF non c'è
+        eposs_btn_layout.addWidget(self.btn_export_poss_json)
+        eposs_btn_layout.addWidget(self.btn_export_poss_csv)
+        eposs_btn_layout.addWidget(self.btn_export_poss_pdf)
+        eposs_layout.addLayout(eposs_btn_layout)
+        eposs_layout.addStretch()
+        sub_tabs.addTab(esporta_possessore_widget, "Esporta Possessore")
+
+        main_layout.addWidget(sub_tabs)
+
+    def _cerca_partita_per_export(self):
+        dialog = PartitaSearchDialog(self.db_manager, self) # Assumendo che PartitaSearchDialog esista e sia simile a quello per i report
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
+            self.selected_partita_id_export = dialog.selected_partita_id
+            self.partita_id_export_edit.setValue(self.selected_partita_id_export)
+            # Potrebbe mostrare nome comune e numero partita
+            partita_details = self.db_manager.get_partita_details(self.selected_partita_id_export)
+            if partita_details:
+                self.partita_info_export_label.setText(f"Selezionata: N. {partita_details.get('numero_partita')} (Comune: {partita_details.get('comune_nome')})")
+            else:
+                self.partita_info_export_label.setText("Partita non trovata.")
+        else:
+            self.selected_partita_id_export = None
+            self.partita_info_export_label.setText("Nessuna partita selezionata.")
+
+
+    def _handle_export_partita_json(self):
+        partita_id = self.partita_id_export_edit.value()
+        if partita_id > 0:
+            gui_esporta_partita_json(self, self.db_manager, partita_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Partita valido.")
+
+    def _handle_export_partita_csv(self):
+        partita_id = self.partita_id_export_edit.value()
+        if partita_id > 0:
+            gui_esporta_partita_csv(self, self.db_manager, partita_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Partita valido.")
+
+    def _handle_export_partita_pdf(self):
+        partita_id = self.partita_id_export_edit.value()
+        if partita_id > 0:
+            gui_esporta_partita_pdf(self, self.db_manager, partita_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Partita valido.")
+
+    def _cerca_possessore_per_export(self):
+        # Assumendo esista un PossessoreSearchDialog, simile a PartitaSearchDialog
+        # Altrimenti, si può usare un semplice QInputDialog per l'ID.
+        dialog = PossessoreSearchDialog(self.db_manager, self) # Assumiamo che PossessoreSearchDialog esista
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore_id:
+            self.selected_possessore_id_export = dialog.selected_possessore_id
+            self.possessore_id_export_edit.setValue(self.selected_possessore_id_export)
+            # Mostra info possessore
+            poss_details = self.db_manager.get_possessore_data_for_export(self.selected_possessore_id_export) # usa il metodo corretto
+            if poss_details and 'possessore' in poss_details:
+                self.possessore_info_export_label.setText(f"Selezionato: {poss_details['possessore'].get('nome_completo')} (Comune: {poss_details['possessore'].get('comune_nome')})")
+            else:
+                self.possessore_info_export_label.setText("Possessore non trovato.")
+        else:
+            self.selected_possessore_id_export = None
+            self.possessore_info_export_label.setText("Nessun possessore selezionato.")
+
+
+    def _handle_export_possessore_json(self):
+        possessore_id = self.possessore_id_export_edit.value()
+        if possessore_id > 0:
+            gui_esporta_possessore_json(self, self.db_manager, possessore_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Possessore valido.")
+        
+    def _handle_export_possessore_csv(self):
+        possessore_id = self.possessore_id_export_edit.value()
+        if possessore_id > 0:
+            gui_esporta_possessore_csv(self, self.db_manager, possessore_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Possessore valido.")
+
+    def _handle_export_possessore_pdf(self):
+        possessore_id = self.possessore_id_export_edit.value()
+        if possessore_id > 0:
+            gui_esporta_possessore_pdf(self, self.db_manager, possessore_id)
+        else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Possessore valido.")
                 # Non fare self.reject() qui, permette un altro tentativo o l'uscita manuale
 # --- Finestra di Creazione Utente ---
 class CreateUserDialog(QDialog):

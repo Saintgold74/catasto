@@ -3,210 +3,202 @@
 """
 Interfaccia Grafica per Gestionale Catasto Storico
 =================================================
-Questo script fornisce un'interfaccia grafica per l'utilizzo del
-Gestionale Catasto Storico, basandosi sulle funzionalità
-implementate in catasto_db_manager.py e sfruttate in python_example.py.
-
-Autore: [Nome Utente]
-Data: 14/05/2025
-Versione: 1.0
+Autore: Marco Santoro
+Data: 17/05/2025
+Versione: 1.1 (con login all'avvio e struttura base migliorata)
 """
 
 import sys
 import os
 import logging
-import getpass
+import getpass # Ancora utile per input password se non si usa sempre QPasswordLineEdit
 import json
 import bcrypt
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QPushButton, QLabel, QLineEdit, 
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                            QHBoxLayout, QPushButton, QLabel, QLineEdit,
                             QComboBox, QTabWidget, QTextEdit, QMessageBox,
                             QCheckBox, QGroupBox, QGridLayout, QTableWidget,
-                            QTableWidgetItem, QDateEdit, QScrollArea, 
-                            QStackedWidget, QFrame, QDialog, QListWidget,
-                            QListWidgetItem, QFileDialog, QSplitter, QStyle, QStyleFactory, QSpinBox)
-from PyQt5.QtCore import Qt, QDate
+                            QTableWidgetItem, QDateEdit, QScrollArea,
+                            QDialog, QListWidget,
+                            QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
+                            QInputDialog, QHeaderView,QFrame) # Aggiunto QInputDialog, QHeaderView, QFrame
+from PyQt5.QtCore import Qt, QDate, QSettings # Aggiunto QSettings
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
 
-# Importa catasto_db_manager
 try:
     from catasto_db_manager import CatastoDBManager
 except ImportError:
-    print("ERRORE: Non è possibile importare CatastoDBManager. Assicurati che catasto_db_manager.py sia nella stessa directory.")
-    sys.exit(1)
+    # Tentativo di importazione da una directory genitore se lo script è in una sottocartella
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    try:
+        from catasto_db_manager import CatastoDBManager
+    except ImportError:
+        QMessageBox.critical(None, "Errore Importazione", 
+                             "Non è possibile importare CatastoDBManager. "
+                             "Assicurati che catasto_db_manager.py sia accessibile.")
+        sys.exit(1)
 
-# --- Configurazione Logging ---
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("catasto_gui.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
 
-# --- Variabili Globali per Sessione Utente ---
-logged_in_user_id: Optional[int] = None
-current_session_id: Optional[str] = None
-# Simula IP client, da ottenere dinamicamente in un'app reale
-client_ip_address: str = "127.0.0.1"
+# --- Configurazione Logging per GUI ---
+# (Può essere diversa da quella della CLI se necessario)
+gui_logger = logging.getLogger("CatastoGUI")
+if not gui_logger.hasHandlers():
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    gui_log_handler = logging.FileHandler("catasto_gui.log")
+    gui_log_handler.setFormatter(logging.Formatter(log_format))
+    
+    # Aggiungi handler console solo se non si è in un ambiente "congelato" (es. PyInstaller)
+    if not getattr(sys, 'frozen', False): 
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging.Formatter(log_format))
+        gui_logger.addHandler(console_handler)
 
-# --- Funzioni Helper per Password ---
+    gui_logger.addHandler(gui_log_handler)
+    gui_logger.setLevel(logging.INFO)
+
+
+# --- Variabili Globali/Stato Applicazione (meglio incapsularle in una classe AppState se crescono) ---
+# Queste verranno impostate dopo il login e usate dalla MainWindow
+# Spostate queste dentro CatastoMainWindow come attributi di istanza
+# logged_in_user_id_gui: Optional[int] = None
+# logged_in_user_info_gui: Optional[Dict] = None
+# current_session_id_gui: Optional[str] = None
+client_ip_address_gui: str = "127.0.0.1" # Simula IP client
+
+# --- Funzioni Helper per Password (identiche a python_example.py) ---
 def _hash_password(password: str) -> str:
-    """Funzione helper per hashare la password usando bcrypt."""
     password_bytes = password.encode('utf-8')
     salt = bcrypt.gensalt()
     hashed_bytes = bcrypt.hashpw(password_bytes, salt)
     return hashed_bytes.decode('utf-8')
 
 def _verify_password(stored_hash: str, provided_password: str) -> bool:
-    """Funzione helper per verificare la password usando bcrypt."""
     try:
         stored_hash_bytes = stored_hash.encode('utf-8')
         provided_password_bytes = provided_password.encode('utf-8')
         return bcrypt.checkpw(provided_password_bytes, stored_hash_bytes)
     except ValueError:
-        logger.error(f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
+        gui_logger.error(f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
         return False
     except Exception as e:
-        logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
+        gui_logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
         return False
 
-# --- Password LineEdit personalizzato ---
+# --- Password LineEdit personalizzato (identico a prova.py precedente) ---
+# --- Password LineEdit personalizzato (SENZA ICONE DI TOGGLE) ---
 class QPasswordLineEdit(QLineEdit):
-    """LineEdit specializzato per password con visibilità toggle."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
-        
-        # Aggiunge pulsante per mostrare/nascondere la password
-        self.toggleAction = self.addAction(
-            QApplication.style().standardIcon(QStyle.SP_DialogYesButton),
-            QLineEdit.TrailingPosition
-        )
-        self.toggleAction.triggered.connect(self.toggle_password_visibility)
-        
-    def toggle_password_visibility(self):
-        if self.echoMode() == QLineEdit.Password:
-            self.setEchoMode(QLineEdit.Normal)
-            self.toggleAction.setIcon(
-                QApplication.style().standardIcon(QStyle.SP_DialogNoButton)
-            )
-        else:
-            self.setEchoMode(QLineEdit.Password)
-            self.toggleAction.setIcon(
-                QApplication.style().standardIcon(QStyle.SP_DialogYesButton)
-            )
-
-# --- Finestra di Login ---
+        # Non aggiungiamo più l'azione di toggle con icona
+        # self.toggleAction = self.addAction(...)
+        # self.toggleAction.triggered.connect(self.toggle_password_visibility)
+        # self._update_toggle_icon_state()osta icona iniziale corretta
+    
+# --- Finestra di Login (simile a prova.py precedente, ma ora chiamata all'avvio) ---
 class LoginDialog(QDialog):
-    def __init__(self, db_manager, parent=None):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
         super(LoginDialog, self).__init__(parent)
         self.db_manager = db_manager
-        self.successful_login = False
-        self.user_id = None
-        self.session_id = None
+        self.logged_in_user_id: Optional[int] = None
+        self.logged_in_user_info: Optional[Dict] = None
+        self.current_session_id: Optional[str] = None
         
         self.setWindowTitle("Login - Catasto Storico")
         self.setMinimumWidth(350)
+        self.setModal(True) # Blocca la finestra principale finché non si fa login o si annulla
+
+        layout = QVBoxLayout(self) # Aggiunto self per il layout principale del dialogo
         
-        layout = QVBoxLayout()
-        
-        # Credenziali
         form_layout = QGridLayout()
-        
-        username_label = QLabel("Username:")
+        form_layout.addWidget(QLabel("Username:"), 0, 0)
         self.username_edit = QLineEdit()
-        form_layout.addWidget(username_label, 0, 0)
+        self.username_edit.setPlaceholderText("Inserisci username")
         form_layout.addWidget(self.username_edit, 0, 1)
         
-        password_label = QLabel("Password:")
-        self.password_edit = QPasswordLineEdit()
-        form_layout.addWidget(password_label, 1, 0)
+        form_layout.addWidget(QLabel("Password:"), 1, 0)
+        self.password_edit = QPasswordLineEdit() # Usa il widget personalizzato
         form_layout.addWidget(self.password_edit, 1, 1)
         
-        # Ricorda credenziali
-        self.remember_checkbox = QCheckBox("Ricorda credenziali")
-        form_layout.addWidget(self.remember_checkbox, 2, 0, 1, 2)
+        # Opzionale: Ricorda credenziali (richiede gestione sicura)
+        # self.remember_checkbox = QCheckBox("Ricorda username")
+        # form_layout.addWidget(self.remember_checkbox, 2, 0, 1, 2)
         
-        # Aggiungi un frame per il form
-        form_frame = QFrame()
-        form_frame.setLayout(form_layout)
-        form_frame.setFrameShape(QFrame.Box)
-        form_frame.setFrameShadow(QFrame.Sunken)
+        layout.addLayout(form_layout)
         
-        layout.addWidget(form_frame)
-        
-        # Pulsanti
         buttons_layout = QHBoxLayout()
-        
         self.login_button = QPushButton("Login")
-        self.login_button.clicked.connect(self.handle_login)
-        self.login_button.setAutoDefault(True)
         self.login_button.setDefault(True)
+        self.login_button.clicked.connect(self.handle_login)
         
-        self.cancel_button = QPushButton("Annulla")
-        self.cancel_button.clicked.connect(self.reject)
+        self.cancel_button = QPushButton("Esci")
+        self.cancel_button.clicked.connect(self.reject) # Chiude il dialogo e l'app se annullato
         
+        buttons_layout.addStretch()
         buttons_layout.addWidget(self.login_button)
         buttons_layout.addWidget(self.cancel_button)
-        
         layout.addLayout(buttons_layout)
-        
-        self.setLayout(layout)
-    
+
+        self.username_edit.setFocus()
+
     def handle_login(self):
         username = self.username_edit.text().strip()
         password = self.password_edit.text()
         
         if not username or not password:
-            QMessageBox.warning(self, "Errore di Login", "Username e password sono obbligatori.")
+            QMessageBox.warning(self, "Login Fallito", "Username e password sono obbligatori.")
             return
         
-        credentials = self.db_manager.get_user_credentials(username)
+        credentials = self.db_manager.get_user_credentials(username) # Questo metodo ora restituisce anche il ruolo
         login_success = False
-        user_id = None
         
         if credentials:
-            user_id = credentials['id']
+            user_id_local = credentials['id'] # Rinominato per chiarezza locale
             stored_hash = credentials['password_hash']
-            logger.debug(f"Tentativo login per user ID {user_id}. Hash: {stored_hash[:10]}...")
             
             if _verify_password(stored_hash, password):
                 login_success = True
-                logger.info(f"Login OK per ID: {user_id}")
+                gui_logger.info(f"Login GUI OK per ID: {user_id_local}")
             else:
-                QMessageBox.critical(self, "Errore di Login", "Password errata.")
-                logger.warning(f"Login fallito (pwd errata) per ID: {user_id}")
+                QMessageBox.warning(self, "Login Fallito", "Password errata.")
+                gui_logger.warning(f"Login GUI fallito (pwd errata) per ID: {user_id_local}")
+                self.password_edit.selectAll()
+                self.password_edit.setFocus()
                 return
         else:
-            QMessageBox.critical(self, "Errore di Login", "Utente non trovato o non attivo.")
-            logger.warning(f"Login fallito (utente '{username}' non trovato/attivo).")
+            QMessageBox.warning(self, "Login Fallito", "Utente non trovato o non attivo.")
+            gui_logger.warning(f"Login GUI fallito (utente '{username}' non trovato/attivo).")
+            self.username_edit.selectAll()
+            self.username_edit.setFocus()
             return
         
-        if user_id is not None:
+        # Se la verifica password è andata a buon fine
+        if login_success and user_id_local is not None:
             session_id_returned = self.db_manager.register_access(
-                user_id, 'login', indirizzo_ip=client_ip_address, esito=login_success
+                user_id_local, 'login', 
+                indirizzo_ip=client_ip_address_gui, # Usa variabile globale per GUI
+                esito=True, # login_success è True qui
+                application_name='CatastoAppGUI' # Nome specifico per l'app GUI
             )
             
-            if login_success and session_id_returned:
-                self.successful_login = True
-                self.user_id = user_id
-                self.session_id = session_id_returned
-                if not self.db_manager.set_session_app_user(self.user_id, client_ip_address):
-                    logger.error("Impossibile impostare contesto DB post-login!")
-                QMessageBox.information(self, "Login Riuscito", f"Benvenuto! Sessione {session_id_returned[:8]}... avviata.")
-                self.accept()
-            elif login_success and not session_id_returned:
-                error_msg = "Errore critico: Impossibile registrare sessione accesso."
-                QMessageBox.critical(self, "Errore di Login", error_msg)
-                logger.error(f"Login OK per ID {user_id} ma fallita reg. accesso.")
-                self.reject()
-
+            if session_id_returned:
+                self.logged_in_user_id = user_id_local
+                self.logged_in_user_info = credentials # Salva tutte le info, incluso il ruolo
+                self.current_session_id = session_id_returned
+                
+                if not self.db_manager.set_session_app_user(self.logged_in_user_id, client_ip_address_gui):
+                    gui_logger.error("Impossibile impostare contesto DB post-login!")
+                
+                QMessageBox.information(self, "Login Riuscito", 
+                                        f"Benvenuto {self.logged_in_user_info.get('nome_completo', username)}!")
+                self.accept() # Chiude il dialogo con successo
+            else:
+                QMessageBox.critical(self, "Login Fallito", "Errore critico: Impossibile registrare la sessione di accesso.")
+                gui_logger.error(f"Login GUI OK per ID {user_id_local} ma fallita reg. accesso.")
+                # Non fare self.reject() qui, permette un altro tentativo o l'uscita manuale
 # --- Finestra di Creazione Utente ---
 class CreateUserDialog(QDialog):
     def __init__(self, db_manager, parent=None):
@@ -299,7 +291,7 @@ class CreateUserDialog(QDialog):
         
         try:
             password_hash = _hash_password(password)
-            logger.debug(f"Hash generato per {username}")
+            gui_logger.debug(f"Hash generato per {username}")
             
             if self.db_manager.create_user(username, password_hash, nome_completo, email, ruolo):
                 QMessageBox.information(self, "Successo", f"Utente '{username}' creato con successo.")
@@ -307,12 +299,12 @@ class CreateUserDialog(QDialog):
             else:
                 QMessageBox.critical(self, "Errore", f"Errore creazione utente '{username}' (controllare log - es. duplicato).")
         except Exception as hash_err:
-            logger.error(f"Errore hashing password per {username}: {hash_err}")
+            gui_logger.error(f"Errore hashing password per {username}: {hash_err}")
             QMessageBox.critical(self, "Errore", "Errore tecnico nella gestione della password.")
 
 # --- Selettore di Comune con finestra dialog ---
 class ComuneSelectionDialog(QDialog):
-    def __init__(self, db_manager, parent=None, title="Seleziona Comune"):
+    def __init__(self, db_manager: CatastoDBManager, parent=None, title="Seleziona Comune"):
         super(ComuneSelectionDialog, self).__init__(parent)
         self.db_manager = db_manager
         self.selected_comune_id = None
@@ -322,76 +314,71 @@ class ComuneSelectionDialog(QDialog):
         self.setMinimumWidth(400)
         self.setMinimumHeight(300)
         
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         
-        # Campo di ricerca
         search_layout = QHBoxLayout()
-        search_label = QLabel("Filtra comuni:")
+        search_layout.addWidget(QLabel("Filtra comuni:"))
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Digita per filtrare...")
         self.search_edit.textChanged.connect(self.filter_comuni)
-        self.search_button = QPushButton("Cerca")
-        self.search_button.clicked.connect(self.filter_comuni)
-        
-        search_layout.addWidget(search_label)
         search_layout.addWidget(self.search_edit)
+        
+        self.search_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), "") # Icona aggiorna
+        self.search_button.setToolTip("Aggiorna lista comuni")
+        self.search_button.clicked.connect(self.filter_comuni)
         search_layout.addWidget(self.search_button)
         
         layout.addLayout(search_layout)
         
-        # Lista comuni
         self.comuni_list = QListWidget()
         self.comuni_list.setAlternatingRowColors(True)
         self.comuni_list.itemDoubleClicked.connect(self.handle_select)
         layout.addWidget(self.comuni_list)
         
-        # Pulsanti
         buttons_layout = QHBoxLayout()
-        
         self.select_button = QPushButton("Seleziona")
+        self.select_button.setDefault(True)
         self.select_button.clicked.connect(self.handle_select)
         
         self.cancel_button = QPushButton("Annulla")
         self.cancel_button.clicked.connect(self.reject)
         
+        buttons_layout.addStretch()
         buttons_layout.addWidget(self.select_button)
         buttons_layout.addWidget(self.cancel_button)
-        
         layout.addLayout(buttons_layout)
         
-        self.setLayout(layout)
-        
-        # Carica comuni inizialmente
         self.load_comuni()
-    
+
     def load_comuni(self, filter_text=None):
-        """Carica i comuni dal database con filtro opzionale."""
         self.comuni_list.clear()
-        comuni = self.db_manager.get_comuni(filter_text)
-        
-        if comuni:
-            for comune in comuni:
-                item = QListWidgetItem(f"{comune['nome']} (ID: {comune['id']}, {comune['provincia']})")
-                # Salva l'id del comune come dato utente
-                item.setData(Qt.UserRole, comune['id'])
-                self.comuni_list.addItem(item)
-        else:
-            self.comuni_list.addItem("Nessun comune trovato.")
-    
+        try:
+            comuni = self.db_manager.get_comuni(filter_text)
+            if comuni:
+                for comune in comuni:
+                    item = QListWidgetItem(f"{comune['nome']} (ID: {comune['id']}, {comune['provincia']})")
+                    item.setData(Qt.UserRole, comune['id'])
+                    item.setData(Qt.UserRole + 1, comune['nome']) # Salva anche il nome
+                    self.comuni_list.addItem(item)
+            else:
+                self.comuni_list.addItem("Nessun comune trovato.")
+        except Exception as e:
+            gui_logger.error(f"Errore caricamento comuni nel dialogo: {e}")
+            self.comuni_list.addItem("Errore caricamento comuni.")
+
     def filter_comuni(self):
-        """Filtra la lista dei comuni in base al testo inserito."""
         filter_text = self.search_edit.text().strip()
         self.load_comuni(filter_text if filter_text else None)
-    
+
     def handle_select(self):
-        """Gestisce la selezione di un comune dalla lista."""
         current_item = self.comuni_list.currentItem()
-        if current_item and current_item.data(Qt.UserRole):
+        if current_item and current_item.data(Qt.UserRole) is not None:
             self.selected_comune_id = current_item.data(Qt.UserRole)
-            self.selected_comune_name = current_item.text().split(" (ID:")[0]
+            self.selected_comune_name = current_item.data(Qt.UserRole + 1) # Recupera il nome
             self.accept()
         else:
-            QMessageBox.warning(self, "Attenzione", "Seleziona un comune valido.")
+            QMessageBox.warning(self, "Attenzione", "Seleziona un comune valido dalla lista.")
+
 
 # --- Widget per riepilogo dati immobili ---
 class ImmobiliTableWidget(QTableWidget):
@@ -2559,7 +2546,7 @@ class CatastoMainWindow(QMainWindow):
                 self.db_status_label.setText("Database: ERRORE")
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore durante la connessione: {str(e)}")
-            logger.error(f"Errore connessione database: {e}")
+            gui_logger.error(f"Errore connessione database: {e}")
     
     def setup_tabs(self):
         """Configura i tab principali dopo la connessione."""
@@ -2671,10 +2658,546 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager.disconnect()
         
         event.accept()
+# --- Dialogo _seleziona_utente_da_elenco (per la GUI) ---
+class UserSelectionDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, parent=None, title="Seleziona Utente", exclude_user_id: Optional[int] = None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.setWindowTitle(title)
+        self.setMinimumWidth(500)
+        self.selected_user_id: Optional[int] = None
+        self.exclude_user_id = exclude_user_id
+
+        layout = QVBoxLayout(self)
+        
+        self.user_table = QTableWidget()
+        self.user_table.setColumnCount(5)
+        self.user_table.setHorizontalHeaderLabels(["ID", "Username", "Nome Completo", "Ruolo", "Stato"])
+        self.user_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.user_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.user_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.user_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.user_table.itemDoubleClicked.connect(self._accept_selection)
+        layout.addWidget(self.user_table)
+
+        buttons_layout = QHBoxLayout()
+        ok_button = QPushButton("Seleziona")
+        ok_button.clicked.connect(self._accept_selection)
+        cancel_button = QPushButton("Annulla")
+        cancel_button.clicked.connect(self.reject)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(ok_button)
+        buttons_layout.addWidget(cancel_button)
+        layout.addLayout(buttons_layout)
+
+        self.load_users()
+
+    def load_users(self):
+        self.user_table.setRowCount(0)
+        users = self.db_manager.get_utenti()
+        for user_data in users:
+            if self.exclude_user_id and user_data['id'] == self.exclude_user_id:
+                continue
+            row_pos = self.user_table.rowCount()
+            self.user_table.insertRow(row_pos)
+            self.user_table.setItem(row_pos, 0, QTableWidgetItem(str(user_data['id'])))
+            self.user_table.setItem(row_pos, 1, QTableWidgetItem(user_data['username']))
+            self.user_table.setItem(row_pos, 2, QTableWidgetItem(user_data['nome_completo']))
+            self.user_table.setItem(row_pos, 3, QTableWidgetItem(user_data['ruolo']))
+            self.user_table.setItem(row_pos, 4, QTableWidgetItem("Attivo" if user_data['attivo'] else "Non Attivo"))
+        self.user_table.resizeColumnsToContents()
+
+
+    def _accept_selection(self):
+        selected_rows = self.user_table.selectionModel().selectedRows()
+        if selected_rows:
+            row = selected_rows[0].row()
+            self.selected_user_id = int(self.user_table.item(row, 0).text())
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Selezione", "Per favore, seleziona un utente dalla lista.")
+
+
+# --- Finestra Principale ---
+class CatastoMainWindow(QMainWindow):
+    def __init__(self):
+        super(CatastoMainWindow, self).__init__()
+        
+        self.db_manager: Optional[CatastoDBManager] = None
+        # Spostiamo le variabili di sessione qui come attributi di istanza
+        self.logged_in_user_id: Optional[int] = None
+        self.logged_in_user_info: Optional[Dict] = None
+        self.current_session_id: Optional[str] = None
+        
+        self.initUI()
+        # Il login ora è gestito nel main dell'applicazione prima di mostrare la finestra
+        # self.connect_to_database() # La connessione avviene prima del login
+
+    def initUI(self):
+        self.setWindowTitle("Gestionale Catasto Storico - Archivio di Stato Savona")
+        self.setMinimumSize(1024, 768) # Dimensioni minime più generose
+        
+        # Icona applicazione (opzionale, creare un file icona .ico o .png)
+        # self.setWindowIcon(QIcon('path/to/your/icon.png'))
+
+        self.central_widget = QWidget()
+        self.main_layout = QVBoxLayout(self.central_widget) # Layout principale per central_widget
+
+        self.create_status_bar_content() # Crea la barra di stato personalizzata
+        self.tabs = QTabWidget()
+        self.main_layout.addWidget(self.tabs)
+        
+        self.setCentralWidget(self.central_widget)
+        self.statusBar().showMessage("Pronto.") # Barra di stato standard di QMainWindow
+
+        # Imposta lo stile qui se non fatto a livello di QApplication
+        # self.setStyleSheet("QMainWindow { background-color: #f0f0f0; } QTabWidget::pane { border: 1px solid #ccc; }")
+
+
+    def create_status_bar_content(self):
+        """Crea il contenuto per la barra di stato personalizzata in alto."""
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.StyledPanel) # Un po' di stile
+        # status_frame.setFixedHeight(40) # Altezza fissa
+        status_layout = QHBoxLayout(status_frame)
+        
+        self.db_status_label = QLabel("Database: Non connesso")
+        self.user_status_label = QLabel("Utente: Nessuno")
+        
+        self.logout_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Logout")
+        self.logout_button.setToolTip("Effettua il logout dell'utente corrente")
+        self.logout_button.clicked.connect(self.handle_logout)
+        self.logout_button.setEnabled(False) # Abilitato dopo il login
+        
+        status_layout.addWidget(self.db_status_label)
+        status_layout.addSpacing(20)
+        status_layout.addWidget(self.user_status_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.logout_button)
+        
+        self.main_layout.addWidget(status_frame) # Aggiungi al layout principale
+
+    def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
+        """Chiamato dopo un login riuscito per impostare la GUI."""
+        self.db_manager = db_manager
+        self.logged_in_user_id = user_id
+        self.logged_in_user_info = user_info
+        self.current_session_id = session_id
+
+        # Aggiorna la UI con le info dell'utente
+        self.db_status_label.setText(f"Database: Connesso ({self.db_manager.conn_params.get('dbname')})")
+        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
+        self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
+        self.logout_button.setEnabled(True)
+        
+        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+        self.setup_tabs() # Ora configura i tab principali
+        self.show() # Mostra la finestra principale
+
+
+    def setup_tabs(self):
+        """Configura i tab principali dell'applicazione."""
+        if not self.db_manager:
+            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
+            return
+            
+        self.tabs.clear() # Pulisce i tab esistenti
+
+        # Tab Consultazione
+        consultazione_main_tab = QWidget() # Un widget contenitore per i sotto-tab
+        consultazione_main_layout = QVBoxLayout(consultazione_main_tab)
+        consultazione_sub_tabs = QTabWidget()
+        consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager), "Ricerca Partite")
+        # TODO: Aggiungere altri widget/sotto-tab per le altre consultazioni
+        # consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager), "Ricerca Possessori")
+        # consultazione_sub_tabs.addTab(RicercaImmobiliWidget(self.db_manager), "Ricerca Immobili")
+        consultazione_main_layout.addWidget(consultazione_sub_tabs)
+        self.tabs.addTab(consultazione_main_tab, "Consultazione")
+
+        # Tab Inserimento
+        inserimento_main_tab = QWidget()
+        inserimento_main_layout = QVBoxLayout(inserimento_main_tab)
+        inserimento_sub_tabs = QTabWidget()
+        inserimento_sub_tabs.addTab(InserimentoPossessoreWidget(self.db_manager), "Nuovo Possessore")
+        inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager), "Nuova Località")
+        inserimento_sub_tabs.addTab(InserimentoComuneWidget(self.db_manager), "Nuovo Comune") # Assumendo che esista InserimentoComuneWidget
+        inserimento_sub_tabs.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Proprietà")
+        # TODO: Aggiungere altri widget/sotto-tab per gli altri inserimenti
+        inserimento_main_layout.addWidget(inserimento_sub_tabs)
+        self.tabs.addTab(inserimento_main_tab, "Inserimento e Gestione")
+
+        # Tab Reportistica
+        self.tabs.addTab(ReportisticaWidget(self.db_manager), "Reportistica")
+        
+        # Tab Statistiche/Viste
+        self.tabs.addTab(StatisticheWidget(self.db_manager), "Statistiche e Viste")
+
+        # Tab Gestione Utenti (NUOVO, basato sulla CLI)
+        self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info), "Gestione Utenti")
+        
+        # Tab Sistema (Audit, Backup, Manutenzione)
+        sistema_tab = QTabWidget()
+        sistema_tab.addTab(AuditWidget(self.db_manager), "Audit Log")
+        sistema_tab.addTab(BackupWidget(self.db_manager), "Backup")
+        # Aggiungere qui il tab Manutenzione se si crea un widget apposito
+        self.tabs.addTab(sistema_tab, "Sistema")
+
+        # Abilita/Disabilita tab in base ai permessi (esempio)
+        self.update_ui_based_on_role()
+
+
+    def update_ui_based_on_role(self):
+        """Abilita/Disabilita funzionalità in base al ruolo dell'utente loggato."""
+        if not self.logged_in_user_info:
+            # Disabilita tutti i tab tranne forse un "Benvenuto" se non loggato
+            for i in range(self.tabs.count()):
+                self.tabs.setTabEnabled(i, False)
+            return
+
+        is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
+        is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
+        
+        # Abilita tutti i tab per default, poi disabilita specifici
+        for i in range(self.tabs.count()):
+            self.tabs.setTabEnabled(i, True)
+
+        # Esempio: Solo admin può vedere "Gestione Utenti" e "Sistema" (alcune parti)
+        # Trova l'indice dei tab per nome (più robusto che per indice fisso)
+        tab_gestione_utenti_index = -1
+        tab_sistema_index = -1
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == "Gestione Utenti":
+                tab_gestione_utenti_index = i
+            elif self.tabs.tabText(i) == "Sistema":
+                tab_sistema_index = i
+        
+        if tab_gestione_utenti_index != -1:
+            self.tabs.setTabEnabled(tab_gestione_utenti_index, is_admin)
+        
+        # Potrebbe essere più granulare per il tab "Sistema"
+        if tab_sistema_index != -1:
+             self.tabs.setTabEnabled(tab_sistema_index, is_admin or is_archivista) # Esempio
+
+
+    def handle_logout(self):
+        global logged_in_user_id_gui, logged_in_user_info_gui, current_session_id_gui
+        
+        if self.logged_in_user_id and self.current_session_id and self.db_manager:
+            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
+                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
+            else:
+                QMessageBox.warning(self, "Logout Fallito", "Errore durante la registrazione del logout.")
+            
+            self.logged_in_user_id = None
+            self.logged_in_user_info = None
+            self.current_session_id = None
+            self.db_manager.clear_session_app_user()
+            
+            self.user_status_label.setText("Utente: Nessuno")
+            self.logout_button.setEnabled(False)
+            self.statusBar().showMessage("Logout effettuato. Riavviare l'applicazione per un nuovo login.")
+            
+            # Disabilita i tab e chiudi la finestra principale, forzando un nuovo login al riavvio
+            # Oppure, meglio, emetti un segnale che l'applicazione principale (in main) può catturare
+            # per mostrare nuovamente il dialogo di login.
+            # Per ora, chiudiamo la finestra principale.
+            self.close() # O QApplication.instance().quit() se è l'unica finestra
+
+    def closeEvent(self, event):
+        """Gestisce la chiusura dell'applicazione."""
+        if self.logged_in_user_id and self.current_session_id and self.db_manager:
+            gui_logger.info(f"Esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id} prima della chiusura...")
+            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
+        
+        if self.db_manager:
+            self.db_manager.disconnect()
+        
+        gui_logger.info("Applicazione GUI terminata.")
+        event.accept()
+
+# --- Widget per la Gestione Utenti ---
+class GestioneUtentiWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, current_user_info: Optional[Dict], parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.current_user_info = current_user_info # Info dell'utente loggato
+        self.is_admin = self.current_user_info.get('ruolo') == 'admin' if self.current_user_info else False
+
+        layout = QVBoxLayout(self)
+        
+        # Pulsanti Azioni
+        action_layout = QHBoxLayout()
+        self.btn_crea_utente = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), " Crea Nuovo Utente")
+        self.btn_crea_utente.clicked.connect(self.crea_nuovo_utente)
+        self.btn_crea_utente.setEnabled(self.is_admin)
+        action_layout.addWidget(self.btn_crea_utente)
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
+
+        # Tabella Utenti
+        self.user_table = QTableWidget()
+        self.user_table.setColumnCount(6) # ID, Username, Nome Completo, Email, Ruolo, Stato
+        self.user_table.setHorizontalHeaderLabels(["ID", "Username", "Nome Completo", "Email", "Ruolo", "Stato"])
+        self.user_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.user_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.user_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.user_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # self.user_table.itemDoubleClicked.connect(self.modifica_utente_selezionato) # Opzionale
+        layout.addWidget(self.user_table)
+
+        # Pulsanti di gestione per utente selezionato
+        manage_layout = QHBoxLayout()
+        self.btn_modifica_utente = QPushButton("Modifica Utente")
+        self.btn_modifica_utente.clicked.connect(self.modifica_utente_selezionato)
+        self.btn_modifica_utente.setEnabled(self.is_admin)
+
+        self.btn_reset_password = QPushButton("Resetta Password")
+        self.btn_reset_password.clicked.connect(self.reset_password_utente_selezionato)
+        self.btn_reset_password.setEnabled(self.is_admin)
+
+        self.btn_toggle_stato = QPushButton("Attiva/Disattiva Utente")
+        self.btn_toggle_stato.clicked.connect(self.toggle_stato_utente_selezionato)
+        self.btn_toggle_stato.setEnabled(self.is_admin)
+        
+        self.btn_delete_utente = QPushButton("Elimina Utente")
+        self.btn_delete_utente.clicked.connect(self.elimina_utente_selezionato)
+        self.btn_delete_utente.setEnabled(self.is_admin)
+
+
+        manage_layout.addWidget(self.btn_modifica_utente)
+        manage_layout.addWidget(self.btn_reset_password)
+        manage_layout.addWidget(self.btn_toggle_stato)
+        manage_layout.addWidget(self.btn_delete_utente)
+        layout.addLayout(manage_layout)
+
+        self.refresh_user_list()
+
+    def refresh_user_list(self):
+        self.user_table.setRowCount(0)
+        utenti = self.db_manager.get_utenti() # Prende tutti gli utenti
+        for user_data in utenti:
+            row_pos = self.user_table.rowCount()
+            self.user_table.insertRow(row_pos)
+            self.user_table.setItem(row_pos, 0, QTableWidgetItem(str(user_data['id'])))
+            self.user_table.setItem(row_pos, 1, QTableWidgetItem(user_data['username']))
+            self.user_table.setItem(row_pos, 2, QTableWidgetItem(user_data['nome_completo']))
+            self.user_table.setItem(row_pos, 3, QTableWidgetItem(user_data.get('email', 'N/D')))
+            self.user_table.setItem(row_pos, 4, QTableWidgetItem(user_data['ruolo']))
+            self.user_table.setItem(row_pos, 5, QTableWidgetItem("Attivo" if user_data['attivo'] else "Non Attivo"))
+        self.user_table.resizeColumnsToContents()
+
+    def crea_nuovo_utente(self):
+        dialog = CreateUserDialog(self.db_manager, self) # CreateUserDialog come definito prima
+        if dialog.exec_() == QDialog.Accepted:
+            self.refresh_user_list()
+            QMessageBox.information(self, "Successo", "Nuovo utente creato.")
+
+    def _get_selected_user_id(self) -> Optional[int]:
+        selected_rows = self.user_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Nessuna Selezione", "Per favore, seleziona un utente dalla lista.")
+            return None
+        try:
+            return int(self.user_table.item(selected_rows[0].row(), 0).text())
+        except (ValueError, AttributeError):
+            QMessageBox.critical(self, "Errore", "Impossibile ottenere l'ID dell'utente selezionato.")
+            return None
+            
+    def modifica_utente_selezionato(self):
+        user_id = self._get_selected_user_id()
+        if user_id is None: return
+
+        utente_attuale = self.db_manager.get_utente_by_id(user_id)
+        if not utente_attuale:
+            QMessageBox.critical(self, "Errore", f"Utente con ID {user_id} non trovato."); return
+
+        # Qui aprirebbe un dialogo per modificare i dettagli, simile a CreateUserDialog ma pre-popolato
+        # Per semplicità, usiamo QInputDialog per alcuni campi
+        nome_attuale = utente_attuale.get('nome_completo', '')
+        new_nome, ok = QInputDialog.getText(self, "Modifica Nome", f"Nuovo nome completo (attuale: '{nome_attuale}'):", text=nome_attuale)
+        if not ok: return # Annullato
+
+        email_attuale = utente_attuale.get('email', '')
+        new_email, ok = QInputDialog.getText(self, "Modifica Email", f"Nuova email (attuale: '{email_attuale}'):", text=email_attuale)
+        if not ok: return
+
+        ruoli = ["admin", "archivista", "consultatore"]
+        ruolo_attuale = utente_attuale.get('ruolo', 'consultatore')
+        new_ruolo, ok = QInputDialog.getItem(self, "Modifica Ruolo", f"Nuovo ruolo (attuale: '{ruolo_attuale}'):", ruoli, ruoli.index(ruolo_attuale) if ruolo_attuale in ruoli else 0, False)
+        if not ok: return
+
+        update_params = {}
+        if new_nome and new_nome != nome_attuale: update_params['nome_completo'] = new_nome
+        if new_email and new_email != email_attuale: update_params['email'] = new_email
+        if new_ruolo and new_ruolo != ruolo_attuale: update_params['ruolo'] = new_ruolo
+        
+        if update_params:
+            if self.db_manager.update_user_details(user_id, **update_params):
+                QMessageBox.information(self, "Successo", "Dettagli utente aggiornati.")
+                self.refresh_user_list()
+            else:
+                QMessageBox.critical(self, "Errore", "Aggiornamento fallito. Controllare i log.")
+        else:
+            QMessageBox.information(self, "Info", "Nessuna modifica apportata.")
+
+
+    def reset_password_utente_selezionato(self):
+        user_id = self._get_selected_user_id()
+        if user_id is None: return
+        if user_id == self.current_user_info.get('id'):
+            QMessageBox.warning(self, "Azione Non Permessa", "Non puoi resettare la tua password da questa interfaccia.")
+            return
+
+        new_password, ok = QInputDialog.getText(self, "Reset Password", "Inserisci la nuova password temporanea:", QLineEdit.Password)
+        if ok and new_password:
+            new_password_confirm, ok_confirm = QInputDialog.getText(self, "Conferma Password", "Conferma la nuova password temporanea:", QLineEdit.Password)
+            if ok_confirm and new_password == new_password_confirm:
+                try:
+                    new_hash = _hash_password(new_password)
+                    if self.db_manager.reset_user_password(user_id, new_hash):
+                        QMessageBox.information(self, "Successo", f"Password per utente ID {user_id} resettata.")
+                    else:
+                        QMessageBox.critical(self, "Errore", "Reset password fallito.")
+                except Exception as e:
+                    QMessageBox.critical(self, "Errore Hashing", f"Errore durante l'hashing: {e}")
+            elif ok_confirm: # ma password non coincidono
+                QMessageBox.warning(self, "Errore", "Le password non coincidono.")
+        elif ok: # password vuota
+             QMessageBox.warning(self, "Errore", "La password non può essere vuota.")
+
+
+    def toggle_stato_utente_selezionato(self):
+        user_id = self._get_selected_user_id()
+        if user_id is None: return
+        if user_id == self.current_user_info.get('id'):
+            QMessageBox.warning(self, "Azione Non Permessa", "Non puoi modificare lo stato del tuo account.")
+            return
+
+        utente_target = self.db_manager.get_utente_by_id(user_id)
+        if not utente_target: QMessageBox.critical(self, "Errore", "Utente non trovato."); return
+
+        nuovo_stato_attivo = not utente_target['attivo']
+        azione_str = "RIATTIVARE" if nuovo_stato_attivo else "DISATTIVARE"
+        
+        reply = QMessageBox.question(self, "Conferma Stato", 
+                                     f"L'utente '{utente_target['username']}' è attualmente {'ATTIVO' if utente_target['attivo'] else 'NON ATTIVO'}.\n"
+                                     f"Vuoi {azione_str} questo utente?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            success = False
+            if nuovo_stato_attivo:
+                success = self.db_manager.activate_user(user_id)
+            else:
+                success = self.db_manager.deactivate_user(user_id)
+            
+            if success:
+                QMessageBox.information(self, "Successo", f"Stato utente '{utente_target['username']}' aggiornato.")
+                self.refresh_user_list()
+            else:
+                QMessageBox.critical(self, "Errore", "Aggiornamento stato fallito.")
+
+    def elimina_utente_selezionato(self):
+        user_id = self._get_selected_user_id()
+        if user_id is None: return
+        if user_id == self.current_user_info.get('id'):
+            QMessageBox.warning(self, "Azione Non Permessa", "Non puoi eliminare te stesso.")
+            return
+
+        utente_target = self.db_manager.get_utente_by_id(user_id)
+        if not utente_target: QMessageBox.critical(self, "Errore", "Utente non trovato."); return
+
+        reply = QMessageBox.warning(self, "Conferma Eliminazione", 
+                                    f"ATTENZIONE: Stai per eliminare PERMANENTEMENTE l'utente '{utente_target['username']}' (ID: {user_id}).\n"
+                                    "Questa operazione è IRREVERSIBILE e i riferimenti nei log verranno impostati a NULL (se configurato).\n"
+                                    "Sei assolutamente sicuro?",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            # Ulteriore conferma digitando lo username
+            confirm_username, ok = QInputDialog.getText(self, "Conferma Finale", 
+                                                        f"Per confermare l'eliminazione permanente di '{utente_target['username']}', riscrivi il suo username:")
+            if ok and confirm_username == utente_target['username']:
+                if self.db_manager.delete_user_permanently(user_id):
+                    QMessageBox.information(self, "Successo", f"Utente '{utente_target['username']}' eliminato permanentemente.")
+                    self.refresh_user_list()
+                else:
+                    QMessageBox.critical(self, "Errore", "Eliminazione fallita. Controllare i log (es. è l'unico admin attivo?).")
+            elif ok: # Username non corrispondente
+                QMessageBox.warning(self, "Annullato", "Username non corrispondente. Eliminazione annullata.")
+            # else: l'utente ha premuto annulla su QInputDialog
+
+# Altri Widget per i Tab (da creare)
+class InserimentoComuneWidget(QWidget): # Esempio
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Widget Inserimento Comune (TODO)"))
+        # ... implementare form e logica ...
+
+class AuditWidget(QWidget): # Esempio
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Widget Audit Log (TODO)"))
+
+class BackupWidget(QWidget): # Esempio
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Widget Backup (TODO)"))
+        
+
+# --- Blocco Main dell'Applicazione GUI ---
+def run_gui_app():
+    app = QApplication(sys.argv)
+    # Imposta uno stile (opzionale)
+    # app.setStyle(QStyleFactory.create('Fusion')) 
+    
+    # Configurazione del database (potrebbe venire da un file di config)
+    db_config_gui = {
+        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
+        "host": "localhost", "port": 5432, "schema": "catasto"
+    }
+    db_manager_gui = CatastoDBManager(**db_config_gui)
+
+    if not db_manager_gui.connect():
+        QMessageBox.critical(None, "Errore Connessione Database",
+                             "Impossibile connettersi al database.\n"
+                             "Verifica i parametri di connessione e che il server PostgreSQL sia in esecuzione.\n"
+                             "L'applicazione verrà chiusa.")
+        sys.exit(1)
+
+    # Loop di login
+    main_window = None
+    while True:
+        login_dialog = LoginDialog(db_manager_gui)
+        if login_dialog.exec_() == QDialog.Accepted:
+            # Login riuscito, passa le info alla MainWindow
+            main_window = CatastoMainWindow()
+            main_window.perform_initial_setup(
+                db_manager_gui,
+                login_dialog.logged_in_user_id,
+                login_dialog.logged_in_user_info,
+                login_dialog.current_session_id
+            )
+            # mainWindow.show() # show() viene chiamato in perform_initial_setup
+            break # Esce dal loop di login e avvia l'app
+        else:
+            # Login annullato o fallito, l'utente ha chiuso il dialogo di login
+            gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
+            db_manager_gui.disconnect() # Assicurati che la connessione sia chiusa
+            sys.exit(0) # Esce dall'applicazione
+
+    if main_window:
+        exit_code = app.exec_()
+        sys.exit(exit_code)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyle(QStyleFactory.create('Fusion'))  # Stile moderno
+    run_gui_app()
     
     # Imposta un tema più moderno
     palette = QPalette()

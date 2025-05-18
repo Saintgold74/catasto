@@ -962,3 +962,32 @@ Traceback (most recent call last):
            ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
 2025-05-17 20:16:26,416 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 11:55:04,983 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 11:55:05,126 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 11:55:12,190 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 11:55:12,449 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 11:55:12,476 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione b57f8306...
+2025-05-18 11:57:20,078 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 11:57:20,188 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 11:57:25,245 - CatastoGUI - INFO - Login annullato o fallito. Uscita dall'applicazione GUI.
+2025-05-18 11:57:25,257 - CatastoDB - INFO - Disconnessione completata
+2025-05-18 11:57:35,034 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 11:57:35,172 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 11:57:41,273 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 11:57:41,527 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 11:57:41,536 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 1e8bd154...
+2025-05-18 11:57:43,223 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 11:59:50,403 - CatastoDB - INFO - Località 'Borgata Sarcazzo' (Comune ID: 3) inserita con ID: 101
+2025-05-18 12:01:01,370 - CatastoDB - INFO - Registrata nuova proprietà: Comune ID 3, Partita N.1
+2025-05-18 12:01:55,848 - CatastoDB - INFO - Avvio aggiornamento viste materializzate...
+2025-05-18 12:01:56,024 - CatastoDB - INFO - Aggiornamento viste completato.
+2025-05-18 12:05:41,601 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-18 12:05:41,710 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-18 12:05:49,041 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-18 12:05:49,308 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-18 12:05:49,317 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione f32db834...
+2025-05-18 12:05:51,313 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-18 12:06:15,007 - CatastoDB - INFO - Utente 'santoro' creato.
+2025-05-18 12:06:16,248 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-18 12:06:32,979 - CatastoDB - INFO - Utente ID 3 eliminato fisicamente con successo.
+2025-05-18 12:06:33,790 - CatastoDB - INFO - Recuperati 1 utenti.

@@ -94,6 +94,108 @@ class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
+        
+class CreateUserDialog(QDialog):
+    def __init__(self, db_manager, parent=None): # db_manager è CatastoDBManager
+        super(CreateUserDialog, self).__init__(parent)
+        self.db_manager = db_manager
+        self.setWindowTitle("Crea Nuovo Utente")
+        self.setMinimumWidth(400)
+        layout = QVBoxLayout(self)
+
+        form_layout = QGridLayout()
+        form_layout.addWidget(QLabel("Username:"), 0, 0)
+        self.username_edit = QLineEdit()
+        self.username_edit.setPlaceholderText("Min. 3 caratteri")
+        form_layout.addWidget(self.username_edit, 0, 1)
+
+        form_layout.addWidget(QLabel("Password:"), 1, 0)
+        self.password_edit = QPasswordLineEdit() # Usa la classe definita sopra
+        self.password_edit.setPlaceholderText("Min. 6 caratteri")
+        form_layout.addWidget(self.password_edit, 1, 1)
+
+        form_layout.addWidget(QLabel("Conferma Password:"), 2, 0)
+        self.confirm_edit = QPasswordLineEdit() # Usa la classe definita sopra
+        form_layout.addWidget(self.confirm_edit, 2, 1)
+
+        form_layout.addWidget(QLabel("Nome Completo:"), 3, 0)
+        self.nome_edit = QLineEdit()
+        form_layout.addWidget(self.nome_edit, 3, 1)
+
+        form_layout.addWidget(QLabel("Email:"), 4, 0)
+        self.email_edit = QLineEdit()
+        self.email_edit.setPlaceholderText("es. utente@dominio.it")
+        form_layout.addWidget(self.email_edit, 4, 1)
+
+        form_layout.addWidget(QLabel("Ruolo:"), 5, 0)
+        self.ruolo_combo = QComboBox()
+        self.ruolo_combo.addItems(["admin", "archivista", "consultatore"]) # Ruoli standard
+        form_layout.addWidget(self.ruolo_combo, 5, 1)
+
+        frame_form = QFrame() # Un frame per raggruppare i campi
+        frame_form.setLayout(form_layout)
+        frame_form.setFrameShape(QFrame.StyledPanel) # Aspetto più gradevole
+        layout.addWidget(frame_form)
+
+        buttons_layout = QHBoxLayout()
+        self.create_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Crea Utente")
+        self.create_button.clicked.connect(self.handle_create_user)
+        self.create_button.setDefault(True)
+
+        self.cancel_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCancelButton), "Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.create_button)
+        buttons_layout.addWidget(self.cancel_button)
+        layout.addLayout(buttons_layout)
+
+        self.username_edit.setFocus()
+
+    def handle_create_user(self):
+        username = self.username_edit.text().strip()
+        password = self.password_edit.text()
+        confirm = self.confirm_edit.text()
+        nome_completo = self.nome_edit.text().strip()
+        email = self.email_edit.text().strip()
+        ruolo = self.ruolo_combo.currentText()
+
+        if not all([username, password, nome_completo, email, ruolo]):
+            QMessageBox.warning(self, "Errore di Validazione", "Tutti i campi sono obbligatori.")
+            return
+        if len(username) < 3:
+            QMessageBox.warning(self, "Errore di Validazione", "L'username deve essere di almeno 3 caratteri.")
+            return
+        if len(password) < 6:
+            QMessageBox.warning(self, "Errore di Validazione", "La password deve essere di almeno 6 caratteri.")
+            return
+        if password != confirm:
+            QMessageBox.warning(self, "Errore di Validazione", "Le password non coincidono.")
+            self.password_edit.setFocus()
+            self.password_edit.selectAll()
+            return
+
+        # Potresti aggiungere una validazione email più robusta qui (es. con regex)
+
+        try:
+            password_hash = _hash_password(password) # Utilizza la funzione globale
+
+            if self.db_manager.create_user(username, password_hash, nome_completo, email, ruolo):
+                QMessageBox.information(self, "Successo", f"Utente '{username}' creato con successo.")
+                self.accept() 
+            else:
+                # Il db_manager.create_user dovrebbe loggare l'errore specifico.
+                # Potrebbe fallire per utente duplicato o altri vincoli DB.
+                QMessageBox.critical(self, "Errore Database", 
+                                     f"Impossibile creare l'utente '{username}'.\n"
+                                     "Verificare che l'username non sia già in uso e controllare i log del database.")
+        except Exception as e:
+            # Questo cattura errori imprevisti, inclusi quelli dall'hashing o dalla chiamata DB.
+            # Assicurati che gui_logger sia definito e accessibile globalmente o passato.
+            # Se gui_logger non è disponibile, usa print() o logging standard.
+            # logging.getLogger("CatastoGUI").error(f"Errore imprevisto durante la creazione dell'utente {username}: {e}")
+            QMessageBox.critical(self, "Errore Inaspettato", 
+                                 f"Si è verificato un errore imprevisto: {e}")
 
 class LoginDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None):

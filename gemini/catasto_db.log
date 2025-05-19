@@ -1101,3 +1101,45 @@ PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
 2025-05-19 09:18:25,252 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione a8d52b34...
 2025-05-19 09:18:25,255 - CatastoDB - INFO - Disconnessione completata
 2025-05-19 09:18:25,255 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 10:01:36,819 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:01:37,061 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:01:44,597 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-19 10:01:44,895 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-19 10:01:44,966 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione d4f9e151...
+2025-05-19 10:01:46,937 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-19 10:02:43,539 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:02:43,608 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:02:50,067 - __main__ - WARNING - Login fallito (utente 'santoro' non trovato/attivo).
+2025-05-19 10:02:58,556 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-19 10:02:59,006 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 5372b372...
+2025-05-19 10:03:05,129 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-19 10:03:37,382 - CatastoDB - INFO - Utente 'santoro' creato.
+2025-05-19 10:03:42,205 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-19 10:03:52,630 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 10:03:55,364 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:03:55,430 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:03:58,847 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:03:59,301 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione a5920a65...
+2025-05-19 10:04:06,150 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 10:04:09,567 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:04:09,634 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:04:14,793 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:04:15,082 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 10:04:15,089 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione c8d0e29d...
+2025-05-19 10:04:16,397 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-19 10:04:46,852 - CatastoDB - INFO - Password resettata per utente ID 1.
+2025-05-19 10:10:51,867 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:10:51,953 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:10:57,335 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:10:57,629 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 10:10:57,680 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 434647ec...
+2025-05-19 10:10:59,213 - CatastoDB - INFO - Recuperati 2 utenti.
+2025-05-19 10:11:47,354 - CatastoDB - INFO - Utente 'pippo' creato.
+2025-05-19 10:11:48,623 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 10:12:24,748 - CatastoDB - INFO - Utente ID 3 disattivato.
+2025-05-19 10:12:25,944 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 10:12:39,287 - CatastoDB - INFO - Dettagli utente ID 3 aggiornati.
+2025-05-19 10:12:40,322 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 10:13:06,856 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 434647ec...
+2025-05-19 10:13:08,005 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 10:13:08,005 - CatastoGUI - INFO - Applicazione GUI terminata.

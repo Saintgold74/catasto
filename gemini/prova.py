@@ -26,10 +26,21 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QTableWidgetItem, QDateEdit, QScrollArea,
                             QDialog, QListWidget,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame) 
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
 from PyQt5.QtWidgets import QDoubleSpinBox
+
+COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
+COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
+# Costanti per la configurazione delle tabelle dei possessori, se usate in più punti
+# Scegli nomi specifici se diverse tabelle hanno diverse configurazioni
+COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM = 5 # Esempio: ID, Nome Compl, Paternità, Comune, Num. Partite
+COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità", "Comune Rif.", "Num. Partite"]
+
+# Per InserimentoPossessoreWidget, se la sua tabella è diversa:
+COLONNE_INSERIMENTO_POSSESSORI_NUM = 4 # Esempio: ID, Nome Completo, Paternità, Comune
+COLONNE_INSERIMENTO_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità", "Comune Riferimento"]
 
 # Importazione FPDF per esportazione PDF
 try:
@@ -1320,6 +1331,9 @@ class PartitaDetailsDialog(QDialog):
         
         layout = QVBoxLayout()
         
+        NUOVE_COLONNE_POSSESSORI = 6 # o 5 se non mostri cognome_nome separato
+        NUOVE_ETICHETTE_POSSESSORI = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
+    # --- Layout della finestra ---
         # Intestazione
         header_layout = QHBoxLayout()
         
@@ -1460,170 +1474,144 @@ class PartitaDetailsDialog(QDialog):
                 QMessageBox.critical(self, "Errore", f"Errore durante l'esportazione: {str(e)}")
 
 # --- Scheda per Inserimento Possessore ---
+
 class InserimentoPossessoreWidget(QWidget):
-    def __init__(self, db_manager, parent=None):
-        super(InserimentoPossessoreWidget, self).__init__(parent)
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
         self.db_manager = db_manager
-        
-        layout = QVBoxLayout()
-        
-        # Form di inserimento
-        form_group = QGroupBox("Inserimento Nuovo Possessore")
-        form_layout = QGridLayout()
-        
-        # Comune
-        comune_label = QLabel("Comune:")
-        self.comune_button = QPushButton("Seleziona Comune...")
-        self.comune_button.clicked.connect(self.select_comune)
-        self.comune_id = None
-        self.comune_display = QLabel("Nessun comune selezionato")
-        
-        form_layout.addWidget(comune_label, 0, 0)
-        form_layout.addWidget(self.comune_button, 0, 1)
-        form_layout.addWidget(self.comune_display, 0, 2)
-        
-        # Cognome e nome
-        cognome_label = QLabel("Cognome e nome:")
-        self.cognome_edit = QLineEdit()
-        
-        form_layout.addWidget(cognome_label, 1, 0)
-        form_layout.addWidget(self.cognome_edit, 1, 1, 1, 2)
-        
-        # Paternità
-        paternita_label = QLabel("Paternità:")
-        self.paternita_edit = QLineEdit()
-        self.paternita_edit.setPlaceholderText("es. 'fu Roberto'")
-        
-        form_layout.addWidget(paternita_label, 2, 0)
-        form_layout.addWidget(self.paternita_edit, 2, 1, 1, 2)
-        
-        # Nome completo
-        nome_completo_label = QLabel("Nome completo:")
+        self.comuni_list_data: List[Dict[str, Any]] = [] # Per memorizzare i dati dei comuni
+        self.selected_comune_id: Optional[int] = None
+
+        main_layout = QVBoxLayout(self)
+
+        # === Gruppo per i dati del possessore ===
+        form_group = QGroupBox("Dati del Nuovo Possessore")
+        form_layout = QGridLayout(form_group)
+
+        form_layout.addWidget(QLabel("Nome Completo:"), 0, 0)
         self.nome_completo_edit = QLineEdit()
-        self.nome_completo_update_button = QPushButton("Genera da cognome+paternità")
-        self.nome_completo_update_button.clicked.connect(self.update_nome_completo)
+        form_layout.addWidget(self.nome_completo_edit, 0, 1)
+
+        form_layout.addWidget(QLabel("Paternità:"), 1, 0)
+        self.paternita_edit = QLineEdit()
+        form_layout.addWidget(self.paternita_edit, 1, 1)
         
-        form_layout.addWidget(nome_completo_label, 3, 0)
-        form_layout.addWidget(self.nome_completo_edit, 3, 1)
-        form_layout.addWidget(self.nome_completo_update_button, 3, 2)
+        form_layout.addWidget(QLabel("Cognome Nome (opzionale, per ricerca):"), 2, 0)
+        self.cognome_nome_edit = QLineEdit() # Se hai questo campo nel DB e lo vuoi inserire
+        form_layout.addWidget(self.cognome_nome_edit, 2, 1)
+
+        form_layout.addWidget(QLabel("Comune di Riferimento:"), 3, 0)
+        self.comune_combo = QComboBox()
+        self._load_comuni_for_combo() # Popola la combobox
+        form_layout.addWidget(self.comune_combo, 3, 1)
         
-        # Stato attivo
-        attivo_label = QLabel("Attivo:")
-        self.attivo_checkbox = QCheckBox()
-        self.attivo_checkbox.setChecked(True)
+        self.attivo_checkbox = QCheckBox("Attivo")
+        self.attivo_checkbox.setChecked(True) # Default a True
+        form_layout.addWidget(self.attivo_checkbox, 4, 0, 1, 2) # Span su due colonne
+
+        main_layout.addWidget(form_group)
+
+        # === Tabella per visualizzare i possessori (SE QUESTO WIDGET LA NECESSITA) ===
+        # Se InserimentoPossessoreWidget è *solo* un form per creare un nuovo possessore,
+        # allora questa tabella potrebbe non essere necessaria qui.
+        # Se è necessaria, ad esempio per mostrare una lista di possessori esistenti
+        # per evitare duplicati o per selezionarne uno da modificare (anche se il nome del widget
+        # suggerisce solo "Inserimento"), allora inizializzala.
+
+        # 1. CREA l'istanza della tabella e assegnala a self.attributo
+        ##self.possessori_table = QTableWidget(self) # 'self' come parent
+
+        # 2. DEFINISCI le colonne e le etichette SPECIFICHE per questa tabella
+        #    Usa valori letterali o costanti di classe/modulo ben definite.
+        #    NON usare 'NUOVE_COLONNE_POSSESSORI' a meno che non sia definita
+        #    globalmente o come costante di classe e sia intesa per QUESTO widget.
+
+        # Esempio: se questa tabella mostra una lista di possessori già inseriti
+        # per riferimento o per una futura funzionalità di modifica da qui.
+        numero_colonne_per_tabella_inserimento = 5 # Ad Esempio: ID, Nome Completo, Paternità, Comune, Attivo
+        etichette_per_tabella_inserimento = ["ID", "Nome Completo", "Paternità", "Comune Rif.", "Stato"]
         
-        form_layout.addWidget(attivo_label, 4, 0)
-        form_layout.addWidget(self.attivo_checkbox, 4, 1)
+        ##self.possessori_table.setColumnCount(numero_colonne_per_tabella_inserimento) # Questa era la riga problematica
+        ##self.possessori_table.setHorizontalHeaderLabels(etichette_per_tabella_inserimento)
         
-        form_group.setLayout(form_layout)
-        layout.addWidget(form_group)
-        
-        # Pulsante inserimento
-        insert_button = QPushButton("Inserisci Possessore")
-        insert_button.clicked.connect(self.insert_possessore)
-        layout.addWidget(insert_button)
-        
-        # Riepilogo possessori del comune selezionato
-        summary_group = QGroupBox("Possessori nel Comune Selezionato")
-        summary_layout = QVBoxLayout()
-        
-        self.refresh_button = QPushButton("Aggiorna Lista")
-        self.refresh_button.clicked.connect(self.refresh_possessori)
-        
-        self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Paternità", "Stato"])
-        self.possessori_table.setAlternatingRowColors(True)
-        self.possessori_table.horizontalHeader().setStretchLastSection(True)
-        
-        summary_layout.addWidget(self.refresh_button)
-        summary_layout.addWidget(self.possessori_table)
-        
-        summary_group.setLayout(summary_layout)
-        layout.addWidget(summary_group)
-        
-        self.setLayout(layout)
-    
-    def select_comune(self):
-        """Apre il selettore di comuni."""
-        dialog = ComuneSelectionDialog(self.db_manager, self)
-        result = dialog.exec_()
-        
-        if result == QDialog.Accepted and dialog.selected_comune_id:
-            self.comune_id = dialog.selected_comune_id
-            self.comune_display.setText(dialog.selected_comune_name)
-            # Aggiorna la lista dei possessori per il comune selezionato
-            self.refresh_possessori()
-    
-    def update_nome_completo(self):
-        """Aggiorna il nome completo in base a cognome e paternità."""
-        cognome = self.cognome_edit.text().strip()
-        paternita = self.paternita_edit.text().strip()
-        
-        if cognome:
-            nome_completo = cognome
-            if paternita:
-                nome_completo += f" {paternita}"
-            
-            self.nome_completo_edit.setText(nome_completo)
-    
-    def insert_possessore(self):
-        """Inserisce un nuovo possessore."""
-        # Valida i dati di input
-        if not self.comune_id:
-            QMessageBox.warning(self, "Errore", "Seleziona un comune.")
-            return
-        
-        cognome_nome = self.cognome_edit.text().strip()
-        paternita = self.paternita_edit.text().strip()
+        # Configura la tabella
+        ##self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        ##self.possessori_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        ##self.possessori_table.setAlternatingRowColors(True)
+        ##self.possessori_table.horizontalHeader().setStretchLastSection(True)
+        # Potresti voler caricare i dati in questa tabella con un pulsante o all'inizializzazione.
+        # self._carica_possessori_esistenti_in_tabella() # Esempio di metodo da chiamare
+
+        # Aggiungi la tabella al layout SOLO SE deve essere visibile in questo widget
+        # Se il widget è solo un form, probabilmente non vuoi mostrarla qui.
+        # main_layout.addWidget(self.possessori_table) 
+
+        # Pulsante per salvare
+        self.save_button = QPushButton("Salva Nuovo Possessore")
+        self.save_button.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.save_button.clicked.connect(self._salva_possessore) # Connetti a un metodo
+        main_layout.addWidget(self.save_button)
+
+        main_layout.addStretch()
+        self.setLayout(main_layout)
+
+    def _load_comuni_for_combo(self):
+        try:
+            self.comuni_list_data = self.db_manager.get_comuni()
+            self.comune_combo.clear()
+            if self.comuni_list_data:
+                for comune in self.comuni_list_data:
+                    self.comune_combo.addItem(f"{comune['nome']} ({comune['provincia']})", userData=comune['id'])
+            else:
+                self.comune_combo.addItem("Nessun comune nel DB")
+        except Exception as e:
+            gui_logger.error(f"Errore caricamento comuni in InserimentoPossessoreWidget: {e}")
+            self.comune_combo.addItem("Errore caricamento comuni")
+
+    def _salva_possessore(self):
         nome_completo = self.nome_completo_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        cognome_nome = self.cognome_nome_edit.text().strip() # Recupera anche questo
+        
+        idx_comune = self.comune_combo.currentIndex()
+        comune_id_selezionato = self.comune_combo.itemData(idx_comune) if idx_comune >= 0 else None
+        
         attivo = self.attivo_checkbox.isChecked()
-        
-        if not cognome_nome:
-            QMessageBox.warning(self, "Errore", "Il cognome e nome è obbligatorio.")
-            return
-        
+
         if not nome_completo:
-            QMessageBox.warning(self, "Errore", "Il nome completo è obbligatorio.")
+            QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Nome Completo' è obbligatorio.")
             return
-        
-        # Inserisci possessore
-        possessore_id = self.db_manager.insert_possessore(
-            self.comune_id, cognome_nome, paternita, nome_completo, attivo
-        )
-        
-        if possessore_id:
-            QMessageBox.information(self, "Successo", f"Possessore '{nome_completo}' inserito con ID: {possessore_id}")
-            
-            # Pulisci i campi
-            self.cognome_edit.clear()
-            self.paternita_edit.clear()
-            self.nome_completo_edit.clear()
-            
-            # Aggiorna la lista dei possessori
-            self.refresh_possessori()
-        else:
-            QMessageBox.critical(self, "Errore", "Errore durante l'inserimento del possessore.")
-    
-    def refresh_possessori(self):
-        """Aggiorna la lista dei possessori per il comune selezionato."""
-        self.possessori_table.setRowCount(0)
-        
-        if self.comune_id:
-            possessori = self.db_manager.get_possessori_by_comune(self.comune_id)
-            
-            if possessori:
-                self.possessori_table.setRowCount(len(possessori))
-                
-                for i, pos in enumerate(possessori):
-                    self.possessori_table.setItem(i, 0, QTableWidgetItem(str(pos.get('id', ''))))
-                    self.possessori_table.setItem(i, 1, QTableWidgetItem(pos.get('nome_completo', '')))
-                    self.possessori_table.setItem(i, 2, QTableWidgetItem(pos.get('paternita', '')))
-                    
-                    stato = "Attivo" if pos.get('attivo') else "Non Attivo"
-                    self.possessori_table.setItem(i, 3, QTableWidgetItem(stato))
-            
-            self.possessori_table.resizeColumnsToContents()
+        if comune_id_selezionato is None:
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune di riferimento.")
+            return
+
+        try:
+            # Assumendo che db_manager.create_possessore accetti anche cognome_nome
+            # Se il tuo metodo create_possessore non lo accetta, dovrai modificarlo
+            # o non passare cognome_nome se non è un campo del DB.
+            success = self.db_manager.create_possessore(
+                nome_completo=nome_completo,
+                paternita=paternita if paternita else None, # Passa None se vuoto
+                comune_riferimento_id=comune_id_selezionato,
+                attivo=attivo,
+                cognome_nome=cognome_nome if cognome_nome else None # Passa anche questo
+            )
+            if success:
+                QMessageBox.information(self, "Successo", f"Possessore '{nome_completo}' creato con successo.")
+                # Pulisci i campi del form dopo il salvataggio
+                self.nome_completo_edit.clear()
+                self.paternita_edit.clear()
+                self.cognome_nome_edit.clear()
+                self.comune_combo.setCurrentIndex(-1) # Resetta combobox
+                self.attivo_checkbox.setChecked(True)
+                # Potresti voler ricaricare la tabella dei possessori, se ne hai una in questo widget
+                # self._carica_possessori_esistenti_in_tabella() 
+            else:
+                QMessageBox.critical(self, "Errore Database", "Impossibile creare il possessore. Controllare i log.")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il salvataggio del possessore: {e}")
+            QMessageBox.critical(self, "Errore Critico", f"Si è verificato un errore imprevisto: {e}")
+
 
 # --- Scheda per Localita ---
 class InserimentoLocalitaWidget(QWidget):
@@ -2108,6 +2096,11 @@ class RegistrazioneProprietaWidget(QWidget):
         for i, possessore in enumerate(self.possessori_data):
             self.possessori_table.setItem(i, 0, QTableWidgetItem(possessore.get('nome_completo', '')))
             self.possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('cognome_nome', '')))
+             # *** NUOVE COLONNE ***
+            if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
+                self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
+            self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
+            # *********************# *** NUOVE COLONNE ***
             self.possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('paternita', '')))
             self.possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
     
@@ -2424,6 +2417,11 @@ class PossessoreSelectionDialog(QDialog):
                 for i, pos in enumerate(possessori):
                     self.possessori_table.setItem(i, 0, QTableWidgetItem(str(pos.get('id', ''))))
                     self.possessori_table.setItem(i, 1, QTableWidgetItem(pos.get('nome_completo', '')))
+                     # *** NUOVE COLONNE ***
+                    if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
+                        self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
+                    # **********************************
                     self.possessori_table.setItem(i, 2, QTableWidgetItem(pos.get('paternita', '')))
                     
                     stato = "Attivo" if pos.get('attivo') else "Non Attivo"

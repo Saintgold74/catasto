@@ -23,6 +23,9 @@ import json
 import uuid
 import os
 
+COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
+COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
+
 # --- Configurazione Logging ---
 # Configura il logger se non già fatto altrove
 if not logging.getLogger("CatastoDB").hasHandlers():
@@ -858,6 +861,28 @@ class CatastoDBManager:
         except Exception as e:
             logger.error(f"Errore Python get_partita_data_for_export (ID: {partita_id}): {e}")
             return None
+        
+        # Recupero possessori associati (modificato per includere paternita e cognome_nome)
+        possessori_query = """
+            SELECT 
+                p.id, p.nome_completo, p.cognome_nome, p.paternita,
+                pp.quota, pp.diritti_obblighi, 
+                t.nome as titolo_proprieta, pp.data_inizio_validita, pp.data_fine_validita
+            FROM catasto.possessori p
+            JOIN catasto.partita_possessore pp ON p.id = pp.possessore_id
+            LEFT JOIN catasto.titoli_proprieta t ON pp.titolo_proprieta_id = t.id
+            WHERE pp.partita_id = %s
+            ORDER BY p.nome_completo;
+        """
+        # Assumendo che self._fetch_all_dict esista e funzioni o sia stato sostituito dalla logica con DictCursor
+        # dict_cursor_poss = self.conn.cursor(cursor_factory=DictCursor) # Esempio se fatto direttamente
+        # dict_cursor_poss.execute(possessori_query, (partita_id,))
+        # partita_data['possessori'] = [dict(row) for row in dict_cursor_poss.fetchall()]
+        # dict_cursor_poss.close()
+        
+        # Se usi un metodo helper come self._fetch_all_dict:
+        partita_data['possessori'] = self._fetch_all_dict(possessori_query, (partita_id,))
+
 
     def get_possessore_data_for_export(self, possessore_id: int) -> Optional[Dict]:
         """

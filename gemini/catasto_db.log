@@ -1251,3 +1251,61 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-19 12:11:27,120 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-62' (soglia: 0.24999999999999967).
 2025-05-19 12:15:33,270 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 1' (soglia: 0.24999999999999967) ha prodotto 100 risultati.
 2025-05-19 12:15:43,249 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 1' (soglia: 1.0) ha prodotto 5 risultati.
+2025-05-19 12:54:36,432 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 12:54:36,710 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 12:54:46,136 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 12:54:46,464 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 12:54:46,505 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione b9c4f1e3...
+2025-05-19 12:54:51,147 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 12:55:57,766 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '101' (soglia: 0.3).
+2025-05-19 12:56:05,677 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 0.3).
+2025-05-19 12:56:17,670 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 0.01).
+2025-05-19 12:57:16,749 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-1' (soglia: 0.01).
+2025-05-19 12:57:23,053 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-1' (soglia: 0.0).
+2025-05-19 12:57:34,172 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 1' (soglia: 0.0) ha prodotto 100 risultati.
+2025-05-19 13:14:19,229 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione b9c4f1e3...
+2025-05-19 13:14:20,779 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 13:14:20,783 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 13:20:01,481 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 13:20:01,598 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 13:20:10,181 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 13:20:10,539 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 13:20:10,560 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione e57f394a...
+2025-05-19 13:20:13,701 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 13:20:51,893 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress' (soglia: 0.3) ha prodotto 100 risultati.
+2025-05-19 13:29:06,388 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione e57f394a...
+2025-05-19 13:29:07,952 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 13:29:07,952 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 13:30:24,963 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 13:30:25,067 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 13:30:34,759 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 13:30:35,095 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 13:30:35,140 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 2f01fc8a...
+2025-05-19 13:30:36,360 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 13:30:44,604 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress' (soglia: 0.3) ha prodotto 100 risultati.
+2025-05-19 13:31:07,252 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 2f01fc8a...
+2025-05-19 13:31:08,623 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 13:31:08,623 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 13:37:20,925 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 13:37:21,145 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 13:37:29,890 - CatastoGUI - WARNING - Login GUI fallito (utente 'santoro' non trovato/attivo).
+2025-05-19 13:37:35,558 - CatastoGUI - WARNING - Login GUI fallito (utente 'santoro' non trovato/attivo).
+2025-05-19 13:37:42,723 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-19 13:37:43,032 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-19 13:37:43,083 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 88e85daa...
+2025-05-19 13:37:44,342 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-19 13:37:52,977 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress' (soglia: 0.3) ha prodotto 100 risultati.
+2025-05-19 13:38:14,537 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 4' (soglia: 0.3) ha prodotto 100 risultati.
+2025-05-19 13:38:27,177 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 4' (soglia: 0.9000000000000002) ha prodotto 5 risultati.
+2025-05-19 13:38:38,131 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'possessore 1' (soglia: 0.9000000000000002).
+2025-05-19 13:38:44,340 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'possessore 1-1' (soglia: 0.9000000000000002).
+2025-05-19 13:38:50,933 - CatastoDB - INFO - Ricerca avanzata possessori per 'possessore 1-1' (soglia: 0.15000000000000002) ha prodotto 100 risultati.
+2025-05-19 13:39:00,690 - CatastoDB - INFO - Ricerca avanzata possessori per '1-1' (soglia: 0.15000000000000002) ha prodotto 5 risultati.
+2025-05-19 13:39:08,874 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 0.44999999999999996).
+2025-05-19 13:39:13,691 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 0.3).
+2025-05-19 13:39:16,817 - CatastoDB - INFO - Ricerca avanzata possessori per '1-1' (soglia: 0.2) ha prodotto 5 risultati.
+2025-05-19 13:39:26,842 - CatastoDB - INFO - Ricerca avanzata possessori per '1-1' (soglia: 0.05000000000000002) ha prodotto 100 risultati.
+2025-05-19 13:39:36,700 - CatastoDB - INFO - Ricerca avanzata possessori per '1-1' (soglia: 0.2) ha prodotto 5 risultati.
+2025-05-19 13:39:49,387 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 88e85daa...
+2025-05-19 13:39:50,773 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 13:39:50,778 - CatastoGUI - INFO - Applicazione GUI terminata.

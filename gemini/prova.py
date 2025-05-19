@@ -1198,6 +1198,116 @@ class RicercaPartiteWidget(QWidget):
                 QMessageBox.warning(self, "Errore", f"Non è stato possibile recuperare i dettagli della partita ID {partita_id}.")
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
+class RicercaPossessoriWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        
+        main_layout = QVBoxLayout(self)
+        
+        # --- Gruppo per i Criteri di Ricerca ---
+        search_criteria_group = QGroupBox("Criteri di Ricerca Possessori")
+        criteria_layout = QGridLayout(search_criteria_group)
+        
+        criteria_layout.addWidget(QLabel("Termine di ricerca (nome, cognome, ecc.):"), 0, 0)
+        self.search_term_edit = QLineEdit()
+        self.search_term_edit.setPlaceholderText("Inserisci parte del nome o altri termini...")
+        criteria_layout.addWidget(self.search_term_edit, 0, 1, 1, 2)
+        
+        # Opzione per la soglia di similarità (come nel tab Ricerca Avanzata)
+        criteria_layout.addWidget(QLabel("Soglia di similarità (0.0 - 1.0):"), 1, 0)
+        self.similarity_threshold_spinbox = QDoubleSpinBox()
+        self.similarity_threshold_spinbox.setMinimum(0.0)
+        self.similarity_threshold_spinbox.setMaximum(1.0)
+        self.similarity_threshold_spinbox.setSingleStep(0.05)
+        self.similarity_threshold_spinbox.setValue(0.3) # Un default ragionevole per la consultazione
+        criteria_layout.addWidget(self.similarity_threshold_spinbox, 1, 1)
+        
+        self.search_button = QPushButton("Cerca Possessori")
+        self.search_button.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton)) # O SP_performSearch
+        self.search_button.clicked.connect(self._perform_search)
+        criteria_layout.addWidget(self.search_button, 1, 2)
+        
+        main_layout.addWidget(search_criteria_group)
+        
+        # --- Tabella per i Risultati ---
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(7) # ID, Nome Completo, Cognome/Nome, Paternità, Comune, Similarità, Num. Partite
+        self.results_table.setHorizontalHeaderLabels([
+            "ID", "Nome Completo", "Cognome Nome", "Paternità", "Comune Rif.", "Similarità", "Num. Partite"
+        ])
+        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.horizontalHeader().setStretchLastSection(True)
+        self.results_table.itemDoubleClicked.connect(self._show_possessore_details) # Opzionale
+        main_layout.addWidget(self.results_table)
+
+    def _perform_search(self):
+        search_term = self.search_term_edit.text().strip()
+        similarity_threshold = self.similarity_threshold_spinbox.value()
+        
+        if not search_term:
+            QMessageBox.warning(self, "Input Mancante", "Per favore, inserisci un termine di ricerca.")
+            return
+            
+        try:
+            # Usiamo la funzione esistente ricerca_avanzata_possessori
+            possessori = self.db_manager.ricerca_avanzata_possessori(
+                query_text=search_term,
+                similarity_threshold=similarity_threshold
+            )
+            
+            self.results_table.setRowCount(0) # Pulisce la tabella
+            
+            if not possessori:
+                QMessageBox.information(self, "Ricerca Possessori", "Nessun possessore trovato con i criteri specificati.")
+                return
+                
+            self.results_table.setRowCount(len(possessori))
+            for row_idx, possessore_data in enumerate(possessori):
+                col = 0
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(str(possessore_data.get('id', 'N/D')))); col+=1
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('nome_completo', 'N/D'))); col+=1
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1 # NUOVA COLONNA
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1    # NUOVA COLONNA
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('comune_nome', 'N/D'))); col+=1
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(f"{possessore_data.get('similarity', 0.0):.3f}")); col+=1
+                self.results_table.setItem(row_idx, col, QTableWidgetItem(str(possessore_data.get('num_partite', 'N/D')))); col+=1
+            
+            self.results_table.resizeColumnsToContents()
+            
+        except Exception as e:
+            gui_logger.error(f"Errore durante la ricerca possessori (GUI - Consultazione): {e}")
+            QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore durante la ricerca: {e}")
+
+    def _show_possessore_details(self, item: QTableWidgetItem):
+        if item is None:
+            return
+        try:
+            row = item.row()
+            possessore_id_str = self.results_table.item(row, 0).text()
+            possessore_id = int(possessore_id_str)
+            
+            # Qui dovresti implementare un dialogo per mostrare i dettagli del possessore.
+            # Potrebbe essere una nuova classe PossessoreDetailsDialog.
+            # Per ora, mostriamo un QMessageBox.
+            
+            # Esempio di recupero dati dettagliati (richiede un metodo in db_manager)
+            # dettagli_possessore = self.db_manager.get_possessore_full_details(possessore_id) 
+            # if dettagli_possessore:
+            #    dialog = PossessoreDetailsDialog(dettagli_possessore, self)
+            #    dialog.exec_()
+            # else:
+            #    QMessageBox.warning(self, "Dettagli non trovati", f"Impossibile recuperare i dettagli per il possessore ID {possessore_id}.")
+
+            QMessageBox.information(self, "Dettaglio Possessore", 
+                                    f"Dettaglio per possessore ID: {possessore_id} (dialogo dettagli da implementare).")
+        except ValueError:
+            QMessageBox.warning(self, "Errore ID", "ID del possessore non valido nella tabella.")
+        except Exception as e:
+            gui_logger.error(f"Errore nell'aprire dettagli possessore: {e}")
+            QMessageBox.critical(self, "Errore", f"Impossibile mostrare i dettagli: {e}")
 
 # --- Dialogo Dettagli Partita ---
 class PartitaDetailsDialog(QDialog):
@@ -3488,40 +3598,38 @@ class CatastoMainWindow(QMainWindow):
             return
         self.tabs.clear()
 
-        # Tab Consultazione (mantenuto come QTabWidget per sotto-tab)
-        consultazione_main_tab = QTabWidget() # Era QWidget, ora QTabWidget
-        consultazione_main_tab.addTab(RicercaPartiteWidget(self.db_manager), "Ricerca Partite")
-        # Qui puoi aggiungere altri sotto-tab per la consultazione se necessario
-        self.tabs.addTab(consultazione_main_tab, "Consultazione")
+        # --- Tab Consultazione (ora è un QTabWidget che contiene sotto-tab) ---
+        self.consultazione_sub_tabs = QTabWidget() # Widget per i sotto-tab di consultazione
+        self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager, self), "Ricerca Partite")
+        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self), "Ricerca Possessori") # NUOVO SOTTO-TAB
+        # self.consultazione_sub_tabs.addTab(RicercaImmobiliWidget(self.db_manager, self), "Ricerca Immobili") # Aggiungeremo dopo
+
+        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione") # Aggiunge il QTabWidget dei sotto-tab al QTabWidget principale
+        # --------------------------------------------------------------------
         
-        # Tab Inserimento (mantenuto come QTabWidget per sotto-tab)
-        inserimento_main_tab = QTabWidget() # Era QWidget, ora QTabWidget
-        inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager), "Nuovo Possessore")
-        inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager), "Nuova Località")
-        # InserimentoComuneWidget non era definito, lo commento per ora
-        # inserimento_main_tab.addTab(InserimentoComuneWidget(self.db_manager), "Nuovo Comune") 
-        inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Proprietà")
+        # Tab Inserimento e Gestione
+        inserimento_main_tab = QTabWidget()
+        inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager, self), "Nuovo Possessore")
+        inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager, self), "Nuova Località")
+        inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager, self), "Registra Proprietà")
         self.tabs.addTab(inserimento_main_tab, "Inserimento e Gestione")
 
-        # === NUOVO TAB PER RICERCA AVANZATA ===
-        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata") # Passa parent se necessario
-        # =======================================
-        # Tab Esportazioni (NUOVO)
-        self.tabs.addTab(EsportazioniWidget(self.db_manager), "Esportazioni") # Aggiunto il nuovo widget
-
-        self.tabs.addTab(ReportisticaWidget(self.db_manager), "Reportistica")
-        self.tabs.addTab(StatisticheWidget(self.db_manager), "Statistiche e Viste")
-        self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info), "Gestione Utenti")
+        # Tab Ricerca Avanzata (quello che abbiamo creato prima)
+        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata")
         
+        # Tab Esportazioni
+        self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni")
+
+        self.tabs.addTab(ReportisticaWidget(self.db_manager, self), "Reportistica")
+        self.tabs.addTab(StatisticheWidget(self.db_manager, self), "Statistiche e Viste")
+        
+        if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
+             self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
+
         sistema_tab = QTabWidget()
-        # AuditWidget e BackupWidget non erano definiti, li commento
-        # sistema_tab.addTab(AuditWidget(self.db_manager), "Audit Log")
-        # sistema_tab.addTab(BackupWidget(self.db_manager), "Backup")
-        # Per ora, il tab Sistema sarà vuoto o conterrà placeholder
         placeholder_sistema = QWidget()
-        placeholder_sistema_layout = QVBoxLayout(placeholder_sistema)
-        placeholder_sistema_layout.addWidget(QLabel("Funzionalità di Sistema (Audit, Backup, Manutenzione) da implementare qui."))
-        sistema_tab.addTab(placeholder_sistema, "Info")
+        # ... (layout placeholder sistema) ...
+        sistema_tab.addTab(placeholder_sistema, "Info Sistema")
         self.tabs.addTab(sistema_tab, "Sistema")
 
         self.update_ui_based_on_role()

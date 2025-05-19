@@ -13,61 +13,62 @@ SET search_path TO catasto, public; -- Aggiunto public se pg_trgm è lì
 -- utilizzando l'estensione pg_trgm.
 -- Include il nome del comune nei risultati.
 -- ========================================================================
-CREATE OR REPLACE FUNCTION ricerca_avanzata_possessori(
+-- Nello script SQL che definisce ricerca_avanzata_possessori(TEXT, REAL)
+CREATE OR REPLACE FUNCTION catasto.ricerca_avanzata_possessori(
     p_query_text TEXT,
-    p_similarity_threshold REAL DEFAULT 0.2 -- Soglia minima di similarità (0.0 - 1.0)
+    p_similarity_threshold REAL DEFAULT 0.2
 )
 RETURNS TABLE (
-    id INTEGER,             -- ID del possessore trovato
-    nome_completo VARCHAR,  -- Nome completo del possessore
-    comune_nome VARCHAR,    -- Nome del comune di residenza/riferimento del possessore
-    similarity REAL,        -- Punteggio di similarità calcolato (0.0 a 1.0)
-    num_partite BIGINT      -- Numero di partite catastali associate a questo possessore
+    id INTEGER,
+    nome_completo VARCHAR, -- o TEXT
+    cognome_nome VARCHAR,  -- Aggiunto (assicurati esista in tabella possessore)
+    paternita VARCHAR,     -- Aggiunto (assicurati esista in tabella possessore)
+    comune_nome VARCHAR,   -- o TEXT
+    similarity REAL,
+    num_partite BIGINT
 ) AS $$
 BEGIN
-    -- Esegui la query di ricerca per similarità
     RETURN QUERY
-    WITH possessore_similarity AS (
-        -- Sottoquery per calcolare la similarità per ogni possessore
+    WITH possessore_base AS (
         SELECT
             p.id,
             p.nome_completo,
-            c.nome AS comune_nome, -- Seleziona il nome del comune tramite JOIN
-            -- Calcola la similarità massima tra il termine di ricerca e i campi rilevanti
-            GREATEST(
-                similarity(p.nome_completo, p_query_text),
-                similarity(p.cognome_nome, p_query_text),
-                COALESCE(similarity(p.paternita, p_query_text), 0.0) -- Gestisce paternita NULL
-            ) AS sim
+            p.cognome_nome, -- Includi qui
+            p.paternita,    -- Includi qui
+            c.nome AS comune_nome
         FROM possessore p
-        JOIN comune c ON p.comune_id = c.id -- *** JOIN con la tabella comune ***
-        WHERE
-            -- Filtro preliminare usando l'operatore % di pg_trgm (efficiente se indicizzato)
-            -- Controlla se c'è una qualche similarità, anche bassa
-            p.nome_completo % p_query_text
-            OR p.cognome_nome % p_query_text
-            OR (p.paternita IS NOT NULL AND p.paternita % p_query_text)
+        LEFT JOIN comune c ON p.comune_id = c.id
+    ),
+    possessore_similarity AS (
+        SELECT
+            pb.id,
+            pb.nome_completo,
+            pb.cognome_nome, -- Propaga
+            pb.paternita,    -- Propaga
+            pb.comune_nome,
+            GREATEST(
+                similarity(pb.nome_completo, p_query_text),
+                COALESCE(similarity(pb.cognome_nome, p_query_text), 0.0), -- Se cognome_nome non esiste, rimuovi
+                COALESCE(similarity(pb.paternita, p_query_text), 0.0)
+            ) AS sim
+        FROM possessore_base pb
     )
-    -- Seleziona i risultati finali, applica la soglia e conta le partite
     SELECT
         ps.id,
-        ps.nome_completo,
-        ps.comune_nome,         -- Nome del comune ottenuto dalla CTE
+        ps.nome_completo::VARCHAR,
+        ps.cognome_nome::VARCHAR,  -- Restituisci
+        ps.paternita::VARCHAR,     -- Restituisci
+        ps.comune_nome::VARCHAR,
         ps.sim AS similarity,
-        COUNT(DISTINCT pp.partita_id)::BIGINT AS num_partite -- Conta le partite associate
+        (SELECT COUNT(DISTINCT pp.partita_id) FROM catasto.partita_possessore pp WHERE pp.possessore_id = ps.id)::BIGINT AS num_partite
     FROM possessore_similarity ps
-    LEFT JOIN partita_possessore pp ON ps.id = pp.possessore_id -- Join per contare le partite
-    WHERE ps.sim >= p_similarity_threshold -- Applica la soglia minima di similarità
-    GROUP BY ps.id, ps.nome_completo, ps.comune_nome, ps.sim -- Raggruppa per calcolare num_partite
-    ORDER BY similarity DESC, ps.nome_completo -- Ordina per similarità decrescente
-    LIMIT 100; -- Limita il numero di risultati per sicurezza e performance
-
+    WHERE ps.sim >= p_similarity_threshold
+    ORDER BY similarity DESC, ps.nome_completo
+    LIMIT 100;
 END;
-$$ LANGUAGE plpgsql;
-
-COMMENT ON FUNCTION ricerca_avanzata_possessori(TEXT, REAL) IS
-'Ricerca possessori tramite similarità testuale (pg_trgm) su nome_completo, cognome_nome e paternita, restituendo anche il nome del comune e il numero di partite associate. Richiede l''estensione pg_trgm.';
-
+$$ LANGUAGE plpgsql STABLE;
+COMMENT ON FUNCTION catasto.ricerca_avanzata_possessori(TEXT, REAL) IS
+'Ricerca possessori per similarita testuale.';
 -- ========================================================================
 -- OTTIMIZZAZIONE (CONSIGLIATA): Creare indici GIN per pg_trgm
 -- Questi indici migliorano drasticamente le performance della ricerca per similarità

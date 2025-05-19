@@ -1,0 +1,20 @@
+--- DETTAGLI PARTITA ---
+Id,562
+Comune Id,2
+Numero Partita,1004
+Tipo,principale
+Data Impianto,1987-05-19
+Data Chiusura,2025-04-05
+Numero Provenienza,
+Stato,inattiva
+Data Creazione,2025-05-19T08:55:29.14786
+Data Modifica,2025-05-19T08:55:29.14786
+Comune Nome,Comune Stress Test 2
+
+--- POSSESSORI ---
+Id,Comune Id,Cognome Nome,Paternita,Nome Completo,Attivo,Data Creazione,Data Modifica,Titolo,Quota
+101,2,Stress 1,fu Stress Test,Possessore 2-1 Rossi,True,2025-05-19T08:55:29.14786,2025-05-19T08:55:29.14786,proprietÃ  esclusiva,
+
+--- VARIAZIONI ---
+Id,Partita Origine Id,Partita Destinazione Id,Tipo,Data Variazione,Numero Riferimento,Nominativo Riferimento,Data Creazione,Data Modifica,Contratto Tipo,Data Contratto,Notaio,Repertorio
+61,562,1061,Vendita,2025-04-05,,,2025-05-19T08:55:29.14786,2025-05-19T08:55:29.14786,Vendita,2025-02-28,Notaio Stress Test,

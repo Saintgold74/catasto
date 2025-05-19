@@ -725,7 +725,7 @@ def menu_consultazione(db: CatastoDBManager):
                           print("Input soglia non numerico, uso default 0.2.")
                           soglia = 0.2
                   
-                  results_possessori = db.ricerca_avanzata_possessori(query_text, similarity_threshold=soglia) # Rinominato
+                  results_possessori = db.ricerca_avanzata_possessori(query_text=query_text, similarity_threshold=soglia)
                   if results_possessori:
                        print(f"\nTrovati {len(results_possessori)} risultati (ordinati per similarità):")
                        for r_item in results_possessori:

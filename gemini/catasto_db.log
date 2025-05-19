@@ -1143,3 +1143,111 @@ PermissionError: [Errno 13] Permission denied: 'partita_1540_2025-05-17.pdf'
 2025-05-19 10:13:06,856 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 434647ec...
 2025-05-19 10:13:08,005 - CatastoDB - INFO - Disconnessione completata
 2025-05-19 10:13:08,005 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 10:37:31,433 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:37:31,514 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:37:41,395 - __main__ - WARNING - Login fallito (utente 'pippo' non trovato/attivo).
+2025-05-19 10:37:49,198 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:37:49,609 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 021d5327...
+2025-05-19 10:55:35,319 - __main__ - ERROR - Errore non gestito nel programma: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1733, in main
+    menu_principale(db) # Entra nel menu principale dopo login riuscito
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1687, in menu_principale
+    if scelta == "1": menu_consultazione(db)
+                      ~~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 728, in menu_consultazione
+    results_possessori = db.ricerca_avanzata_possessori(query_text, similarity_threshold=soglia) # Rinominato
+TypeError: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+2025-05-19 10:55:35,363 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 021d5327...
+2025-05-19 10:55:35,365 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 10:55:38,737 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:55:38,809 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:55:42,382 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:55:42,774 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 508703e0...
+2025-05-19 10:55:50,096 - __main__ - ERROR - Errore non gestito nel programma: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1733, in main
+    menu_principale(db) # Entra nel menu principale dopo login riuscito
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 1687, in menu_principale
+    if scelta == "1": menu_consultazione(db)
+                      ~~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\python_example.py", line 728, in menu_consultazione
+    results_possessori = db.ricerca_avanzata_possessori(query_text, similarity_threshold=soglia) # Rinominato
+TypeError: CatastoDBManager.ricerca_avanzata_possessori() got an unexpected keyword argument 'similarity_threshold'
+2025-05-19 10:55:50,125 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 508703e0...
+2025-05-19 10:55:50,128 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 10:58:56,621 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 10:58:56,704 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 10:59:00,355 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 10:59:00,754 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 936c6b79...
+2025-05-19 10:59:07,027 - CatastoDB - WARNING - La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.
+2025-05-19 10:59:17,077 - CatastoDB - ERROR - Errore Python imprevisto durante la ricerca avanzata dei possessori: 'CatastoDBManager' object has no attribute 'fetch_all_dict'
+2025-05-19 11:02:02,115 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:02:04,894 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 11:02:04,963 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 11:02:10,217 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 11:02:10,638 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 45e134df...
+2025-05-19 11:02:18,206 - CatastoDB - ERROR - Errore DB durante la ricerca avanzata dei possessori: ERRORE:  la funzione catasto.search_possessori_advanced(unknown, unknown, numeric) non esiste
+LINE 1: SELECT * FROM catasto.search_possessori_advanced('2-97', NUL...
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-19 11:02:18,207 - CatastoDB - INFO - Rollback eseguito.
+2025-05-19 11:05:11,647 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:05:32,706 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 11:05:32,828 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 11:05:36,967 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 11:05:37,388 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 03930a43...
+2025-05-19 11:05:43,519 - CatastoDB - ERROR - Errore DB durante la ricerca avanzata dei possessori: ERRORE:  la funzione catasto.search_possessori_advanced(unknown, unknown, real) non esiste
+LINE 1: SELECT * FROM catasto.search_possessori_advanced('2-97', NUL...
+                      ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-19 11:05:43,520 - CatastoDB - INFO - Rollback eseguito.
+2025-05-19 11:06:01,110 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:18:57,085 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 11:18:57,152 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 11:19:00,703 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 11:19:01,044 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 6708e445...
+2025-05-19 11:19:13,506 - CatastoDB - ERROR - Errore Python imprevisto durante la ricerca avanzata dei possessori: name 'comune_id' is not defined
+2025-05-19 11:23:54,089 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:23:57,388 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 11:23:57,488 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 11:24:01,894 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 11:24:02,288 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione bb837c88...
+2025-05-19 11:24:09,478 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-97' (soglia: 0.2).
+2025-05-19 11:24:35,464 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-97' (soglia: 0.0).
+2025-05-19 11:24:50,084 - CatastoDB - INFO - Ricerca avanzata possessori per 'rossi' (soglia: 0.2) ha prodotto 95 risultati.
+2025-05-19 11:27:22,878 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:32:36,466 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 11:32:36,535 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 11:32:44,033 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 11:32:44,332 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 11:32:44,340 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 4158b7fc...
+2025-05-19 11:32:46,686 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 11:59:26,406 - CatastoDB - INFO - Logout registrato per utente ID 2, sessione 4158b7fc...
+2025-05-19 11:59:27,937 - CatastoDB - INFO - Disconnessione completata
+2025-05-19 11:59:27,937 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-19 12:08:48,431 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-19 12:08:48,545 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-19 12:08:56,756 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: santoro, Ruolo: admin
+2025-05-19 12:08:57,050 - CatastoGUI - INFO - Login GUI OK per ID: 2
+2025-05-19 12:08:57,092 - CatastoDB - INFO - Registrato accesso: Utente ID 2, Azione login, Esito True, Sessione 6689471d...
+2025-05-19 12:08:58,162 - CatastoDB - INFO - Recuperati 3 utenti.
+2025-05-19 12:09:09,932 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-97' (soglia: 0.2).
+2025-05-19 12:09:16,770 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '2-97' (soglia: 0.0).
+2025-05-19 12:09:26,475 - CatastoDB - INFO - Ricerca avanzata possessori per 'rossi' (soglia: 0.0) ha prodotto 95 risultati.
+2025-05-19 12:09:36,759 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '3-3' (soglia: 0.0).
+2025-05-19 12:09:46,799 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '3-3' (soglia: 0.0).
+2025-05-19 12:10:00,957 - CatastoDB - INFO - Ricerca avanzata possessori per 'rossi' (soglia: 0.0) ha prodotto 95 risultati.
+2025-05-19 12:10:17,776 - CatastoDB - INFO - Ricerca avanzata possessori per '5-1 rossi' (soglia: 0.0) ha prodotto 100 risultati.
+2025-05-19 12:10:47,004 - CatastoDB - INFO - Ricerca avanzata possessori per 'possessore' (soglia: 0.0) ha prodotto 100 risultati.
+2025-05-19 12:10:55,721 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 0.0).
+2025-05-19 12:10:59,494 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-1' (soglia: 1.0).
+2025-05-19 12:11:09,904 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'stress' (soglia: 1.0).
+2025-05-19 12:11:17,136 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress' (soglia: 0.24999999999999967) ha prodotto 100 risultati.
+2025-05-19 12:11:27,120 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: '1-62' (soglia: 0.24999999999999967).
+2025-05-19 12:15:33,270 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 1' (soglia: 0.24999999999999967) ha prodotto 100 risultati.
+2025-05-19 12:15:43,249 - CatastoDB - INFO - Ricerca avanzata possessori per 'stress 1' (soglia: 1.0) ha prodotto 5 risultati.

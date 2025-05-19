@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QInputDialog, QHeaderView,QFrame) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
+from PyQt5.QtWidgets import QDoubleSpinBox
 
 # Importazione FPDF per esportazione PDF
 try:
@@ -2084,6 +2085,101 @@ class RegistrazioneProprietaWidget(QWidget):
         else:
             QMessageBox.critical(self, "Errore", "Errore durante la registrazione della proprietà.")
 
+class RicercaAvanzataWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.setWindowTitle("Ricerca Avanzata per Similarità") # Titolo del widget, anche se nel tab non si vede
+        
+        main_layout = QVBoxLayout(self)
+        
+        # --- Sezione Ricerca Possessori per Similarità ---
+        possessori_group = QGroupBox("Ricerca Avanzata Possessori per Similarità")
+        possessori_layout = QGridLayout(possessori_group)
+        
+        possessori_layout.addWidget(QLabel("Termine di ricerca (nome, cognome, paternità):"), 0, 0)
+        self.possessore_query_edit = QLineEdit()
+        self.possessore_query_edit.setPlaceholderText("Inserisci parte del nome, cognome o paternità...")
+        possessori_layout.addWidget(self.possessore_query_edit, 0, 1, 1, 2) # Span su 2 colonne
+        
+        possessori_layout.addWidget(QLabel("Soglia di similarità (0.0 - 1.0):"), 1, 0)
+        self.possessore_soglia_spinbox = QDoubleSpinBox()
+        self.possessore_soglia_spinbox.setMinimum(0.0)
+        self.possessore_soglia_spinbox.setMaximum(1.0)
+        self.possessore_soglia_spinbox.setSingleStep(0.05)
+        self.possessore_soglia_spinbox.setValue(0.2) # Valore di default
+        possessori_layout.addWidget(self.possessore_soglia_spinbox, 1, 1)
+        
+        self.btn_cerca_possessori_av = QPushButton("Cerca Possessori")
+        self.btn_cerca_possessori_av.setIcon(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        self.btn_cerca_possessori_av.clicked.connect(self._esegui_ricerca_possessori_avanzata)
+        possessori_layout.addWidget(self.btn_cerca_possessori_av, 1, 2)
+        
+        main_layout.addWidget(possessori_group)
+        
+        # Tabella per i risultati della ricerca possessori
+        self.risultati_possessori_table = QTableWidget()
+        self.risultati_possessori_table.setColumnCount(5) # ID, Nome Completo, Comune Nome, Similarità, Num. Partite
+        self.risultati_possessori_table.setHorizontalHeaderLabels([
+            "ID", "Nome Completo", "Comune Riferimento", "Similarità", "Num. Partite"
+        ])
+        self.risultati_possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.risultati_possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.risultati_possessori_table.setAlternatingRowColors(True)
+        self.risultati_possessori_table.horizontalHeader().setStretchLastSection(True)
+        # self.risultati_possessori_table.itemDoubleClicked.connect(self._apri_dettaglio_possessore) # Opzionale
+        main_layout.addWidget(self.risultati_possessori_table)
+        
+        # TODO: Potresti aggiungere qui altre sezioni per ricerca avanzata immobili, partite, ecc.
+        # usando sub-tab o altri QGroupBox se necessario.
+
+        main_layout.addStretch() # Per spingere gli elementi in alto
+
+    def _esegui_ricerca_possessori_avanzata(self):
+        query_text = self.possessore_query_edit.text().strip()
+        similarity_threshold = self.possessore_soglia_spinbox.value()
+        
+        if not query_text:
+            QMessageBox.warning(self, "Input Mancante", "Inserisci un termine di ricerca per i possessori.")
+            return
+            
+        try:
+            # Chiamata al metodo del db_manager (versione a 2 parametri)
+            risultati = self.db_manager.ricerca_avanzata_possessori(
+                query_text=query_text,
+                similarity_threshold=similarity_threshold
+            )
+            
+            self.risultati_possessori_table.setRowCount(0) # Pulisce la tabella
+            
+            if not risultati:
+                QMessageBox.information(self, "Ricerca Avanzata", "Nessun possessore trovato con i criteri specificati.")
+                return
+                
+            self.risultati_possessori_table.setRowCount(len(risultati))
+            for row_idx, possessore in enumerate(risultati):
+                self.risultati_possessori_table.setItem(row_idx, 0, QTableWidgetItem(str(possessore.get('id', 'N/D'))))
+                self.risultati_possessori_table.setItem(row_idx, 1, QTableWidgetItem(possessore.get('nome_completo', 'N/D')))
+                self.risultati_possessori_table.setItem(row_idx, 2, QTableWidgetItem(possessore.get('comune_nome', 'N/D'))) # Dal JOIN nella funzione SQL
+                self.risultati_possessori_table.setItem(row_idx, 3, QTableWidgetItem(f"{possessore.get('similarity', 0.0):.3f}")) # Formatta la similarità
+                self.risultati_possessori_table.setItem(row_idx, 4, QTableWidgetItem(str(possessore.get('num_partite', 'N/D')))) # Dal COUNT nella funzione SQL
+
+            self.risultati_possessori_table.resizeColumnsToContents()
+            
+        except Exception as e:
+            gui_logger.error(f"Errore durante la ricerca avanzata possessori (GUI): {e}")
+            QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore: {e}")
+
+    # def _apri_dettaglio_possessore(self, item): # Funzione opzionale
+    #     if item is None: return
+    #     row = item.row()
+    #     try:
+    #         possessore_id = int(self.risultati_possessori_table.item(row, 0).text())
+    #         # Qui potresti aprire un dialogo con i dettagli del possessore,
+    #         # simile a PartitaDetailsDialog ma per possessori.
+    #         QMessageBox.information(self, "Dettaglio", f"Dettaglio per possessore ID: {possessore_id} (da implementare).")
+    #     except (ValueError, TypeError) as e:
+    #         gui_logger.error(f"Errore nel recuperare ID possessore dalla tabella: {e}")
 
 # --- Dialog per la Selezione dei Possessori ---
 class PossessoreSelectionDialog(QDialog):
@@ -3407,6 +3503,9 @@ class CatastoMainWindow(QMainWindow):
         inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Proprietà")
         self.tabs.addTab(inserimento_main_tab, "Inserimento e Gestione")
 
+        # === NUOVO TAB PER RICERCA AVANZATA ===
+        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata") # Passa parent se necessario
+        # =======================================
         # Tab Esportazioni (NUOVO)
         self.tabs.addTab(EsportazioniWidget(self.db_manager), "Esportazioni") # Aggiunto il nuovo widget
 

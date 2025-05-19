@@ -1352,17 +1352,58 @@ class CatastoDBManager:
 
     # --- Metodi Ricerca Avanzata (MODIFICATI) ---
 
-    def ricerca_avanzata_possessori(self, query_text: str) -> List[Dict]:
-        """Chiama la funzione SQL ricerca_avanzata_possessori (SQL aggiornata per nome comune)."""
+    # All'interno della classe CatastoDBManager
+    # All'interno della classe CatastoDBManager
+    def ricerca_avanzata_possessori(self,
+                                    query_text: str,
+                                    # comune_id è stato rimosso come parametro
+                                    similarity_threshold: Optional[float] = 0.2
+                                ) -> List[Dict[str, Any]]:
+        """
+        Esegue una ricerca avanzata di possessori utilizzando le funzioni di similarità di PostgreSQL.
+        Utilizza una soglia di similarità specificata.
+        """
+        
+        # La funzione SQL ora accetta (TEXT, REAL)
+        query = "SELECT * FROM catasto.ricerca_avanzata_possessori(%s::TEXT, %s::REAL);"
+        params = (query_text, similarity_threshold)
+        
         try:
-            # Funzione SQL aggiornata per join e nome comune
-            query = "SELECT * FROM ricerca_avanzata_possessori(%s)"
-            if self.execute_query(query, (query_text,)): return self.fetchall()
-        except psycopg2.errors.UndefinedFunction: logger.warning("Funzione 'ricerca_avanzata_possessori' non trovata."); return []
-        except psycopg2.Error as db_err: logger.error(f"Errore DB ricerca_avanzata_possessori: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python ricerca_avanzata_possessori: {e}"); return []
-        return []
+            if not self.conn or self.conn.closed:
+                logger.error("Connessione al database non attiva.")
+                return []
+            
+            # Assicurati che DictCursor sia importato: from psycopg2.extras import DictCursor
+            with self.conn.cursor(cursor_factory=DictCursor) as cur:
+                if logger.level == logging.DEBUG:
+                    try:
+                        log_query = cur.mogrify(query, params)
+                        logger.debug(f"Esecuzione query (ricerca avanzata possessori): {log_query.decode('utf-8', errors='ignore')}")
+                    except Exception as e_mogrify:
+                        logger.debug(f"Impossibile eseguire mogrify: {e_mogrify}. Query: {query}, Params: {params}")
+                
+                cur.execute(query, params)
+                results_raw = cur.fetchall()
+            
+            results = [dict(row) for row in results_raw] if results_raw else []
 
+            if results:
+                # *** MODIFICA QUI: Rimuovi comune_id dai messaggi di log ***
+                logger.info(f"Ricerca avanzata possessori per '{query_text}' (soglia: {similarity_threshold}) ha prodotto {len(results)} risultati.")
+            else:
+                # *** MODIFICA QUI: Rimuovi comune_id dai messaggi di log ***
+                logger.info(f"Nessun risultato per ricerca avanzata possessori: '{query_text}' (soglia: {similarity_threshold}).")
+            return results
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB durante la ricerca avanzata dei possessori: {db_err}")
+            self.rollback()
+            return []
+        except Exception as e:
+            # Questo è l'errore che stai vedendo ora (NameError)
+            logger.error(f"Errore Python imprevisto durante la ricerca avanzata dei possessori: {e}")
+            # Potresti non voler fare rollback per un NameError, dipende se una transazione è attiva
+            # self.rollback() # Commentato per ora per NameError
+            return []
     def ricerca_avanzata_immobili(self, comune_id: Optional[int] = None, natura: Optional[str] = None, # Usa comune_id
                                  localita: Optional[str] = None, classificazione: Optional[str] = None,
                                  possessore: Optional[str] = None) -> List[Dict]:

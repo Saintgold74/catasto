@@ -1,0 +1,22 @@
+============================================================
+              REPORT DELLE CONSULTAZIONI
+                CATASTO STORICO ANNI '50
+============================================================
+
+PARAMETRI DI RICERCA:
+Data inizio: 2024-05-19
+Data fine: 2025-05-19
+
+-------------------- CONSULTAZIONI --------------------
+Consultazione ID: 1 - 2025-05-19
+  Richiedente: Luigi Neri
+  Documento: CI ZZ9876543
+  Motivazione: Verifica genealogica
+  Materiale consultato: Matricole Altare anni 50
+  Funzionario autorizzante: Dott. Bianchi
+
+Totale consultazioni: 1
+
+============================================================
+Report generato il: 2025-05-19
+============================================================

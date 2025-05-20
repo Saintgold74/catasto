@@ -1399,3 +1399,8 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-19 18:09:41,608 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 350ec7b1...
 2025-05-19 18:09:42,857 - CatastoDB - INFO - Disconnessione completata
 2025-05-19 18:09:42,863 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-20 11:54:21,301 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-20 11:54:21,390 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-20 11:54:26,176 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-20 11:54:26,674 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione f412c154...
+2025-05-20 11:54:32,802 - CatastoDB - INFO - Disconnessione completata

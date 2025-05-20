@@ -505,20 +505,47 @@ else: # FPDF non disponibile
 
 # --- Funzioni di esportazione adattate per GUI ---
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
-    dict_data = db_manager.get_partita_data_for_export(partita_id)
+    # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo
+    # Questo metodo è get_partita_data_for_export, NON export_partita_json
+    dict_data = db_manager.get_partita_data_for_export(partita_id) 
+    
     if dict_data:
-        json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False)
-        default_filename = f"partita_{partita_id}_{date.today()}.json"
+        # --- INIZIO MODIFICA ---
+        def json_serial(obj):
+            """JSON serializer per oggetti non serializzabili di default (date/datetime)."""
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            # Potresti voler gestire altri tipi qui se necessario
+            # Esempio per Decimal (se usi la libreria decimal):
+            # from decimal import Decimal
+            # if isinstance(obj, Decimal):
+            #    return str(obj) # o float(obj) a seconda della precisione richiesta
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+        
+        try:
+            json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False, default=json_serial)
+        except TypeError as te:
+            gui_logger.error(f"Errore di serializzazione JSON per partita ID {partita_id}: {te} - Dati: {dict_data}")
+            QMessageBox.critical(parent_widget, "Errore di Serializzazione", 
+                                 f"Errore durante la conversione dei dati della partita in JSON: {te}\n"
+                                 "Controllare i log per i dettagli.")
+            return
+        # --- FINE MODIFICA ---
+
+        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json"
         filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva JSON Partita", default_filename, "JSON Files (*.json)")
+        
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(json_data_str)
                 QMessageBox.information(parent_widget, "Esportazione JSON", f"Partita esportata con successo in:\n{filename}")
             except Exception as e:
+                gui_logger.error(f"Errore durante il salvataggio del file JSON per partita ID {partita_id}: {e}")
                 QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
     else:
-        QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore recupero dati.")
+        QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore nel recupero dei dati per l'esportazione.")
+
 
 def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     partita_data = db_manager.get_partita_data_for_export(partita_id)
@@ -1455,23 +1482,47 @@ class PartitaDetailsDialog(QDialog):
     
     def export_to_json(self):
         """Esporta i dettagli della partita in formato JSON."""
-        partita_id = self.partita['id']
+        if not self.partita: # Assicurati che self.partita contenga i dati
+            QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
+            return
+
+        partita_id = self.partita.get('id', 'sconosciuto') # Usa .get per sicurezza
         
-        # Usa QFileDialog per selezionare il percorso del file
-        file_path, _ = QFileDialog.getSaveFileName(self, "Salva JSON", f"partita_{partita_id}.json", "JSON files (*.json)")
+        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json" # Usa isoformat per la data nel nome file
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Salva JSON Partita", 
+            default_filename, 
+            "JSON files (*.json)"
+        )
         
         if file_path:
             try:
-                # Converti il dizionario in stringa JSON formattata
-                json_str = json.dumps(self.partita, indent=4, ensure_ascii=False)
+                # --- INIZIO MODIFICA ---
+                def json_serial(obj):
+                    """JSON serializer per oggetti non serializzabili di default (date/datetime)."""
+                    if isinstance(obj, (datetime, date)):
+                        return obj.isoformat() # Converte date/datetime in stringa ISO 8601
+                    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+                # Usa l'handler personalizzato con json.dumps
+                json_str = json.dumps(self.partita, indent=4, ensure_ascii=False, default=json_serial)
+                # --- FINE MODIFICA ---
                 
-                # Scrivi sul file
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(json_str)
                 
-                QMessageBox.information(self, "Esportazione Completata", f"I dati sono stati salvati in {file_path}")
+                QMessageBox.information(self, "Esportazione Completata", f"I dati della partita sono stati salvati in:\n{file_path}")
+            except TypeError as te: # Cattura specificamente il TypeError se json_serial non copre tutto
+                gui_logger.error(f"Errore di serializzazione JSON: {te} - Dati: {self.partita}")
+                QMessageBox.critical(self, "Errore di Serializzazione", 
+                                     f"Errore durante la conversione dei dati in JSON: {te}\n"
+                                     "Controllare i log per i dettagli dei dati problematici.")
             except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Errore durante l'esportazione: {str(e)}")
+                gui_logger.error(f"Errore durante l'esportazione JSON della partita: {e}")
+                QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
+
 
 # --- Scheda per Inserimento Possessore ---
 

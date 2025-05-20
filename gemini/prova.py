@@ -4003,6 +4003,19 @@ def run_gui_app():
         sys.exit(exit_code)
 
 if __name__ == "__main__":
+    app = QApplication(sys.argv)
+
+    # Esempio: aumenta la dimensione del font di tutti i widget di 1pt
+    # Per un controllo più fine, puoi specificare i widget: QLabel { font-size: 10pt; }
+    # Nota: i valori di stylesheet potrebbero sovrascrivere il font globale impostato con app.setFont()
+    # Potresti dover trovare un valore assoluto che ti soddisfi, es. '11pt' invece di '+1'
+    # o sperimentare con percentuali se supportato.
+    # Qui usiamo una dimensione fissa come esempio.
+    # Per incrementare, dovresti leggere il font corrente, cosa più complessa con gli stylesheet puri.
+    # Una dimensione fissa è più semplice:
+    app.setStyleSheet("* { font-size: 11pt; }") # Imposta tutti i widget a 10pt
+    # Oppure per un leggero aumento rispetto al default, potresti provare con em o % se la versione di Qt lo supporta bene.
+    # app.setStyleSheet("QWidget { font-size: 1.1em; }") # Prova a incrementare del 10%
     run_gui_app()
     
     # Imposta un tema più moderno

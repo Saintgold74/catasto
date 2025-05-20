@@ -1431,3 +1431,22 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-20 12:02:43,149 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 572bd24b...
 2025-05-20 12:02:44,392 - CatastoDB - INFO - Disconnessione completata
 2025-05-20 12:02:44,392 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-20 12:14:42,875 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-20 12:14:42,985 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-20 12:14:49,945 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-20 12:14:50,238 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-20 12:14:50,281 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 34c206d0...
+2025-05-20 12:14:52,163 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-20 12:15:25,565 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 34c206d0...
+2025-05-20 12:15:27,111 - CatastoDB - INFO - Disconnessione completata
+2025-05-20 12:15:27,112 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-20 12:15:53,601 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-20 12:15:53,670 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-20 12:16:01,987 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-20 12:16:02,290 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-20 12:16:02,301 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione c7f938c3...
+2025-05-20 12:16:03,983 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-20 12:16:23,120 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'pippo' (soglia: 0.3).
+2025-05-20 12:16:25,530 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione c7f938c3...
+2025-05-20 12:16:26,753 - CatastoDB - INFO - Disconnessione completata
+2025-05-20 12:16:26,754 - CatastoGUI - INFO - Applicazione GUI terminata.

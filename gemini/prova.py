@@ -42,6 +42,9 @@ COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità"
 COLONNE_INSERIMENTO_POSSESSORI_NUM = 4 # Esempio: ID, Nome Completo, Paternità, Comune
 COLONNE_INSERIMENTO_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità", "Comune Riferimento"]
 
+NUOVE_COLONNE_POSSESSORI = 6 # o 5 se non mostri cognome_nome separato
+NUOVE_ETICHETTE_POSSESSORI = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
+        
 # Importazione FPDF per esportazione PDF
 try:
     from fpdf import FPDF
@@ -505,20 +508,47 @@ else: # FPDF non disponibile
 
 # --- Funzioni di esportazione adattate per GUI ---
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
-    dict_data = db_manager.get_partita_data_for_export(partita_id)
+    # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo
+    # Questo metodo è get_partita_data_for_export, NON export_partita_json
+    dict_data = db_manager.get_partita_data_for_export(partita_id) 
+    
     if dict_data:
-        json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False)
-        default_filename = f"partita_{partita_id}_{date.today()}.json"
+        # --- INIZIO MODIFICA ---
+        def json_serial(obj):
+            """JSON serializer per oggetti non serializzabili di default (date/datetime)."""
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            # Potresti voler gestire altri tipi qui se necessario
+            # Esempio per Decimal (se usi la libreria decimal):
+            # from decimal import Decimal
+            # if isinstance(obj, Decimal):
+            #    return str(obj) # o float(obj) a seconda della precisione richiesta
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+        
+        try:
+            json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False, default=json_serial)
+        except TypeError as te:
+            gui_logger.error(f"Errore di serializzazione JSON per partita ID {partita_id}: {te} - Dati: {dict_data}")
+            QMessageBox.critical(parent_widget, "Errore di Serializzazione", 
+                                 f"Errore durante la conversione dei dati della partita in JSON: {te}\n"
+                                 "Controllare i log per i dettagli.")
+            return
+        # --- FINE MODIFICA ---
+
+        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json"
         filename, _ = QFileDialog.getSaveFileName(parent_widget, "Salva JSON Partita", default_filename, "JSON Files (*.json)")
+        
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(json_data_str)
                 QMessageBox.information(parent_widget, "Esportazione JSON", f"Partita esportata con successo in:\n{filename}")
             except Exception as e:
+                gui_logger.error(f"Errore durante il salvataggio del file JSON per partita ID {partita_id}: {e}")
                 QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
     else:
-        QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore recupero dati.")
+        QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore nel recupero dei dati per l'esportazione.")
+
 
 def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     partita_data = db_manager.get_partita_data_for_export(partita_id)
@@ -837,9 +867,9 @@ class EsportazioniWidget(QWidget):
         else: QMessageBox.warning(self, "Selezione Mancante", "Inserisci o cerca un ID Partita valido.")
 
     def _cerca_possessore_per_export(self):
-        # Assumendo esista un PossessoreSearchDialog, simile a PartitaSearchDialog
+        # Assumendo esista un PossessoreSelectionDialog, simile a PartitaSearchDialog
         # Altrimenti, si può usare un semplice QInputDialog per l'ID.
-        dialog = PossessoreSearchDialog(self.db_manager, self) # Assumiamo che PossessoreSearchDialog esista
+        dialog = PossessoreSelectionDialog(self.db_manager, self) # Assumiamo che PossessoreSelectionDialog esista
         if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore_id:
             self.selected_possessore_id_export = dialog.selected_possessore_id
             self.possessore_id_export_edit.setValue(self.selected_possessore_id_export)
@@ -1331,8 +1361,7 @@ class PartitaDetailsDialog(QDialog):
         
         layout = QVBoxLayout()
         
-        NUOVE_COLONNE_POSSESSORI = 6 # o 5 se non mostri cognome_nome separato
-        NUOVE_ETICHETTE_POSSESSORI = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
+        
     # --- Layout della finestra ---
         # Intestazione
         header_layout = QHBoxLayout()
@@ -1455,23 +1484,47 @@ class PartitaDetailsDialog(QDialog):
     
     def export_to_json(self):
         """Esporta i dettagli della partita in formato JSON."""
-        partita_id = self.partita['id']
+        if not self.partita: # Assicurati che self.partita contenga i dati
+            QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
+            return
+
+        partita_id = self.partita.get('id', 'sconosciuto') # Usa .get per sicurezza
         
-        # Usa QFileDialog per selezionare il percorso del file
-        file_path, _ = QFileDialog.getSaveFileName(self, "Salva JSON", f"partita_{partita_id}.json", "JSON files (*.json)")
+        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json" # Usa isoformat per la data nel nome file
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Salva JSON Partita", 
+            default_filename, 
+            "JSON files (*.json)"
+        )
         
         if file_path:
             try:
-                # Converti il dizionario in stringa JSON formattata
-                json_str = json.dumps(self.partita, indent=4, ensure_ascii=False)
+                # --- INIZIO MODIFICA ---
+                def json_serial(obj):
+                    """JSON serializer per oggetti non serializzabili di default (date/datetime)."""
+                    if isinstance(obj, (datetime, date)):
+                        return obj.isoformat() # Converte date/datetime in stringa ISO 8601
+                    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+                # Usa l'handler personalizzato con json.dumps
+                json_str = json.dumps(self.partita, indent=4, ensure_ascii=False, default=json_serial)
+                # --- FINE MODIFICA ---
                 
-                # Scrivi sul file
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(json_str)
                 
-                QMessageBox.information(self, "Esportazione Completata", f"I dati sono stati salvati in {file_path}")
+                QMessageBox.information(self, "Esportazione Completata", f"I dati della partita sono stati salvati in:\n{file_path}")
+            except TypeError as te: # Cattura specificamente il TypeError se json_serial non copre tutto
+                gui_logger.error(f"Errore di serializzazione JSON: {te} - Dati: {self.partita}")
+                QMessageBox.critical(self, "Errore di Serializzazione", 
+                                     f"Errore durante la conversione dei dati in JSON: {te}\n"
+                                     "Controllare i log per i dettagli dei dati problematici.")
             except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Errore durante l'esportazione: {str(e)}")
+                gui_logger.error(f"Errore durante l'esportazione JSON della partita: {e}")
+                QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
+
 
 # --- Scheda per Inserimento Possessore ---
 
@@ -2088,22 +2141,26 @@ class RegistrazioneProprietaWidget(QWidget):
         if 0 <= row < len(self.possessori_data):
             del self.possessori_data[row]
             self.update_possessori_table()
-    
     def update_possessori_table(self):
         """Aggiorna la tabella dei possessori."""
         self.possessori_table.setRowCount(len(self.possessori_data))
         
-        for i, possessore in enumerate(self.possessori_data):
-            self.possessori_table.setItem(i, 0, QTableWidgetItem(possessore.get('nome_completo', '')))
-            self.possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('cognome_nome', '')))
-             # *** NUOVE COLONNE ***
-            if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
-                self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
-            self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
-            # *********************# *** NUOVE COLONNE ***
-            self.possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('paternita', '')))
-            self.possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
-    
+        for i, possessore_dict in enumerate(self.possessori_data): # 'i' è l'indice di riga, 'possessore_dict' contiene i dati del possessore
+            # Inizializza un indice di colonna per questa riga
+            col_idx = 0
+            
+            # Popola le celle per le colonne definite: "Nome Completo", "Cognome e Nome", "Paternità", "Quota"
+            self.possessori_table.setItem(i, col_idx, QTableWidgetItem(possessore_dict.get('nome_completo', '')))
+            col_idx += 1
+            
+            self.possessori_table.setItem(i, col_idx, QTableWidgetItem(possessore_dict.get('cognome_nome', '')))
+            col_idx += 1
+            
+            self.possessori_table.setItem(i, col_idx, QTableWidgetItem(possessore_dict.get('paternita', '')))
+            col_idx += 1
+            
+            self.possessori_table.setItem(i, col_idx, QTableWidgetItem(possessore_dict.get('quota', '')))
+            # col_idx += 1 # Non necessario se è l'ultima colonna
     def add_immobile(self):
         """Aggiunge un immobile alla lista."""
         dialog = ImmobileDialog(self.db_manager, self.comune_id, self)
@@ -2318,7 +2375,7 @@ class PossessoreSelectionDialog(QDialog):
         
         # Tabella possessori
         self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
+        self.possessori_table.setColumnCount(4) # ID, Nome Completo, Paternità, Stato
         self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Paternità", "Stato"])
         self.possessori_table.setAlternatingRowColors(True)
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -2334,7 +2391,7 @@ class PossessoreSelectionDialog(QDialog):
         create_tab = QWidget()
         create_layout = QGridLayout()
         
-        # Cognome e nome
+        # Cognome e nome (per il form di creazione, se utile)
         cognome_label = QLabel("Cognome e nome:")
         self.cognome_edit = QLineEdit()
         
@@ -2342,11 +2399,11 @@ class PossessoreSelectionDialog(QDialog):
         create_layout.addWidget(self.cognome_edit, 0, 1)
         
         # Paternità
-        paternita_label = QLabel("Paternità:")
-        self.paternita_edit = QLineEdit()
+        paternita_label_create = QLabel("Paternità:") # Nome variabile diverso per evitare conflitti
+        self.paternita_edit_create = QLineEdit()    # Nome variabile diverso
         
-        create_layout.addWidget(paternita_label, 1, 0)
-        create_layout.addWidget(self.paternita_edit, 1, 1)
+        create_layout.addWidget(paternita_label_create, 1, 0)
+        create_layout.addWidget(self.paternita_edit_create, 1, 1)
         
         # Nome completo
         nome_completo_label = QLabel("Nome completo:")
@@ -2390,7 +2447,7 @@ class PossessoreSelectionDialog(QDialog):
         # Carica i possessori iniziali
         self.current_tab = 0
         tabs.currentChanged.connect(self.tab_changed)
-        self.load_possessori()
+        self.load_possessori() # Questa chiamata generava l'errore
     
     def tab_changed(self, index):
         """Gestisce il cambio di tab."""
@@ -2408,24 +2465,19 @@ class PossessoreSelectionDialog(QDialog):
             possessori = self.db_manager.get_possessori_by_comune(self.comune_id)
             
             if possessori:
-                # Filtra se necessario
                 if filter_text:
                     possessori = [p for p in possessori if filter_text.lower() in p.get('nome_completo', '').lower()]
                 
                 self.possessori_table.setRowCount(len(possessori))
                 
-                for i, pos in enumerate(possessori):
-                    self.possessori_table.setItem(i, 0, QTableWidgetItem(str(pos.get('id', ''))))
-                    self.possessori_table.setItem(i, 1, QTableWidgetItem(pos.get('nome_completo', '')))
-                     # *** NUOVE COLONNE ***
-                    if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
-                        self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
-                    # **********************************
-                    self.possessori_table.setItem(i, 2, QTableWidgetItem(pos.get('paternita', '')))
+                for i, pos_data in enumerate(possessori): # Usa 'i' come indice di riga e 'pos_data' per i dati
+                    col_idx = 0
+                    self.possessori_table.setItem(i, col_idx, QTableWidgetItem(str(pos_data.get('id', '')))); col_idx += 1
+                    self.possessori_table.setItem(i, col_idx, QTableWidgetItem(pos_data.get('nome_completo', ''))); col_idx += 1
+                    self.possessori_table.setItem(i, col_idx, QTableWidgetItem(pos_data.get('paternita', ''))); col_idx += 1
                     
-                    stato = "Attivo" if pos.get('attivo') else "Non Attivo"
-                    self.possessori_table.setItem(i, 3, QTableWidgetItem(stato))
+                    stato = "Attivo" if pos_data.get('attivo') else "Non Attivo"
+                    self.possessori_table.setItem(i, col_idx, QTableWidgetItem(stato)); col_idx += 1
                 
                 self.possessori_table.resizeColumnsToContents()
     
@@ -2437,7 +2489,7 @@ class PossessoreSelectionDialog(QDialog):
     def update_nome_completo(self):
         """Aggiorna il nome completo in base a cognome e paternità."""
         cognome = self.cognome_edit.text().strip()
-        paternita = self.paternita_edit.text().strip()
+        paternita = self.paternita_edit_create.text().strip() # Usa il nome corretto del QLineEdit
         
         if cognome:
             nome_completo = cognome
@@ -2448,25 +2500,26 @@ class PossessoreSelectionDialog(QDialog):
     
     def select_from_table(self, item):
         """Gestisce la selezione dalla tabella dei possessori."""
-        row = item.row()
-        self.handle_selection()
+        # row = item.row() # Non necessario se handle_selection gestisce il recupero della riga
+        self.handle_selection() # Chiama direttamente handle_selection che recupererà la riga corrente
     
     def handle_selection(self):
         """Gestisce la selezione o creazione del possessore."""
         if self.current_tab == 0:  # Seleziona esistente
-            selected_rows = self.possessori_table.selectedIndexes()
-            if not selected_rows:
+            selected_items = self.possessori_table.selectedItems() # Usa selectedItems() per verificare la selezione
+            if not selected_items:
                 QMessageBox.warning(self, "Attenzione", "Seleziona un possessore dalla tabella.")
                 return
             
-            row = selected_rows[0].row()
-            
-            # Recupera i dati del possessore selezionato
+            row = self.possessori_table.currentRow() # Ottieni la riga corrente
+            if row < 0: # Nessuna riga selezionata
+                QMessageBox.warning(self, "Attenzione", "Seleziona un possessore dalla tabella.")
+                return
+
             possessore_id = int(self.possessori_table.item(row, 0).text())
             nome_completo = self.possessori_table.item(row, 1).text()
             paternita = self.possessori_table.item(row, 2).text() if self.possessori_table.item(row, 2) else ""
             
-            # Dialogo per la quota
             quota, ok = QInputDialog.getText(
                 self, "Quota", "Inserisci la quota (vuoto per esclusiva):",
                 QLineEdit.Normal, ""
@@ -2477,38 +2530,55 @@ class PossessoreSelectionDialog(QDialog):
                     'id': possessore_id,
                     'nome_completo': nome_completo,
                     'paternita': paternita,
-                    'quota': quota
+                    'quota': quota.strip() if quota else None # Salva None se vuoto
                 }
                 self.accept()
         
         else:  # Crea nuovo
-            cognome_nome = self.cognome_edit.text().strip()
-            paternita = self.paternita_edit.text().strip()
-            nome_completo = self.nome_completo_edit.text().strip()
-            quota = self.quota_edit.text().strip()
-            
-            if not cognome_nome or not nome_completo:
-                QMessageBox.warning(self, "Errore", "Cognome e nome e Nome completo sono obbligatori.")
+            cognome_nome = self.cognome_edit.text().strip() # Questo è 'cognome e nome'
+            paternita_create = self.paternita_edit_create.text().strip() # Dal form di creazione
+            nome_completo_create = self.nome_completo_edit.text().strip() # Dal form di creazione
+            quota_create = self.quota_edit.text().strip()
+
+            # Validazione per la creazione
+            if not nome_completo_create: # Il nome completo è il campo principale
+                QMessageBox.warning(self, "Errore", "Il campo 'Nome completo' è obbligatorio per la creazione.")
+                self.nome_completo_edit.setFocus()
                 return
             
-            # Inserisci nuovo possessore
-            possessore_id = self.db_manager.insert_possessore(
-                self.comune_id, cognome_nome, paternita, nome_completo, True
+            # Inserisci nuovo possessore usando i dati dal form di creazione
+            # Assumendo che `insert_possessore` prenda 'nome_completo' e 'paternita'
+            # e che 'comune_id' sia disponibile da self.comune_id (passato al dialogo)
+            if self.comune_id is None:
+                QMessageBox.critical(self, "Errore", "ID Comune non specificato per la creazione del possessore.")
+                return
+
+            # Il metodo db_manager.insert_possessore potrebbe aver bisogno di essere adattato
+            # per accettare nome_completo, paternita, comune_id e restituire l'ID.
+            # Il tuo `catasto_db_manager.create_possessore` sembra più adatto.
+            # Verifichiamo i parametri di `create_possessore`:
+            # create_possessore(nome_completo, paternita, comune_riferimento_id, attivo, cognome_nome=None)
+            
+            nuovo_possessore_id = self.db_manager.create_possessore(
+                nome_completo=nome_completo_create,
+                paternita=paternita_create if paternita_create else None,
+                comune_riferimento_id=self.comune_id,
+                attivo=True, # Presumiamo attivo di default
+                cognome_nome=cognome_nome if cognome_nome else None # Se vuoi salvare anche questo
             )
             
-            if possessore_id:
+            if nuovo_possessore_id:
                 self.selected_possessore = {
-                    'id': possessore_id,
-                    'nome_completo': nome_completo,
-                    'cognome_nome': cognome_nome,
-                    'paternita': paternita,
-                    'quota': quota
+                    'id': nuovo_possessore_id,
+                    'nome_completo': nome_completo_create,
+                    'cognome_nome': cognome_nome, # Se lo vuoi passare indietro
+                    'paternita': paternita_create,
+                    'quota': quota_create.strip() if quota_create else None
                 }
                 self.accept()
             else:
-                QMessageBox.critical(self, "Errore", "Errore durante l'inserimento del possessore.")
+                QMessageBox.critical(self, "Errore", "Errore durante l'inserimento del nuovo possessore nel database.")
 
-     # --- Dialog per l'Inserimento degli Immobili ---
 class ImmobileDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):
         super(ImmobileDialog, self).__init__(parent)
@@ -3032,7 +3102,7 @@ class ReportisticaWidget(QWidget):
     
     def search_possessore(self):
         """Apre un dialogo per cercare un possessore."""
-        dialog = PossessoreSearchDialog(self.db_manager, self)
+        dialog = PossessoreSelectionDialog(self.db_manager, self)
         result = dialog.exec_()
         
         if result == QDialog.Accepted and dialog.selected_possessore_id:
@@ -3885,13 +3955,148 @@ class GestioneUtentiWidget(QWidget):
             # else: l'utente ha premuto annulla su QInputDialog
 
 # Altri Widget per i Tab (da creare)
-class InserimentoComuneWidget(QWidget): # Esempio
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
+class InserimentoComuneWidget(QDialog): # o QWidget
+    def __init__(self, db_manager, utente_attuale, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Widget Inserimento Comune (TODO)"))
-        # ... implementare form e logica ...
+        self.db = db_manager
+        self.utente_attuale = utente_attuale # Per registrare chi fa l'inserimento
+
+        self.setWindowTitle("Inserimento Nuovo Comune")
+        self.setModal(True) # Se è un QDialog e vuoi che sia modale
+        self.initUI()
+        #Assumendo che lei abbia un menu 'Anagrafiche':
+        anagrafiche_menu = self.menuBar().addMenu("Anagrafiche")
+        nuovo_comune_action = QAction("Nuovo Comune", self)
+        nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
+        anagrafiche_menu.addAction(nuovo_comune_action)
+        
+    
+    def initUI(self):
+        layout = QFormLayout(self)
+
+        # Campi del form
+        self.nome_comune_edit = QLineEdit()
+        self.codice_catastale_edit = QLineEdit()
+        self.codice_catastale_edit.setMaxLength(4) # Limita lunghezza codice catastale
+        self.provincia_edit = QLineEdit("SV") # Preimpostato a SV
+        self.provincia_edit.setMaxLength(2) # Limita lunghezza provincia
+
+        self.data_istituzione_edit = QDateEdit()
+        self.data_istituzione_edit.setCalendarPopup(True)
+        self.data_istituzione_edit.setDate(QDate.currentDate()) # Data di default o lasciare vuoto
+        self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_istituzione_edit.setNullable(True) # Permette di non inserire la data
+        self.data_istituzione_edit.setDate(QDate()) # Per renderlo vuoto all'inizio se nullable
+
+        self.data_soppressione_edit = QDateEdit()
+        self.data_soppressione_edit.setCalendarPopup(True)
+        self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_soppressione_edit.setNullable(True)
+        self.data_soppressione_edit.setDate(QDate()) # Per renderlo vuoto all'inizio
+
+        self.note_edit = QTextEdit()
+
+        layout.addRow("Nome Comune (*):", self.nome_comune_edit)
+        layout.addRow("Codice Catastale:", self.codice_catastale_edit)
+        layout.addRow("Provincia (*):", self.provincia_edit)
+        layout.addRow("Data Istituzione:", self.data_istituzione_edit)
+        layout.addRow("Data Soppressione:", self.data_soppressione_edit)
+        layout.addRow("Note:", self.note_edit)
+
+        # Pulsanti
+        self.submit_button = QPushButton("Inserisci Comune")
+        self.submit_button.clicked.connect(self.inserisci_comune)
+        self.clear_button = QPushButton("Pulisci Campi")
+        self.clear_button.clicked.connect(self.pulisci_campi)
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject) # o self.close se è un QWidget non modale
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.submit_button)
+        button_layout.addWidget(self.clear_button)
+        button_layout.addWidget(self.cancel_button)
+
+        layout.addRow(button_layout)
+        self.setLayout(layout)
+
+    def pulisci_campi(self):
+        self.nome_comune_edit.clear()
+        self.codice_catastale_edit.clear()
+        self.provincia_edit.setText("SV") # O clear() se non vuoi default
+        self.data_istituzione_edit.setDate(QDate()) # Resetta a vuoto
+        self.data_istituzione_edit.setSpecialValueText(" ") # Per mostrare come vuoto
+        self.data_soppressione_edit.setDate(QDate()) # Resetta a vuoto
+        self.data_soppressione_edit.setSpecialValueText(" ") # Per mostrare come vuoto
+        self.note_edit.clear()
+
+    def inserisci_comune(self):
+        nome_comune = self.nome_comune_edit.text().strip()
+        codice_catastale = self.codice_catastale_edit.text().strip()
+        provincia = self.provincia_edit.text().strip().upper()
+
+        # Gestione date opzionali
+        data_istituzione = None
+        if self.data_istituzione_edit.date().isValid() and not self.data_istituzione_edit.date().isNull():
+            data_istituzione = self.data_istituzione_edit.date().toPyDate()
+
+        data_soppressione = None
+        if self.data_soppressione_edit.date().isValid() and not self.data_soppressione_edit.date().isNull():
+            data_soppressione = self.data_soppressione_edit.date().toPyDate()
+
+        note = self.note_edit.toPlainText().strip()
+
+        # Validazione (base)
+        if not nome_comune:
+            QMessageBox.warning(self, "Errore Inserimento", "Il nome del comune è obbligatorio.")
+            return
+        if not provincia:
+            QMessageBox.warning(self, "Errore Inserimento", "La provincia è obbligatoria.")
+            return
+        if len(provincia) != 2 and provincia:
+             QMessageBox.warning(self, "Errore Inserimento", "La provincia deve essere di 2 caratteri.")
+             return
+        if codice_catastale and len(codice_catastale) != 4:
+             QMessageBox.warning(self, "Errore Inserimento", "Il codice catastale deve essere di 4 caratteri (es. L781).")
+             return
+
+
+        try:
+            comune_id = self.db.aggiungi_comune(
+                nome_comune=nome_comune,
+                codice_catastale=codice_catastale if codice_catastale else None,
+                provincia=provincia,
+                data_istituzione=data_istituzione,
+                data_soppressione=data_soppressione,
+                note=note if note else None,
+                utente=self.utente_attuale # Passa l'utente loggato
+            )
+
+            if comune_id:
+                QMessageBox.information(self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
+                self.pulisci_campi()
+                self.accept() # Chiude il dialogo se l'inserimento ha successo
+            else:
+                # Questo caso potrebbe non verificarsi se aggiungi_comune solleva eccezioni per errori
+                QMessageBox.critical(self, "Errore Inserimento", "Impossibile inserire il comune. Controllare i log.")
+
+        except Exception as e:
+            # Qui potremmo voler essere più specifici sul tipo di errore
+            # Ad esempio, se il DB Manager solleva eccezioni custom per duplicati (UNIQUE constraint)
+            QMessageBox.critical(self, "Errore Database", f"Errore durante l'inserimento del comune: {e}")
+            # logger.error(f"Errore inserimento comune: {e}", exc_info=True) # se hai un logger configurato
+
+# ...
+
+# Esempio di come potrebbe essere chiamato (da MainWindow o un gestore di menu):
+# def mostra_dialog_inserimento_comune(self):
+#     # Assumendo che self.db_manager e self.logged_in_user_info siano disponibili
+#     # in MainWindow
+#     utente_login = self.logged_in_user_info.get('username', 'utente_sconosciuto') if self.logged_in_user_info else "utente_gui"
+#     dialog = InserimentoComuneWidget(self.db_manager, utente_login, self)
+#     if dialog.exec_() == QDialog.Accepted:
+#         print("Dialogo chiuso con successo, potrei aggiornare una lista di comuni se visibile")
+#         # Qui potresti voler emettere un segnale per aggiornare altre parti della GUI
+#         # ad esempio una tabella che elenca i comuni.
 
 class AuditWidget(QWidget): # Esempio
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -3952,7 +4157,41 @@ def run_gui_app():
         sys.exit(exit_code)
 
 if __name__ == "__main__":
+    app = QApplication(sys.argv)
+
+    # Esempio: aumenta la dimensione del font di tutti i widget di 1pt
+    # Per un controllo più fine, puoi specificare i widget: QLabel { font-size: 10pt; }
+    # Nota: i valori di stylesheet potrebbero sovrascrivere il font globale impostato con app.setFont()
+    # Potresti dover trovare un valore assoluto che ti soddisfi, es. '11pt' invece di '+1'
+    # o sperimentare con percentuali se supportato.
+    # Qui usiamo una dimensione fissa come esempio.
+    # Per incrementare, dovresti leggere il font corrente, cosa più complessa con gli stylesheet puri.
+    # Una dimensione fissa è più semplice:
+    app.setStyleSheet("* { font-size: 11pt; }") # Imposta tutti i widget a 10pt
+    # Oppure per un leggero aumento rispetto al default, potresti provare con em o % se la versione di Qt lo supporta bene.
+    # app.setStyleSheet("QWidget { font-size: 1.1em; }") # Prova a incrementare del 10%
     run_gui_app()
+    
+    def apri_dialog_inserimento_comune(self):
+        if not self.db_manager: # Assicurarsi che db_manager sia inizializzato
+            QMessageBox.critical(self, "Errore", "Manager Database non inizializzato.")
+        return
+        if not self.logged_in_user_info: # Assicurarsi che l'utente sia loggato
+            QMessageBox.warning(self, "Login Richiesto", "Effettuare il login per procedere.")
+        return
+
+    # Recupera lo username dell'utente loggato
+    utente_login = self.logged_in_user_info.get('username', 'utente_sconosciuto')
+
+    dialog = InserimentoComuneWidget(self.db_manager, utente_login, self)
+    if dialog.exec_() == QDialog.Accepted:
+        # Azioni post-inserimento, es. aggiornare una tabella di comuni se visibile
+        print("Dialogo inserimento comune chiuso con successo.")
+        # Qui potrebbe voler chiamare un metodo per ricaricare/aggiornare
+        # la lista dei comuni in ComuniTabWidget, se esiste e se è visibile.
+        # Esempio: if hasattr(self, 'comuni_tab') and isinstance(self.comuni_tab, ComuniTabWidget):
+        #              self.comuni_tab.carica_comuni()
+        pass
     
     # Imposta un tema più moderno
     palette = QPalette()

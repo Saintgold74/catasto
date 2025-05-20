@@ -273,24 +273,54 @@ class CatastoDBManager:
             self.rollback()
             return None
 
-    def get_possessori_by_comune(self, comune_id: int) -> List[Dict]: # Usa comune_id
+    def get_possessori_by_comune(self, comune_id: int) -> List[Dict]:
         """Recupera possessori per comune ID, includendo il nome del comune."""
+        possessori = [] # Inizializza a lista vuota
         try:
-            # Query SQL aggiornata per JOIN
+            # Query SQL CORRETTA
             query = """
-                SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
-                       pos.nome_completo, pos.attivo
-                FROM possessore pos
-                JOIN comune c ON pos.comune_id = c.id
-                WHERE pos.comune_id = %s ORDER BY pos.nome_completo
+                SELECT pos.possessore_id AS id,  -- Alias esplicito per 'id' se la GUI lo aspetta
+                    co.nome_comune AS comune_nome,
+                    pos.cognome_nome,
+                    pos.paternita,
+                    pos.nome_completo,
+                    pos.attivo
+                FROM catasto.possessore pos
+                JOIN catasto.comuni co ON pos.comune_riferimento_id = co.comune_id
+                WHERE pos.comune_riferimento_id = %s
+                ORDER BY pos.nome_completo;
             """
-            if self.execute_query(query, (comune_id,)):
-                return self.fetchall()
+            # DEBUG: Stampa la query e i parametri
+            # print(f"DEBUG DB: Esecuzione query in get_possessori_by_comune con comune_id: {comune_id}")
+            # print(f"DEBUG DB Query: {query % (comune_id,)}") # Semplice formattazione per debug, non usare per esecuzione reale
+
+            # self.execute_query dovrebbe idealmente restituire True/False o sollevare eccezioni chiare.
+            # Se self.execute_query ritorna False in caso di errore SQL senza sollevare eccezione,
+            # la logica attuale è ok. Se solleva eccezione, il blocco try-except la prenderà.
+
+            if self.execute_query(query, (comune_id,)): # execute_query usa il cursore interno
+                risultati_raw = self.fetchall() # fetchall recupera i risultati dal cursore interno
+                if risultati_raw:
+                    possessori = risultati_raw # Assegna i risultati
+                    # logger.debug(f"Recuperati {len(possessori)} possessori per comune_id {comune_id}")
+                # else:
+                    # logger.debug(f"Nessun possessore trovato per comune_id {comune_id}")
+            # else:
+                # logger.warning(f"execute_query ha restituito False per get_possessori_by_comune con comune_id {comune_id}")
+
+
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB in get_possessori_by_comune: {db_err}")
+            # Logga l'errore specifico del database in modo più dettagliato se possibile
+            logger.error(f"Errore Database in get_possessori_by_comune per comune_id {comune_id}: {db_err}")
+            logger.error(f"Dettagli DB Errore: SQLSTATE={db_err.pgcode}, Messaggio={db_err.pgerror}")
+            # Potrebbe essere utile rilanciare un'eccezione personalizzata o ritornare None per indicare fallimento
+            # raise CustomDBError(f"Fallimento recupero possessori: {db_err}") from db_err
         except Exception as e:
-            logger.error(f"Errore Python in get_possessori_by_comune: {e}")
-        return []
+            logger.error(f"Errore Generico in get_possessori_by_comune per comune_id {comune_id}: {e}", exc_info=True)
+            # exc_info=True aggiungerà il traceback al log
+            # raise # Rilanciare potrebbe essere meglio per far sapere al chiamante che qualcosa è andato storto
+
+        return possessori # Ritorna la lista (piena o vuota)
 
     def insert_localita(self, comune_id: int, nome: str, tipo: str, # Usa comune_id
                       civico: Optional[int] = None) -> Optional[int]:

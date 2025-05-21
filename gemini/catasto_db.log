@@ -1450,3 +1450,113 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-20 12:16:25,530 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione c7f938c3...
 2025-05-20 12:16:26,753 - CatastoDB - INFO - Disconnessione completata
 2025-05-20 12:16:26,754 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-20 12:18:40,465 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-20 12:18:40,569 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-20 12:18:47,347 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-20 12:18:47,641 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-20 12:18:47,688 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione aca2eb05...
+2025-05-20 12:18:49,495 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-20 12:20:43,847 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione aca2eb05...
+2025-05-20 12:20:44,866 - CatastoDB - INFO - Disconnessione completata
+2025-05-20 12:20:44,866 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 08:14:48,596 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 08:14:48,878 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 08:14:59,560 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 08:14:59,877 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 08:14:59,923 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 7b287052...
+2025-05-21 08:15:02,357 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 08:15:25,778 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 7b287052...
+2025-05-21 08:15:26,939 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 08:15:26,939 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 08:19:01,831 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 08:19:01,944 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 08:19:08,833 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 08:19:09,839 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 1d8aef86...
+2025-05-21 08:19:29,001 - __main__ - ERROR - Errore non gestito nel programma: name 'aggiungi_comune' is not defined
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\main.py", line 1733, in main
+    menu_principale(db) # Entra nel menu principale dopo login riuscito
+    ~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\main.py", line 1688, in menu_principale
+    elif scelta == "2": menu_inserimento(db)
+                        ~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\saint\catasto\gemini\main.py", line 929, in menu_inserimento
+    if scelta == "1": aggiungi_comune(db)
+                      ^^^^^^^^^^^^^^^
+NameError: name 'aggiungi_comune' is not defined
+2025-05-21 08:19:29,058 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 1d8aef86...
+2025-05-21 08:19:29,060 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 08:48:39,755 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 08:48:39,881 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 08:48:51,909 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 08:48:52,857 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 54ef6593...
+2025-05-21 08:49:11,082 - CatastoDB - ERROR - Errore Python generico in registra_comune_nel_db per 'Altare': 'CatastoDBManager' object has no attribute 'cursor'
+2025-05-21 08:49:11,084 - CatastoDB - INFO - Rollback eseguito.
+2025-05-21 08:55:28,899 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 54ef6593...
+2025-05-21 08:55:28,902 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 08:55:32,002 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 08:55:32,091 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 08:55:38,879 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 08:55:39,743 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione a27ad5a6...
+2025-05-21 08:55:52,735 - CatastoDB - INFO - Comune 'Altare' (ID: 8) inserito con successo nel database.
+2025-05-21 08:56:18,596 - CatastoDB - INFO - Comune 'Altare (Fabbricati)' (ID: 9) inserito con successo nel database.
+2025-05-21 08:56:41,060 - CatastoDB - INFO - Comune 'Altare (Terreni)' (ID: 10) inserito con successo nel database.
+2025-05-21 08:56:52,083 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:09,869 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:20,026 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:35,050 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 08:57:39,432 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 08:57:39,542 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 08:57:47,649 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 08:57:47,976 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 08:57:48,024 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione b832523c...
+2025-05-21 08:57:50,716 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:51,064 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:51,071 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:51,106 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:57:51,107 - CatastoDB - INFO - Recuperati 0 utenti.
+2025-05-21 08:57:58,284 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:58:12,813 - CatastoDB - WARNING - Nessun risultato da recuperare per l'ultima query.
+2025-05-21 08:58:18,252 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione b832523c...
+2025-05-21 08:58:19,566 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 08:58:19,566 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 09:06:20,624 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:06:20,738 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:06:25,749 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:06:26,687 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6398cb48...
+2025-05-21 09:06:57,443 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 09:07:01,650 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:07:01,741 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:07:11,986 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:07:12,294 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 09:07:12,333 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 9af39879...
+2025-05-21 09:07:14,948 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 09:09:39,111 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:09:39,210 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:09:45,562 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:09:45,931 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 09:09:46,026 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 21469b22...
+2025-05-21 09:09:47,331 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 09:10:19,049 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:10:19,131 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:10:24,149 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:10:24,486 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 09:10:24,493 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 32ba35a8...
+2025-05-21 09:10:25,671 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 09:14:45,492 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:14:45,610 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:14:52,450 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:14:52,843 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 09:14:52,890 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione ecfee40e...
+2025-05-21 09:14:54,485 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 09:34:14,608 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 09:34:14,733 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 09:34:20,598 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 09:34:20,965 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 09:34:21,038 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6fae6bf2...
+2025-05-21 09:34:23,184 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 09:35:33,051 - CatastoDB - INFO - Località 'Via dei Fatti Miei' (Comune ID: 2) inserita con ID: 101
+2025-05-21 09:35:56,185 - CatastoDB - INFO - Registrata nuova proprietà: Comune ID 2, Partita N.1
+2025-05-21 09:41:01,486 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 6fae6bf2...
+2025-05-21 09:41:02,736 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 09:41:02,736 - CatastoGUI - INFO - Applicazione GUI terminata.

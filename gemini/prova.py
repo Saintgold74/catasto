@@ -42,6 +42,8 @@ COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità"
 COLONNE_INSERIMENTO_POSSESSORI_NUM = 4 # Esempio: ID, Nome Completo, Paternità, Comune
 COLONNE_INSERIMENTO_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità", "Comune Riferimento"]
 
+NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome", "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
+
 # Importazione FPDF per esportazione PDF
 try:
     from fpdf import FPDF
@@ -2142,18 +2144,58 @@ class RegistrazioneProprietaWidget(QWidget):
     
     def update_possessori_table(self):
         """Aggiorna la tabella dei possessori."""
+        if not hasattr(self, 'possessori_data') or self.possessori_data is None:
+            self.possessori_data = [] # Assicura che sia una lista se non definito
+
         self.possessori_table.setRowCount(len(self.possessori_data))
         
-        for i, possessore in enumerate(self.possessori_data):
-            self.possessori_table.setItem(i, 0, QTableWidgetItem(possessore.get('nome_completo', '')))
-            self.possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('cognome_nome', '')))
-             # *** NUOVE COLONNE ***
-            if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
-                self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
-            self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
-            # *********************# *** NUOVE COLONNE ***
-            self.possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('paternita', '')))
-            self.possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
+        # Assicurati che NUOVE_ETICHETTE_POSSESSORI sia definito globalmente,
+        # come attributo di classe/istanza, o passato al metodo se necessario.
+        # Esempio: NUOVE_ETICHETTE_POSSESSORI = ["cognome_nome", "paternita_dettaglio", ...]
+        # Se non è definito, il controllo 'in NUOVE_ETICHETTE_POSSESSORI' causerà un NameError.
+        # Per ora, assumiamo che sia definito da qualche parte accessibile.
+        # Se non lo è, dovrà definirlo o rimuovere il blocco condizionale se le colonne sono fisse.
+
+        for i, dati_possessore in enumerate(self.possessori_data): # Usa 'i' e 'dati_possessore'
+            current_col = 0 # Inizializza l'indice di colonna per ogni riga
+
+            # Colonna 0: Nome Completo (come da sua logica originale)
+            self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('nome_completo', ''))))
+            current_col += 1
+
+            # Colonna 1: Cognome e Nome (come da sua logica originale)
+            # Questa potrebbe essere la stessa del blocco "NUOVE COLONNE" o una versione diversa.
+            # Se 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI è per una visualizzazione speciale, gestiscila qui.
+            if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Assumendo NUOVE_ETICHETTE_POSSESSORI sia definito
+                # Usa il valore da dati_possessore.get('cognome_nome', 'N/D')
+                # Questa era la colonna che causava l'errore usando 'row_idx' e 'col' non definite.
+                self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('cognome_nome', 'N/D'))))
+            else:
+                # Fallback o gestione se 'cognome_nome' non è in NUOVE_ETICHETTE_POSSESSORI ma è una colonna fissa
+                self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('cognome_nome', ''))))
+            current_col += 1
+
+            # Colonna 2: Paternità
+            # Il blocco "NUOVE COLONNE" aveva anche una 'paternita'. Chiarire quale usare.
+            # Se il blocco if precedente gestiva una 'paternita' condizionale:
+            # if 'paternita_speciale' in NUOVE_ETICHETTE_POSSESSORI:
+            #     self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('paternita_speciale', 'N/D'))))
+            # else:
+            #     self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('paternita', ''))))
+            # current_col += 1
+            # Oppure, se è sempre la stessa 'paternita':
+            self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('paternita', ''))))
+            current_col += 1
+            
+            # Colonna 3: Quota
+            self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('quota', ''))))
+            current_col += 1
+            
+            # Aggiungere altre colonne se necessario, seguendo il pattern:
+            # self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('nome_campo', ''))))
+            # current_col += 1
+
+        self.possessori_table.resizeColumnsToContents()
     
     def add_immobile(self):
         """Aggiunge un immobile alla lista."""
@@ -2456,28 +2498,87 @@ class PossessoreSelectionDialog(QDialog):
         self.possessori_table.setRowCount(0)
         
         if self.comune_id:
-            possessori = self.db_manager.get_possessori_by_comune(self.comune_id)
+            possessori_list = self.db_manager.get_possessori_by_comune(self.comune_id) # Rinominato per chiarezza
             
-            if possessori:
-                # Filtra se necessario
+            if possessori_list:
                 if filter_text:
-                    possessori = [p for p in possessori if filter_text.lower() in p.get('nome_completo', '').lower()]
+                    possessori_list = [p for p in possessori_list if filter_text.lower() in p.get('nome_completo', '').lower()]
                 
-                self.possessori_table.setRowCount(len(possessori))
+                self.possessori_table.setRowCount(len(possessori_list))
                 
-                for i, pos in enumerate(possessori):
-                    self.possessori_table.setItem(i, 0, QTableWidgetItem(str(pos.get('id', ''))))
-                    self.possessori_table.setItem(i, 1, QTableWidgetItem(pos.get('nome_completo', '')))
-                     # *** NUOVE COLONNE ***
-                    if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI: # Controlla se la colonna è prevista
-                        self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('cognome_nome', 'N/D'))); col+=1
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore_data.get('paternita', 'N/D'))); col+=1
-                    # **********************************
-                    self.possessori_table.setItem(i, 2, QTableWidgetItem(pos.get('paternita', '')))
+                # Assicurati che NUOVE_ETICHETTE_POSSESSORI sia definito globalmente o come attributo di classe/istanza
+                # Esempio: NUOVE_ETICHETTE_POSSESSORI = ["cognome_nome", "paternita_dettaglio", ...]
+
+                for i, pos_data in enumerate(possessori_list): # Usa 'i' come indice di riga, 'pos_data' per i dati del possessore
+                    col = 0 # Inizializza l'indice di colonna per ogni riga
+
+                    # Colonna ID
+                    self.possessori_table.setItem(i, col, QTableWidgetItem(str(pos_data.get('id', ''))))
+                    col += 1
+
+                    # Colonna Nome Completo
+                    self.possessori_table.setItem(i, col, QTableWidgetItem(pos_data.get('nome_completo', '')))
+                    col += 1
                     
-                    stato = "Attivo" if pos.get('attivo') else "Non Attivo"
-                    self.possessori_table.setItem(i, 3, QTableWidgetItem(stato))
-                
+                    # Gestione delle "NUOVE COLONNE" in modo dinamico o specifico
+                    # Esempio se vuoi aggiungere 'cognome_nome' se presente in NUOVE_ETICHETTE_POSSESSORI
+                    if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI:
+                        self.possessori_table.setItem(i, col, QTableWidgetItem(str(pos_data.get('cognome_nome', 'N/D'))))
+                        col += 1
+                    
+                    # Colonna Paternita (originale, la tua riga successiva la sovrascriverebbe o sarebbe la colonna successiva)
+                    # Se la 'paternita' dal blocco "NUOVE COLONNE" è diversa o aggiuntiva:
+                    if 'paternita_dettaglio' in NUOVE_ETICHETTE_POSSESSORI: # Esempio se hai un'etichetta specifica
+                        self.possessori_table.setItem(i, col, QTableWidgetItem(str(pos_data.get('paternita', 'N/D')))) # o un campo diverso da pos_data
+                        col += 1
+                    # Altrimenti, se la riga successiva gestisce la paternità standard:
+                    # self.possessori_table.setItem(i, col, QTableWidgetItem(pos_data.get('paternita', '')))
+                    # col += 1
+
+                    # La tua riga successiva per 'paternita'
+                    # Questa riga sembra essere la gestione standard della paternità.
+                    # Assicurati che 'col' abbia il valore corretto qui.
+                    # Se le "NUOVE COLONNE" hanno già incrementato 'col', allora questa potrebbe
+                    # essere la colonna successiva.
+                    # Per ora, assumo che questa sia la colonna standard per 'paternita'
+                    # e che le "NUOVE COLONNE" siano inserite prima se NUOVE_ETICHETTE_POSSESSORI lo prevede.
+                    # Se il blocco "NUOVE COLONNE" gestisce già la paternità, questa riga potrebbe essere ridondante o errata.
+                    
+                    # Riconsiderando la logica originale:
+                    # Colonna 0: id
+                    # Colonna 1: nome_completo
+                    # Il blocco "NUOVE COLONNE" è inserito in modo confuso.
+                    # Semplifichiamo e rendiamo l'ordine esplicito:
+
+                # Ri-strutturazione del ciclo per maggiore chiarezza:
+                for i, pos_data in enumerate(possessori_list):
+                    current_col = 0
+
+                    # ID
+                    self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(pos_data.get('id', ''))))
+                    current_col += 1
+
+                    # Nome Completo
+                    self.possessori_table.setItem(i, current_col, QTableWidgetItem(pos_data.get('nome_completo', '')))
+                    current_col += 1
+
+                    # Cognome e Nome (se la colonna è prevista)
+                    if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI:
+                        self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(pos_data.get('cognome_nome', 'N/D'))))
+                        current_col += 1
+                    
+                    # Paternità (se la colonna è prevista E diversa da quella standard)
+                    # O la tua colonna paternità standard:
+                    self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(pos_data.get('paternita', 'N/D'))))
+                    current_col += 1
+                    
+                    # Stato
+                    stato_str = "Attivo" if pos_data.get('attivo') else "Non Attivo"
+                    self.possessori_table.setItem(i, current_col, QTableWidgetItem(stato_str))
+                    current_col += 1
+
+                    # Aggiungi qui altre colonne se necessario, usando current_col e incrementandolo
+
                 self.possessori_table.resizeColumnsToContents()
     
     def filter_possessori(self):

@@ -1560,3 +1560,49 @@ NameError: name 'aggiungi_comune' is not defined
 2025-05-21 09:41:01,486 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 6fae6bf2...
 2025-05-21 09:41:02,736 - CatastoDB - INFO - Disconnessione completata
 2025-05-21 09:41:02,736 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 12:18:37,718 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 12:18:37,783 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 12:18:44,082 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 12:18:44,364 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 12:18:44,403 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione dd8c7094...
+2025-05-21 12:18:46,124 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 12:19:00,582 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione dd8c7094...
+2025-05-21 12:19:01,903 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 12:19:01,904 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 12:30:07,070 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 12:30:07,149 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 12:30:12,883 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 12:30:13,172 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 12:30:13,227 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione c17d0d1f...
+2025-05-21 12:30:14,246 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 12:30:31,537 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione c17d0d1f...
+2025-05-21 12:30:32,781 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 12:30:32,782 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 12:39:56,341 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 12:39:56,416 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 12:40:02,422 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 12:40:02,705 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 12:40:02,747 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 2766e571...
+2025-05-21 12:40:03,632 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: 
+             SELECT 
+                 id, 
+                 nome AS nome_comune, 
+                 ... Errore: ERRORE:  la colonna "codice_catastale" non esiste
+LINE 5:                  codice_catastale,  -- Assumendo che queste ...
+                         ^
+
+2025-05-21 12:40:03,633 - CatastoDB - INFO - Rollback eseguito.
+2025-05-21 12:40:03,633 - CatastoGUI - INFO - Nessun comune trovato nel database.
+2025-05-21 12:40:03,873 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 12:40:31,303 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 2766e571...
+2025-05-21 12:40:32,436 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 12:40:32,436 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-21 12:42:24,659 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-21 12:42:24,729 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-21 12:42:29,883 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-21 12:42:30,182 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-21 12:42:30,208 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 3e85e30b...
+2025-05-21 12:42:32,163 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-21 12:42:35,809 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 3e85e30b...
+2025-05-21 12:42:37,117 - CatastoDB - INFO - Disconnessione completata
+2025-05-21 12:42:37,117 - CatastoGUI - INFO - Applicazione GUI terminata.

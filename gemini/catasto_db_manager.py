@@ -288,6 +288,31 @@ class CatastoDBManager:
         except Exception as e:
             logger.error(f"Errore Python in get_comuni: {e}")
         return []
+    
+    def get_all_comuni_details(self) -> List[Dict[str, Any]]:
+        """
+        Recupera i dettagli disponibili di tutti i comuni dalla tabella catasto.comune.
+        I campi codice_catastale, data_istituzione, data_soppressione, note
+        NON sono presenti nella tabella 'comune' attuale e quindi non verranno popolati.
+        """
+        query_effettiva = """
+            SELECT 
+                id, 
+                nome AS nome_comune, -- La GUI si aspetta 'nome_comune'
+                provincia,
+                regione -- Aggiungiamo regione se può essere utile, anche se la GUI non la usa direttamente
+                -- codice_catastale, data_istituzione, data_soppressione, note (NON PRESENTI IN 'comune')
+            FROM catasto.comune 
+            ORDER BY nome_comune;
+        """
+        try:
+            if self.execute_query(query_effettiva):
+                return self.fetchall()
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_all_comuni_details: {db_err}")
+        except Exception as e:
+            logger.error(f"Errore Python in get_all_comuni_details: {e}")
+        return []
 
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
         """Verifica se un possessore esiste (per nome completo e comune_id) e ritorna il suo ID."""

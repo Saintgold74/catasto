@@ -378,6 +378,108 @@ class ComuneSelectionDialog(QDialog): # ASSICURATI CHE SIA QUI O PRIMA DI DOVE S
         else:
             QMessageBox.warning(self, "Attenzione", "Seleziona un comune valido dalla lista.")
 
+class ElencoComuniWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        
+        layout = QVBoxLayout(self)
+        
+        # Gruppo per filtri e tabella
+        comuni_group = QGroupBox("Elenco Comuni Registrati")
+        comuni_layout = QVBoxLayout(comuni_group)
+        
+        # Filtro
+        self.filter_comuni_edit = QLineEdit()
+        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia, codice catastale...")
+        self.filter_comuni_edit.textChanged.connect(self.apply_filter)
+        comuni_layout.addWidget(self.filter_comuni_edit)
+        
+        # Tabella Comuni
+        self.comuni_table = QTableWidget()
+        self.comuni_table.setColumnCount(7) # ID, Nome, Codice Cat., Provincia, Data Ist., Data Soppr., Note
+        self.comuni_table.setHorizontalHeaderLabels([
+            "ID", "Nome Comune", "Cod. Catastale", "Provincia", 
+            "Data Istituzione", "Data Soppressione", "Note"
+        ])
+        self.comuni_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.comuni_table.setAlternatingRowColors(True)
+        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # Stretch per riempire
+        self.comuni_table.setSortingEnabled(True) # Abilita ordinamento per colonna
+        comuni_layout.addWidget(self.comuni_table)
+        
+        layout.addWidget(comuni_group)
+        self.setLayout(layout)
+        
+        self.load_comuni_data()
+
+    def load_comuni_data(self):
+        """Carica i dati di tutti i comuni nella tabella."""
+        self.comuni_table.setRowCount(0) # Pulisce la tabella
+        self.comuni_table.setSortingEnabled(False) # Disabilita sorting durante il caricamento
+        
+        try:
+            # Assumiamo che db_manager.get_all_comuni_details() esista e restituisca tutti i campi.
+            # Se non esiste, dobbiamo crearlo o adattare un metodo esistente.
+            # get_comuni() potrebbe non bastare se non restituisce tutti i dettagli.
+            # Per ora, creiamo un ipotetico get_all_comuni_details basato sullo schema.
+            
+            # Metodo ipotetico in CatastoDBManager:
+            # def get_all_comuni_details(self) -> List[Dict[str, Any]]:
+            #     query = "SELECT comune_id AS id, nome_comune, codice_catastale, provincia, data_istituzione, data_soppressione, note FROM catasto.comuni ORDER BY nome_comune;"
+            #     if self.execute_query(query):
+            #         return self.fetchall()
+            #     return []
+
+            comuni_list = self.db_manager.get_all_comuni_details() # Assicurati che questo metodo esista e funzioni!
+            
+            if comuni_list:
+                self.comuni_table.setRowCount(len(comuni_list))
+                for row_idx, comune in enumerate(comuni_list):
+                    col = 0
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(comune.get('id', '')))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('nome_comune', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('codice_catastale', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('provincia', ''))); col+=1
+                    
+                    data_ist = comune.get('data_istituzione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_ist) if data_ist else '')); col+=1
+                    
+                    data_soppr = comune.get('data_soppressione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_soppr) if data_soppr else '')); col+=1
+                    
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('note', ''))); col+=1
+                
+                self.comuni_table.resizeColumnsToContents()
+            else:
+                gui_logger.info("Nessun comune trovato nel database.")
+                
+        except AttributeError as ae: # Se get_all_comuni_details non esiste
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_all_comuni_details' esista.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati comuni non trovata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.comuni_table.setSortingEnabled(True) # Riabilita sorting
+
+    def apply_filter(self):
+        """Filtra le righe della tabella in base al testo inserito."""
+        filter_text = self.filter_comuni_edit.text().strip().lower()
+        for row in range(self.comuni_table.rowCount()):
+            row_visible = False
+            if not filter_text: # Se il filtro è vuoto, mostra tutte le righe
+                row_visible = True
+            else:
+                for col in range(self.comuni_table.columnCount()):
+                    item = self.comuni_table.item(row, col)
+                    if item and filter_text in item.text().lower():
+                        row_visible = True
+                        break
+            self.comuni_table.setRowHidden(row, not row_visible)
+
+
 
 # --- Classi PDF (da python_example.py) ---
 if FPDF_AVAILABLE:
@@ -3750,11 +3852,15 @@ class CatastoMainWindow(QMainWindow):
 
         # --- Tab Consultazione (ora è un QTabWidget che contiene sotto-tab) ---
         self.consultazione_sub_tabs = QTabWidget() # Widget per i sotto-tab di consultazione
+        
+        # Sotto-tab Elenco Comuni Dettagliato (NUOVO)
+        self.consultazione_sub_tabs.addTab(ElencoComuniWidget(self.db_manager, self), "Elenco Comuni") # <--- NUOVO
+        
         self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager, self), "Ricerca Partite")
-        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self), "Ricerca Possessori") # NUOVO SOTTO-TAB
+        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self), "Ricerca Possessori")
         # self.consultazione_sub_tabs.addTab(RicercaImmobiliWidget(self.db_manager, self), "Ricerca Immobili") # Aggiungeremo dopo
 
-        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione") # Aggiunge il QTabWidget dei sotto-tab al QTabWidget principale
+        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione")
         # --------------------------------------------------------------------
         
         # Tab Inserimento e Gestione
@@ -4037,13 +4143,140 @@ class GestioneUtentiWidget(QWidget):
             # else: l'utente ha premuto annulla su QInputDialog
 
 # Altri Widget per i Tab (da creare)
-class InserimentoComuneWidget(QWidget): # Esempio
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
+class InserimentoComuneWidget(QDialog): # o QWidget
+    def __init__(self, db_manager, utente_attuale, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Widget Inserimento Comune (TODO)"))
-        # ... implementare form e logica ...
+        self.db = db_manager
+        self.utente_attuale = utente_attuale
+
+        self.setWindowTitle("Inserimento Nuovo Comune")
+        self.setModal(True)
+        self.initUI()
+
+    def initUI(self):
+        layout = QFormLayout(self)
+
+        self.nome_comune_edit = QLineEdit()
+        self.codice_catastale_edit = QLineEdit()
+        self.codice_catastale_edit.setMaxLength(4)
+        self.provincia_edit = QLineEdit("SV")
+        self.provincia_edit.setMaxLength(2)
+
+        self.data_istituzione_edit = QDateEdit()
+        self.data_istituzione_edit.setCalendarPopup(True)
+        self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_istituzione_edit.setNullable(True)
+        self.data_istituzione_edit.setDate(QDate()) # Inizialmente vuoto
+        self.data_istituzione_edit.setSpecialValueText(" ") # Mostra come vuoto
+
+        self.data_soppressione_edit = QDateEdit()
+        self.data_soppressione_edit.setCalendarPopup(True)
+        self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_soppressione_edit.setNullable(True)
+        self.data_soppressione_edit.setDate(QDate()) # Inizialmente vuoto
+        self.data_soppressione_edit.setSpecialValueText(" ") # Mostra come vuoto
+
+
+        self.note_edit = QTextEdit()
+
+        layout.addRow("Nome Comune (*):", self.nome_comune_edit)
+        layout.addRow("Codice Catastale:", self.codice_catastale_edit)
+        layout.addRow("Provincia (*):", self.provincia_edit)
+        layout.addRow("Data Istituzione:", self.data_istituzione_edit)
+        layout.addRow("Data Soppressione:", self.data_soppressione_edit)
+        layout.addRow("Note:", self.note_edit)
+
+        self.submit_button = QPushButton("Inserisci Comune")
+        self.submit_button.clicked.connect(self.inserisci_comune)
+        self.clear_button = QPushButton("Pulisci Campi")
+        self.clear_button.clicked.connect(self.pulisci_campi)
+        self.cancel_button = QPushButton("Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+
+        button_layout = QHBoxLayout() # Per disporre i pulsanti orizzontalmente
+        button_layout.addWidget(self.submit_button)
+        button_layout.addWidget(self.clear_button)
+        button_layout.addWidget(self.cancel_button)
+
+        layout.addRow(button_layout) # Aggiunge il layout dei pulsanti al form layout
+        self.setLayout(layout)
+
+    def pulisci_campi(self):
+        self.nome_comune_edit.clear()
+        self.codice_catastale_edit.clear()
+        self.provincia_edit.setText("SV")
+        self.data_istituzione_edit.setDate(QDate())
+        self.data_istituzione_edit.setSpecialValueText(" ")
+        self.data_soppressione_edit.setDate(QDate())
+        self.data_soppressione_edit.setSpecialValueText(" ")
+        self.note_edit.clear()
+
+    def inserisci_comune(self):
+        nome_comune = self.nome_comune_edit.text().strip()
+        codice_catastale = self.codice_catastale_edit.text().strip().upper() # Converti in maiuscolo
+        provincia = self.provincia_edit.text().strip().upper() # Converti in maiuscolo
+
+        data_istituzione = None
+        if self.data_istituzione_edit.date().isValid() and not self.data_istituzione_edit.date().isNull():
+            data_istituzione = self.data_istituzione_edit.date().toPyDate()
+
+        data_soppressione = None
+        if self.data_soppressione_edit.date().isValid() and not self.data_soppressione_edit.date().isNull():
+            data_soppressione = self.data_soppressione_edit.date().toPyDate()
+
+        note = self.note_edit.toPlainText().strip()
+
+        if not nome_comune:
+            QMessageBox.warning(self, "Errore Inserimento", "Il nome del comune è obbligatorio.")
+            return
+        if not provincia:
+            QMessageBox.warning(self, "Errore Inserimento", "La provincia è obbligatoria.")
+            return
+        if len(provincia) != 2:
+            QMessageBox.warning(self, "Errore Inserimento", "La provincia deve essere di 2 caratteri (es. SV).")
+            return
+        if codice_catastale and len(codice_catastale) != 4:
+            QMessageBox.warning(self, "Errore Inserimento", "Il codice catastale deve essere di 4 caratteri (es. L781).")
+            return
+        # Controllo aggiuntivo per il formato del codice catastale (una lettera seguita da tre numeri)
+        if codice_catastale and not (codice_catastale[0].isalpha() and codice_catastale[1:].isdigit() and len(codice_catastale) == 4) :
+             QMessageBox.warning(self, "Errore Inserimento", "Il codice catastale deve iniziare con una lettera seguita da tre cifre (es. L781).")
+             return
+
+        try:
+            # Assicurati che il tuo db_manager sia accessibile come self.db
+            # e che utente_attuale sia disponibile come self.utente_attuale
+            comune_id = self.db.aggiungi_comune(
+                nome_comune=nome_comune,
+                codice_catastale=codice_catastale if codice_catastale else None,
+                provincia=provincia,
+                data_istituzione=data_istituzione,
+                data_soppressione=data_soppressione,
+                note=note if note else None,
+                utente=self.utente_attuale
+            )
+
+            if comune_id:
+                QMessageBox.information(self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
+                # Eventuale segnale per aggiornare altre viste
+                # self.comune_aggiunto.emit() # Se si implementa un segnale
+                self.pulisci_campi()
+                self.accept() # Chiude il dialogo
+            else:
+                # Questo potrebbe non essere mai raggiunto se aggiungi_comune solleva sempre eccezioni in caso di fallimento
+                QMessageBox.critical(self, "Errore Inserimento", "Impossibile inserire il comune. Il metodo nel DB manager non ha restituito un ID.")
+
+        except ValueError as ve: # Esempio di gestione errore specifico da db_manager
+            QMessageBox.critical(self, "Errore Dati", f"Errore nei dati forniti: {ve}")
+        except Exception as e: # Gestione generica per altri errori (es. DB)
+            # Potresti voler loggare l'errore completo e mostrare un messaggio più generico
+            # logger.error(f"Errore database durante inserimento comune: {e}", exc_info=True)
+            messaggio = f"Errore durante l'inserimento del comune: {e}"
+            if "comuni_nome_comune_key" in str(e).lower():
+                messaggio = f"Errore: Esiste già un comune con il nome '{nome_comune}'."
+            elif "comuni_codice_catastale_key" in str(e).lower():
+                 messaggio = f"Errore: Esiste già un comune con il codice catastale '{codice_catastale}'."
+            QMessageBox.critical(self, "Errore Database", messaggio)
 
 class AuditWidget(QWidget): # Esempio
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -4135,6 +4368,27 @@ if __name__ == "__main__":
     palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
     palette.setColor(QPalette.HighlightedText, Qt.black)
     app.setPalette(palette)
+    
+    def apri_dialog_inserimento_comune(self):
+        if not self.db_manager: # Assicurarsi che db_manager sia inizializzato
+            QMessageBox.critical(self, "Errore", "Manager Database non inizializzato.")
+            return
+        if not self.logged_in_user_info: # Assicurarsi che l'utente sia loggato
+            QMessageBox.warning(self, "Login Richiesto", "Effettuare il login per procedere.")
+            return
+
+        # Recupera lo username dell'utente loggato
+        utente_login = self.logged_in_user_info.get('username', 'utente_sconosciuto')
+
+        dialog = InserimentoComuneWidget(self.db_manager, utente_login, self)
+        if dialog.exec_() == QDialog.Accepted:
+            # Azioni post-inserimento, es. aggiornare una tabella di comuni se visibile
+            print("Dialogo inserimento comune chiuso con successo.")
+            # Qui potrebbe voler chiamare un metodo per ricaricare/aggiornare
+            # la lista dei comuni in ComuniTabWidget, se esiste e se è visibile.
+            # Esempio: if hasattr(self, 'comuni_tab') and isinstance(self.comuni_tab, ComuniTabWidget):
+            #              self.comuni_tab.carica_comuni()
+            pass
     
     mainWindow = CatastoMainWindow()
     mainWindow.show()

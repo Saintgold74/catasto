@@ -362,10 +362,10 @@ class CatastoDBManager:
             # Query SQL aggiornata per JOIN
             query = """
                 SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
-                       pos.nome_completo, pos.attivo
-                FROM possessore pos
-                JOIN comune c ON pos.comune_id = c.id
-                WHERE pos.comune_id = %s ORDER BY pos.nome_completo
+                    pos.nome_completo, pos.attivo
+                FROM catasto.possessore pos  -- Schema qualificato
+                JOIN catasto.comune c ON pos.comune_id = c.id -- Chiave corretta se è comune.id e possessore.comune_id
+                WHERE pos.comune_id = %s ORDER BY pos.nome_completo;
             """
             if self.execute_query(query, (comune_id,)):
                 return self.fetchall()

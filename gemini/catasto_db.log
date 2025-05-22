@@ -1664,3 +1664,21 @@ LINE 5:                  codice_catastale,  -- Assumendo che queste ...
 2025-05-22 18:41:53,036 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione bac69bfc...
 2025-05-22 18:41:54,898 - CatastoDB - INFO - Disconnessione completata
 2025-05-22 18:41:54,898 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-22 18:53:08,540 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-22 18:53:08,805 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-22 18:53:15,500 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-22 18:53:15,860 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-22 18:53:15,908 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione cae38a74...
+2025-05-22 18:53:17,957 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-22 18:53:33,077 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione cae38a74...
+2025-05-22 18:53:34,678 - CatastoDB - INFO - Disconnessione completata
+2025-05-22 18:53:34,681 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-22 18:55:21,616 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-22 18:55:21,730 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-22 18:55:28,618 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-22 18:55:28,941 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-22 18:55:28,988 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione ca195b2c...
+2025-05-22 18:55:30,911 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-22 18:56:43,378 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione ca195b2c...
+2025-05-22 18:56:45,246 - CatastoDB - INFO - Disconnessione completata
+2025-05-22 18:56:45,246 - CatastoGUI - INFO - Applicazione GUI terminata.

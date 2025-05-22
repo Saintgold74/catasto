@@ -16,7 +16,7 @@ import json
 import bcrypt
 import csv # Aggiunto per esportazione CSV
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 # Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -385,19 +385,17 @@ class ElencoComuniWidget(QWidget):
         
         layout = QVBoxLayout(self)
         
-        # Gruppo per filtri e tabella
         comuni_group = QGroupBox("Elenco Comuni Registrati")
         comuni_layout = QVBoxLayout(comuni_group)
         
-        # Filtro
+        # ... (filter_comuni_edit e comuni_table come prima) ...
         self.filter_comuni_edit = QLineEdit()
-        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia, codice catastale...")
+        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia...")
         self.filter_comuni_edit.textChanged.connect(self.apply_filter)
         comuni_layout.addWidget(self.filter_comuni_edit)
-        
-        # Tabella Comuni
+
         self.comuni_table = QTableWidget()
-        self.comuni_table.setColumnCount(7) # ID, Nome, Codice Cat., Provincia, Data Ist., Data Soppr., Note
+        self.comuni_table.setColumnCount(7) 
         self.comuni_table.setHorizontalHeaderLabels([
             "ID", "Nome Comune", "Cod. Catastale", "Provincia", 
             "Data Istituzione", "Data Soppressione", "Note"
@@ -405,13 +403,25 @@ class ElencoComuniWidget(QWidget):
         self.comuni_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.comuni_table.setAlternatingRowColors(True)
-        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # Stretch per riempire
-        self.comuni_table.setSortingEnabled(True) # Abilita ordinamento per colonna
-        comuni_layout.addWidget(self.comuni_table)
-        
-        # === NUOVA CONNESSIONE PER DOPPIO CLICK ===
+        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.comuni_table.setSortingEnabled(True)
         self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune)
-        # ===========================================
+        comuni_layout.addWidget(self.comuni_table)
+
+        # === NUOVI PULSANTI PER AZIONI SUL COMUNE SELEZIONATO ===
+        action_buttons_layout = QHBoxLayout()
+        self.btn_mostra_partite = QPushButton("Mostra Partite del Comune")
+        self.btn_mostra_partite.clicked.connect(self.azione_mostra_partite)
+        action_buttons_layout.addWidget(self.btn_mostra_partite)
+
+        self.btn_mostra_possessori = QPushButton("Mostra Possessori del Comune") # NUOVO
+        self.btn_mostra_possessori.clicked.connect(self.azione_mostra_possessori) # NUOVO
+        action_buttons_layout.addWidget(self.btn_mostra_possessori) # NUOVO
+
+        # Aggiungeremo qui il pulsante per le località più avanti
+        action_buttons_layout.addStretch()
+        comuni_layout.addLayout(action_buttons_layout)
+        # =======================================================
         
         layout.addWidget(comuni_group)
         self.setLayout(layout)
@@ -483,12 +493,19 @@ class ElencoComuniWidget(QWidget):
                         break
             self.comuni_table.setRowHidden(row, not row_visible)
             
-    def mostra_partite_del_comune(self, item: QTableWidgetItem):
-        """Apre un dialogo con le partite del comune selezionato tramite doppio click."""
-        if not item:
-            return
+    def _get_selected_comune_info(self) -> Optional[Tuple[int, str]]:
+        """Helper per ottenere ID e nome del comune correntemente selezionato nella tabella."""
+        selected_items = self.comuni_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+            return None
         
-        row = item.row()
+        row = self.comuni_table.currentRow() # selectedItems può dare più item se la selezione non è per riga
+                                           # currentRow è più sicuro per single row selection
+        if row < 0: # Nessuna riga effettivamente selezionata
+             QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+             return None
+
         try:
             comune_id_item = self.comuni_table.item(row, 0) # Colonna ID
             nome_comune_item = self.comuni_table.item(row, 1) # Colonna Nome Comune
@@ -496,17 +513,52 @@ class ElencoComuniWidget(QWidget):
             if comune_id_item and nome_comune_item:
                 comune_id = int(comune_id_item.text())
                 nome_comune = nome_comune_item.text()
-                
-                # Apri il nuovo dialogo
-                dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
-                dialog.exec_()
+                return comune_id, nome_comune
             else:
                 QMessageBox.warning(self, "Errore Selezione", "Impossibile recuperare ID o nome del comune dalla riga.")
+                return None
         except ValueError:
             QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
+            return None
         except Exception as e:
-            gui_logger.error(f"Errore in mostra_partite_del_comune: {e}", exc_info=True)
+            gui_logger.error(f"Errore in _get_selected_comune_info: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore", f"Si è verificato un errore imprevisto: {e}")
+            return None
+
+    def mostra_partite_del_comune(self, item: QTableWidgetItem): # Questo è per il doppio click
+        """Apre un dialogo con le partite del comune selezionato tramite doppio click."""
+        # Questa funzione ora può usare l'helper se item è valido,
+        # o mantenere la sua logica se item è il modo primario per ottenere la riga.
+        if not item: return
+        row = item.row()
+        # ... (resto della logica di mostra_partite_del_comune come prima, usando 'row' per prendere ID e nome)
+        try:
+            comune_id_item = self.comuni_table.item(row, 0)
+            nome_comune_item = self.comuni_table.item(row, 1)
+            if comune_id_item and nome_comune_item:
+                comune_id = int(comune_id_item.text())
+                nome_comune = nome_comune_item.text()
+                dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+                dialog.exec_()
+        except ValueError: QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
+        except Exception as e: gui_logger.error(f"Errore in mostra_partite_del_comune: {e}", exc_info=True); QMessageBox.critical(self, "Errore", f"Errore: {e}")
+
+
+    def azione_mostra_partite(self):
+        """Azione per il pulsante 'Mostra Partite del Comune'."""
+        selected_info = self._get_selected_comune_info()
+        if selected_info:
+            comune_id, nome_comune = selected_info
+            dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+            dialog.exec_()
+
+    def azione_mostra_possessori(self): # NUOVO METODO
+        """Azione per il pulsante 'Mostra Possessori del Comune'."""
+        selected_info = self._get_selected_comune_info()
+        if selected_info:
+            comune_id, nome_comune = selected_info
+            dialog = PossessoriComuneDialog(self.db_manager, comune_id, nome_comune, self)
+            dialog.exec_()
 
 
 
@@ -3658,6 +3710,96 @@ class PartiteComuneDialog(QDialog):
                  QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
          else:
              QMessageBox.warning(self, "ID Non Valido", "ID partita non valido nella riga selezionata.")
+             
+class PossessoriComuneDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.nome_comune = nome_comune
+
+        self.setWindowTitle(f"Possessori del Comune di {self.nome_comune} (ID: {self.comune_id})")
+        self.setMinimumSize(800, 500)
+
+        layout = QVBoxLayout(self)
+
+        # Tabella Possessori
+        self.possessori_table = QTableWidget()
+        # ID, Nome Completo, Cognome/Nome (se disponibile), Paternità, Stato
+        self.possessori_table.setColumnCount(5) # Aggiunta colonna per Cognome/Nome
+        self.possessori_table.setHorizontalHeaderLabels([
+            "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Stato"
+        ])
+        self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.possessori_table.setAlternatingRowColors(True)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.possessori_table.setSortingEnabled(True)
+        # self.possessori_table.itemDoubleClicked.connect(self.apri_dettaglio_possessore_selezionato) # Per futuri dettagli
+
+        layout.addWidget(self.possessori_table)
+
+        # Pulsante Chiudi
+        self.close_button = QPushButton("Chiudi")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
+
+        self.setLayout(layout)
+        self.load_possessori_data()
+
+    def load_possessori_data(self):
+        """Carica i possessori per il comune specificato."""
+        self.possessori_table.setRowCount(0)
+        self.possessori_table.setSortingEnabled(False)
+
+        try:
+            # Utilizziamo il metodo che hai confermato esistere e funzionare:
+            # db_manager.get_possessori_by_comune(comune_id)
+            # Questo metodo, dal tuo codice, restituisce:
+            # pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita, pos.nome_completo, pos.attivo
+            possessori_list = self.db_manager.get_possessori_by_comune(self.comune_id) #
+
+            if possessori_list:
+                self.possessori_table.setRowCount(len(possessori_list))
+                for row_idx, possessore in enumerate(possessori_list):
+                    col = 0
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(str(possessore.get('id', '')))); col+=1
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('nome_completo', ''))); col+=1
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('cognome_nome', ''))); col+=1 # Da get_possessori_by_comune
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('paternita', ''))); col+=1
+                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(stato_str)); col+=1
+                
+                self.possessori_table.resizeColumnsToContents()
+            else:
+                gui_logger.info(f"Nessun possessore trovato per il comune ID: {self.comune_id}")
+        except AttributeError as ae:
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_possessori_by_comune' esista e sia corretto.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati possessori non trovata o errata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento dei possessori per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.possessori_table.setSortingEnabled(True)
+
+    # def apri_dettaglio_possessore_selezionato(self, item):
+    #     """Apre il dialogo dei dettagli per il possessore selezionato (DA IMPLEMENTARE)."""
+    #     if not item: return
+    #     row = item.row()
+    #     possessore_id_str = self.possessori_table.item(row, 0).text()
+    #     if possessore_id_str.isdigit():
+    #         possessore_id = int(possessore_id_str)
+    #         # Qui dovresti avere un DialogoDettagliPossessore e un metodo in db_manager
+    #         # per recuperare tutti i dettagli del possessore, incluse le partite associate.
+    #         # Esempio: possessore_details_data = self.db_manager.get_possessore_full_details(possessore_id)
+    #         # if possessore_details_data:
+    #         # details_dialog = DialogoDettagliPossessore(possessore_details_data, self)
+    #         # details_dialog.exec_()
+    #         QMessageBox.information(self, "Dettaglio Possessore", f"Dettaglio per ID {possessore_id} (da implementare)")
+    #     else:
+    #         QMessageBox.warning(self, "ID Non Valido", "ID possessore non valido.")
+
 
 
 # --- Finestra principale ---

@@ -409,6 +409,10 @@ class ElencoComuniWidget(QWidget):
         self.comuni_table.setSortingEnabled(True) # Abilita ordinamento per colonna
         comuni_layout.addWidget(self.comuni_table)
         
+        # === NUOVA CONNESSIONE PER DOPPIO CLICK ===
+        self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune)
+        # ===========================================
+        
         layout.addWidget(comuni_group)
         self.setLayout(layout)
         
@@ -478,6 +482,32 @@ class ElencoComuniWidget(QWidget):
                         row_visible = True
                         break
             self.comuni_table.setRowHidden(row, not row_visible)
+            
+    def mostra_partite_del_comune(self, item: QTableWidgetItem):
+        """Apre un dialogo con le partite del comune selezionato tramite doppio click."""
+        if not item:
+            return
+        
+        row = item.row()
+        try:
+            comune_id_item = self.comuni_table.item(row, 0) # Colonna ID
+            nome_comune_item = self.comuni_table.item(row, 1) # Colonna Nome Comune
+            
+            if comune_id_item and nome_comune_item:
+                comune_id = int(comune_id_item.text())
+                nome_comune = nome_comune_item.text()
+                
+                # Apri il nuovo dialogo
+                dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+                dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore Selezione", "Impossibile recuperare ID o nome del comune dalla riga.")
+        except ValueError:
+            QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
+        except Exception as e:
+            gui_logger.error(f"Errore in mostra_partite_del_comune: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Si è verificato un errore imprevisto: {e}")
+
 
 
 
@@ -2425,7 +2455,7 @@ class RicercaAvanzataWidget(QWidget):
         self.risultati_possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.risultati_possessori_table.setAlternatingRowColors(True)
         self.risultati_possessori_table.horizontalHeader().setStretchLastSection(True)
-        # self.risultati_possessori_table.itemDoubleClicked.connect(self._apri_dettaglio_possessore) # Opzionale
+        self.risultati_possessori_table.itemDoubleClicked.connect(self._apri_dettaglio_possessore) # Opzionale
         main_layout.addWidget(self.risultati_possessori_table)
         
         # TODO: Potresti aggiungere qui altre sezioni per ricerca avanzata immobili, partite, ecc.
@@ -2468,16 +2498,16 @@ class RicercaAvanzataWidget(QWidget):
             gui_logger.error(f"Errore durante la ricerca avanzata possessori (GUI): {e}")
             QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore: {e}")
 
-    # def _apri_dettaglio_possessore(self, item): # Funzione opzionale
-    #     if item is None: return
-    #     row = item.row()
-    #     try:
-    #         possessore_id = int(self.risultati_possessori_table.item(row, 0).text())
+    def _apri_dettaglio_possessore(self, item): # Funzione opzionale
+         if item is None: return
+         row = item.row()
+         try:
+             possessore_id = int(self.risultati_possessori_table.item(row, 0).text())
     #         # Qui potresti aprire un dialogo con i dettagli del possessore,
     #         # simile a PartitaDetailsDialog ma per possessori.
-    #         QMessageBox.information(self, "Dettaglio", f"Dettaglio per possessore ID: {possessore_id} (da implementare).")
-    #     except (ValueError, TypeError) as e:
-    #         gui_logger.error(f"Errore nel recuperare ID possessore dalla tabella: {e}")
+             QMessageBox.information(self, "Dettaglio", f"Dettaglio per possessore ID: {possessore_id} (da implementare).")
+         except (ValueError, TypeError) as e:
+             gui_logger.error(f"Errore nel recuperare ID possessore dalla tabella: {e}")
 
 # --- Dialog per la Selezione dei Possessori ---
 class PossessoreSelectionDialog(QDialog):
@@ -3528,6 +3558,106 @@ class PartitaSearchDialog(QDialog):
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
 
+class PartiteComuneDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.nome_comune = nome_comune
+
+        self.setWindowTitle(f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
+        self.setMinimumSize(800, 500) # Dimensioni generose per la tabella
+
+        layout = QVBoxLayout(self)
+
+        # Filtro (opzionale, per ora semplice tabella)
+        # Si potrebbe aggiungere un QLineEdit per filtrare le partite per numero o possessore
+
+        # Tabella Partite
+        self.partite_table = QTableWidget()
+        # ID, Numero, Tipo, Stato, Data Impianto, Possessori (stringa), Num. Immobili
+        self.partite_table.setColumnCount(7)
+        self.partite_table.setHorizontalHeaderLabels([
+            "ID Partita", "Numero", "Tipo", "Stato",
+            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili"
+        ])
+        self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.partite_table.setSelectionMode(QTableWidget.SingleSelection) # O ExtendedSelection se vuoi multiselezione
+        self.partite_table.setAlternatingRowColors(True)
+        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.partite_table.setSortingEnabled(True)
+        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata) # Per aprire PartitaDetailsDialog
+
+        layout.addWidget(self.partite_table)
+
+        # Pulsante Chiudi
+        self.close_button = QPushButton("Chiudi")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
+
+        self.setLayout(layout)
+        self.load_partite_data()
+
+    def load_partite_data(self):
+        """Carica le partite per il comune specificato."""
+        self.partite_table.setRowCount(0)
+        self.partite_table.setSortingEnabled(False)
+
+        try:
+            # Assumiamo che db_manager.get_partite_by_comune(comune_id) esista
+            # e restituisca una lista di dizionari con le chiavi necessarie.
+            # Dal tuo catasto_db_manager.py, la query in get_partite_by_comune include:
+            # p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
+            # p.data_chiusura, p.stato,
+            # string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
+            # COUNT(DISTINCT i.id) as num_immobili
+            partite_list = self.db_manager.get_partite_by_comune(self.comune_id) #
+
+            if partite_list:
+                self.partite_table.setRowCount(len(partite_list))
+                for row_idx, partita in enumerate(partite_list):
+                    col = 0
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col+=1
+                    
+                    data_imp = partita.get('data_impianto')
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col+=1
+                    
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col+=1
+                
+                self.partite_table.resizeColumnsToContents()
+            else:
+                gui_logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id}")
+        except AttributeError as ae:
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_partite_by_comune' esista.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati partite non trovata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.partite_table.setSortingEnabled(True)
+
+    def apri_dettaglio_partita_selezionata(self, item):
+         """Apre il dialogo dei dettagli per la partita selezionata."""
+         if not item: return
+         row = item.row()
+         partita_id_str = self.partite_table.item(row, 0).text()
+         if partita_id_str.isdigit():
+             partita_id = int(partita_id_str)
+          # Il metodo get_partita_details già esiste nel tuo db_manager
+             partita_details_data = self.db_manager.get_partita_details(partita_id) #
+             if partita_details_data:
+                 # Assumendo che PartitaDetailsDialog esista e sia importato
+                 details_dialog = PartitaDetailsDialog(partita_details_data, self)
+                 details_dialog.exec_()
+             else:
+                 QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
+         else:
+             QMessageBox.warning(self, "ID Non Valido", "ID partita non valido nella riga selezionata.")
 
 
 # --- Finestra principale ---

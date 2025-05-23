@@ -101,6 +101,28 @@ def _set_session_context(db: CatastoDBManager):
 def _confirm_action(prompt: str) -> bool:
     """Chiede conferma all'utente."""
     return input(f"{prompt} (s/n)? ").strip().lower() == 's'
+def interfaccia_aggiungi_comune(db: CatastoDBManager): # db è un'istanza di CatastoDBManager
+    """Funzione interattiva per l'inserimento di un nuovo comune."""
+    _set_session_context(db)  # Funzione definita in main.py
+    stampa_intestazione("AGGIUNGI NUOVO COMUNE")  # Funzione definita in main.py
+
+    nome = input("Nome comune: ").strip()
+    provincia = input("Provincia (es. SV): ").strip().upper()
+    regione = input("Regione (es. Liguria): ").strip()
+
+    if not (nome and provincia and regione):
+        print("\nERRORE: Nome, Provincia e Regione sono obbligatori. Operazione annullata.")
+        return
+
+    # Chiamata al metodo della classe CatastoDBManager
+    comune_id_restituito = db.registra_comune_nel_db(nome, provincia, regione)
+
+    if comune_id_restituito is not None:
+        print(f"\nOperazione per il comune '{nome}' (ID: {comune_id_restituito}) completata con successo.")
+        print("(Il comune è stato inserito o la sua esistenza è stata confermata).")
+    else:
+        print(f"\nERRORE: Impossibile completare l'operazione per il comune '{nome}'.")
+        print("Controllare i log del programma (python_example.log e/o catasto_db.log) per dettagli.")
 
 def _seleziona_comune(db: CatastoDBManager, prompt: str = "Seleziona il comune:") -> Optional[int]:
     """
@@ -926,7 +948,8 @@ def menu_inserimento(db: CatastoDBManager):
         print("0. Torna al menu principale")
         scelta = input("\nSeleziona un'opzione (0-9): ").strip()
 
-        if scelta == "1": aggiungi_comune(db)
+        if scelta == "1":
+            interfaccia_aggiungi_comune(db) # Chiamata alla funzione di interfaccia utente
         elif scelta == "2": inserisci_possessore(db)
         elif scelta == "3": inserisci_localita(db)
         elif scelta == "4": _registra_nuova_proprieta_interattivo(db)

@@ -23,6 +23,7 @@ import json
 import uuid
 import os
 
+
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
 
@@ -58,6 +59,8 @@ class CatastoDBManager:
         self.conn_params['options'] = f'-c search_path={self.schema},public'
         self.conn = None
         self.cur = None
+        self.cursor = None # Inizializza a None
+        self.active_transaction = False
         logger.info(f"Inizializzato gestore per database {dbname} (schema: {schema})")
 
     # --- Metodi Base Connessione e Transazione ---
@@ -115,91 +118,77 @@ class CatastoDBManager:
                  logger.error(f"Errore rollback: {e}")
         else: logger.warning("Tentativo di rollback senza connessione attiva.")
 
-    def execute_query(self, query: str, params: Union[tuple, Dict, None] = None) -> bool:
-        """
-        Esegue una query SQL, gestendo errori di connessione e RILANCIANDO altri errori DB.
-        Restituisce True se la query è stata eseguita senza errori DB, False altrimenti.
-        """
-        attempt_reconnect = True
-        while True:
-            try:
-                # 1. Verifica/Stabilisci Connessione
-                if not self.conn or self.conn.closed:
-                    if not attempt_reconnect:
-                        logger.error("Riconnessione fallita definitivamente.")
-                        return False # Già tentato riconnessione
-                    logger.warning("Connessione non attiva. Tentativo di riconnessione...")
-                    if not self.connect():
-                        return False # Riconnessione fallita
-                    attempt_reconnect = False # Riconnetti solo una volta
+    def execute_query(self, query: str, params: Optional[tuple] = None, fetch_results: bool = False) -> bool:
+        """Esegue una query SQL. Gestisce transazioni e logging."""
+        if not self.conn or self.conn.closed:
+            logger.error("Nessuna connessione attiva al database.")
+            self.cursor = None # Assicura che cursor sia None se non c'è connessione
+            return False
+        try:
+            # Potrebbe essere meglio creare un nuovo cursore per ogni query
+            # per evitare problemi con stati di cursori precedenti,
+            # oppure assicurarsi che venga resettato correttamente.
+            self.cursor = self.conn.cursor(cursor_factory=DictCursor) # Crea/Ricrea il cursore
 
-                # 2. Assicura Cursore Valido
-                if self.cur is None or self.cur.closed:
-                     logger.warning("Cursore non valido o chiuso. Creazione nuovo cursore.")
-                     self.cur = self.conn.cursor(cursor_factory=DictCursor)
+            self.cursor.execute(query, params)
+            logger.debug(f"Query eseguita: {self.cursor.query.decode() if self.cursor.query else query}") # Logga la query effettiva
 
-                # 3. Esegui Query
-                logger.debug(f"Esecuzione query: {self.cur.mogrify(query, params)}")
-                self.cur.execute(query, params)
-                # Se l'esecuzione arriva qui senza eccezioni, è andata bene
-                return True
+            # Se la query non è di tipo SELECT (o non ci si aspetta risultati immediati qui),
+            # il successo è dato dall'assenza di eccezioni.
+            # Il commit verrà gestito esternamente o da metodi specifici.
+            
+            # Non resettare self.cursor a None qui se vuoi accedere a rowcount o fetchone dopo
+            return True
 
-            # 4. Gestione Errori di Connessione (per Riconnessione)
-            except (psycopg2.InterfaceError, psycopg2.OperationalError) as conn_err:
-                logger.error(f"Errore di connessione DB: {conn_err}")
-                if not attempt_reconnect:
-                    logger.error("Riconnessione già tentata. Operazione fallita.")
-                    return False # Fallimento dopo tentativo di riconnessione
-                self.disconnect() # Chiudi connessione problematica
-                attempt_reconnect = False # Tenta la riconnessione solo una volta nel prossimo ciclo
-                logger.info("Riconnessione in corso...")
-                # Il ciclo while riproverà la connessione all'inizio
-
-            # 5. Gestione Altri Errori DB (Log + Rollback + Rilancio)
-            except psycopg2.Error as db_err:
-                 logger.error(f"Errore DB specifico rilevato: {db_err.__class__.__name__} - {db_err}")
-                 logger.error(f"SQLSTATE: {db_err.pgcode}") # Codice errore SQL
-                 try: logger.error(f"Query renderizzata: {self.cur.mogrify(query, params)}")
-                 except Exception: logger.error(f"Query (originale): {query}"); logger.error(f"Parametri: {params}")
-                 self.rollback() # Annulla transazione in caso di errore DB
-                 raise db_err # RILANCIA l'eccezione per gestione specifica nel chiamante
-
-            # 6. Gestione Errori Python Generici (Log + Rollback + Rilancio)
-            except Exception as e:
-                logger.exception(f"Errore Python imprevisto durante esecuzione query:") # Logga traceback
-                try: logger.error(f"Query renderizzata: {self.cur.mogrify(query, params)}")
-                except Exception: logger.error(f"Query (originale): {query}"); logger.error(f"Parametri: {params}")
-                self.rollback() # Annulla transazione anche per errori Python generici
-                raise e # RILANCIA l'eccezione Python
+        except psycopg2.Error as e:
+            logger.error(f"Errore DB durante l'esecuzione della query: {query[:100]}... Errore: {e}")
+            if self.conn and not self.conn.closed: # Solo se la connessione è ancora valida
+                self.rollback() # Esegui rollback in caso di errore
+            # self.cursor = None # Potrebbe essere utile resettarlo in caso di errore
+            return False
+        except Exception as e:
+            logger.error(f"Errore Python generico durante l'esecuzione della query: {e}")
+            if self.conn and not self.conn.closed:
+                self.rollback()
+            # self.cursor = None
+            return False
 
     def fetchall(self) -> List[Dict]:
         """Recupera tutti i risultati dell'ultima query come lista di dizionari."""
-        if self.cur and not self.cur.closed:
-             try:
-                 return [dict(row) for row in self.cur.fetchall()]
-             except psycopg2.ProgrammingError:
-                 logger.warning("Nessun risultato da recuperare per l'ultima query.")
-                 return [] # Nessun risultato o cursore non valido per fetch
-             except Exception as e:
-                 logger.error(f"Errore durante fetchall: {e}")
-                 return []
-        logger.warning("Tentativo di fetchall senza cursore valido.")
-        return []
+        # Utilizza self.cursor, che è impostato da execute_query
+        if self.cursor and not self.cursor.closed:
+            try:
+                # Il DictCursor restituisce già dict-like rows, quindi dict(row) potrebbe essere ridondante
+                # ma non è dannoso. Se self.cursor.fetchall() restituisce già una lista di dict (o DictRow),
+                # la conversione esplicita potrebbe non essere necessaria.
+                # Per sicurezza e chiarezza, lasciamola se DictCursor non restituisce dict nativi.
+                # Se DictCursor restituisce oggetti DictRow, sono già simili a dizionari.
+                risultati = self.cursor.fetchall()
+                # Se DictCursor è usato, ogni 'row' in 'risultati' è già un oggetto simile a un dizionario.
+                # La conversione [dict(row) for row in ...] è sicura.
+                return risultati # Se DictCursor restituisce direttamente una lista di dizionari (o oggetti DictRow)
+                # oppure: return [dict(row) for row in risultati] # Se necessario convertire esplicitamente
+            except psycopg2.ProgrammingError: # Si verifica se si tenta di fetch da una query che non restituisce risultati
+                logger.warning("Nessun risultato da recuperare per l'ultima query (fetchall).")
+                return []
+            except Exception as e:
+                logger.error(f"Errore generico durante fetchall: {e}")
+                return []
+        else: # self.cursor è None o è chiuso
+            logger.warning("Tentativo di fetchall senza un cursore valido o su un cursore chiuso.")
+            return []
 
-    def fetchone(self) -> Optional[Dict]:
-        """Recupera una riga di risultati dall'ultima query come dizionario."""
-        if self.cur and not self.cur.closed:
-             try:
-                 row = self.cur.fetchone()
-                 return dict(row) if row else None # Converte DictRow in dict standard se esiste
-             except psycopg2.ProgrammingError:
-                 logger.warning("Nessun risultato da recuperare per l'ultima query.")
-                 return None # Nessun risultato o cursore non valido per fetch
-             except Exception as e:
-                 logger.error(f"Errore durante fetchone: {e}")
-                 return None
-        logger.warning("Tentativo di fetchone senza cursore valido.")
-        return None
+    def fetchone(self) -> Optional[Dict[str, Any]]:
+        """Recupera una riga dal cursore."""
+        if self.cursor: # Verifica che il cursore esista
+            try:
+                return self.cursor.fetchone()
+            except psycopg2.Error as e:
+                logger.error(f"Errore DB durante fetchone: {e}")
+                return None
+        else:
+            logger.warning("Tentativo di fetchone senza un cursore valido.")
+            return None
     
     def is_connected(self) -> bool:
         """Verifica se la connessione al database è attiva."""
@@ -212,11 +201,80 @@ class CatastoDBManager:
                 return False
         return False
     # --- Metodi CRUD e Ricerca Base (MODIFICATI per comune_id) ---
+    def registra_comune_nel_db(self, nome: str, provincia: str, regione: str) -> Optional[int]:
+        comune_id: Optional[int] = None
+        query_insert = """
+        INSERT INTO catasto.comune (nome, provincia, regione)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (nome) DO NOTHING
+        RETURNING id;
+        """
+        query_select = "SELECT id FROM catasto.comune WHERE nome = %s;"
 
+        try:
+            if self.execute_query(query_insert, (nome, provincia, regione)):
+                # execute_query DEVE aver impostato self.cursor se ha restituito True
+                if self.cursor is None: # Controllo di sicurezza aggiuntivo
+                    logger.error(f"Errore critico: self.cursor è None dopo execute_query riuscita per INSERT comune '{nome}'.")
+                    self.rollback()
+                    return None
+
+                risultato_insert = None
+                if self.cursor.description: # Verifica se la query poteva ritornare risultati
+                    try:
+                        risultato_insert = self.cursor.fetchone() # Prova a fare fetch
+                    except psycopg2.ProgrammingError as pe: # Es. "no results to fetch"
+                        logger.warning(f"Nessun risultato da fetchone() per INSERT comune '{nome}' (probabile ON CONFLICT DO NOTHING): {pe}")
+                        risultato_insert = None
+
+                if risultato_insert and 'id' in risultato_insert:
+                    comune_id = risultato_insert['id']
+                    self.commit()
+                    logger.info(f"Comune '{nome}' (ID: {comune_id}) inserito con successo nel database.")
+                    return comune_id
+                else: # L'INSERT non ha inserito (ON CONFLICT DO NOTHING) o ID non recuperato
+                    logger.info(f"Comune '{nome}' non inserito da INSERT (probabile conflitto). Tentativo di SELECT.")
+                    if self.execute_query(query_select, (nome,)):
+                        if self.cursor is None: # Controllo di sicurezza
+                            logger.error(f"Errore critico: self.cursor è None dopo execute_query riuscita per SELECT comune '{nome}'.")
+                            self.rollback()
+                            return None
+                        
+                        risultato_select = self.fetchone() # fetchone() ora dovrebbe usare il cursore del SELECT
+                        if risultato_select and 'id' in risultato_select:
+                            comune_id = risultato_select['id']
+                            self.commit() 
+                            logger.info(f"Comune '{nome}' (ID: {comune_id}) già esistente, operazione confermata.")
+                            return comune_id
+                        else:
+                            logger.error(f"Errore logico: Comune '{nome}' non inserito e non trovato dopo ON CONFLICT e successivo SELECT.")
+                            self.rollback()
+                            return None
+                    else: # Errore durante il SELECT
+                        # execute_query dovrebbe aver già gestito il rollback
+                        logger.error(f"Errore DB nel selezionare il comune '{nome}' dopo un potenziale conflitto.")
+                        return None
+            else: # Errore durante l'INSERT iniziale
+                # execute_query dovrebbe aver già gestito il rollback
+                logger.error(f"Errore DB iniziale durante l'inserimento del comune '{nome}'.")
+                return None
+
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore database (psycopg2) in registra_comune_nel_db per '{nome}': {db_err}")
+            self.rollback()
+            return None
+        except AttributeError as ae: # Specifico per l'errore 'has no attribute cursor' se persiste
+            logger.error(f"AttributeError in registra_comune_nel_db per '{nome}': {ae}. Controllare gestione self.cursor.")
+            self.rollback()
+            return None
+        except Exception as e:
+            logger.error(f"Errore Python generico in registra_comune_nel_db per '{nome}': {e}")
+            self.rollback()
+            return None
     def get_comuni(self, search_term: Optional[str] = None) -> List[Dict]:
         """Recupera comuni (ID e nome) con filtro opzionale per nome."""
         try:
-            select_clause = "SELECT id, nome, provincia, regione FROM comune" # Seleziona ID
+            select_clause = "SELECT id, nome, provincia, regione FROM catasto.comune" # Seleziona ID
             if search_term:
                 query = f"{select_clause} WHERE nome ILIKE %s ORDER BY nome"
                 params = (f"%{search_term}%",)
@@ -229,6 +287,31 @@ class CatastoDBManager:
             logger.error(f"Errore DB in get_comuni: {db_err}")
         except Exception as e:
             logger.error(f"Errore Python in get_comuni: {e}")
+        return []
+    
+    def get_all_comuni_details(self) -> List[Dict[str, Any]]:
+        """
+        Recupera i dettagli disponibili di tutti i comuni dalla tabella catasto.comune.
+        I campi codice_catastale, data_istituzione, data_soppressione, note
+        NON sono presenti nella tabella 'comune' attuale e quindi non verranno popolati.
+        """
+        query_effettiva = """
+            SELECT 
+                id, 
+                nome AS nome_comune, -- La GUI si aspetta 'nome_comune'
+                provincia,
+                regione -- Aggiungiamo regione se può essere utile, anche se la GUI non la usa direttamente
+                -- codice_catastale, data_istituzione, data_soppressione, note (NON PRESENTI IN 'comune')
+            FROM catasto.comune 
+            ORDER BY nome_comune;
+        """
+        try:
+            if self.execute_query(query_effettiva):
+                return self.fetchall()
+        except psycopg2.Error as db_err:
+            logger.error(f"Errore DB in get_all_comuni_details: {db_err}")
+        except Exception as e:
+            logger.error(f"Errore Python in get_all_comuni_details: {e}")
         return []
 
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
@@ -273,54 +356,24 @@ class CatastoDBManager:
             self.rollback()
             return None
 
-    def get_possessori_by_comune(self, comune_id: int) -> List[Dict]:
+    def get_possessori_by_comune(self, comune_id: int) -> List[Dict]: # Usa comune_id
         """Recupera possessori per comune ID, includendo il nome del comune."""
-        possessori = [] # Inizializza a lista vuota
         try:
-            # Query SQL CORRETTA
+            # Query SQL aggiornata per JOIN
             query = """
-                SELECT pos.possessore_id AS id,  -- Alias esplicito per 'id' se la GUI lo aspetta
-                    co.nome_comune AS comune_nome,
-                    pos.cognome_nome,
-                    pos.paternita,
-                    pos.nome_completo,
-                    pos.attivo
-                FROM catasto.possessore pos
-                JOIN catasto.comuni co ON pos.comune_riferimento_id = co.comune_id
-                WHERE pos.comune_riferimento_id = %s
-                ORDER BY pos.nome_completo;
+                SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
+                    pos.nome_completo, pos.attivo
+                FROM catasto.possessore pos  -- Schema qualificato
+                JOIN catasto.comune c ON pos.comune_id = c.id -- Chiave corretta se è comune.id e possessore.comune_id
+                WHERE pos.comune_id = %s ORDER BY pos.nome_completo;
             """
-            # DEBUG: Stampa la query e i parametri
-            # print(f"DEBUG DB: Esecuzione query in get_possessori_by_comune con comune_id: {comune_id}")
-            # print(f"DEBUG DB Query: {query % (comune_id,)}") # Semplice formattazione per debug, non usare per esecuzione reale
-
-            # self.execute_query dovrebbe idealmente restituire True/False o sollevare eccezioni chiare.
-            # Se self.execute_query ritorna False in caso di errore SQL senza sollevare eccezione,
-            # la logica attuale è ok. Se solleva eccezione, il blocco try-except la prenderà.
-
-            if self.execute_query(query, (comune_id,)): # execute_query usa il cursore interno
-                risultati_raw = self.fetchall() # fetchall recupera i risultati dal cursore interno
-                if risultati_raw:
-                    possessori = risultati_raw # Assegna i risultati
-                    # logger.debug(f"Recuperati {len(possessori)} possessori per comune_id {comune_id}")
-                # else:
-                    # logger.debug(f"Nessun possessore trovato per comune_id {comune_id}")
-            # else:
-                # logger.warning(f"execute_query ha restituito False per get_possessori_by_comune con comune_id {comune_id}")
-
-
+            if self.execute_query(query, (comune_id,)):
+                return self.fetchall()
         except psycopg2.Error as db_err:
-            # Logga l'errore specifico del database in modo più dettagliato se possibile
-            logger.error(f"Errore Database in get_possessori_by_comune per comune_id {comune_id}: {db_err}")
-            logger.error(f"Dettagli DB Errore: SQLSTATE={db_err.pgcode}, Messaggio={db_err.pgerror}")
-            # Potrebbe essere utile rilanciare un'eccezione personalizzata o ritornare None per indicare fallimento
-            # raise CustomDBError(f"Fallimento recupero possessori: {db_err}") from db_err
+            logger.error(f"Errore DB in get_possessori_by_comune: {db_err}")
         except Exception as e:
-            logger.error(f"Errore Generico in get_possessori_by_comune per comune_id {comune_id}: {e}", exc_info=True)
-            # exc_info=True aggiungerà il traceback al log
-            # raise # Rilanciare potrebbe essere meglio per far sapere al chiamante che qualcosa è andato storto
-
-        return possessori # Ritorna la lista (piena o vuota)
+            logger.error(f"Errore Python in get_possessori_by_comune: {e}")
+        return []
 
     def insert_localita(self, comune_id: int, nome: str, tipo: str, # Usa comune_id
                       civico: Optional[int] = None) -> Optional[int]:
@@ -1559,6 +1612,81 @@ class CatastoDBManager:
             return False
         except psycopg2.Error as db_err: logger.error(f"Errore DB link doc-partita: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python link doc-partita: {e}"); self.rollback(); return False
+        
+    def ricerca_avanzata_immobili_gui(self,
+                                 comune_id: Optional[int] = None,
+                                 localita_id: Optional[int] = None,
+                                 natura_search: Optional[str] = None,
+                                 classificazione_search: Optional[str] = None,
+                                 consistenza_search: Optional[str] = None,
+                                 piani_min: Optional[int] = None,
+                                 piani_max: Optional[int] = None,
+                                 vani_min: Optional[int] = None,
+                                 vani_max: Optional[int] = None,
+                                 nome_possessore_search: Optional[str] = None,
+                                 data_inizio_possesso_search: Optional[date] = None,
+                                 data_fine_possesso_search: Optional[date] = None
+                                 ) -> List[Dict[str, Any]]:
+        """
+        Esegue una ricerca avanzata di immobili chiamando la funzione SQL `cerca_immobili_avanzato`.
+        Questo metodo è pensato per essere chiamato dalla GUI.
+        """
+        # La funzione SQL è catasto.cerca_immobili_avanzato
+        # Prende i seguenti parametri, come definito in 17_funzione_ricerca_immobili.sql:
+        # p_comune_id INT, p_localita_id INT, p_natura VARCHAR, p_classificazione VARCHAR,
+        # p_consistenza_search VARCHAR, p_piani_min INT, p_piani_max INT,
+        # p_vani_min INT, p_vani_max INT, p_nome_possessore VARCHAR,
+        # p_data_inizio_possesso DATE, p_data_fine_possesso DATE
+        
+        query = """
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                p_comune_id => %s,
+                p_localita_id => %s,
+                p_natura => %s,
+                p_classificazione => %s,
+                p_consistenza_search => %s,
+                p_piani_min => %s,
+                p_piani_max => %s,
+                p_vani_min => %s,
+                p_vani_max => %s,
+                p_nome_possessore => %s,
+                p_data_inizio_possesso => %s,
+                p_data_fine_possesso => %s
+            );
+        """
+        
+        # Prepara i parametri per la ricerca ILIKE nella funzione SQL
+        params = (
+            comune_id, 
+            localita_id, 
+            f"%{natura_search}%" if natura_search else None,
+            f"%{classificazione_search}%" if classificazione_search else None,
+            f"%{consistenza_search}%" if consistenza_search else None,
+            piani_min, 
+            piani_max,
+            vani_min, 
+            vani_max,
+            f"%{nome_possessore_search}%" if nome_possessore_search else None,
+            data_inizio_possesso_search,
+            data_fine_possesso_search
+        )
+        
+        risultati = []
+        try:
+            # Assicurati che self.execute_query gestisca correttamente la connessione
+            # e il cursore, e che self.fetchall restituisca una lista di dizionari.
+            if self.execute_query(query, params):
+                risultati = self.fetchall()
+                logger.info(f"Ricerca avanzata immobili (GUI) ha prodotto {len(risultati)} risultati.")
+            # else: execute_query potrebbe aver loggato un errore se ha restituito False
+        except psycopg2.Error as db_err: # Errore specifico del database
+            logger.error(f"Errore DB in ricerca_avanzata_immobili_gui: {db_err}")
+            # Potresti voler rilanciare l'eccezione o gestirla in modo più specifico
+            # se la GUI deve sapere del fallimento.
+        except Exception as e: # Altri errori Python
+            logger.error(f"Errore Python imprevisto in ricerca_avanzata_immobili_gui: {e}", exc_info=True)
+        
+        return risultati
 
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

@@ -2073,3 +2073,28 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-23 17:48:40,012 - CatastoGUI - INFO - Connessione al database chiusa.
 2025-05-23 17:48:40,029 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
 2025-05-23 17:48:40,049 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-23 18:11:56,979 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 18:11:57,127 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 18:12:04,783 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 18:12:05,041 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 18:12:05,053 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione e095c921...
+2025-05-23 18:13:37,119 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 18:13:37,235 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 18:13:53,807 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 18:13:54,064 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 18:13:54,075 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 2903abc8...
+2025-05-23 18:13:55,805 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-23 18:13:56,010 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:13:56,064 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-23 18:13:56,253 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:13:56,266 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-23 18:13:56,272 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-23 18:13:56,277 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-23 18:13:56,283 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-23 18:13:56,292 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-23 18:14:07,000 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 2903abc8...
+2025-05-23 18:14:08,489 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-23 18:14:08,495 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 18:14:08,506 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-23 18:14:08,516 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-23 18:14:08,540 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0

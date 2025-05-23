@@ -4334,7 +4334,7 @@ class CatastoMainWindow(QMainWindow):
 
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
-        self.inserimento_main_tab = QTabWidget()
+        self.inserimento_sub_tabs = QTabWidget()
         # Aggiungere altri se necessario (es. per Sistema)
 
         self.initUI()
@@ -4357,29 +4357,35 @@ class CatastoMainWindow(QMainWindow):
 
     # Esempio di Menu Bar (opzionale)
     # All'interno della classe CatastoMainWindow
+    # All'interno della classe CatastoMainWindow
     def create_menu_bar(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
 
-        self.nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo &Comune...", self)
-        self.nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
-        self.nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
-        # self.nuovo_comune_action.setEnabled(False) # L'abilitazione è gestita da update_ui_based_on_role
-        file_menu.addAction(self.nuovo_comune_action)
+        # --- INIZIO SEZIONE DA RIMUOVERE O COMMENTARE ---
+        # Se "Nuovo Comune" è solo nel tab, queste righe non servono più qui.
+        #
+        # self.nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo &Comune...", self)
+        # self.nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
+        # self.nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
+        # # self.nuovo_comune_action.setEnabled(False) # L'abilitazione era gestita da update_ui_based_on_role
+        # file_menu.addAction(self.nuovo_comune_action) # <-- QUESTA RIGA CAUSA L'ERRORE se self.nuovo_comune_action non è definito
 
-        file_menu.addSeparator() # Separatore
+        # file_menu.addSeparator() # Rimuovi anche questo se non ci sono altre azioni prima di "Esci"
+        # --- FINE SEZIONE DA RIMUOVERE O COMMENTARE ---
 
-        # Azione per Uscire
+        # Azione per Uscire (questa può rimanere)
         exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
         exit_action.setStatusTip("Chiudi l'applicazione")
         exit_action.triggered.connect(self.close) # Chiama il metodo close della finestra
         file_menu.addAction(exit_action)
 
-        # Puoi aggiungere altri menu e azioni qui (es. "Amministrazione" > "Gestione Utenti")
+        # Puoi aggiungere altri menu e azioni qui se necessario
+        # Esempio:
         # if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
         #     admin_menu = menu_bar.addMenu("&Amministrazione")
         #     gestione_utenti_action = QAction("Gestione &Utenti", self)
-        #     # gestione_utenti_action.triggered.connect(self.mostra_tab_gestione_utenti) # Dovresti creare questo metodo
+        #     # gestione_utenti_action.triggered.connect(self.mostra_tab_gestione_utenti)
         #     admin_menu.addAction(gestione_utenti_action)
 
 
@@ -4454,9 +4460,10 @@ class CatastoMainWindow(QMainWindow):
         self.show() # <-- ESSENZIALE
         gui_logger.info(">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
 
+    # All'interno della classe CatastoMainWindow in prova.py
     def setup_tabs(self):
         if not self.db_manager:
-            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
+            gui_logger.error("Tentativo di configurare i tab senza un db_manager.") # TODO: gui_logger è definito?
             QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato. Impossibile caricare i tab.")
             return
         self.tabs.clear() # Pulisce i tab esistenti prima di ricrearli
@@ -4469,16 +4476,44 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs.addTab(RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Immobili Avanzata")
         self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione")
 
-        # --- Tab Inserimento e Gestione (QTabWidget per sotto-tab) ---
-        self.inserimento_main_tab.clear()
-        self.inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager, self.inserimento_main_tab), "Nuovo Possessore")
-        self.inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_main_tab), "Nuova Località")
-        self.inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_main_tab), "Registra Proprietà")
-        # Nota: InserimentoComuneWidget è gestito come dialogo modale, non un tab.
-        self.tabs.addTab(self.inserimento_main_tab, "Inserimento e Gestione")
+        # --- Tab Inserimento e Gestione (MODIFICATO con pulsante "Nuovo Comune") ---
+        # 1. Crea un widget contenitore principale per questo tab
+        inserimento_gestione_contenitore = QWidget()
+        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore) # Layout verticale
 
-        # --- Tab Ricerca Avanzata Possessori (se diverso da quello in Consultazione) ---
-        # Questo widget (RicercaAvanzataWidget) è quello per la ricerca fuzzy dei possessori
+        # 2. Crea e aggiungi il pulsante "Nuovo Comune" in alto
+        # Questo attributo deve essere accessibile da update_ui_based_on_role
+        self.btn_nuovo_comune_nel_tab = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Aggiungi Nuovo Comune")
+        self.btn_nuovo_comune_nel_tab.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
+        self.btn_nuovo_comune_nel_tab.clicked.connect(self.apri_dialog_inserimento_comune) # Metodo di CatastoMainWindow
+        # L'abilitazione iniziale del pulsante sarà gestita da update_ui_based_on_role
+        self.btn_nuovo_comune_nel_tab.setEnabled(False) # Inizialmente disabilitato
+        layout_contenitore_inserimento.addWidget(self.btn_nuovo_comune_nel_tab)
+
+        # 3. Aggiungi una linea orizzontale per separazione visiva (opzionale)
+        linea_separatrice = QFrame()
+        linea_separatrice.setFrameShape(QFrame.HLine)
+        linea_separatrice.setFrameShadow(QFrame.Sunken)
+        layout_contenitore_inserimento.addWidget(linea_separatrice)
+        layout_contenitore_inserimento.addSpacing(5) # Un po' di spazio prima dei sotto-tab
+
+        # 4. Il QTabWidget per i sotto-tab ("Nuovo Possessore", "Nuova Località", ecc.)
+        #    Assicurati che self.inserimento_sub_tabs sia un QTabWidget inizializzato in __init__
+        if not hasattr(self, 'inserimento_sub_tabs') or not isinstance(self.inserimento_sub_tabs, QTabWidget):
+            self.inserimento_sub_tabs = QTabWidget() # Fallback, ma dovrebbe essere in __init__
+            gui_logger.warning("self.inserimento_sub_tabs non inizializzato correttamente in __init__.") # TODO: gui_logger
+
+        self.inserimento_sub_tabs.clear()
+        self.inserimento_sub_tabs.addTab(InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs), "Nuovo Possessore")
+        self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località")
+        self.inserimento_sub_tabs.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs), "Registra Proprietà")
+        # Nota: InserimentoComuneWidget (il dialogo) è chiamato dal pulsante, non è un tab qui.
+        layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs) # Aggiungi i sotto-tab al layout del contenitore
+
+        # 5. Aggiungi il widget contenitore come tab principale
+        self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
+
+        # --- Tab Ricerca Avanzata Possessori ---
         self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata Possessori")
 
         # --- Tab Esportazioni ---
@@ -4491,7 +4526,6 @@ class CatastoMainWindow(QMainWindow):
         self.tabs.addTab(StatisticheWidget(self.db_manager, self), "Statistiche e Viste")
 
         # --- Tab Gestione Utenti (solo per admin) ---
-        # Questo tab viene aggiunto condizionatamente, quindi non serve disabilitarlo in update_ui_based_on_role se non esiste
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
 
@@ -4501,40 +4535,34 @@ class CatastoMainWindow(QMainWindow):
         placeholder_sistema_layout = QVBoxLayout(placeholder_sistema)
         placeholder_sistema_layout.addWidget(QLabel("Funzionalità di Sistema (Audit, Backup, Manutenzione) da implementare qui."))
         sistema_sub_tabs.addTab(placeholder_sistema, "Info Sistema")
-        # Esempio se si avessero i widget pronti:
-        # if hasattr(self, 'AuditWidget'): sistema_sub_tabs.addTab(AuditWidget(self.db_manager, sistema_sub_tabs), "Audit Log")
-        # if hasattr(self, 'BackupWidget'): sistema_sub_tabs.addTab(BackupWidget(self.db_manager, sistema_sub_tabs), "Backup")
         self.tabs.addTab(sistema_sub_tabs, "Sistema")
 
-        # Non è necessario chiamare self.update_ui_based_on_role() qui,
-        # perché viene chiamato in perform_initial_setup DOPO setup_tabs.
+        # La chiamata a self.update_ui_based_on_role() avverrà dopo in perform_initial_setup,
+        # quindi il pulsante self.btn_nuovo_comune_nel_tab e i tab verranno abilitati/disabilitati correttamente.
 
     def update_ui_based_on_role(self):
         if not self.logged_in_user_info:
             for i in range(self.tabs.count()):
                 self.tabs.setTabEnabled(i, False)
-            # self.btn_nuovo_comune_toolbar.setEnabled(False) # RIMOSSO O MODIFICATO
-            if hasattr(self, 'nuovo_comune_action'): # Controlla se l'azione del menu esiste
-                self.nuovo_comune_action.setEnabled(False)
-            # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False) # Se hai un menu bar
+            # if hasattr(self, 'nuovo_comune_action'): # Rimuovi se non usi più il menu
+            #     self.nuovo_comune_action.setEnabled(False)
+            if hasattr(self, 'btn_nuovo_comune_nel_tab'): # Nuovo pulsante
+                self.btn_nuovo_comune_nel_tab.setEnabled(False)
             return
-
-        # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(True)
 
         is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
         is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
 
-        # Abilita/Disabilita l'azione del menu "Nuovo Comune"
-        if hasattr(self, 'nuovo_comune_action'): # Controlla se l'azione del menu esiste
-            self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
-        
-        # Rimuovi la riga che si riferisce a self.btn_nuovo_comune_toolbar
-        # self.btn_nuovo_comune_toolbar.setEnabled(is_admin or is_archivista) # RIMOSSA
+        # Rimuovi o commenta la gestione di self.nuovo_comune_action
+        # if hasattr(self, 'nuovo_comune_action'):
+        #     self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
 
-        # Mappa dei nomi dei tab ai loro indici attuali per riferimento
+        # Abilita/disabilita il nuovo pulsante nel tab
+        if hasattr(self, 'btn_nuovo_comune_nel_tab'):
+            self.btn_nuovo_comune_nel_tab.setEnabled(is_admin or is_archivista)
+
         tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
 
-        # Logica di abilitazione dei tab principali
         if "Consultazione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Consultazione"], True)
         if "Ricerca Avanzata Possessori" in tab_indices: self.tabs.setTabEnabled(tab_indices["Ricerca Avanzata Possessori"], True)
         if "Esportazioni" in tab_indices: self.tabs.setTabEnabled(tab_indices["Esportazioni"], True)
@@ -4547,7 +4575,7 @@ class CatastoMainWindow(QMainWindow):
         if "Gestione Utenti" in tab_indices:
             self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
         if "Sistema" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin) # Solo admin per funzioni di sistema critiche
+            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin)
 
     def apri_dialog_inserimento_comune(self): # Metodo integrato nella classe
         if not self.db_manager:

@@ -26,10 +26,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QTableWidgetItem, QDateEdit, QScrollArea,
                             QDialog, QListWidget,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame,QAbstractItemView) 
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
-from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
+from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
 from PyQt5.QtWidgets import QDoubleSpinBox
+
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
@@ -378,187 +379,9 @@ class ComuneSelectionDialog(QDialog): # ASSICURATI CHE SIA QUI O PRIMA DI DOVE S
         else:
             QMessageBox.warning(self, "Attenzione", "Seleziona un comune valido dalla lista.")
 
-class ElencoComuniWidget(QWidget):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        
-        layout = QVBoxLayout(self)
-        
-        comuni_group = QGroupBox("Elenco Comuni Registrati")
-        comuni_layout = QVBoxLayout(comuni_group)
-        
-        # ... (filter_comuni_edit e comuni_table come prima) ...
-        self.filter_comuni_edit = QLineEdit()
-        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia...")
-        self.filter_comuni_edit.textChanged.connect(self.apply_filter)
-        comuni_layout.addWidget(self.filter_comuni_edit)
-
-        self.comuni_table = QTableWidget()
-        self.comuni_table.setColumnCount(7) 
-        self.comuni_table.setHorizontalHeaderLabels([
-            "ID", "Nome Comune", "Cod. Catastale", "Provincia", 
-            "Data Istituzione", "Data Soppressione", "Note"
-        ])
-        self.comuni_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.comuni_table.setAlternatingRowColors(True)
-        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.comuni_table.setSortingEnabled(True)
-        self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune)
-        comuni_layout.addWidget(self.comuni_table)
-
-        # === NUOVI PULSANTI PER AZIONI SUL COMUNE SELEZIONATO ===
-        action_buttons_layout = QHBoxLayout()
-        self.btn_mostra_partite = QPushButton("Mostra Partite del Comune")
-        self.btn_mostra_partite.clicked.connect(self.azione_mostra_partite)
-        action_buttons_layout.addWidget(self.btn_mostra_partite)
-
-        self.btn_mostra_possessori = QPushButton("Mostra Possessori del Comune") # NUOVO
-        self.btn_mostra_possessori.clicked.connect(self.azione_mostra_possessori) # NUOVO
-        action_buttons_layout.addWidget(self.btn_mostra_possessori) # NUOVO
-
-        # Aggiungeremo qui il pulsante per le località più avanti
-        action_buttons_layout.addStretch()
-        comuni_layout.addLayout(action_buttons_layout)
-        # =======================================================
-        
-        layout.addWidget(comuni_group)
-        self.setLayout(layout)
-        
-        self.load_comuni_data()
-
-    def load_comuni_data(self):
-        """Carica i dati di tutti i comuni nella tabella."""
-        self.comuni_table.setRowCount(0) # Pulisce la tabella
-        self.comuni_table.setSortingEnabled(False) # Disabilita sorting durante il caricamento
-        
-        try:
-            # Assumiamo che db_manager.get_all_comuni_details() esista e restituisca tutti i campi.
-            # Se non esiste, dobbiamo crearlo o adattare un metodo esistente.
-            # get_comuni() potrebbe non bastare se non restituisce tutti i dettagli.
-            # Per ora, creiamo un ipotetico get_all_comuni_details basato sullo schema.
-            
-            # Metodo ipotetico in CatastoDBManager:
-            # def get_all_comuni_details(self) -> List[Dict[str, Any]]:
-            #     query = "SELECT comune_id AS id, nome_comune, codice_catastale, provincia, data_istituzione, data_soppressione, note FROM catasto.comuni ORDER BY nome_comune;"
-            #     if self.execute_query(query):
-            #         return self.fetchall()
-            #     return []
-
-            comuni_list = self.db_manager.get_all_comuni_details() # Assicurati che questo metodo esista e funzioni!
-            
-            if comuni_list:
-                self.comuni_table.setRowCount(len(comuni_list))
-                for row_idx, comune in enumerate(comuni_list):
-                    col = 0
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(comune.get('id', '')))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('nome_comune', ''))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('codice_catastale', ''))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('provincia', ''))); col+=1
-                    
-                    data_ist = comune.get('data_istituzione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_ist) if data_ist else '')); col+=1
-                    
-                    data_soppr = comune.get('data_soppressione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_soppr) if data_soppr else '')); col+=1
-                    
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('note', ''))); col+=1
-                
-                self.comuni_table.resizeColumnsToContents()
-            else:
-                gui_logger.info("Nessun comune trovato nel database.")
-                
-        except AttributeError as ae: # Se get_all_comuni_details non esiste
-            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_all_comuni_details' esista.")
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati comuni non trovata: {ae}")
-        except Exception as e:
-            gui_logger.error(f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
-        finally:
-            self.comuni_table.setSortingEnabled(True) # Riabilita sorting
-
-    def apply_filter(self):
-        """Filtra le righe della tabella in base al testo inserito."""
-        filter_text = self.filter_comuni_edit.text().strip().lower()
-        for row in range(self.comuni_table.rowCount()):
-            row_visible = False
-            if not filter_text: # Se il filtro è vuoto, mostra tutte le righe
-                row_visible = True
-            else:
-                for col in range(self.comuni_table.columnCount()):
-                    item = self.comuni_table.item(row, col)
-                    if item and filter_text in item.text().lower():
-                        row_visible = True
-                        break
-            self.comuni_table.setRowHidden(row, not row_visible)
-            
-    def _get_selected_comune_info(self) -> Optional[Tuple[int, str]]:
-        """Helper per ottenere ID e nome del comune correntemente selezionato nella tabella."""
-        selected_items = self.comuni_table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
-            return None
-        
-        row = self.comuni_table.currentRow() # selectedItems può dare più item se la selezione non è per riga
-                                           # currentRow è più sicuro per single row selection
-        if row < 0: # Nessuna riga effettivamente selezionata
-             QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
-             return None
-
-        try:
-            comune_id_item = self.comuni_table.item(row, 0) # Colonna ID
-            nome_comune_item = self.comuni_table.item(row, 1) # Colonna Nome Comune
-            
-            if comune_id_item and nome_comune_item:
-                comune_id = int(comune_id_item.text())
-                nome_comune = nome_comune_item.text()
-                return comune_id, nome_comune
-            else:
-                QMessageBox.warning(self, "Errore Selezione", "Impossibile recuperare ID o nome del comune dalla riga.")
-                return None
-        except ValueError:
-            QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
-            return None
-        except Exception as e:
-            gui_logger.error(f"Errore in _get_selected_comune_info: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore", f"Si è verificato un errore imprevisto: {e}")
-            return None
-
-    def mostra_partite_del_comune(self, item: QTableWidgetItem): # Questo è per il doppio click
-        """Apre un dialogo con le partite del comune selezionato tramite doppio click."""
-        # Questa funzione ora può usare l'helper se item è valido,
-        # o mantenere la sua logica se item è il modo primario per ottenere la riga.
-        if not item: return
-        row = item.row()
-        # ... (resto della logica di mostra_partite_del_comune come prima, usando 'row' per prendere ID e nome)
-        try:
-            comune_id_item = self.comuni_table.item(row, 0)
-            nome_comune_item = self.comuni_table.item(row, 1)
-            if comune_id_item and nome_comune_item:
-                comune_id = int(comune_id_item.text())
-                nome_comune = nome_comune_item.text()
-                dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
-                dialog.exec_()
-        except ValueError: QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
-        except Exception as e: gui_logger.error(f"Errore in mostra_partite_del_comune: {e}", exc_info=True); QMessageBox.critical(self, "Errore", f"Errore: {e}")
 
 
-    def azione_mostra_partite(self):
-        """Azione per il pulsante 'Mostra Partite del Comune'."""
-        selected_info = self._get_selected_comune_info()
-        if selected_info:
-            comune_id, nome_comune = selected_info
-            dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
-            dialog.exec_()
 
-    def azione_mostra_possessori(self): # NUOVO METODO
-        """Azione per il pulsante 'Mostra Possessori del Comune'."""
-        selected_info = self._get_selected_comune_info()
-        if selected_info:
-            comune_id, nome_comune = selected_info
-            dialog = PossessoriComuneDialog(self.db_manager, comune_id, nome_comune, self)
-            dialog.exec_()
 
 
 
@@ -1087,139 +910,7 @@ class EsportazioniWidget(QWidget):
                 # Non fare self.reject() qui, permette un altro tentativo o l'uscita manuale
 # --- Finestra di Creazione Utente ---
 # --- Finestra principale ---
-class CatastoMainWindow(QMainWindow):
-    def __init__(self):
-        super(CatastoMainWindow, self).__init__()
-        self.db_manager: Optional[CatastoDBManager] = None
-        self.logged_in_user_id: Optional[int] = None
-        self.logged_in_user_info: Optional[Dict] = None
-        self.current_session_id: Optional[str] = None
-        self.initUI()
 
-    def initUI(self):
-        self.setWindowTitle("Gestionale Catasto Storico - Archivio di Stato Savona")
-        self.setMinimumSize(1024, 768)
-        self.central_widget = QWidget()
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.create_status_bar_content()
-        self.tabs = QTabWidget()
-        self.main_layout.addWidget(self.tabs)
-        self.setCentralWidget(self.central_widget)
-        self.statusBar().showMessage("Pronto.")
-
-    def create_status_bar_content(self):
-        status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.StyledPanel)
-        status_layout = QHBoxLayout(status_frame)
-        self.db_status_label = QLabel("Database: Non connesso")
-        self.user_status_label = QLabel("Utente: Nessuno")
-        self.logout_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Logout")
-        self.logout_button.setToolTip("Effettua il logout dell'utente corrente")
-        self.logout_button.clicked.connect(self.handle_logout)
-        self.logout_button.setEnabled(False)
-        status_layout.addWidget(self.db_status_label)
-        status_layout.addSpacing(20)
-        status_layout.addWidget(self.user_status_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.logout_button)
-        self.main_layout.addWidget(status_frame)
-
-    def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
-        self.db_manager = db_manager
-        self.logged_in_user_id = user_id
-        self.logged_in_user_info = user_info
-        self.current_session_id = session_id
-        self.db_status_label.setText(f"Database: Connesso ({self.db_manager.conn_params.get('dbname')})")
-        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
-        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
-        self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
-        self.logout_button.setEnabled(True)
-        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
-        self.setup_tabs()
-        self.show()
-
-    def setup_tabs(self):
-        if not self.db_manager:
-            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
-            return
-        self.tabs.clear()
-
-        # Tab Consultazione (mantenuto come QTabWidget per sotto-tab)
-        consultazione_main_tab = QTabWidget() # Era QWidget, ora QTabWidget
-        consultazione_main_tab.addTab(RicercaPartiteWidget(self.db_manager), "Ricerca Partite")
-        # Qui puoi aggiungere altri sotto-tab per la consultazione se necessario
-        self.tabs.addTab(consultazione_main_tab, "Consultazione")
-        
-        # Tab Inserimento (mantenuto come QTabWidget per sotto-tab)
-        inserimento_main_tab = QTabWidget() # Era QWidget, ora QTabWidget
-        inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager), "Nuovo Possessore")
-        inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager), "Nuova Località")
-        # InserimentoComuneWidget non era definito, lo commento per ora
-        # inserimento_main_tab.addTab(InserimentoComuneWidget(self.db_manager), "Nuovo Comune") 
-        inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Proprietà")
-        self.tabs.addTab(inserimento_main_tab, "Inserimento e Gestione")
-
-        # Tab Esportazioni (NUOVO)
-        self.tabs.addTab(EsportazioniWidget(self.db_manager), "Esportazioni") # Aggiunto il nuovo widget
-
-        self.tabs.addTab(ReportisticaWidget(self.db_manager), "Reportistica")
-        self.tabs.addTab(StatisticheWidget(self.db_manager), "Statistiche e Viste")
-        self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info), "Gestione Utenti")
-        
-        sistema_tab = QTabWidget()
-        # AuditWidget e BackupWidget non erano definiti, li commento
-        # sistema_tab.addTab(AuditWidget(self.db_manager), "Audit Log")
-        # sistema_tab.addTab(BackupWidget(self.db_manager), "Backup")
-        # Per ora, il tab Sistema sarà vuoto o conterrà placeholder
-        placeholder_sistema = QWidget()
-        placeholder_sistema_layout = QVBoxLayout(placeholder_sistema)
-        placeholder_sistema_layout.addWidget(QLabel("Funzionalità di Sistema (Audit, Backup, Manutenzione) da implementare qui."))
-        sistema_tab.addTab(placeholder_sistema, "Info")
-        self.tabs.addTab(sistema_tab, "Sistema")
-
-        self.update_ui_based_on_role()
-
-    def update_ui_based_on_role(self):
-        if not self.logged_in_user_info:
-            for i in range(self.tabs.count()): self.tabs.setTabEnabled(i, False)
-            return
-        is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
-        is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
-        for i in range(self.tabs.count()): self.tabs.setTabEnabled(i, True)
-        
-        tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
-        if "Gestione Utenti" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
-        if "Sistema" in tab_indices: # Il tab Sistema è abilitato per admin e archivisti
-            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin or is_archivista)
-        # Potresti voler rendere il tab "Inserimento e Gestione" accessibile solo ad admin e archivisti
-        if "Inserimento e Gestione" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], is_admin or is_archivista)
-
-
-    def handle_logout(self):
-        if self.logged_in_user_id and self.current_session_id and self.db_manager:
-            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
-                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
-            else:
-                QMessageBox.warning(self, "Logout Fallito", "Errore durante la registrazione del logout.")
-            self.logged_in_user_id = None
-            self.logged_in_user_info = None
-            self.current_session_id = None
-            self.db_manager.clear_session_app_user()
-            self.user_status_label.setText("Utente: Nessuno")
-            self.logout_button.setEnabled(False)
-            self.statusBar().showMessage("Logout effettuato. Riavviare l'applicazione per un nuovo login.")
-            self.close()
-
-    def closeEvent(self, event):
-        if self.logged_in_user_id and self.current_session_id and self.db_manager:
-            gui_logger.info(f"Esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id} prima della chiusura...")
-            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
-        if self.db_manager:
-            self.db_manager.disconnect()
-        gui_logger.info("Applicazione GUI terminata.")
-        event.accept()
 
 # --- Widget per riepilogo dati immobili ---
 class ImmobiliTableWidget(QTableWidget):
@@ -1709,7 +1400,195 @@ class PartitaDetailsDialog(QDialog):
                 gui_logger.error(f"Errore durante l'esportazione JSON della partita: {e}")
                 QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
 
+class PartiteComuneDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.nome_comune = nome_comune
 
+        self.setWindowTitle(f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
+        self.setMinimumSize(800, 500) # Dimensioni generose per la tabella
+
+        layout = QVBoxLayout(self)
+
+        # Filtro (opzionale, per ora semplice tabella)
+        # Si potrebbe aggiungere un QLineEdit per filtrare le partite per numero o possessore
+
+        # Tabella Partite
+        self.partite_table = QTableWidget()
+        # ID, Numero, Tipo, Stato, Data Impianto, Possessori (stringa), Num. Immobili
+        self.partite_table.setColumnCount(7)
+        self.partite_table.setHorizontalHeaderLabels([
+            "ID Partita", "Numero", "Tipo", "Stato",
+            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili"
+        ])
+        self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.partite_table.setSelectionMode(QTableWidget.SingleSelection) # O ExtendedSelection se vuoi multiselezione
+        self.partite_table.setAlternatingRowColors(True)
+        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.partite_table.setSortingEnabled(True)
+        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata) # Per aprire PartitaDetailsDialog
+
+        layout.addWidget(self.partite_table)
+
+        # Pulsante Chiudi
+        self.close_button = QPushButton("Chiudi")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
+
+        self.setLayout(layout)
+        self.load_partite_data()
+
+    def load_partite_data(self):
+        """Carica le partite per il comune specificato."""
+        self.partite_table.setRowCount(0)
+        self.partite_table.setSortingEnabled(False)
+
+        try:
+            # Assumiamo che db_manager.get_partite_by_comune(comune_id) esista
+            # e restituisca una lista di dizionari con le chiavi necessarie.
+            # Dal tuo catasto_db_manager.py, la query in get_partite_by_comune include:
+            # p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
+            # p.data_chiusura, p.stato,
+            # string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
+            # COUNT(DISTINCT i.id) as num_immobili
+            partite_list = self.db_manager.get_partite_by_comune(self.comune_id) #
+
+            if partite_list:
+                self.partite_table.setRowCount(len(partite_list))
+                for row_idx, partita in enumerate(partite_list):
+                    col = 0
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col+=1
+                    
+                    data_imp = partita.get('data_impianto')
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col+=1
+                    
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col+=1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col+=1
+                
+                self.partite_table.resizeColumnsToContents()
+            else:
+                gui_logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id}")
+        except AttributeError as ae:
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_partite_by_comune' esista.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati partite non trovata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.partite_table.setSortingEnabled(True)
+
+    def apri_dettaglio_partita_selezionata(self, item):
+         """Apre il dialogo dei dettagli per la partita selezionata."""
+         if not item: return
+         row = item.row()
+         partita_id_str = self.partite_table.item(row, 0).text()
+         if partita_id_str.isdigit():
+             partita_id = int(partita_id_str)
+          # Il metodo get_partita_details già esiste nel tuo db_manager
+             partita_details_data = self.db_manager.get_partita_details(partita_id) #
+             if partita_details_data:
+                 # Assumendo che PartitaDetailsDialog esista e sia importato
+                 details_dialog = PartitaDetailsDialog(partita_details_data, self)
+                 details_dialog.exec_()
+             else:
+                 QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
+         else:
+             QMessageBox.warning(self, "ID Non Valido", "ID partita non valido nella riga selezionata.")
+class PossessoriComuneDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.nome_comune = nome_comune
+
+        self.setWindowTitle(f"Possessori del Comune di {self.nome_comune} (ID: {self.comune_id})")
+        self.setMinimumSize(800, 500)
+
+        layout = QVBoxLayout(self)
+
+        # Tabella Possessori
+        self.possessori_table = QTableWidget()
+        # ID, Nome Completo, Cognome/Nome (se disponibile), Paternità, Stato
+        self.possessori_table.setColumnCount(5) # Aggiunta colonna per Cognome/Nome
+        self.possessori_table.setHorizontalHeaderLabels([
+            "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Stato"
+        ])
+        self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.possessori_table.setAlternatingRowColors(True)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.possessori_table.setSortingEnabled(True)
+        # self.possessori_table.itemDoubleClicked.connect(self.apri_dettaglio_possessore_selezionato) # Per futuri dettagli
+
+        layout.addWidget(self.possessori_table)
+
+        # Pulsante Chiudi
+        self.close_button = QPushButton("Chiudi")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
+
+        self.setLayout(layout)
+        self.load_possessori_data()
+
+    def load_possessori_data(self):
+        """Carica i possessori per il comune specificato."""
+        self.possessori_table.setRowCount(0)
+        self.possessori_table.setSortingEnabled(False)
+
+        try:
+            # Utilizziamo il metodo che hai confermato esistere e funzionare:
+            # db_manager.get_possessori_by_comune(comune_id)
+            # Questo metodo, dal tuo codice, restituisce:
+            # pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita, pos.nome_completo, pos.attivo
+            possessori_list = self.db_manager.get_possessori_by_comune(self.comune_id) #
+
+            if possessori_list:
+                self.possessori_table.setRowCount(len(possessori_list))
+                for row_idx, possessore in enumerate(possessori_list):
+                    col = 0
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(str(possessore.get('id', '')))); col+=1
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('nome_completo', ''))); col+=1
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('cognome_nome', ''))); col+=1 # Da get_possessori_by_comune
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('paternita', ''))); col+=1
+                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(stato_str)); col+=1
+                
+                self.possessori_table.resizeColumnsToContents()
+            else:
+                gui_logger.info(f"Nessun possessore trovato per il comune ID: {self.comune_id}")
+        except AttributeError as ae:
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_possessori_by_comune' esista e sia corretto.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati possessori non trovata o errata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento dei possessori per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.possessori_table.setSortingEnabled(True)
+
+    # def apri_dettaglio_possessore_selezionato(self, item):
+    #     """Apre il dialogo dei dettagli per il possessore selezionato (DA IMPLEMENTARE)."""
+    #     if not item: return
+    #     row = item.row()
+    #     possessore_id_str = self.possessori_table.item(row, 0).text()
+    #     if possessore_id_str.isdigit():
+    #         possessore_id = int(possessore_id_str)
+    #         # Qui dovresti avere un DialogoDettagliPossessore e un metodo in db_manager
+    #         # per recuperare tutti i dettagli del possessore, incluse le partite associate.
+    #         # Esempio: possessore_details_data = self.db_manager.get_possessore_full_details(possessore_id)
+    #         # if possessore_details_data:
+    #         # details_dialog = DialogoDettagliPossessore(possessore_details_data, self)
+    #         # details_dialog.exec_()
+    #         QMessageBox.information(self, "Dettaglio Possessore", f"Dettaglio per ID {possessore_id} (da implementare)")
+    #     else:
+    #         QMessageBox.warning(self, "ID Non Valido", "ID possessore non valido.")
+             
 # --- Scheda per Inserimento Possessore ---
 
 class InserimentoPossessoreWidget(QWidget):
@@ -3610,401 +3489,7 @@ class PartitaSearchDialog(QDialog):
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
 
-class PartiteComuneDialog(QDialog):
-    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        self.comune_id = comune_id
-        self.nome_comune = nome_comune
 
-        self.setWindowTitle(f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
-        self.setMinimumSize(800, 500) # Dimensioni generose per la tabella
-
-        layout = QVBoxLayout(self)
-
-        # Filtro (opzionale, per ora semplice tabella)
-        # Si potrebbe aggiungere un QLineEdit per filtrare le partite per numero o possessore
-
-        # Tabella Partite
-        self.partite_table = QTableWidget()
-        # ID, Numero, Tipo, Stato, Data Impianto, Possessori (stringa), Num. Immobili
-        self.partite_table.setColumnCount(7)
-        self.partite_table.setHorizontalHeaderLabels([
-            "ID Partita", "Numero", "Tipo", "Stato",
-            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili"
-        ])
-        self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.partite_table.setSelectionMode(QTableWidget.SingleSelection) # O ExtendedSelection se vuoi multiselezione
-        self.partite_table.setAlternatingRowColors(True)
-        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.partite_table.setSortingEnabled(True)
-        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata) # Per aprire PartitaDetailsDialog
-
-        layout.addWidget(self.partite_table)
-
-        # Pulsante Chiudi
-        self.close_button = QPushButton("Chiudi")
-        self.close_button.clicked.connect(self.accept)
-        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
-
-        self.setLayout(layout)
-        self.load_partite_data()
-
-    def load_partite_data(self):
-        """Carica le partite per il comune specificato."""
-        self.partite_table.setRowCount(0)
-        self.partite_table.setSortingEnabled(False)
-
-        try:
-            # Assumiamo che db_manager.get_partite_by_comune(comune_id) esista
-            # e restituisca una lista di dizionari con le chiavi necessarie.
-            # Dal tuo catasto_db_manager.py, la query in get_partite_by_comune include:
-            # p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
-            # p.data_chiusura, p.stato,
-            # string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-            # COUNT(DISTINCT i.id) as num_immobili
-            partite_list = self.db_manager.get_partite_by_comune(self.comune_id) #
-
-            if partite_list:
-                self.partite_table.setRowCount(len(partite_list))
-                for row_idx, partita in enumerate(partite_list):
-                    col = 0
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col+=1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col+=1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col+=1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col+=1
-                    
-                    data_imp = partita.get('data_impianto')
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col+=1
-                    
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col+=1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col+=1
-                
-                self.partite_table.resizeColumnsToContents()
-            else:
-                gui_logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id}")
-        except AttributeError as ae:
-            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_partite_by_comune' esista.")
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati partite non trovata: {ae}")
-        except Exception as e:
-            gui_logger.error(f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
-        finally:
-            self.partite_table.setSortingEnabled(True)
-
-    def apri_dettaglio_partita_selezionata(self, item):
-         """Apre il dialogo dei dettagli per la partita selezionata."""
-         if not item: return
-         row = item.row()
-         partita_id_str = self.partite_table.item(row, 0).text()
-         if partita_id_str.isdigit():
-             partita_id = int(partita_id_str)
-          # Il metodo get_partita_details già esiste nel tuo db_manager
-             partita_details_data = self.db_manager.get_partita_details(partita_id) #
-             if partita_details_data:
-                 # Assumendo che PartitaDetailsDialog esista e sia importato
-                 details_dialog = PartitaDetailsDialog(partita_details_data, self)
-                 details_dialog.exec_()
-             else:
-                 QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
-         else:
-             QMessageBox.warning(self, "ID Non Valido", "ID partita non valido nella riga selezionata.")
-             
-class PossessoriComuneDialog(QDialog):
-    def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        self.comune_id = comune_id
-        self.nome_comune = nome_comune
-
-        self.setWindowTitle(f"Possessori del Comune di {self.nome_comune} (ID: {self.comune_id})")
-        self.setMinimumSize(800, 500)
-
-        layout = QVBoxLayout(self)
-
-        # Tabella Possessori
-        self.possessori_table = QTableWidget()
-        # ID, Nome Completo, Cognome/Nome (se disponibile), Paternità, Stato
-        self.possessori_table.setColumnCount(5) # Aggiunta colonna per Cognome/Nome
-        self.possessori_table.setHorizontalHeaderLabels([
-            "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Stato"
-        ])
-        self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.possessori_table.setAlternatingRowColors(True)
-        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.possessori_table.setSortingEnabled(True)
-        # self.possessori_table.itemDoubleClicked.connect(self.apri_dettaglio_possessore_selezionato) # Per futuri dettagli
-
-        layout.addWidget(self.possessori_table)
-
-        # Pulsante Chiudi
-        self.close_button = QPushButton("Chiudi")
-        self.close_button.clicked.connect(self.accept)
-        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
-
-        self.setLayout(layout)
-        self.load_possessori_data()
-
-    def load_possessori_data(self):
-        """Carica i possessori per il comune specificato."""
-        self.possessori_table.setRowCount(0)
-        self.possessori_table.setSortingEnabled(False)
-
-        try:
-            # Utilizziamo il metodo che hai confermato esistere e funzionare:
-            # db_manager.get_possessori_by_comune(comune_id)
-            # Questo metodo, dal tuo codice, restituisce:
-            # pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita, pos.nome_completo, pos.attivo
-            possessori_list = self.db_manager.get_possessori_by_comune(self.comune_id) #
-
-            if possessori_list:
-                self.possessori_table.setRowCount(len(possessori_list))
-                for row_idx, possessore in enumerate(possessori_list):
-                    col = 0
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(str(possessore.get('id', '')))); col+=1
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('nome_completo', ''))); col+=1
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('cognome_nome', ''))); col+=1 # Da get_possessori_by_comune
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(possessore.get('paternita', ''))); col+=1
-                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
-                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(stato_str)); col+=1
-                
-                self.possessori_table.resizeColumnsToContents()
-            else:
-                gui_logger.info(f"Nessun possessore trovato per il comune ID: {self.comune_id}")
-        except AttributeError as ae:
-            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_possessori_by_comune' esista e sia corretto.")
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati possessori non trovata o errata: {ae}")
-        except Exception as e:
-            gui_logger.error(f"Errore durante il caricamento dei possessori per comune ID {self.comune_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
-        finally:
-            self.possessori_table.setSortingEnabled(True)
-
-    # def apri_dettaglio_possessore_selezionato(self, item):
-    #     """Apre il dialogo dei dettagli per il possessore selezionato (DA IMPLEMENTARE)."""
-    #     if not item: return
-    #     row = item.row()
-    #     possessore_id_str = self.possessori_table.item(row, 0).text()
-    #     if possessore_id_str.isdigit():
-    #         possessore_id = int(possessore_id_str)
-    #         # Qui dovresti avere un DialogoDettagliPossessore e un metodo in db_manager
-    #         # per recuperare tutti i dettagli del possessore, incluse le partite associate.
-    #         # Esempio: possessore_details_data = self.db_manager.get_possessore_full_details(possessore_id)
-    #         # if possessore_details_data:
-    #         # details_dialog = DialogoDettagliPossessore(possessore_details_data, self)
-    #         # details_dialog.exec_()
-    #         QMessageBox.information(self, "Dettaglio Possessore", f"Dettaglio per ID {possessore_id} (da implementare)")
-    #     else:
-    #         QMessageBox.warning(self, "ID Non Valido", "ID possessore non valido.")
-
-
-
-# --- Finestra principale ---
-class CatastoMainWindow(QMainWindow):
-    def __init__(self):
-        super(CatastoMainWindow, self).__init__()
-        
-        self.db_manager = None
-        self.initUI()
-        self.connect_to_database()
-    
-    def initUI(self):
-        self.setWindowTitle("Gestionale Catasto Storico")
-        self.setMinimumSize(1000, 700)
-        
-        # Widget centrale
-        self.central_widget = QWidget()
-        self.central_layout = QVBoxLayout()
-        
-        # Area di stato
-        self.create_status_area()
-        
-        # Tabs principali
-        self.tabs = QTabWidget()
-        
-        # I tab effettivi verranno aggiunti dopo la connessione al database
-        
-        self.central_layout.addWidget(self.tabs)
-        self.central_widget.setLayout(self.central_layout)
-        self.setCentralWidget(self.central_widget)
-        
-        # Barra di stato
-        self.statusBar().showMessage("Pronto")
-    
-    def create_status_area(self):
-        """Crea l'area di stato in alto."""
-        status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.Box)
-        status_frame.setFrameShadow(QFrame.Sunken)
-        status_layout = QHBoxLayout()
-        
-        self.db_status_label = QLabel("Database: Non connesso")
-        self.user_status_label = QLabel("Utente: Nessuno")
-        
-        self.connect_button = QPushButton("Connetti")
-        self.connect_button.clicked.connect(self.connect_to_database)
-        
-        self.login_button = QPushButton("Login")
-        self.login_button.clicked.connect(self.handle_login)
-        self.login_button.setEnabled(False)
-        
-        self.logout_button = QPushButton("Logout")
-        self.logout_button.clicked.connect(self.handle_logout)
-        self.logout_button.setEnabled(False)
-        
-        status_layout.addWidget(self.db_status_label)
-        status_layout.addWidget(self.user_status_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.connect_button)
-        status_layout.addWidget(self.login_button)
-        status_layout.addWidget(self.logout_button)
-        
-        status_frame.setLayout(status_layout)
-        self.central_layout.addWidget(status_frame)
-    
-    def connect_to_database(self):
-        """Connette al database."""
-        try:
-            # Usa valori predefiniti da catasto_db_manager.py
-            self.db_manager = CatastoDBManager(
-                dbname="catasto_storico", 
-                user="postgres", 
-                password="Markus74", 
-                host="localhost", 
-                port=5432, 
-                schema="catasto"
-            )
-            
-            if self.db_manager.connect():
-                self.db_status_label.setText("Database: Connesso")
-                self.connect_button.setText("Riconnetti")
-                self.login_button.setEnabled(True)
-                
-                self.statusBar().showMessage("Connessione al database stabilita")
-                
-                # Inizializza i tab dopo la connessione
-                self.setup_tabs()
-            else:
-                QMessageBox.critical(self, "Errore", "Impossibile connettersi al database.")
-                self.db_status_label.setText("Database: ERRORE")
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore durante la connessione: {str(e)}")
-            gui_logger.error(f"Errore connessione database: {e}")
-    
-    def setup_tabs(self):
-        """Configura i tab principali dopo la connessione."""
-        # Pulisce i tab esistenti
-        self.tabs.clear()
-        
-        # Tab Consultazione
-        consultazione_tab = QTabWidget()
-        
-        # Sotto-tab di Consultazione
-        consultazione_tab.addTab(RicercaPartiteWidget(self.db_manager), "Ricerca Partite")
-        
-        # Aggiungi altri sotto-tab di consultazione qui...
-        
-        self.tabs.addTab(consultazione_tab, "Consultazione")
-        
-        # Tab Inserimento
-        inserimento_tab = QTabWidget()
-        
-        # Sotto-tab di Inserimento
-        inserimento_tab.addTab(InserimentoPossessoreWidget(self.db_manager), "Inserisci Possessore")
-        inserimento_tab.addTab(InserimentoLocalitaWidget(self.db_manager), "Inserisci Località")
-        inserimento_tab.addTab(RegistrazioneProprietaWidget(self.db_manager), "Registra Nuova Proprietà")
-        
-        # Aggiungi altri sotto-tab di inserimento qui...
-        
-        self.tabs.addTab(inserimento_tab, "Inserimento")
-        
-        # Tab Reportistica
-        self.tabs.addTab(ReportisticaWidget(self.db_manager), "Reportistica")
-        
-        # Tab Statistiche
-        self.tabs.addTab(StatisticheWidget(self.db_manager), "Statistiche")
-        
-        # Tab Utenti
-        utenti_tab = QWidget()
-        utenti_layout = QVBoxLayout()
-        
-        create_user_button = QPushButton("Crea Nuovo Utente")
-        create_user_button.clicked.connect(self.create_new_user)
-        
-        utenti_layout.addWidget(create_user_button)
-        utenti_layout.addStretch()
-        
-        utenti_tab.setLayout(utenti_layout)
-        self.tabs.addTab(utenti_tab, "Utenti")
-    
-    def handle_login(self):
-        """Gestisce il login utente."""
-        global logged_in_user_id, current_session_id
-        
-        if not self.db_manager:
-            QMessageBox.warning(self, "Attenzione", "Connettiti prima al database.")
-            return
-        
-        login_dialog = LoginDialog(self.db_manager, self)
-        result = login_dialog.exec_()
-        
-        if result == QDialog.Accepted and login_dialog.successful_login:
-            logged_in_user_id = login_dialog.user_id
-            current_session_id = login_dialog.session_id
-            
-            self.user_status_label.setText(f"Utente: ID {logged_in_user_id}")
-            self.login_button.setEnabled(False)
-            self.logout_button.setEnabled(True)
-            
-            self.statusBar().showMessage("Login effettuato con successo")
-    
-    def handle_logout(self):
-        """Gestisce il logout utente."""
-        global logged_in_user_id, current_session_id
-        
-        if logged_in_user_id and current_session_id and self.db_manager:
-            if self.db_manager.logout_user(logged_in_user_id, current_session_id, client_ip_address):
-                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
-            else:
-                QMessageBox.warning(self, "Attenzione", "Errore durante il logout.")
-            
-            logged_in_user_id = None
-            current_session_id = None
-            
-            self.user_status_label.setText("Utente: Nessuno")
-            self.login_button.setEnabled(True)
-            self.logout_button.setEnabled(False)
-            
-            self.statusBar().showMessage("Logout effettuato")
-    
-    def create_new_user(self):
-        """Apre la finestra di creazione nuovo utente."""
-        if not self.db_manager:
-            QMessageBox.warning(self, "Attenzione", "Connettiti prima al database.")
-            return
-        
-        create_dialog = CreateUserDialog(self.db_manager, self)
-        create_dialog.exec_()
-    
-    def closeEvent(self, event):
-        """Gestisce la chiusura dell'applicazione."""
-        global logged_in_user_id, current_session_id
-        
-        # Esegui logout automatico se necessario
-        if logged_in_user_id and current_session_id and self.db_manager:
-            self.db_manager.logout_user(logged_in_user_id, current_session_id, client_ip_address)
-            logged_in_user_id = None
-            current_session_id = None
-        
-        # Chiudi la connessione database
-        if self.db_manager:
-            self.db_manager.disconnect()
-        
-        event.accept()
-# --- Dialogo _seleziona_utente_da_elenco (per la GUI) ---
 class UserSelectionDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None, title="Seleziona Utente", exclude_user_id: Optional[int] = None):
         super().__init__(parent)
@@ -4065,144 +3550,7 @@ class UserSelectionDialog(QDialog):
 
 
 # --- Finestra Principale ---# --- Finestra principale ---
-class CatastoMainWindow(QMainWindow):
-    def __init__(self):
-        super(CatastoMainWindow, self).__init__()
-        self.db_manager: Optional[CatastoDBManager] = None
-        self.logged_in_user_id: Optional[int] = None
-        self.logged_in_user_info: Optional[Dict] = None
-        self.current_session_id: Optional[str] = None
-        self.initUI()
 
-    def initUI(self):
-        self.setWindowTitle("Gestionale Catasto Storico - Archivio di Stato Savona")
-        self.setMinimumSize(1024, 768)
-        self.central_widget = QWidget()
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.create_status_bar_content()
-        self.tabs = QTabWidget()
-        self.main_layout.addWidget(self.tabs)
-        self.setCentralWidget(self.central_widget)
-        self.statusBar().showMessage("Pronto.")
-
-    def create_status_bar_content(self):
-        status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.StyledPanel)
-        status_layout = QHBoxLayout(status_frame)
-        self.db_status_label = QLabel("Database: Non connesso")
-        self.user_status_label = QLabel("Utente: Nessuno")
-        self.logout_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Logout")
-        self.logout_button.setToolTip("Effettua il logout dell'utente corrente")
-        self.logout_button.clicked.connect(self.handle_logout)
-        self.logout_button.setEnabled(False)
-        status_layout.addWidget(self.db_status_label)
-        status_layout.addSpacing(20)
-        status_layout.addWidget(self.user_status_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.logout_button)
-        self.main_layout.addWidget(status_frame)
-
-    def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
-        self.db_manager = db_manager
-        self.logged_in_user_id = user_id
-        self.logged_in_user_info = user_info
-        self.current_session_id = session_id
-        self.db_status_label.setText(f"Database: Connesso ({self.db_manager.conn_params.get('dbname')})")
-        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
-        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
-        self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
-        self.logout_button.setEnabled(True)
-        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
-        self.setup_tabs()
-        self.show()
-
-    def setup_tabs(self):
-        if not self.db_manager:
-            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
-            return
-        self.tabs.clear()
-
-        # --- Tab Consultazione (ora è un QTabWidget che contiene sotto-tab) ---
-        self.consultazione_sub_tabs = QTabWidget() # Widget per i sotto-tab di consultazione
-        
-        # Sotto-tab Elenco Comuni Dettagliato (NUOVO)
-        self.consultazione_sub_tabs.addTab(ElencoComuniWidget(self.db_manager, self), "Elenco Comuni") # <--- NUOVO
-        
-        self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager, self), "Ricerca Partite")
-        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self), "Ricerca Possessori")
-        # self.consultazione_sub_tabs.addTab(RicercaImmobiliWidget(self.db_manager, self), "Ricerca Immobili") # Aggiungeremo dopo
-
-        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione")
-        # --------------------------------------------------------------------
-        
-        # Tab Inserimento e Gestione
-        inserimento_main_tab = QTabWidget()
-        inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager, self), "Nuovo Possessore")
-        inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager, self), "Nuova Località")
-        inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager, self), "Registra Proprietà")
-        self.tabs.addTab(inserimento_main_tab, "Inserimento e Gestione")
-
-        # Tab Ricerca Avanzata (quello che abbiamo creato prima)
-        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata")
-        
-        # Tab Esportazioni
-        self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni")
-
-        self.tabs.addTab(ReportisticaWidget(self.db_manager, self), "Reportistica")
-        self.tabs.addTab(StatisticheWidget(self.db_manager, self), "Statistiche e Viste")
-        
-        if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
-             self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
-
-        sistema_tab = QTabWidget()
-        placeholder_sistema = QWidget()
-        # ... (layout placeholder sistema) ...
-        sistema_tab.addTab(placeholder_sistema, "Info Sistema")
-        self.tabs.addTab(sistema_tab, "Sistema")
-
-        self.update_ui_based_on_role()
-
-    def update_ui_based_on_role(self):
-        if not self.logged_in_user_info:
-            for i in range(self.tabs.count()): self.tabs.setTabEnabled(i, False)
-            return
-        is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
-        is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
-        for i in range(self.tabs.count()): self.tabs.setTabEnabled(i, True)
-        
-        tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
-        if "Gestione Utenti" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
-        if "Sistema" in tab_indices: # Il tab Sistema è abilitato per admin e archivisti
-            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin or is_archivista)
-        # Potresti voler rendere il tab "Inserimento e Gestione" accessibile solo ad admin e archivisti
-        if "Inserimento e Gestione" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], is_admin or is_archivista)
-
-
-    def handle_logout(self):
-        if self.logged_in_user_id and self.current_session_id and self.db_manager:
-            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
-                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
-            else:
-                QMessageBox.warning(self, "Logout Fallito", "Errore durante la registrazione del logout.")
-            self.logged_in_user_id = None
-            self.logged_in_user_info = None
-            self.current_session_id = None
-            self.db_manager.clear_session_app_user()
-            self.user_status_label.setText("Utente: Nessuno")
-            self.logout_button.setEnabled(False)
-            self.statusBar().showMessage("Logout effettuato. Riavviare l'applicazione per un nuovo login.")
-            self.close()
-
-    def closeEvent(self, event):
-        if self.logged_in_user_id and self.current_session_id and self.db_manager:
-            gui_logger.info(f"Esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id} prima della chiusura...")
-            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
-        if self.db_manager:
-            self.db_manager.disconnect()
-        gui_logger.info("Applicazione GUI terminata.")
-        event.accept()
 # --- Widget per la Gestione Utenti ---
 class GestioneUtentiWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, current_user_info: Optional[Dict], parent=None):
@@ -4563,105 +3911,780 @@ class BackupWidget(QWidget): # Esempio
         self.db_manager = db_manager
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Widget Backup (TODO)"))
+
+
+class RicercaAvanzataImmobiliWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.selected_comune_id: Optional[int] = None
+        self.selected_localita_id: Optional[int] = None
+
+        main_layout = QVBoxLayout(self)
+
+        criteria_group = QGroupBox("Criteri di Ricerca Avanzata Immobili")
+        criteria_layout = QGridLayout(criteria_group)
+
+        # Riga 0: Comune
+        criteria_layout.addWidget(QLabel("Comune:"), 0, 0)
+        self.comune_display_label = QLabel("Qualsiasi comune")
+        criteria_layout.addWidget(self.comune_display_label, 0, 1)
+        self.btn_seleziona_comune = QPushButton("Seleziona...")
+        self.btn_seleziona_comune.clicked.connect(self._seleziona_comune_per_ricerca)
+        criteria_layout.addWidget(self.btn_seleziona_comune, 0, 2)
+        self.btn_reset_comune = QPushButton("Reset")
+        self.btn_reset_comune.clicked.connect(self._reset_comune_ricerca)
+        criteria_layout.addWidget(self.btn_reset_comune, 0, 3)
+
+        # Riga 1: Località
+        criteria_layout.addWidget(QLabel("Località:"), 1, 0)
+        self.localita_display_label = QLabel("Qualsiasi località")
+        criteria_layout.addWidget(self.localita_display_label, 1, 1)
+        self.btn_seleziona_localita = QPushButton("Seleziona...")
+        self.btn_seleziona_localita.clicked.connect(self._seleziona_localita_per_ricerca)
+        self.btn_seleziona_localita.setEnabled(False)
+        criteria_layout.addWidget(self.btn_seleziona_localita, 1, 2)
+        self.btn_reset_localita = QPushButton("Reset")
+        self.btn_reset_localita.clicked.connect(self._reset_localita_ricerca)
+        criteria_layout.addWidget(self.btn_reset_localita, 1, 3)
+
+        # Riga 2: Natura e Classificazione
+        criteria_layout.addWidget(QLabel("Natura Immobile:"), 2, 0)
+        self.natura_edit = QLineEdit()
+        self.natura_edit.setPlaceholderText("Es. Casa, Terreno (lascia vuoto per qualsiasi)")
+        criteria_layout.addWidget(self.natura_edit, 2, 1, 1, 3)
+
+        criteria_layout.addWidget(QLabel("Classificazione:"), 3, 0)
+        self.classificazione_edit = QLineEdit()
+        self.classificazione_edit.setPlaceholderText("Es. Abitazione civile, Oliveto (lascia vuoto per qualsiasi)")
+        criteria_layout.addWidget(self.classificazione_edit, 3, 1, 1, 3)
         
+        # Riga 4: Consistenza (come testo per ricerca parziale)
+        criteria_layout.addWidget(QLabel("Testo Consistenza:"), 4, 0)
+        self.consistenza_search_edit = QLineEdit()
+        self.consistenza_search_edit.setPlaceholderText("Es. 120, are, vani (ricerca parziale)")
+        criteria_layout.addWidget(self.consistenza_search_edit, 4, 1, 1, 3)
 
-# --- Blocco Main dell'Applicazione GUI ---
-def run_gui_app():
-    app = QApplication(sys.argv)
-    if not FPDF_AVAILABLE: # Mostra avviso all'avvio dell'app
-        QMessageBox.warning(None, "Avviso Dipendenza Mancante", 
-                            "La libreria FPDF non è installata.\n"
-                            "L'esportazione dei report in formato PDF non sarà disponibile.\n"
-                            "Puoi installarla con: pip install fpdf2")
+        # Riga 5: Numero Piani
+        criteria_layout.addWidget(QLabel("Piani Min:"), 5, 0)
+        self.piani_min_spinbox = QSpinBox()
+        self.piani_min_spinbox.setMinimum(0); self.piani_min_spinbox.setValue(0)
+        criteria_layout.addWidget(self.piani_min_spinbox, 5, 1)
+        criteria_layout.addWidget(QLabel("Piani Max:"), 5, 2)
+        self.piani_max_spinbox = QSpinBox()
+        self.piani_max_spinbox.setMinimum(0); self.piani_max_spinbox.setMaximum(99); self.piani_max_spinbox.setValue(0)
+        self.piani_max_spinbox.setSpecialValueText("Qualsiasi")
+        criteria_layout.addWidget(self.piani_max_spinbox, 5, 3)
 
-    db_config_gui = {
-        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
-        "host": "localhost", "port": 5432, "schema": "catasto"
-    }
-    db_manager_gui = CatastoDBManager(**db_config_gui)
+        # Riga 6: Numero Vani
+        criteria_layout.addWidget(QLabel("Vani Min:"), 6, 0)
+        self.vani_min_spinbox = QSpinBox()
+        self.vani_min_spinbox.setMinimum(0); self.vani_min_spinbox.setValue(0)
+        criteria_layout.addWidget(self.vani_min_spinbox, 6, 1)
+        criteria_layout.addWidget(QLabel("Vani Max:"), 6, 2)
+        self.vani_max_spinbox = QSpinBox()
+        self.vani_max_spinbox.setMinimum(0); self.vani_max_spinbox.setMaximum(999); self.vani_max_spinbox.setValue(0)
+        self.vani_max_spinbox.setSpecialValueText("Qualsiasi")
+        criteria_layout.addWidget(self.vani_max_spinbox, 6, 3)
+        
+        # Riga 7: Nome Possessore (NUOVO CAMPO)
+        criteria_layout.addWidget(QLabel("Nome Possessore:"), 7, 0)
+        self.nome_possessore_edit = QLineEdit()
+        self.nome_possessore_edit.setPlaceholderText("Ricerca parziale nome possessore (lascia vuoto per qualsiasi)")
+        criteria_layout.addWidget(self.nome_possessore_edit, 7, 1, 1, 3)
 
-    if not db_manager_gui.connect():
-        QMessageBox.critical(None, "Errore Connessione Database",
-                             "Impossibile connettersi al database.\n"
-                             "Verifica i parametri di connessione e che il server PostgreSQL sia in esecuzione.\n"
-                             "L'applicazione verrà chiusa.")
-        sys.exit(1)
+        main_layout.addWidget(criteria_group)
 
-    main_window = None
-    while True:
-        login_dialog = LoginDialog(db_manager_gui)
-        if login_dialog.exec_() == QDialog.Accepted:
-            main_window = CatastoMainWindow()
-            main_window.perform_initial_setup(
-                db_manager_gui,
-                login_dialog.logged_in_user_id,
-                login_dialog.logged_in_user_info,
-                login_dialog.current_session_id
+        self.btn_esegui_ricerca_immobili = QPushButton("Esegui Ricerca Immobili")
+        self.btn_esegui_ricerca_immobili.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton))
+        self.btn_esegui_ricerca_immobili.clicked.connect(self._esegui_ricerca_effettiva)
+        main_layout.addWidget(self.btn_esegui_ricerca_immobili)
+
+        results_group = QGroupBox("Risultati Ricerca")
+        results_layout = QVBoxLayout(results_group)
+        self.risultati_immobili_table = QTableWidget()
+        # Colonne basate sulla funzione SQL cerca_immobili_avanzato
+        self.risultati_immobili_table.setColumnCount(10) 
+        self.risultati_immobili_table.setHorizontalHeaderLabels([
+            "ID Imm.", "Part. N.", "Comune", "Località", "Natura", 
+            "Class.", "Consist.", "Piani", "Vani", "Possessori"
+        ])
+        self.risultati_immobili_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.risultati_immobili_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.risultati_immobili_table.setAlternatingRowColors(True)
+        self.risultati_immobili_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents) # ResizeToContents
+        self.risultati_immobili_table.horizontalHeader().setStretchLastSection(True) # Ultima colonna stretch
+        self.risultati_immobili_table.setSortingEnabled(True)
+        results_layout.addWidget(self.risultati_immobili_table)
+        main_layout.addWidget(results_group)
+
+        self.setLayout(main_layout)
+
+    def _seleziona_comune_per_ricerca(self):
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_comune_id:
+            self.selected_comune_id = dialog.selected_comune_id
+            self.comune_display_label.setText(f"{dialog.selected_comune_name} (ID: {self.selected_comune_id})")
+            self.btn_seleziona_localita.setEnabled(True)
+            self._reset_localita_ricerca()
+        elif not self.selected_comune_id:
+            self.comune_display_label.setText("Qualsiasi comune")
+            self.btn_seleziona_localita.setEnabled(False)
+
+    def _reset_comune_ricerca(self):
+        self.selected_comune_id = None
+        self.comune_display_label.setText("Qualsiasi comune")
+        self.btn_seleziona_localita.setEnabled(False)
+        self._reset_localita_ricerca()
+
+    def _seleziona_localita_per_ricerca(self):
+        if not self.selected_comune_id:
+            QMessageBox.warning(self, "Comune Mancante", "Seleziona prima un comune per filtrare le località.")
+            return
+        dialog = LocalitaSelectionDialog(self.db_manager, self.selected_comune_id, self) # Usa LocalitaSelectionDialog
+        dialog.setWindowTitle(f"Seleziona Località per Comune ID: {self.selected_comune_id}")
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_localita_id:
+            self.selected_localita_id = dialog.selected_localita_id
+            self.localita_display_label.setText(f"{dialog.selected_localita_name} (ID: {self.selected_localita_id})")
+        elif not self.selected_localita_id:
+            self.localita_display_label.setText("Qualsiasi località")
+
+    def _reset_localita_ricerca(self):
+        self.selected_localita_id = None
+        self.localita_display_label.setText("Qualsiasi località")
+
+    def _esegui_ricerca_effettiva(self):
+        p_comune_id = self.selected_comune_id
+        p_localita_id = self.selected_localita_id
+        p_natura = self.natura_edit.text().strip() or None
+        p_classificazione = self.classificazione_edit.text().strip() or None
+        p_consistenza_search = self.consistenza_search_edit.text().strip() or None # Campo unico per ricerca testuale consistenza
+
+        p_piani_min = self.piani_min_spinbox.value() if self.piani_min_spinbox.value() > 0 else None
+        p_piani_max = self.piani_max_spinbox.value() if self.piani_max_spinbox.value() != 0 else None # 0 è speciale "Qualsiasi"
+
+        p_vani_min = self.vani_min_spinbox.value() if self.vani_min_spinbox.value() > 0 else None
+        p_vani_max = self.vani_max_spinbox.value() if self.vani_max_spinbox.value() != 0 else None
+
+        p_nome_possessore = self.nome_possessore_edit.text().strip() or None
+
+        try:
+            immobili_trovati = self.db_manager.ricerca_avanzata_immobili_gui(
+                comune_id=p_comune_id,
+                localita_id=p_localita_id,
+                natura_search=p_natura,
+                classificazione_search=p_classificazione,
+                consistenza_search=p_consistenza_search,
+                piani_min=p_piani_min,
+                piani_max=p_piani_max,
+                vani_min=p_vani_min,
+                vani_max=p_vani_max,
+                nome_possessore_search=p_nome_possessore,
+                data_inizio_possesso_search=None, # Non ancora in GUI
+                data_fine_possesso_search=None    # Non ancora in GUI
             )
-            break
-        else:
-            gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
-            db_manager_gui.disconnect()
-            sys.exit(0)
 
-    if main_window:
-        exit_code = app.exec_()
-        sys.exit(exit_code)
+            self.risultati_immobili_table.setRowCount(0)
+            if immobili_trovati:
+                self.risultati_immobili_table.setRowCount(len(immobili_trovati))
+                for row_idx, immobile in enumerate(immobili_trovati):
+                    col = 0
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', '')))); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', '')))); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(immobile.get('comune_nome', ''))); col+=1
+                    localita_display = f"{immobile.get('localita_nome', '')}"
+                    if immobile.get('civico'):
+                        localita_display += f", {immobile.get('civico')}"
+                    if immobile.get('localita_tipo'):
+                        localita_display += f" ({immobile.get('localita_tipo')})"
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(localita_display.strip())); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(immobile.get('natura', ''))); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(immobile.get('classificazione', ''))); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(immobile.get('consistenza', ''))); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else '')); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else '')); col+=1
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', ''))); col+=1 # Campo dalla funzione SQL
+                
+                # self.risultati_immobili_table.resizeColumnsToContents() # Potrebbe essere lento con molti dati
+                QMessageBox.information(self, "Ricerca Completata", f"Trovati {len(immobili_trovati)} immobili.")
+            else:
+                QMessageBox.information(self, "Ricerca Completata", "Nessun immobile trovato con i criteri specificati.")
+        except AttributeError as ae:
+             gui_logger.error(f"Metodo di ricerca immobili non trovato nel db_manager: {ae}", exc_info=True)
+             QMessageBox.critical(self, "Errore Interno", f"Funzionalità di ricerca non implementata correttamente nel gestore DB: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante la ricerca avanzata immobili: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore imprevisto: {e}")
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
+class ElencoComuniWidget(QWidget):
+    def __init__(self, db_manager: CatastoDBManager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        
+        layout = QVBoxLayout(self)
+        
+        comuni_group = QGroupBox("Elenco Comuni Registrati")
+        comuni_layout = QVBoxLayout(comuni_group)
+        
+        # ... (filter_comuni_edit e comuni_table come prima) ...
+        self.filter_comuni_edit = QLineEdit()
+        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia...")
+        self.filter_comuni_edit.textChanged.connect(self.apply_filter)
+        comuni_layout.addWidget(self.filter_comuni_edit)
 
-    # Esempio: aumenta la dimensione del font di tutti i widget di 1pt
-    # Per un controllo più fine, puoi specificare i widget: QLabel { font-size: 10pt; }
-    # Nota: i valori di stylesheet potrebbero sovrascrivere il font globale impostato con app.setFont()
-    # Potresti dover trovare un valore assoluto che ti soddisfi, es. '11pt' invece di '+1'
-    # o sperimentare con percentuali se supportato.
-    # Qui usiamo una dimensione fissa come esempio.
-    # Per incrementare, dovresti leggere il font corrente, cosa più complessa con gli stylesheet puri.
-    # Una dimensione fissa è più semplice:
-    app.setStyleSheet("* { font-size: 11pt; }") # Imposta tutti i widget a 10pt
-    # Oppure per un leggero aumento rispetto al default, potresti provare con em o % se la versione di Qt lo supporta bene.
-    # app.setStyleSheet("QWidget { font-size: 1.1em; }") # Prova a incrementare del 10%
-    run_gui_app()
-    
-    # Imposta un tema più moderno
-    palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(53, 53, 53))
-    palette.setColor(QPalette.WindowText, Qt.white)
-    palette.setColor(QPalette.Base, QColor(25, 25, 25))
-    palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
-    palette.setColor(QPalette.ToolTipBase, Qt.white)
-    palette.setColor(QPalette.ToolTipText, Qt.white)
-    palette.setColor(QPalette.Text, Qt.white)
-    palette.setColor(QPalette.Button, QColor(53, 53, 53))
-    palette.setColor(QPalette.ButtonText, Qt.white)
-    palette.setColor(QPalette.BrightText, Qt.red)
-    palette.setColor(QPalette.Link, QColor(42, 130, 218))
-    palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-    palette.setColor(QPalette.HighlightedText, Qt.black)
-    app.setPalette(palette)
-    
-    def apri_dialog_inserimento_comune(self):
-        if not self.db_manager: # Assicurarsi che db_manager sia inizializzato
+        self.comuni_table = QTableWidget()
+        self.comuni_table.setColumnCount(7) 
+        self.comuni_table.setHorizontalHeaderLabels([
+            "ID", "Nome Comune", "Cod. Catastale", "Provincia", 
+            "Data Istituzione", "Data Soppressione", "Note"
+        ])
+        self.comuni_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.comuni_table.setAlternatingRowColors(True)
+        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.comuni_table.setSortingEnabled(True)
+        self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune)
+        comuni_layout.addWidget(self.comuni_table)
+
+        # === NUOVI PULSANTI PER AZIONI SUL COMUNE SELEZIONATO ===
+        action_buttons_layout = QHBoxLayout()
+        self.btn_mostra_partite = QPushButton("Mostra Partite del Comune")
+        self.btn_mostra_partite.clicked.connect(self.azione_mostra_partite)
+        action_buttons_layout.addWidget(self.btn_mostra_partite)
+
+        self.btn_mostra_possessori = QPushButton("Mostra Possessori del Comune") # NUOVO
+        self.btn_mostra_possessori.clicked.connect(self.azione_mostra_possessori) # NUOVO
+        action_buttons_layout.addWidget(self.btn_mostra_possessori) # NUOVO
+
+         # === VERIFICA QUESTA SEZIONE ===
+        self.btn_mostra_localita = QPushButton("Mostra Località del comune") # 1. Creazione del pulsante
+        self.btn_mostra_localita.setToolTip("Mostra le località del comune selezionato")
+        self.btn_mostra_localita.clicked.connect(self.azione_mostra_localita) # 2. Connessione al metodo
+        action_buttons_layout.addWidget(self.btn_mostra_localita) # 3. Aggiunta al layout dei pulsanti
+        # ===============================
+        action_buttons_layout.addStretch()
+        comuni_layout.addLayout(action_buttons_layout)
+        # =======================================================
+        
+        layout.addWidget(comuni_group)
+        self.setLayout(layout)
+        
+        self.load_comuni_data()
+
+    def load_comuni_data(self):
+        """Carica i dati di tutti i comuni nella tabella."""
+        self.comuni_table.setRowCount(0) # Pulisce la tabella
+        self.comuni_table.setSortingEnabled(False) # Disabilita sorting durante il caricamento
+        
+        try:
+            # Assumiamo che db_manager.get_all_comuni_details() esista e restituisca tutti i campi.
+            # Se non esiste, dobbiamo crearlo o adattare un metodo esistente.
+            # get_comuni() potrebbe non bastare se non restituisce tutti i dettagli.
+            # Per ora, creiamo un ipotetico get_all_comuni_details basato sullo schema.
+            
+            # Metodo ipotetico in CatastoDBManager:
+            # def get_all_comuni_details(self) -> List[Dict[str, Any]]:
+            #     query = "SELECT comune_id AS id, nome_comune, codice_catastale, provincia, data_istituzione, data_soppressione, note FROM catasto.comuni ORDER BY nome_comune;"
+            #     if self.execute_query(query):
+            #         return self.fetchall()
+            #     return []
+
+            comuni_list = self.db_manager.get_all_comuni_details() # Assicurati che questo metodo esista e funzioni!
+            
+            if comuni_list:
+                self.comuni_table.setRowCount(len(comuni_list))
+                for row_idx, comune in enumerate(comuni_list):
+                    col = 0
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(comune.get('id', '')))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('nome_comune', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('codice_catastale', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('provincia', ''))); col+=1
+                    
+                    data_ist = comune.get('data_istituzione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_ist) if data_ist else '')); col+=1
+                    
+                    data_soppr = comune.get('data_soppressione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_soppr) if data_soppr else '')); col+=1
+                    
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('note', ''))); col+=1
+                
+                self.comuni_table.resizeColumnsToContents()
+            else:
+                gui_logger.info("Nessun comune trovato nel database.")
+                
+        except AttributeError as ae: # Se get_all_comuni_details non esiste
+            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_all_comuni_details' esista.")
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati comuni non trovata: {ae}")
+        except Exception as e:
+            gui_logger.error(f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.comuni_table.setSortingEnabled(True) # Riabilita sorting
+
+    def apply_filter(self):
+        """Filtra le righe della tabella in base al testo inserito."""
+        filter_text = self.filter_comuni_edit.text().strip().lower()
+        for row in range(self.comuni_table.rowCount()):
+            row_visible = False
+            if not filter_text: # Se il filtro è vuoto, mostra tutte le righe
+                row_visible = True
+            else:
+                for col in range(self.comuni_table.columnCount()):
+                    item = self.comuni_table.item(row, col)
+                    if item and filter_text in item.text().lower():
+                        row_visible = True
+                        break
+            self.comuni_table.setRowHidden(row, not row_visible)
+            
+    def _get_selected_comune_info(self) -> Optional[Tuple[int, str]]:
+        """Helper per ottenere ID e nome del comune correntemente selezionato nella tabella."""
+        selected_items = self.comuni_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+            return None
+        
+        row = self.comuni_table.currentRow() # selectedItems può dare più item se la selezione non è per riga
+                                           # currentRow è più sicuro per single row selection
+        if row < 0: # Nessuna riga effettivamente selezionata
+             QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+             return None
+
+        try:
+            comune_id_item = self.comuni_table.item(row, 0) # Colonna ID
+            nome_comune_item = self.comuni_table.item(row, 1) # Colonna Nome Comune
+            
+            if comune_id_item and nome_comune_item:
+                comune_id = int(comune_id_item.text())
+                nome_comune = nome_comune_item.text()
+                return comune_id, nome_comune
+            else:
+                QMessageBox.warning(self, "Errore Selezione", "Impossibile recuperare ID o nome del comune dalla riga.")
+                return None
+        except ValueError:
+            QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
+            return None
+        except Exception as e:
+            gui_logger.error(f"Errore in _get_selected_comune_info: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Si è verificato un errore imprevisto: {e}")
+            return None
+
+    def mostra_partite_del_comune(self, item: QTableWidgetItem): # Questo è per il doppio click
+        """Apre un dialogo con le partite del comune selezionato tramite doppio click."""
+        # Questa funzione ora può usare l'helper se item è valido,
+        # o mantenere la sua logica se item è il modo primario per ottenere la riga.
+        if not item: return
+        row = item.row()
+        # ... (resto della logica di mostra_partite_del_comune come prima, usando 'row' per prendere ID e nome)
+        try:
+            comune_id_item = self.comuni_table.item(row, 0)
+            nome_comune_item = self.comuni_table.item(row, 1)
+            if comune_id_item and nome_comune_item:
+                comune_id = int(comune_id_item.text())
+                nome_comune = nome_comune_item.text()
+                dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+                dialog.exec_()
+        except ValueError: QMessageBox.warning(self, "Errore Dati", "L'ID del comune non è un numero valido.")
+        except Exception as e: gui_logger.error(f"Errore in mostra_partite_del_comune: {e}", exc_info=True); QMessageBox.critical(self, "Errore", f"Errore: {e}")
+
+
+    def azione_mostra_partite(self):
+        """Azione per il pulsante 'Mostra Partite del Comune'."""
+        selected_info = self._get_selected_comune_info()
+        if selected_info:
+            comune_id, nome_comune = selected_info
+            dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+            dialog.exec_()
+
+    def azione_mostra_possessori(self): # NUOVO METODO
+        """Azione per il pulsante 'Mostra Possessori del Comune'."""
+        selected_info = self._get_selected_comune_info()
+        if selected_info:
+            comune_id, nome_comune = selected_info
+            dialog = PossessoriComuneDialog(self.db_manager, comune_id, nome_comune, self)
+            dialog.exec_()
+            
+    def azione_mostra_localita(self):
+        """Azione per il pulsante 'Mostra Località del Comune'.
+        Usa la LocalitaSelectionDialog esistente per visualizzazione."""
+        selected_info = self._get_selected_comune_info()
+        if selected_info:
+            comune_id, nome_comune = selected_info
+
+            # Usa la tua classe LocalitaSelectionDialog esistente
+            dialog = LocalitaSelectionDialog(self.db_manager, comune_id, self) # Passa 'self' come parent
+
+            # Opzionale: personalizza il titolo se vuoi che sia diverso da "Seleziona Località"
+            # quando viene aperta solo per consultazione.
+            dialog.setWindowTitle(f"Località del Comune di {nome_comune} (ID: {comune_id})")
+
+            # .exec_() aprirà il dialogo in modo modale.
+            # L'utente potrà vedere le località nel tab "Seleziona Esistente".
+            # Non ci interessa il valore restituito (selected_localita_id) in questo contesto.
+            dialog.exec_()     
+# ... (altre importazioni e classi definite prima, come LoginDialog, CreateUserDialog, vari Widget dei tab, ecc.)
+# ASSICURARSI CHE TUTTE LE CLASSI WIDGET DEI TAB (ElencoComuniWidget, RicercaPartiteWidget, ecc.)
+# SIANO DEFINITE PRIMA DI CatastoMainWindow
+
+class CatastoMainWindow(QMainWindow):
+    def __init__(self):
+        super(CatastoMainWindow, self).__init__()
+        self.db_manager: Optional[CatastoDBManager] = None
+        self.logged_in_user_id: Optional[int] = None
+        self.logged_in_user_info: Optional[Dict] = None
+        self.current_session_id: Optional[str] = None
+
+        # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
+        self.consultazione_sub_tabs = QTabWidget()
+        self.inserimento_main_tab = QTabWidget()
+        # Aggiungere altri se necessario (es. per Sistema)
+
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("Gestionale Catasto Storico - Archivio di Stato Savona")
+        self.setMinimumSize(1280, 720) # Dimensioni minime suggerite
+        self.central_widget = QWidget()
+        self.main_layout = QVBoxLayout(self.central_widget)
+
+        self.create_status_bar_content() # Barra di stato personalizzata in alto
+
+        self.tabs = QTabWidget() # Il QTabWidget principale per le sezioni
+        self.main_layout.addWidget(self.tabs)
+        self.setCentralWidget(self.central_widget)
+
+        self.statusBar().showMessage("Pronto.")
+        # self.create_menu_bar() # Opzionale, se si desidera un menu bar tradizionale
+
+    # Esempio di Menu Bar (opzionale)
+    # def create_menu_bar(self):
+    #     menu_bar = self.menuBar()
+    #     file_menu = menu_bar.addMenu("&File")
+
+    #     nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileIcon), "Nuovo &Comune...", self)
+    #     nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
+    #     nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
+    #     file_menu.addAction(nuovo_comune_action)
+    #     # Qui si possono aggiungere altre azioni al menu File
+
+    #     file_menu.addSeparator()
+    #     exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
+    #     exit_action.setStatusTip("Chiudi l'applicazione")
+    #     exit_action.triggered.connect(self.close) # Chiama closeEvent
+    #     file_menu.addAction(exit_action)
+
+        # admin_menu = menu_bar.addMenu("&Amministrazione")
+        # gestione_utenti_action = QAction("Gestione &Utenti", self)
+        # # gestione_utenti_action.triggered.connect(self.apri_gestione_utenti_tab) # Metodo per aprire il tab utenti
+        # admin_menu.addAction(gestione_utenti_action)
+
+
+    def create_status_bar_content(self):
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.StyledPanel)
+        status_frame.setFrameShadow(QFrame.Sunken)
+        status_layout = QHBoxLayout(status_frame)
+
+        self.db_status_label = QLabel("Database: Non connesso")
+        self.user_status_label = QLabel("Utente: Nessuno")
+
+        # Pulsante per Inserimento Nuovo Comune (spostato qui per accessibilità)
+        self.btn_nuovo_comune_toolbar = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo Comune") # Icona cambiata
+        self.btn_nuovo_comune_toolbar.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
+        self.btn_nuovo_comune_toolbar.clicked.connect(self.apri_dialog_inserimento_comune)
+        self.btn_nuovo_comune_toolbar.setEnabled(False) # Abilitato dopo login e in base al ruolo
+
+        self.logout_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Logout")
+        self.logout_button.setToolTip("Effettua il logout dell'utente corrente")
+        self.logout_button.clicked.connect(self.handle_logout)
+        self.logout_button.setEnabled(False)
+
+        status_layout.addWidget(self.db_status_label)
+        status_layout.addSpacing(20)
+        status_layout.addWidget(self.user_status_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.btn_nuovo_comune_toolbar)
+        status_layout.addSpacing(10)
+        status_layout.addWidget(self.logout_button)
+        self.main_layout.addWidget(status_frame)
+
+    def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
+        self.db_manager = db_manager
+        self.logged_in_user_id = user_id
+        self.logged_in_user_info = user_info
+        self.current_session_id = session_id
+
+        db_name = "N/D"
+        if hasattr(self.db_manager, 'conn_params') and self.db_manager.conn_params: # Controllo robustezza
+            db_name = self.db_manager.conn_params.get('dbname', 'N/D')
+        self.db_status_label.setText(f"Database: Connesso ({db_name})")
+
+        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
+        self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
+
+        self.logout_button.setEnabled(True)
+        # L'abilitazione di btn_nuovo_comune_toolbar è gestita da update_ui_based_on_role
+
+        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+        self.setup_tabs() # Configura i tab
+        self.update_ui_based_on_role() # Applica i permessi UI subito dopo aver impostato i tab
+        self.show()
+
+    def setup_tabs(self):
+        if not self.db_manager:
+            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
+            QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato. Impossibile caricare i tab.")
+            return
+        self.tabs.clear() # Pulisce i tab esistenti prima di ricrearli
+
+        # --- Tab Consultazione (QTabWidget per contenere sotto-tab) ---
+        self.consultazione_sub_tabs.clear() # Pulisce i sotto-tab precedenti
+        self.consultazione_sub_tabs.addTab(ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs), "Elenco Comuni")
+        self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Partite")
+        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Possessori")
+        self.consultazione_sub_tabs.addTab(RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Immobili Avanzata")
+        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione")
+
+        # --- Tab Inserimento e Gestione (QTabWidget per sotto-tab) ---
+        self.inserimento_main_tab.clear()
+        self.inserimento_main_tab.addTab(InserimentoPossessoreWidget(self.db_manager, self.inserimento_main_tab), "Nuovo Possessore")
+        self.inserimento_main_tab.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_main_tab), "Nuova Località")
+        self.inserimento_main_tab.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_main_tab), "Registra Proprietà")
+        # Nota: InserimentoComuneWidget è gestito come dialogo modale, non un tab.
+        self.tabs.addTab(self.inserimento_main_tab, "Inserimento e Gestione")
+
+        # --- Tab Ricerca Avanzata Possessori (se diverso da quello in Consultazione) ---
+        # Questo widget (RicercaAvanzataWidget) è quello per la ricerca fuzzy dei possessori
+        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata Possessori")
+
+        # --- Tab Esportazioni ---
+        self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni")
+
+        # --- Tab Reportistica ---
+        self.tabs.addTab(ReportisticaWidget(self.db_manager, self), "Reportistica")
+
+        # --- Tab Statistiche e Viste Materializzate ---
+        self.tabs.addTab(StatisticheWidget(self.db_manager, self), "Statistiche e Viste")
+
+        # --- Tab Gestione Utenti (solo per admin) ---
+        # Questo tab viene aggiunto condizionatamente, quindi non serve disabilitarlo in update_ui_based_on_role se non esiste
+        if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
+            self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
+
+        # --- Tab Sistema (placeholder per Audit, Backup) ---
+        sistema_sub_tabs = QTabWidget()
+        placeholder_sistema = QWidget(sistema_sub_tabs)
+        placeholder_sistema_layout = QVBoxLayout(placeholder_sistema)
+        placeholder_sistema_layout.addWidget(QLabel("Funzionalità di Sistema (Audit, Backup, Manutenzione) da implementare qui."))
+        sistema_sub_tabs.addTab(placeholder_sistema, "Info Sistema")
+        # Esempio se si avessero i widget pronti:
+        # if hasattr(self, 'AuditWidget'): sistema_sub_tabs.addTab(AuditWidget(self.db_manager, sistema_sub_tabs), "Audit Log")
+        # if hasattr(self, 'BackupWidget'): sistema_sub_tabs.addTab(BackupWidget(self.db_manager, sistema_sub_tabs), "Backup")
+        self.tabs.addTab(sistema_sub_tabs, "Sistema")
+
+        # Non è necessario chiamare self.update_ui_based_on_role() qui,
+        # perché viene chiamato in perform_initial_setup DOPO setup_tabs.
+
+    def update_ui_based_on_role(self):
+        if not self.logged_in_user_info:
+            for i in range(self.tabs.count()):
+                self.tabs.setTabEnabled(i, False)
+            self.btn_nuovo_comune_toolbar.setEnabled(False)
+            # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False) # Disabilita anche il menuBar
+            return
+
+        # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(True)
+
+        is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
+        is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
+        # is_consultatore = self.logged_in_user_info.get('ruolo') == 'consultatore' # Non serve per ora
+
+        # Abilita/Disabilita il pulsante "Nuovo Comune" sulla toolbar
+        self.btn_nuovo_comune_toolbar.setEnabled(is_admin or is_archivista)
+        # Abilita/Disabilita azione nel menu (se esiste)
+        # if hasattr(self, 'nuovo_comune_action'): self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
+
+
+        # Mappa dei nomi dei tab ai loro indici attuali per riferimento
+        tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
+
+        # Logica di abilitazione dei tab principali
+        # Questi tab sono generalmente accessibili a tutti o quasi.
+        if "Consultazione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Consultazione"], True)
+        if "Ricerca Avanzata Possessori" in tab_indices: self.tabs.setTabEnabled(tab_indices["Ricerca Avanzata Possessori"], True)
+        if "Esportazioni" in tab_indices: self.tabs.setTabEnabled(tab_indices["Esportazioni"], True)
+        if "Reportistica" in tab_indices: self.tabs.setTabEnabled(tab_indices["Reportistica"], True)
+
+        # Tab con restrizioni più specifiche
+        if "Inserimento e Gestione" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], is_admin or is_archivista)
+
+        if "Statistiche e Viste" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], is_admin or is_archivista) # O policy diverse
+
+        # Gestione Utenti è aggiunto solo se admin, quindi se esiste è per l'admin
+        if "Gestione Utenti" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
+
+        if "Sistema" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin) # Solo admin per funzioni di sistema critiche
+
+    def apri_dialog_inserimento_comune(self): # Metodo integrato nella classe
+        if not self.db_manager:
             QMessageBox.critical(self, "Errore", "Manager Database non inizializzato.")
             return
-        if not self.logged_in_user_info: # Assicurarsi che l'utente sia loggato
+        if not self.logged_in_user_info:
             QMessageBox.warning(self, "Login Richiesto", "Effettuare il login per procedere.")
             return
 
-        # Recupera lo username dell'utente loggato
-        utente_login = self.logged_in_user_info.get('username', 'utente_sconosciuto')
+        ruolo_utente = self.logged_in_user_info.get('ruolo')
+        if ruolo_utente not in ['admin', 'archivista']:
+            QMessageBox.warning(self, "Accesso Negato",
+                                "Non si dispone delle autorizzazioni necessarie per aggiungere un comune.")
+            return
 
-        dialog = InserimentoComuneWidget(self.db_manager, utente_login, self)
+        utente_login_username = self.logged_in_user_info.get('username', 'log_utente_sconosciuto')
+
+        dialog = InserimentoComuneWidget(self.db_manager, utente_login_username, self) # Passa 'self' come parent
         if dialog.exec_() == QDialog.Accepted:
-            # Azioni post-inserimento, es. aggiornare una tabella di comuni se visibile
-            print("Dialogo inserimento comune chiuso con successo.")
-            # Qui potrebbe voler chiamare un metodo per ricaricare/aggiornare
-            # la lista dei comuni in ComuniTabWidget, se esiste e se è visibile.
-            # Esempio: if hasattr(self, 'comuni_tab') and isinstance(self.comuni_tab, ComuniTabWidget):
-            #              self.comuni_tab.carica_comuni()
-            pass
-    
-    mainWindow = CatastoMainWindow()
-    mainWindow.show()
-    sys.exit(app.exec_())
+            gui_logger.info(f"Dialogo inserimento comune chiuso con successo da utente '{utente_login_username}'.")
+            QMessageBox.information(self, "Comune Aggiunto", "Il nuovo comune è stato registrato con successo.")
+            # Aggiorna la vista dell'elenco comuni se presente nel tab consultazione
+            # Questo ciclo cerca il widget ElencoComuniWidget tra i sotto-tab di consultazione
+            if hasattr(self, 'consultazione_sub_tabs'):
+                 for i in range(self.consultazione_sub_tabs.count()):
+                    widget = self.consultazione_sub_tabs.widget(i)
+                    if isinstance(widget, ElencoComuniWidget):
+                        widget.load_comuni_data() # Assumendo che ElencoComuniWidget abbia questo metodo
+                        gui_logger.info("Elenco comuni nel tab consultazione aggiornato.")
+                        break
+        else:
+            gui_logger.info(f"Dialogo inserimento comune annullato da utente '{utente_login_username}'.")
+
+
+    def handle_logout(self):
+        if self.logged_in_user_id and self.current_session_id and self.db_manager:
+            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui): #
+                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
+            else:
+                QMessageBox.warning(self, "Logout Fallito", "Errore durante la registrazione del logout.")
+
+            self.logged_in_user_id = None
+            self.logged_in_user_info = None
+            self.current_session_id = None
+            if self.db_manager: self.db_manager.clear_session_app_user()
+
+            self.user_status_label.setText("Utente: Nessuno")
+            self.db_status_label.setText("Database: Connesso (Logout effettuato)") # O "Non connesso" se si chiude la conn
+            self.logout_button.setEnabled(False)
+            self.btn_nuovo_comune_toolbar.setEnabled(False)
+            # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False)
+
+
+            for i in range(self.tabs.count()): # Disabilita tutti i tab
+                self.tabs.setTabEnabled(i, False)
+            self.tabs.clear() # Rimuove tutti i tab
+
+            self.statusBar().showMessage("Logout effettuato. Riavviare l'applicazione per un nuovo login.")
+            # Potrebbe essere preferibile chiudere e richiedere un nuovo avvio dell'app
+            # piuttosto che tentare di tornare al dialogo di login da qui.
+            self.close() # Chiude la finestra principale, che triggera closeEvent
+        else:
+            gui_logger.warning("Tentativo di logout senza una sessione utente o db_manager validi.")
+
+
+    def closeEvent(self, event: QCloseEvent): # Specificare il tipo dell'evento
+        gui_logger.info("Evento closeEvent intercettato.")
+        # Registra il logout se l'utente chiude la finestra mentre è loggato
+        if self.logged_in_user_id and self.current_session_id and self.db_manager:
+            gui_logger.info(f"Chiusura applicazione: esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id}...")
+            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui) #
+
+        if self.db_manager:
+            self.db_manager.disconnect()
+            gui_logger.info("Connessione al database chiusa.")
+
+        gui_logger.info("Applicazione GUI Catasto Storico terminata.")
+        # QApplication.instance().quit() # Non sempre necessario qui se event.accept() è chiamato
+        event.accept() # Conferma la chiusura della finestra
+
+# --- Fine Classe CatastoMainWindow ---
+
+# La funzione run_gui_app() e il blocco if __name__ == "__main__":
+# devono essere presenti nel file prova.py e modificati come segue:
+
+
+def run_gui_app():
+     app = QApplication(sys.argv)
+     if not FPDF_AVAILABLE:
+         QMessageBox.warning(None, "Avviso Dipendenza Mancante",
+                             "La libreria FPDF non è installata.\n"
+                             "L'esportazione dei report in formato PDF non sarà disponibile.\n"
+                             "Puoi installarla con: pip install fpdf2")
+
+     db_config_gui = {
+         "dbname": "catasto_storico", "user": "postgres", "password": "Markus74", # USARE CONFIGURAZIONE SICURA
+         "host": "localhost", "port": 5432, "schema": "catasto"
+     }
+     db_manager_gui = CatastoDBManager(**db_config_gui)
+
+     if not db_manager_gui.connect():
+         QMessageBox.critical(None, "Errore Connessione Database",
+                             "Impossibile connettersi al database.\n"
+                             "Verifica i parametri di connessione e che il server PostgreSQL sia in esecuzione.\n"
+                             "L'applicazione verrà chiusa.")
+         sys.exit(1)
+
+     main_window_instance = None # Riferimento alla finestra principale
+     login_success = False
+
+     while not login_success: # Continua a mostrare il login finché non ha successo o l'utente esce
+         login_dialog = LoginDialog(db_manager_gui)
+         if login_dialog.exec_() == QDialog.Accepted:
+             if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
+                 main_window_instance = CatastoMainWindow() # Crea l'istanza QUI
+                 main_window_instance.perform_initial_setup( # Passa i dati alla finestra principale
+                     db_manager_gui,
+                     login_dialog.logged_in_user_id,
+                     login_dialog.logged_in_user_info,
+                     login_dialog.current_session_id
+                 )
+                 login_success = True # Esce dal ciclo di login
+             else:
+                 # Questo caso non dovrebbe accadere se LoginDialog.accept() è chiamato solo su login valido
+                 QMessageBox.critical(None, "Errore Login", "Dati di login non validi ricevuti dal dialogo.")
+                 # Potrebbe essere meglio chiudere l'app qui o loggare e ritentare
+                 db_manager_gui.disconnect()
+                 sys.exit(1) # Uscita critica
+         else: # LoginDialog è stato chiuso o cancellato
+             gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
+             if db_manager_gui: db_manager_gui.disconnect()
+             sys.exit(0) # Uscita pulita
+
+     if main_window_instance and login_success:
+         # Imposta stili e palette sull'istanza dell'app
+         app.setStyleSheet("* { font-size: 10pt; }") # O la dimensione preferita
+         palette = QPalette()
+         # ... (configurazione della palette come nel file originale) ...
+         palette.setColor(QPalette.Window, QColor(53,53,53))
+         # ... (resto della palette)
+         app.setPalette(palette)
+
+         exit_code = app.exec_() # Avvia il loop eventi principale
+         # db_manager_gui.disconnect() # La disconnessione è gestita in closeEvent
+         sys.exit(exit_code)
+     else:
+         # Se main_window_instance non è stata creata o il login non è andato a buon fine
+         # (anche se il loop while dovrebbe coprire questo)
+         if db_manager_gui: db_manager_gui.disconnect()
+         sys.exit(1)
+
+
+if __name__ == "__main__":
+     # Il logging dovrebbe essere configurato qui se non già fatto altrove all'inizio del file
+     # Esempio:
+ if not gui_logger.hasHandlers():
+     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+...# (resto della configurazione del logger) ...
+
+run_gui_app()

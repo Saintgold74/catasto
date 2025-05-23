@@ -1612,6 +1612,81 @@ class CatastoDBManager:
             return False
         except psycopg2.Error as db_err: logger.error(f"Errore DB link doc-partita: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python link doc-partita: {e}"); self.rollback(); return False
+        
+    def ricerca_avanzata_immobili_gui(self,
+                                 comune_id: Optional[int] = None,
+                                 localita_id: Optional[int] = None,
+                                 natura_search: Optional[str] = None,
+                                 classificazione_search: Optional[str] = None,
+                                 consistenza_search: Optional[str] = None,
+                                 piani_min: Optional[int] = None,
+                                 piani_max: Optional[int] = None,
+                                 vani_min: Optional[int] = None,
+                                 vani_max: Optional[int] = None,
+                                 nome_possessore_search: Optional[str] = None,
+                                 data_inizio_possesso_search: Optional[date] = None,
+                                 data_fine_possesso_search: Optional[date] = None
+                                 ) -> List[Dict[str, Any]]:
+        """
+        Esegue una ricerca avanzata di immobili chiamando la funzione SQL `cerca_immobili_avanzato`.
+        Questo metodo è pensato per essere chiamato dalla GUI.
+        """
+        # La funzione SQL è catasto.cerca_immobili_avanzato
+        # Prende i seguenti parametri, come definito in 17_funzione_ricerca_immobili.sql:
+        # p_comune_id INT, p_localita_id INT, p_natura VARCHAR, p_classificazione VARCHAR,
+        # p_consistenza_search VARCHAR, p_piani_min INT, p_piani_max INT,
+        # p_vani_min INT, p_vani_max INT, p_nome_possessore VARCHAR,
+        # p_data_inizio_possesso DATE, p_data_fine_possesso DATE
+        
+        query = """
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                p_comune_id => %s,
+                p_localita_id => %s,
+                p_natura => %s,
+                p_classificazione => %s,
+                p_consistenza_search => %s,
+                p_piani_min => %s,
+                p_piani_max => %s,
+                p_vani_min => %s,
+                p_vani_max => %s,
+                p_nome_possessore => %s,
+                p_data_inizio_possesso => %s,
+                p_data_fine_possesso => %s
+            );
+        """
+        
+        # Prepara i parametri per la ricerca ILIKE nella funzione SQL
+        params = (
+            comune_id, 
+            localita_id, 
+            f"%{natura_search}%" if natura_search else None,
+            f"%{classificazione_search}%" if classificazione_search else None,
+            f"%{consistenza_search}%" if consistenza_search else None,
+            piani_min, 
+            piani_max,
+            vani_min, 
+            vani_max,
+            f"%{nome_possessore_search}%" if nome_possessore_search else None,
+            data_inizio_possesso_search,
+            data_fine_possesso_search
+        )
+        
+        risultati = []
+        try:
+            # Assicurati che self.execute_query gestisca correttamente la connessione
+            # e il cursore, e che self.fetchall restituisca una lista di dizionari.
+            if self.execute_query(query, params):
+                risultati = self.fetchall()
+                logger.info(f"Ricerca avanzata immobili (GUI) ha prodotto {len(risultati)} risultati.")
+            # else: execute_query potrebbe aver loggato un errore se ha restituito False
+        except psycopg2.Error as db_err: # Errore specifico del database
+            logger.error(f"Errore DB in ricerca_avanzata_immobili_gui: {db_err}")
+            # Potresti voler rilanciare l'eccezione o gestirla in modo più specifico
+            # se la GUI deve sapere del fallimento.
+        except Exception as e: # Altri errori Python
+            logger.error(f"Errore Python imprevisto in ricerca_avanzata_immobili_gui: {e}", exc_info=True)
+        
+        return risultati
 
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

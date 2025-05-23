@@ -1682,3 +1682,125 @@ LINE 5:                  codice_catastale,  -- Assumendo che queste ...
 2025-05-22 18:56:43,378 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione ca195b2c...
 2025-05-22 18:56:45,246 - CatastoDB - INFO - Disconnessione completata
 2025-05-22 18:56:45,246 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 09:01:19,464 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 09:01:19,638 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 09:01:28,894 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 09:01:29,228 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 09:01:29,284 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 54061e04...
+2025-05-23 09:01:31,137 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 09:02:03,538 - CatastoGUI - INFO - Nessuna partita trovata per il comune ID: 9
+2025-05-23 09:24:13,923 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 54061e04...
+2025-05-23 09:24:15,321 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 09:24:15,322 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 09:34:04,453 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 09:34:04,574 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 09:34:12,086 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 09:34:12,397 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 09:34:12,497 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione f2bc916d...
+2025-05-23 09:34:14,522 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 09:37:41,163 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione f2bc916d...
+2025-05-23 09:37:42,269 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 09:37:42,269 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 09:38:43,071 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 09:38:43,143 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 09:38:49,763 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 09:38:50,055 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 09:38:50,066 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 65496ba6...
+2025-05-23 09:38:51,840 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 09:39:20,051 - CatastoDB - INFO - Località 'Borgata CiccioCicci' (Comune ID: 3) inserita con ID: 102
+2025-05-23 09:40:38,121 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 65496ba6...
+2025-05-23 09:40:39,322 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 09:40:39,323 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 09:48:16,019 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 09:48:16,226 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 09:48:23,489 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 09:48:23,902 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 5431a4ca...
+2025-05-23 09:48:57,076 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LIMIT %s... Errore: ERRORE:  la relazione "v_audit_dettagliato" non esiste
+LINE 1: SELECT * FROM v_audit_dettagliato ORDER BY timestamp DESC LI...
+                      ^
+
+2025-05-23 09:48:57,077 - CatastoDB - INFO - Rollback eseguito.
+2025-05-23 09:49:05,238 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:12:40,307 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:12:40,402 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:12:46,047 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:12:46,331 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:12:46,365 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 0d13d6aa...
+2025-05-23 10:12:48,394 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 10:16:06,472 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 0d13d6aa...
+2025-05-23 10:16:07,590 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:16:07,590 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 10:17:08,866 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:17:08,928 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:17:14,074 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:17:14,352 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:17:14,372 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione cefcb0eb...
+2025-05-23 10:17:15,727 - CatastoGUI - WARNING - Classe ElencoComuniWidget non trovata durante setup_tabs.
+2025-05-23 10:17:15,728 - CatastoGUI - WARNING - Classe RicercaPartiteWidget non trovata durante setup_tabs.
+2025-05-23 10:17:15,728 - CatastoGUI - WARNING - Classe RicercaPossessoriWidget non trovata durante setup_tabs.
+2025-05-23 10:17:15,728 - CatastoGUI - ERROR - CLASSE RicercaAvanzataImmobiliWidget NON TROVATA. Impossibile aggiungere il tab.
+2025-05-23 10:17:29,603 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione cefcb0eb...
+2025-05-23 10:17:31,089 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:17:31,089 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 10:26:11,789 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:26:11,864 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:26:18,120 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:26:18,409 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:26:18,451 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 2600e509...
+2025-05-23 10:26:20,368 - CatastoGUI - WARNING - Classe ElencoComuniWidget non trovata durante setup_tabs.
+2025-05-23 10:26:20,369 - CatastoGUI - WARNING - Classe RicercaPartiteWidget non trovata durante setup_tabs.
+2025-05-23 10:26:20,369 - CatastoGUI - WARNING - Classe RicercaPossessoriWidget non trovata durante setup_tabs.
+2025-05-23 10:26:20,369 - CatastoGUI - ERROR - CLASSE RicercaAvanzataImmobiliWidget NON TROVATA. Impossibile aggiungere il tab.
+2025-05-23 10:27:22,562 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 2600e509...
+2025-05-23 10:27:23,827 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:27:23,827 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 10:43:02,945 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:43:03,009 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:43:08,312 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:43:08,591 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:43:08,600 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione e5f4b523...
+2025-05-23 10:43:10,362 - CatastoGUI - WARNING - Classe ElencoComuniWidget non trovata durante setup_tabs.
+2025-05-23 10:43:10,362 - CatastoGUI - WARNING - Classe RicercaPartiteWidget non trovata durante setup_tabs.
+2025-05-23 10:43:10,363 - CatastoGUI - WARNING - Classe RicercaPossessoriWidget non trovata durante setup_tabs.
+2025-05-23 10:43:10,363 - CatastoGUI - ERROR - CLASSE RicercaAvanzataImmobiliWidget NON TROVATA. Impossibile aggiungere il tab.
+2025-05-23 10:43:12,161 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione e5f4b523...
+2025-05-23 10:43:13,479 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:43:13,479 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 10:52:34,921 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:52:35,109 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:52:41,260 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:52:41,542 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:52:41,550 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 8d0fb4f0...
+2025-05-23 10:52:42,972 - CatastoGUI - WARNING - Classe ElencoComuniWidget non trovata durante setup_tabs.
+2025-05-23 10:52:42,972 - CatastoGUI - WARNING - Classe RicercaPartiteWidget non trovata durante setup_tabs.
+2025-05-23 10:52:42,973 - CatastoGUI - WARNING - Classe RicercaPossessoriWidget non trovata durante setup_tabs.
+2025-05-23 10:52:42,973 - CatastoGUI - ERROR - CLASSE RicercaAvanzataImmobiliWidget NON TROVATA. Impossibile aggiungere il tab.
+2025-05-23 10:52:57,467 - CatastoGUI - INFO - Esecuzione logout di sicurezza per utente ID: 1 prima della chiusura...
+2025-05-23 10:52:57,485 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 8d0fb4f0...
+2025-05-23 10:52:57,487 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 10:52:57,488 - CatastoGUI - INFO - Applicazione GUI terminata.
+2025-05-23 10:56:31,068 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:56:31,130 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 10:56:36,184 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 10:56:36,460 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 10:56:36,478 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 58515096...
+2025-05-23 10:56:38,113 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 10:56:38,186 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 11:08:07,736 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 11:08:07,823 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 11:08:14,043 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 11:08:14,365 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 11:08:14,412 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 1514706d...
+2025-05-23 11:08:15,744 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 11:08:15,846 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 11:55:40,869 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 11:55:40,987 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 11:55:52,186 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 11:55:52,546 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 11:55:52,621 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 438ff93a...
+2025-05-23 11:55:54,492 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 11:56:00,756 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 438ff93a...
+2025-05-23 11:56:02,837 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-23 11:56:02,838 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 11:56:02,839 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-23 11:56:02,839 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.

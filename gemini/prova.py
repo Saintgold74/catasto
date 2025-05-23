@@ -24,9 +24,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QComboBox, QTabWidget, QTextEdit, QMessageBox,
                             QCheckBox, QGroupBox, QGridLayout, QTableWidget,
                             QTableWidgetItem, QDateEdit, QScrollArea,
-                            QDialog, QListWidget,
+                            QDialog, QListWidget,QMainWindow,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy) 
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, QMenu,QFormLayout) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
 from PyQt5.QtWidgets import QDoubleSpinBox
@@ -3774,28 +3774,27 @@ class InserimentoComuneWidget(QDialog): # o QWidget
         self.initUI()
 
     def initUI(self):
-        layout = QFormLayout(self)
+        layout = QFormLayout(self) # Assicurati che QFormLayout sia importato
 
         self.nome_comune_edit = QLineEdit()
         self.codice_catastale_edit = QLineEdit()
         self.codice_catastale_edit.setMaxLength(4)
-        self.provincia_edit = QLineEdit("SV")
+        self.provincia_edit = QLineEdit("SV") # Valore predefinito
         self.provincia_edit.setMaxLength(2)
 
         self.data_istituzione_edit = QDateEdit()
         self.data_istituzione_edit.setCalendarPopup(True)
         self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_istituzione_edit.setNullable(True)
-        self.data_istituzione_edit.setDate(QDate()) # Inizialmente vuoto
-        self.data_istituzione_edit.setSpecialValueText(" ") # Mostra come vuoto
+        # La riga .setNullable(True) è stata rimossa
+        self.data_istituzione_edit.setDate(QDate()) # Imposta una data nulla/invalida inizialmente
+        self.data_istituzione_edit.setSpecialValueText(" ") # Mostra come vuoto se la data non è valida
 
         self.data_soppressione_edit = QDateEdit()
         self.data_soppressione_edit.setCalendarPopup(True)
         self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_soppressione_edit.setNullable(True)
-        self.data_soppressione_edit.setDate(QDate()) # Inizialmente vuoto
-        self.data_soppressione_edit.setSpecialValueText(" ") # Mostra come vuoto
-
+        # La riga .setNullable(True) è stata rimossa
+        self.data_soppressione_edit.setDate(QDate()) # Imposta una data nulla/invalida inizialmente
+        self.data_soppressione_edit.setSpecialValueText(" ") # Mostra come vuoto se la data non è valida
 
         self.note_edit = QTextEdit()
 
@@ -3813,12 +3812,12 @@ class InserimentoComuneWidget(QDialog): # o QWidget
         self.cancel_button = QPushButton("Annulla")
         self.cancel_button.clicked.connect(self.reject)
 
-        button_layout = QHBoxLayout() # Per disporre i pulsanti orizzontalmente
+        button_layout = QHBoxLayout()
         button_layout.addWidget(self.submit_button)
         button_layout.addWidget(self.clear_button)
         button_layout.addWidget(self.cancel_button)
 
-        layout.addRow(button_layout) # Aggiunge il layout dei pulsanti al form layout
+        layout.addRow(button_layout)
         self.setLayout(layout)
 
     def pulisci_campi(self):
@@ -4342,40 +4341,46 @@ class CatastoMainWindow(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle("Gestionale Catasto Storico - Archivio di Stato Savona")
-        self.setMinimumSize(1280, 720) # Dimensioni minime suggerite
+        self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
 
-        self.create_status_bar_content() # Barra di stato personalizzata in alto
+        self.create_status_bar_content()
+        self.create_menu_bar() # Aggiungi questa chiamata
 
-        self.tabs = QTabWidget() # Il QTabWidget principale per le sezioni
+        self.tabs = QTabWidget()
         self.main_layout.addWidget(self.tabs)
         self.setCentralWidget(self.central_widget)
 
         self.statusBar().showMessage("Pronto.")
-        # self.create_menu_bar() # Opzionale, se si desidera un menu bar tradizionale
+        #self.create_menu_bar() # Commenta o rimuovi questa riga se il menu bar non è usato
 
     # Esempio di Menu Bar (opzionale)
-    # def create_menu_bar(self):
-    #     menu_bar = self.menuBar()
-    #     file_menu = menu_bar.addMenu("&File")
+    # All'interno della classe CatastoMainWindow
+    def create_menu_bar(self):
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("&File")
 
-    #     nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileIcon), "Nuovo &Comune...", self)
-    #     nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
-    #     nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
-    #     file_menu.addAction(nuovo_comune_action)
-    #     # Qui si possono aggiungere altre azioni al menu File
+        self.nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo &Comune...", self)
+        self.nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
+        self.nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
+        # self.nuovo_comune_action.setEnabled(False) # L'abilitazione è gestita da update_ui_based_on_role
+        file_menu.addAction(self.nuovo_comune_action)
 
-    #     file_menu.addSeparator()
-    #     exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
-    #     exit_action.setStatusTip("Chiudi l'applicazione")
-    #     exit_action.triggered.connect(self.close) # Chiama closeEvent
-    #     file_menu.addAction(exit_action)
+        file_menu.addSeparator() # Separatore
 
-        # admin_menu = menu_bar.addMenu("&Amministrazione")
-        # gestione_utenti_action = QAction("Gestione &Utenti", self)
-        # # gestione_utenti_action.triggered.connect(self.apri_gestione_utenti_tab) # Metodo per aprire il tab utenti
-        # admin_menu.addAction(gestione_utenti_action)
+        # Azione per Uscire
+        exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
+        exit_action.setStatusTip("Chiudi l'applicazione")
+        exit_action.triggered.connect(self.close) # Chiama il metodo close della finestra
+        file_menu.addAction(exit_action)
+
+        # Puoi aggiungere altri menu e azioni qui (es. "Amministrazione" > "Gestione Utenti")
+        # if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
+        #     admin_menu = menu_bar.addMenu("&Amministrazione")
+        #     gestione_utenti_action = QAction("Gestione &Utenti", self)
+        #     # gestione_utenti_action.triggered.connect(self.mostra_tab_gestione_utenti) # Dovresti creare questo metodo
+        #     admin_menu.addAction(gestione_utenti_action)
 
 
     def create_status_bar_content(self):
@@ -4387,11 +4392,11 @@ class CatastoMainWindow(QMainWindow):
         self.db_status_label = QLabel("Database: Non connesso")
         self.user_status_label = QLabel("Utente: Nessuno")
 
-        # Pulsante per Inserimento Nuovo Comune (spostato qui per accessibilità)
-        self.btn_nuovo_comune_toolbar = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo Comune") # Icona cambiata
-        self.btn_nuovo_comune_toolbar.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
-        self.btn_nuovo_comune_toolbar.clicked.connect(self.apri_dialog_inserimento_comune)
-        self.btn_nuovo_comune_toolbar.setEnabled(False) # Abilitato dopo login e in base al ruolo
+        # RIGA RIMOSSA: La definizione di self.btn_nuovo_comune_toolbar
+        # self.btn_nuovo_comune_toolbar = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo Comune")
+        # self.btn_nuovo_comune_toolbar.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
+        # self.btn_nuovo_comune_toolbar.clicked.connect(self.apri_dialog_inserimento_comune)
+        # self.btn_nuovo_comune_toolbar.setEnabled(False)
 
         self.logout_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Logout")
         self.logout_button.setToolTip("Effettua il logout dell'utente corrente")
@@ -4402,12 +4407,18 @@ class CatastoMainWindow(QMainWindow):
         status_layout.addSpacing(20)
         status_layout.addWidget(self.user_status_label)
         status_layout.addStretch()
-        status_layout.addWidget(self.btn_nuovo_comune_toolbar)
-        status_layout.addSpacing(10)
+        
+        # RIGA RIMOSSA: L'aggiunta di self.btn_nuovo_comune_toolbar al layout
+        # status_layout.addWidget(self.btn_nuovo_comune_toolbar)
+        # status_layout.addSpacing(10) # Rimuovi anche questo se btn_nuovo_comune_toolbar è rimosso
+                                     # o lascialo se vuoi uno spazio prima del logout button.
+                                     # Per pulizia, se il pulsante è via, anche lo spazio dedicato può andare.
+
         status_layout.addWidget(self.logout_button)
         self.main_layout.addWidget(status_frame)
 
     def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
+        gui_logger.info(">>> CatastoMainWindow: Inizio perform_initial_setup")
         self.db_manager = db_manager
         self.logged_in_user_id = user_id
         self.logged_in_user_info = user_info
@@ -4418,8 +4429,12 @@ class CatastoMainWindow(QMainWindow):
             db_name = self.db_manager.conn_params.get('dbname', 'N/D')
         self.db_status_label.setText(f"Database: Connesso ({db_name})")
 
-        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
-        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
+        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D') # Assicurati che logged_in_user_info sia impostato
+        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+
+         # ---> AGGIUNGI QUESTA RIGA PER DEFINIRE ruolo_display <---
+        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D') 
+        
         self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
 
         self.logout_button.setEnabled(True)
@@ -4429,6 +4444,15 @@ class CatastoMainWindow(QMainWindow):
         self.setup_tabs() # Configura i tab
         self.update_ui_based_on_role() # Applica i permessi UI subito dopo aver impostato i tab
         self.show()
+        
+        gui_logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
+        self.setup_tabs()
+        gui_logger.info(">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
+        self.update_ui_based_on_role()
+
+        gui_logger.info(">>> CatastoMainWindow: Chiamata a self.show()")
+        self.show() # <-- ESSENZIALE
+        gui_logger.info(">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
 
     def setup_tabs(self):
         if not self.db_manager:
@@ -4489,43 +4513,39 @@ class CatastoMainWindow(QMainWindow):
         if not self.logged_in_user_info:
             for i in range(self.tabs.count()):
                 self.tabs.setTabEnabled(i, False)
-            self.btn_nuovo_comune_toolbar.setEnabled(False)
-            # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False) # Disabilita anche il menuBar
+            # self.btn_nuovo_comune_toolbar.setEnabled(False) # RIMOSSO O MODIFICATO
+            if hasattr(self, 'nuovo_comune_action'): # Controlla se l'azione del menu esiste
+                self.nuovo_comune_action.setEnabled(False)
+            # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False) # Se hai un menu bar
             return
 
         # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(True)
 
         is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
         is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
-        # is_consultatore = self.logged_in_user_info.get('ruolo') == 'consultatore' # Non serve per ora
 
-        # Abilita/Disabilita il pulsante "Nuovo Comune" sulla toolbar
-        self.btn_nuovo_comune_toolbar.setEnabled(is_admin or is_archivista)
-        # Abilita/Disabilita azione nel menu (se esiste)
-        # if hasattr(self, 'nuovo_comune_action'): self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
-
+        # Abilita/Disabilita l'azione del menu "Nuovo Comune"
+        if hasattr(self, 'nuovo_comune_action'): # Controlla se l'azione del menu esiste
+            self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
+        
+        # Rimuovi la riga che si riferisce a self.btn_nuovo_comune_toolbar
+        # self.btn_nuovo_comune_toolbar.setEnabled(is_admin or is_archivista) # RIMOSSA
 
         # Mappa dei nomi dei tab ai loro indici attuali per riferimento
         tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
 
         # Logica di abilitazione dei tab principali
-        # Questi tab sono generalmente accessibili a tutti o quasi.
         if "Consultazione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Consultazione"], True)
         if "Ricerca Avanzata Possessori" in tab_indices: self.tabs.setTabEnabled(tab_indices["Ricerca Avanzata Possessori"], True)
         if "Esportazioni" in tab_indices: self.tabs.setTabEnabled(tab_indices["Esportazioni"], True)
         if "Reportistica" in tab_indices: self.tabs.setTabEnabled(tab_indices["Reportistica"], True)
 
-        # Tab con restrizioni più specifiche
         if "Inserimento e Gestione" in tab_indices:
             self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], is_admin or is_archivista)
-
         if "Statistiche e Viste" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], is_admin or is_archivista) # O policy diverse
-
-        # Gestione Utenti è aggiunto solo se admin, quindi se esiste è per l'admin
+            self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], is_admin or is_archivista)
         if "Gestione Utenti" in tab_indices:
             self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
-
         if "Sistema" in tab_indices:
             self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin) # Solo admin per funzioni di sistema critiche
 
@@ -4577,7 +4597,7 @@ class CatastoMainWindow(QMainWindow):
             self.user_status_label.setText("Utente: Nessuno")
             self.db_status_label.setText("Database: Connesso (Logout effettuato)") # O "Non connesso" se si chiude la conn
             self.logout_button.setEnabled(False)
-            self.btn_nuovo_comune_toolbar.setEnabled(False)
+            #self.btn_nuovo_comune_toolbar.setEnabled(False)
             # if hasattr(self, 'menuBar'): self.menuBar().setEnabled(False)
 
 
@@ -4610,76 +4630,164 @@ class CatastoMainWindow(QMainWindow):
 
 # --- Fine Classe CatastoMainWindow ---
 
-# La funzione run_gui_app() e il blocco if __name__ == "__main__":
-# devono essere presenti nel file prova.py e modificati come segue:
-
-
 def run_gui_app():
-     app = QApplication(sys.argv)
-     if not FPDF_AVAILABLE:
-         QMessageBox.warning(None, "Avviso Dipendenza Mancante",
+    app = QApplication(sys.argv)
+    
+    # Applica UN SOLO stylesheet principale all'avvio
+    app.setStyleSheet("""
+        * { 
+            font-size: 10pt; /* Dimensione font globale */
+        }
+        QMainWindow {
+            background-color: #353535; /* Esempio: Sfondo scuro per coerenza con la palette */
+            /* Se usi una QPalette per QPalette.Window, potresti non aver bisogno di questo */
+        }
+        QPushButton {
+            background-color: #4CAF50; 
+            color: white;
+            border-radius: 5px;
+            padding: 5px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #45a049;
+        }
+        QPushButton:pressed {
+            background-color: #3e8e41;
+        }
+        QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+            background-color: #2E2E2E; /* Sfondo scuro per input */
+            color: #E0E0E0; /* Testo chiaro per input */
+            border: 1px solid #505050;
+            border-radius: 3px;
+            padding: 3px;
+        }
+        QLabel {
+            color: #E0E0E0; /* Testo chiaro per etichette */
+        }
+        QTabWidget::pane { 
+            border-top: 2px solid #505050;
+            margin-top: -1px; 
+        }
+        QTabBar::tab { 
+            background: #3E3E3E;
+            color: #E0E0E0;
+            border: 1px solid #505050;
+            border-bottom-color: #505050; 
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            min-width: 8ex;
+            padding: 3px 5px;
+        }
+        QTabBar::tab:selected, QTabBar::tab:hover {
+            background: #4A4A4A;
+            color: white;
+        }
+        QTabBar::tab:selected {
+            border-color: #606060;
+            border-bottom-color: #4A4A4A; 
+        }
+        QTableWidget {
+            gridline-color: #505050; 
+            background-color: #2E2E2E;
+            color: #E0E0E0;
+            alternate-background-color: #353535; 
+        }
+        QHeaderView::section { 
+            background-color: #3E3E3E;
+            color: #E0E0E0;
+            padding: 4px;
+            border: 1px solid #505050;
+            font-weight: bold;
+        }
+        QToolTip { /* Stile per i ToolTip tramite QSS */
+            background-color: #555555;
+            color: white;
+            border: 1px solid #666666;
+            padding: 2px;
+        }
+    """)
+
+    if not FPDF_AVAILABLE:
+        QMessageBox.warning(None, "Avviso Dipendenza Mancante",
                              "La libreria FPDF non è installata.\n"
                              "L'esportazione dei report in formato PDF non sarà disponibile.\n"
                              "Puoi installarla con: pip install fpdf2")
 
-     db_config_gui = {
-         "dbname": "catasto_storico", "user": "postgres", "password": "Markus74", # USARE CONFIGURAZIONE SICURA
-         "host": "localhost", "port": 5432, "schema": "catasto"
-     }
-     db_manager_gui = CatastoDBManager(**db_config_gui)
+    db_config_gui = {
+        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
+        "host": "localhost", "port": 5432, "schema": "catasto"
+        }
+    db_manager_gui = CatastoDBManager(**db_config_gui)
 
-     if not db_manager_gui.connect():
-         QMessageBox.critical(None, "Errore Connessione Database",
+    if not db_manager_gui.connect():
+        QMessageBox.critical(None, "Errore Connessione Database",
                              "Impossibile connettersi al database.\n"
                              "Verifica i parametri di connessione e che il server PostgreSQL sia in esecuzione.\n"
                              "L'applicazione verrà chiusa.")
-         sys.exit(1)
+        sys.exit(1)
 
-     main_window_instance = None # Riferimento alla finestra principale
-     login_success = False
+    main_window_instance = None # Riferimento alla finestra principale
+    login_success = False
 
-     while not login_success: # Continua a mostrare il login finché non ha successo o l'utente esce
-         login_dialog = LoginDialog(db_manager_gui)
-         if login_dialog.exec_() == QDialog.Accepted:
-             if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
-                 main_window_instance = CatastoMainWindow() # Crea l'istanza QUI
-                 main_window_instance.perform_initial_setup( # Passa i dati alla finestra principale
-                     db_manager_gui,
-                     login_dialog.logged_in_user_id,
-                     login_dialog.logged_in_user_info,
-                     login_dialog.current_session_id
-                 )
-                 login_success = True # Esce dal ciclo di login
-             else:
-                 # Questo caso non dovrebbe accadere se LoginDialog.accept() è chiamato solo su login valido
-                 QMessageBox.critical(None, "Errore Login", "Dati di login non validi ricevuti dal dialogo.")
-                 # Potrebbe essere meglio chiudere l'app qui o loggare e ritentare
-                 db_manager_gui.disconnect()
-                 sys.exit(1) # Uscita critica
-         else: # LoginDialog è stato chiuso o cancellato
-             gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
-             if db_manager_gui: db_manager_gui.disconnect()
-             sys.exit(0) # Uscita pulita
+    while not login_success: # Continua a mostrare il login finché non ha successo o l'utente esce
+        login_dialog = LoginDialog(db_manager_gui)
+        if login_dialog.exec_() == QDialog.Accepted:
+            if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
+                main_window_instance = CatastoMainWindow() 
+                main_window_instance.perform_initial_setup(
+                    db_manager_gui,
+                    login_dialog.logged_in_user_id,
+                    login_dialog.logged_in_user_info,
+                    login_dialog.current_session_id
+                )
+                login_success = True
+            else:
+                # Questo caso non dovrebbe accadere se LoginDialog.accept() è chiamato solo su login valido
+                QMessageBox.critical(None, "Errore Login", "Dati di login non validi ricevuti dal dialogo.")
+                # Potrebbe essere meglio chiudere l'app qui o loggare e ritentare
+                db_manager_gui.disconnect()
+                sys.exit(1) # Uscita critica
+        else: # LoginDialog è stato chiuso o cancellato
+            gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
+            if db_manager_gui: db_manager_gui.disconnect()
+            sys.exit(0) # Uscita pulita
+            
+    if main_window_instance and login_success:
+        gui_logger.info(">>> run_gui_app: Login successo, preparazione per app.exec_()")
 
-     if main_window_instance and login_success:
-         # Imposta stili e palette sull'istanza dell'app
-         app.setStyleSheet("* { font-size: 10pt; }") # O la dimensione preferita
-         palette = QPalette()
-         # ... (configurazione della palette come nel file originale) ...
-         palette.setColor(QPalette.Window, QColor(53,53,53))
-         # ... (resto della palette)
-         app.setPalette(palette)
+        # Se vuoi usare una QPalette in aggiunta o al posto di alcune parti del QSS:
+        # palette = QPalette()
+        # # Esempio di configurazione aggiuntiva o di base se il QSS non è completo
+        # palette.setColor(QPalette.Window, QColor(53, 53, 53)) # Sfondo scuro per la finestra
+        # palette.setColor(QPalette.WindowText, Qt.white)       # Testo bianco sulla finestra
+        # palette.setColor(QPalette.Base, QColor(25, 25, 25))    # Sfondo per input widgets
+        # palette.setColor(QPalette.AlternateBase, QColor(45, 45, 45)) # Colore alternato righe
+        # palette.setColor(QPalette.ToolTipBase, Qt.white)
+        # palette.setColor(QPalette.ToolTipText, Qt.black)
+        # palette.setColor(QPalette.Text, Qt.white)            # Colore testo generico
+        # palette.setColor(QPalette.Button, QColor(60, 60, 60))  # Sfondo pulsanti (se non da QSS)
+        # palette.setColor(QPalette.ButtonText, Qt.white)      # Testo pulsanti (se non da QSS)
+        # palette.setColor(QPalette.BrightText, Qt.red)
+        # palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        # palette.setColor(QPalette.Highlight, QColor(42, 130, 218)) # Colore selezione
+        # palette.setColor(QPalette.HighlightedText, Qt.white) # Testo selezionato
+        # app.setPalette(palette)
 
-         exit_code = app.exec_() # Avvia il loop eventi principale
-         # db_manager_gui.disconnect() # La disconnessione è gestita in closeEvent
-         sys.exit(exit_code)
-     else:
-         # Se main_window_instance non è stata creata o il login non è andato a buon fine
-         # (anche se il loop while dovrebbe coprire questo)
-         if db_manager_gui: db_manager_gui.disconnect()
-         sys.exit(1)
+        gui_logger.info(">>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()")
+        exit_code = app.exec_()
+        gui_logger.info(f">>> run_gui_app: app.exec_() TERMINATO con codice: {exit_code}")
+        sys.exit(exit_code)
+    else:
+        # Questo blocco viene raggiunto se main_window_instance non è stata creata
+        # o login_success è False, il che indicherebbe un problema nel ciclo di login
+        # che non ha portato a un'uscita anticipata.
+        gui_logger.error("Avvio dell'applicazione fallito: main_window_instance non inizializzata o login non riuscito prima di app.exec_().")
+        if db_manager_gui: # Assicurati che db_manager_gui sia definito
+            db_manager_gui.disconnect()
+        sys.exit(1)
 
-
+    
 if __name__ == "__main__":
      # Il logging dovrebbe essere configurato qui se non già fatto altrove all'inizio del file
      # Esempio:

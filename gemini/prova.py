@@ -24,12 +24,19 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QComboBox, QTabWidget, QTextEdit, QMessageBox,
                             QCheckBox, QGroupBox, QGridLayout, QTableWidget,
                             QTableWidgetItem, QDateEdit, QScrollArea,
-                            QDialog, QListWidget,QMainWindow,
+                            QDialog, QListWidget,QMainWindow,QDateTimeEdit ,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
                             QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, QMenu,QFormLayout) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
 from PyQt5.QtWidgets import QDoubleSpinBox
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                             QPushButton, QGroupBox, QFormLayout, QApplication, QStyle,
+                             QFileDialog, QTextEdit, QProgressBar, QMessageBox, QComboBox,
+                             QLineEdit) # Aggiunte QComboBox e QLineEdit per opzioni
+from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
+import os # Per gestire percorsi# <--- ASSICURATI CHE QDateTime SIA PRESENTE
 
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
@@ -294,12 +301,22 @@ class LoginDialog(QDialog):
             
             if session_id_returned:
                 self.logged_in_user_id = user_id_local
-                self.logged_in_user_info = credentials
+                self.logged_in_user_info = credentials # Contiene l'ID dell'utente DB, non app_user_id!
+                                                    # Assicurati che 'id' in credentials sia l'app_user_id
                 self.current_session_id = session_id_returned
-                
-                if not self.db_manager.set_session_app_user(self.logged_in_user_id, client_ip_address_gui):
-                    gui_logger.error("Impossibile impostare contesto DB post-login!")
-                
+
+                # Imposta le variabili di sessione per l'audit
+                # Assumendo che user_id_local sia l'app_user_id
+                if not self.db_manager.set_audit_session_variables(self.logged_in_user_id, self.current_session_id): # <--- CHIAMATA
+                    # Gestisci l'errore, forse il login non dovrebbe procedere
+                    QMessageBox.critical(self, "Errore Audit", "Impossibile impostare le informazioni di sessione per l'audit.")
+                    # Potresti decidere di non accettare il login qui
+
+                # Commentato perché il metodo `set_session_app_user` sembra fare qualcosa di simile,
+                # ma `set_audit_session_variables` è più specifico per i GUC.
+                # if not self.db_manager.set_session_app_user(self.logged_in_user_id, client_ip_address_gui):
+                #    gui_logger.error("Impossibile impostare contesto DB post-login!")
+
                 QMessageBox.information(self, "Login Riuscito", 
                                         f"Benvenuto {self.logged_in_user_info.get('nome_completo', username)}!")
                 self.accept()
@@ -3897,19 +3914,652 @@ class InserimentoComuneWidget(QDialog): # o QWidget
                  messaggio = f"Errore: Esiste già un comune con il codice catastale '{codice_catastale}'."
             QMessageBox.critical(self, "Errore Database", messaggio)
 
-class AuditWidget(QWidget): # Esempio
+class AuditLogViewerWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Widget Audit Log (TODO)"))
+        self.setWindowTitle("Visualizzatore Log di Audit") # Titolo opzionale se usato come finestra separata
 
-class BackupWidget(QWidget): # Esempio
+        self._init_ui()
+        self._load_initial_data() # Caricheremo i dati all'avvio o su richiesta
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        # --- Gruppo Filtri ---
+        filters_group = QGroupBox("Filtri di Ricerca Log")
+        filters_form_layout = QFormLayout(filters_group) # Usiamo QFormLayout per etichette e campi allineati
+
+        self.filter_table_name_edit = QLineEdit()
+        filters_form_layout.addRow("Nome Tabella:", self.filter_table_name_edit)
+
+        self.filter_operation_combo = QComboBox()
+        self.filter_operation_combo.addItems(["Tutte", "INSERT (I)", "UPDATE (U)", "DELETE (D)"])
+        filters_form_layout.addRow("Operazione:", self.filter_operation_combo)
+        
+        # Filtro per Utente Applicativo (ID)
+        self.filter_app_user_id_edit = QLineEdit()
+        self.filter_app_user_id_edit.setPlaceholderText("ID utente (opzionale)")
+        filters_form_layout.addRow("ID Utente Applicativo:", self.filter_app_user_id_edit)
+
+        # Filtro per ID Record
+        self.filter_record_id_edit = QLineEdit()
+        self.filter_record_id_edit.setPlaceholderText("ID record modificato (opzionale)")
+        filters_form_layout.addRow("ID Record:", self.filter_record_id_edit)
+
+        # Filtro per Data/Ora
+        self.filter_start_datetime_edit = QDateTimeEdit(self)
+        self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7)) # Default: ultima settimana
+        self.filter_start_datetime_edit.setCalendarPopup(True)
+        self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        filters_form_layout.addRow("Da Data/Ora:", self.filter_start_datetime_edit)
+
+        self.filter_end_datetime_edit = QDateTimeEdit(self)
+        self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime()) # Default: ora attuale
+        self.filter_end_datetime_edit.setCalendarPopup(True)
+        self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        filters_form_layout.addRow("A Data/Ora:", self.filter_end_datetime_edit)
+        
+        self.filter_search_text_edit = QLineEdit()
+        self.filter_search_text_edit.setPlaceholderText("Cerca in dati JSON (opzionale, può essere lento)")
+        filters_form_layout.addRow("Testo in Dati JSON:", self.filter_search_text_edit)
+
+
+        self.search_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton), "Applica Filtri / Cerca")
+        self.search_button.clicked.connect(self._apply_filters_and_search)
+        
+        self.reset_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCancelButton), "Resetta Filtri") # O SP_TrashIcon
+        self.reset_button.clicked.connect(self._reset_filters)
+
+        buttons_filter_layout = QHBoxLayout()
+        buttons_filter_layout.addWidget(self.search_button)
+        buttons_filter_layout.addWidget(self.reset_button)
+        filters_form_layout.addRow(buttons_filter_layout) # Aggiungi layout bottoni al form layout
+
+        main_layout.addWidget(filters_group)
+
+        # --- Tabella Risultati Log ---
+        self.log_table = QTableWidget()
+        self.log_table.setColumnCount(9) # ID Log, Timestamp, Utente App, Sessione, Tabella, Operazione, Record ID, IP, Dettagli (per JSON)
+        self.log_table.setHorizontalHeaderLabels([
+            "ID Log", "Timestamp", "ID Utente App", "ID Sessione", "Tabella",
+            "Operazione", "ID Record", "Indirizzo IP", "Modifiche?"
+        ])
+        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.log_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.log_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setStretchLastSection(True)
+        self.log_table.setAlternatingRowColors(True)
+        self.log_table.setSortingEnabled(True) # Abilita sorting client-side (o implementa server-side)
+        self.log_table.itemSelectionChanged.connect(self._display_log_details) # Per mostrare dati JSON
+        main_layout.addWidget(self.log_table)
+
+        # --- Area Dettagli JSON ---
+        details_group = QGroupBox("Dettagli Modifica (JSON)")
+        details_layout = QHBoxLayout(details_group) # Layout orizzontale per Dati Prima e Dati Dopo
+
+        self.details_before_text = QTextEdit()
+        self.details_before_text.setReadOnly(True)
+        self.details_before_text.setPlaceholderText("Dati prima della modifica...")
+        details_layout.addWidget(QLabel("Dati Prima:"))
+        details_layout.addWidget(self.details_before_text)
+
+        self.details_after_text = QTextEdit()
+        self.details_after_text.setReadOnly(True)
+        self.details_after_text.setPlaceholderText("Dati dopo la modifica...")
+        details_layout.addWidget(QLabel("Dati Dopo:"))
+        details_layout.addWidget(self.details_after_text)
+        
+        # Imposta stretch factors per dare più spazio ai QTextEdit rispetto alle QLabel
+        details_layout.setStretchFactor(self.details_before_text, 1)
+        details_layout.setStretchFactor(self.details_after_text, 1)
+        details_layout.setStretchFactor(details_layout.itemAt(0).widget(), 0) # QLabel "Dati Prima:"
+        details_layout.setStretchFactor(details_layout.itemAt(2).widget(), 0) # QLabel "Dati Dopo:"
+
+
+        main_layout.addWidget(details_group)
+        
+        # TODO: Aggiungere controlli di paginazione ( QLabel per info pagina, QPushButton per Precedente/Successiva)
+        # self.pagination_label = QLabel("Pagina 1 di X (Y risultati)")
+        # self.prev_page_button = QPushButton("Precedente")
+        # self.next_page_button = QPushButton("Successiva")
+        # pagination_layout = QHBoxLayout()
+        # ... aggiungere widget al pagination_layout e poi al main_layout ...
+
+        self.setLayout(main_layout)
+
+    def _apply_filters_and_search(self):
+        # Qui recupereremo i valori dai campi di filtro
+        filters = {
+            "table_name": self.filter_table_name_edit.text().strip() or None,
+            "operation_char": None,
+            "app_user_id": self.filter_app_user_id_edit.text().strip() or None,
+            "record_id": self.filter_record_id_edit.text().strip() or None,
+            "start_datetime": self.filter_start_datetime_edit.dateTime().toPyDateTime(),
+            "end_datetime": self.filter_end_datetime_edit.dateTime().toPyDateTime(),
+            "search_text_json": self.filter_search_text_edit.text().strip() or None,
+        }
+        
+        op_text = self.filter_operation_combo.currentText()
+        if "INSERT" in op_text: filters["operation_char"] = "I"
+        elif "UPDATE" in op_text: filters["operation_char"] = "U"
+        elif "DELETE" in op_text: filters["operation_char"] = "D"
+
+        # Converti app_user_id e record_id in interi se sono numerici, altrimenti None
+        if filters["app_user_id"] and filters["app_user_id"].isdigit():
+            filters["app_user_id"] = int(filters["app_user_id"])
+        else:
+            filters["app_user_id"] = None # O mostra un errore se si aspetta un numero
+
+        if filters["record_id"] and filters["record_id"].isdigit():
+            filters["record_id"] = int(filters["record_id"])
+        else:
+            filters["record_id"] = None
+
+        self.current_filters = filters # Salva i filtri correnti per la paginazione
+        self.current_page = 1
+        self._fetch_and_display_logs()
+
+    def _reset_filters(self):
+        self.filter_table_name_edit.clear()
+        self.filter_operation_combo.setCurrentIndex(0) # "Tutte"
+        self.filter_app_user_id_edit.clear()
+        self.filter_record_id_edit.clear()
+        self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7))
+        self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime())
+        self.filter_search_text_edit.clear()
+        
+        self.current_filters = None
+        self.current_page = 1
+        self._fetch_and_display_logs() # Ricarica con filtri resettati (o tutti i log recenti)
+
+
+    def _fetch_and_display_logs(self, page_number: int = 1):
+        # Questo metodo chiamerà db_manager.get_audit_logs(self.current_filters, page=page_number)
+        # e popolerà self.log_table. Per ora, lo lasciamo come placeholder.
+        self.log_table.setRowCount(0) # Pulisce la tabella
+        self.details_before_text.clear()
+        self.details_after_text.clear()
+        
+        # --- Logica di Test (da sostituire con chiamata DB reale) ---
+        if not hasattr(self, 'db_manager') or not self.db_manager:
+            QMessageBox.warning(self, "Errore", "DB Manager non disponibile.")
+            return
+
+        # Prepara i filtri per il db_manager.get_audit_logs (metodo da creare)
+        filters_for_db = getattr(self, 'current_filters', {}) # Usa filtri correnti o dizionario vuoto
+        if not filters_for_db: # Se filtri resettati, imposta un default ragionevole
+             filters_for_db = {
+                "start_datetime": QDateTime.currentDateTime().addDays(-7).toPyDateTime(),
+                "end_datetime": QDateTime.currentDateTime().toPyDateTime()
+             }
+
+
+        try:
+            # Assumiamo che db_manager.get_audit_logs() restituisca (lista_log, totale_record_filtrati)
+            # Per ora, non implementiamo la paginazione completa qui, ma il metodo DB dovrebbe supportarla.
+            logs, total_records = self.db_manager.get_audit_logs(
+                filters=filters_for_db,
+                page=page_number, # Da implementare la gestione della paginazione UI
+                page_size=100    # Esempio di dimensione pagina
+            )
+
+            if logs:
+                self.log_table.setRowCount(len(logs))
+                for row_idx, log_entry in enumerate(logs):
+                    col = 0
+                    # ID Log
+                    item_id = QTableWidgetItem(str(log_entry.get('id', '')))
+                    item_id.setData(Qt.UserRole, log_entry) # Salva l'intero dict del log nell'item
+                    self.log_table.setItem(row_idx, col, item_id); col+=1
+                    # Timestamp
+                    ts = log_entry.get('timestamp')
+                    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "N/D"
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(ts_str)); col+=1
+                    # ID Utente App
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(str(log_entry.get('app_user_id', 'N/D')))); col+=1
+                    # ID Sessione (troncato per brevità)
+                    session_id_full = log_entry.get('session_id', 'N/D')
+                    session_id_display = (session_id_full[:8] + '...') if session_id_full and len(session_id_full) > 8 else session_id_full
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(session_id_display)); col+=1
+                    # Tabella
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(log_entry.get('tabella', 'N/D'))); col+=1
+                    # Operazione
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(log_entry.get('operazione', 'N/D'))); col+=1
+                    # ID Record
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(str(log_entry.get('record_id', 'N/D')))); col+=1
+                    # Indirizzo IP
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(log_entry.get('ip_address', 'N/D'))); col+=1
+                    # Modifiche? (semplice indicatore se dati_prima o dati_dopo esistono)
+                    has_changes = "Sì" if log_entry.get('dati_prima') or log_entry.get('dati_dopo') else "No"
+                    self.log_table.setItem(row_idx, col, QTableWidgetItem(has_changes)); col+=1
+
+                self.log_table.resizeColumnsToContents() # Adatta larghezza colonne
+                # TODO: Aggiorna self.pagination_label
+            else:
+                # TODO: Aggiorna self.pagination_label con "Nessun risultato"
+                pass # Nessun log trovato
+
+        except AttributeError as ae: # Se get_audit_logs non esiste in db_manager
+            self.log_table.setRowCount(1)
+            self.log_table.setItem(0,0, QTableWidgetItem(f"Errore: metodo get_audit_logs non trovato in DBManager ({ae})"))
+            gui_logger.error(f"AuditLogViewer: db_manager non ha get_audit_logs: {ae}")
+        except Exception as e:
+            self.log_table.setRowCount(1)
+            self.log_table.setItem(0,0, QTableWidgetItem(f"Errore durante il caricamento dei log: {e}"))
+            gui_logger.error(f"AuditLogViewer: Errore caricamento log: {e}", exc_info=True)
+
+
+    def _display_log_details(self):
+        selected_items = self.log_table.selectedItems()
+        if not selected_items:
+            self.details_before_text.clear()
+            self.details_after_text.clear()
+            return
+
+        # Prendiamo l'intero record del log memorizzato nel primo item della riga
+        first_item_selected_row = self.log_table.item(selected_items[0].row(), 0)
+        if not first_item_selected_row: return
+
+        log_entry_data = first_item_selected_row.data(Qt.UserRole) # Recupera il dict del log
+        if not log_entry_data or not isinstance(log_entry_data, dict):
+            self.details_before_text.setText("Dati del log non disponibili o corrotti.")
+            self.details_after_text.clear()
+            return
+
+        dati_prima = log_entry_data.get('dati_prima')
+        dati_dopo = log_entry_data.get('dati_dopo')
+
+        self.details_before_text.setText(json.dumps(dati_prima, indent=4, ensure_ascii=False) if dati_prima else "Nessun dato precedente.")
+        self.details_after_text.setText(json.dumps(dati_dopo, indent=4, ensure_ascii=False) if dati_dopo else "Nessun dato successivo.")
+
+
+    def _load_initial_data(self):
+        # Carica i log più recenti all'avvio del widget
+        self.current_filters = {
+            "start_datetime": QDateTime.currentDateTime().addDays(-1).toPyDateTime(), # Default: ultime 24 ore
+            "end_datetime": QDateTime.currentDateTime().toPyDateTime()
+        }
+        self.current_page = 1
+        self._fetch_and_display_logs()
+
+# ... (Fine della classe AuditLogViewerWidget) ...
+
+# Poi, in CatastoMainWindow, nel metodo setup_tabs:
+# Sostituisci la parte del placeholder per il tab "Sistema" con:
+#
+# self.audit_viewer_widget = AuditLogViewerWidget(self.db_manager, sistema_sub_tabs)
+# sistema_sub_tabs.addTab(self.audit_viewer_widget, "Log di Audit")
+# # ... (eventualmente aggiungi altri sotto-tab a sistema_sub_tabs per Backup, ecc.)
+# self.tabs.addTab(sistema_sub_tabs, "Sistema")
+
+class BackupRestoreWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Widget Backup (TODO)"))
+        self.setWindowTitle("Backup e Ripristino Database")
+
+        # Processi per pg_dump e pg_restore
+        self.process = QProcess(self)
+        self.process.readyReadStandardOutput.connect(self._handle_stdout)
+        self.process.readyReadStandardError.connect(self._handle_stderr)
+        self.process.finished.connect(self._handle_process_finished)
+
+        self._init_ui()
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        # --- Sezione Backup ---
+        backup_group = QGroupBox("Backup Database")
+        backup_layout = QFormLayout(backup_group)
+
+        self.backup_file_path_edit = QLineEdit()
+        self.backup_file_path_edit.setPlaceholderText("Seleziona percorso e nome del file di backup...")
+        self.backup_file_path_edit.setReadOnly(True)
+        btn_browse_backup_path = QPushButton("Sfoglia...")
+        btn_browse_backup_path.clicked.connect(self._browse_backup_file_save_path)
+        backup_path_layout = QHBoxLayout()
+        backup_path_layout.addWidget(self.backup_file_path_edit)
+        backup_path_layout.addWidget(btn_browse_backup_path)
+        backup_layout.addRow("File di Backup:", backup_path_layout)
+
+        self.backup_format_combo = QComboBox()
+        self.backup_format_combo.addItems([
+            "Custom (compresso, per pg_restore - raccomandato)", # .dump o .backup
+            "Plain SQL (testo semplice)" # .sql
+        ])
+        backup_layout.addRow("Formato Backup:", self.backup_format_combo)
+
+        # Opzionale: percorso pg_dump se non nel PATH
+        self.pg_dump_path_edit = QLineEdit()
+        self.pg_dump_path_edit.setPlaceholderText("Es. C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe (opzionale)")
+        backup_layout.addRow("Percorso pg_dump (opz.):", self.pg_dump_path_edit)
+
+
+        self.backup_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Esegui Backup")
+        self.backup_button.clicked.connect(self._start_backup)
+        backup_layout.addRow(self.backup_button)
+
+        main_layout.addWidget(backup_group)
+
+        # --- Sezione Ripristino ---
+        restore_group = QGroupBox("Ripristino Database")
+        restore_layout = QFormLayout(restore_group)
+
+        self.restore_file_path_edit = QLineEdit()
+        self.restore_file_path_edit.setPlaceholderText("Seleziona il file di backup da ripristinare...")
+        self.restore_file_path_edit.setReadOnly(True)
+        btn_browse_restore_path = QPushButton("Sfoglia...")
+        btn_browse_restore_path.clicked.connect(self._browse_restore_file_open_path)
+        restore_path_layout = QHBoxLayout()
+        restore_path_layout.addWidget(self.restore_file_path_edit)
+        restore_path_layout.addWidget(btn_browse_restore_path)
+        restore_layout.addRow("File di Backup:", restore_path_layout)
+
+        # Opzionale: percorso pg_restore/psql se non nel PATH
+        self.pg_restore_path_edit = QLineEdit()
+        self.pg_restore_path_edit.setPlaceholderText("Es. ...\\bin\\pg_restore.exe o ...\\bin\\psql.exe (opz.)")
+        restore_layout.addRow("Percorso pg_restore/psql (opz.):", self.pg_restore_path_edit)
+
+        self.restore_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton), "Esegui Ripristino")
+        self.restore_button.clicked.connect(self._start_restore)
+        restore_layout.addRow(self.restore_button)
+        restore_layout.addRow(QLabel("<font color='red'><b>ATTENZIONE:</b> Il ripristino sovrascriverà i dati correnti nel database. Procedere con cautela.</font>"))
+
+
+        main_layout.addWidget(restore_group)
+
+        # --- Output e Progresso ---
+        output_group = QGroupBox("Output Operazione")
+        output_layout = QVBoxLayout(output_group)
+        self.output_text_edit = QTextEdit()
+        self.output_text_edit.setReadOnly(True)
+        self.output_text_edit.setLineWrapMode(QTextEdit.NoWrap) # Per output comandi
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False) # Mostra solo durante l'operazione
+
+        output_layout.addWidget(self.output_text_edit)
+        output_layout.addWidget(self.progress_bar)
+        main_layout.addWidget(output_group, 1) # Il 1 dà a questo widget più stretch factor
+
+        self.setLayout(main_layout)
+
+    def _browse_backup_file_save_path(self):
+        default_db_name = self.db_manager.conn_params.get("dbname", "catasto_storico")
+        default_filename = f"{default_db_name}_backup_{QDateTime.currentDateTime().toString('yyyyMMdd_HHmmss')}"
+        
+        if self.backup_format_combo.currentIndex() == 0: # Custom
+            filter_str = "File di Backup PostgreSQL Custom (*.dump *.backup);;Tutti i file (*)"
+            default_filename += ".dump"
+        else: # Plain SQL
+            filter_str = "File SQL (*.sql);;Tutti i file (*)"
+            default_filename += ".sql"
+
+        filePath, _ = QFileDialog.getSaveFileName(self, "Salva Backup Database", default_filename, filter_str)
+        if filePath:
+            self.backup_file_path_edit.setText(filePath)
+
+    def _browse_restore_file_open_path(self):
+        filter_str = "File di Backup PostgreSQL (*.dump *.backup *.sql);;File Custom (*.dump *.backup);;File SQL (*.sql);;Tutti i file (*)"
+        filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Backup per Ripristino", "", filter_str)
+        if filePath:
+            self.restore_file_path_edit.setText(filePath)
+
+    def _update_ui_for_process(self, is_running: bool):
+        self.backup_button.setEnabled(not is_running)
+        self.restore_button.setEnabled(not is_running)
+        self.progress_bar.setVisible(is_running)
+        if is_running:
+            self.progress_bar.setRange(0,0) # Indicatore di attività (busy)
+            self.output_text_edit.clear()
+        else:
+            self.progress_bar.setRange(0,1) # Resetta
+            self.progress_bar.setValue(0)
+
+    def _handle_stdout(self):
+        data = self.process.readAllStandardOutput().data().decode(errors='ignore')
+        self.output_text_edit.append(data)
+
+    def _handle_stderr(self):
+        data = self.process.readAllStandardError().data().decode(errors='ignore')
+        self.output_text_edit.append(f"<font color='red'>ERRORE: {data}</font>")
+
+    def _handle_process_finished(self, exitCode, exitStatus):
+        is_restore = self.process.property("is_restore_operation")
+        self.process.setProperty("is_restore_operation", False) # Resetta la proprietà
+
+        self.output_text_edit.append(f"<hr>DEBUG: Processo terminato. ExitCode: {exitCode}, ExitStatus: {exitStatus}, Operazione Ripristino: {is_restore}<hr>")
+        self._update_ui_for_process(False)
+
+        operation_name = "Ripristino" if is_restore else "Backup"
+
+        if exitStatus == QProcess.CrashExit:
+            self.output_text_edit.append(f"<font color='red'><b>ERRORE: Il processo di {operation_name.lower()} è terminato inaspettatamente (crash).</b></font>")
+            QMessageBox.critical(self, f"Errore Processo {operation_name}", f"Il processo di {operation_name.lower()} è terminato inaspettatamente.")
+        elif exitCode != 0:
+            self.output_text_edit.append(f"<font color='red'><b>FALLITO: Il processo di {operation_name.lower()} è terminato con codice d'errore: {exitCode}.</b></font>")
+            QMessageBox.warning(self, f"Operazione {operation_name} Fallita",
+                                f"L'operazione di {operation_name.lower()} è fallita (codice: {exitCode}). Controllare l'output per i dettagli.")
+        else:
+            self.output_text_edit.append(f"<font color='green'><b>Operazione di {operation_name.lower()} completata con successo (secondo exit code 0).</b></font>")
+            QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                    f"L'operazione di {operation_name.lower()} è stata completata con successo.")
+            if is_restore:
+                QMessageBox.information(self, "Riconnessione Database",
+                                        "Il ripristino sembra completato. L'applicazione tenterà ora di riconnettersi al database.\n"
+                                        "Potrebbe essere necessario riavviare l'applicazione se si verificano problemi.")
+        
+        # --- RICONNESSIONE POOL DOPO IL RIPRISTINO ---
+        if is_restore:
+            self.output_text_edit.append("<i>Tentativo di ripristinare le connessioni dell'applicazione al database...</i>\n")
+            QApplication.processEvents()
+            if self.db_manager.reconnect_pool(): # DECOMMENTA E USA
+                self.output_text_edit.append("<i>Connessioni dell'applicazione al database ripristinate.</i>\n")
+                if success_message_box: # Mostra il messaggio di successo solo ora
+                     QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                            f"L'operazione di {operation_name.lower()} è stata completata con successo.")
+                     QMessageBox.information(self, "Database Riconnesso",
+                                            "Il ripristino è completato e l'applicazione si è riconnessa al database.\n"
+                                            "Si consiglia di verificare i dati e, se necessario, riavviare l'applicazione.")
+
+            else:
+                self.output_text_edit.append("<font color='red'><b>FALLITO: Impossibile ripristinare le connessioni al database. Si prega di RIAVVIARE L'APPLICAZIONE.</b></font>\n")
+                QMessageBox.critical(self, "Errore Riconnessione Critico", 
+                                     "Impossibile ripristinare le connessioni al database dopo il ripristino.\n"
+                                     "L'applicazione deve essere riavviata.")
+                # Potresti voler chiudere l'app qui o disabilitare ulteriori interazioni DB
+        elif success_message_box: # Per operazioni diverse dal ripristino (es. backup)
+            QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                    f"L'operazione di {operation_name.lower()} è stata completata con successo.")
+        # --- FINE RICONNESSIONE POOL ---
+    def _start_backup(self):
+        # Controllo del percorso del file di backup   
+        backup_file = self.backup_file_path_edit.text()
+        if not backup_file:
+            QMessageBox.warning(self, "Percorso Mancante", "Selezionare un percorso e un nome file per il backup.")
+            return
+
+        if os.path.exists(backup_file):
+            reply = QMessageBox.question(self, "Conferma Sovrascrittura",
+                                         f"Il file '{os.path.basename(backup_file)}' esiste già.\nVuoi sovrascriverlo?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
+
+        # --- Richiesta Password ---
+        password, ok = QInputDialog.getText(self, "Autenticazione Database",
+                                            f"Inserisci la password per l'utente '{self.db_manager.conn_params.get('user', 'N/D')}' "
+                                            f"sul database '{self.db_manager.conn_params.get('dbname', 'N/D')}':",
+                                            QLineEdit.Password)
+        if not ok: # L'utente ha premuto Annulla o chiuso il dialogo
+            self.output_text_edit.append("<i>Backup annullato dall'utente (nessuna password inserita).</i>")
+            return
+        if not password: # L'utente ha premuto OK ma non ha inserito nulla (non dovrebbe succedere se inputMask è settato, ma meglio controllare)
+            QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota.")
+            self.output_text_edit.append("<font color='orange'>Backup fallito: password non fornita.</font>")
+            return
+        # --- Fine Richiesta Password ---
+
+        self._update_ui_for_process(True)
+        self.output_text_edit.append(f"Avvio backup su: {backup_file}...\n")
+
+        command_parts = self.db_manager.get_backup_command_parts(
+            backup_file_path=backup_file,
+            pg_dump_executable_path_ui=self.pg_dump_path_edit.text().strip(), # Passa il contenuto del campo
+            format_type="custom" if self.backup_format_combo.currentIndex() == 0 else "plain",
+            include_blobs=False 
+        )
+
+        if not command_parts:
+            self.output_text_edit.append("<font color='red'><b>ERRORE: Impossibile costruire il comando di backup. Verificare il percorso di pg_dump e i log.</b></font>")
+            self._update_ui_for_process(False)
+            QMessageBox.critical(self, "Errore Comando", "Impossibile preparare il comando di backup. Controllare i log dell'applicazione.")
+            return
+
+        executable = command_parts[0]
+        args = command_parts[1:]
+
+        self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
+
+        # --- Impostazione PGPASSWORD per QProcess ---
+        process_env = self.process.processEnvironment() # Ottieni l'ambiente corrente del QProcess
+                                                        # o QProcess.systemEnvironment() se vuoi partire da quello di sistema
+        
+        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{self.db_manager.conn_params.get('user')}'...</i>\n")
+        try:
+            process_env.insert("PGPASSWORD", password) # Usa la password fornita dall'utente
+            self.process.setProcessEnvironment(process_env)
+            self.output_text_edit.append("<i>PGPASSWORD impostata per questo processo.</i>\n")
+        except Exception as e: # Gestione generica se l'insert fallisce per qualche motivo imprevisto
+            self.output_text_edit.append(f"<font color='red'><b>ERRORE nell'impostare PGPASSWORD: {e}</b></font>\n")
+            self.output_text_edit.append("<font color='orange'>Il backup potrebbe fallire o richiedere la password altrimenti.</font>\n")
+        # --- Fine Impostazione PGPASSWORD ---
+        
+        self.process.start(executable, args)
+
+   
+
+    def _start_restore(self):
+        restore_file = self.restore_file_path_edit.text()
+        if not restore_file:
+            QMessageBox.warning(self, "File Mancante", "Selezionare un file di backup da cui ripristinare.")
+            return
+        if not os.path.exists(restore_file):
+            QMessageBox.critical(self, "Errore File", f"Il file di backup '{restore_file}' non è stato trovato.")
+            return
+
+        # --- AVVISI E CONFERME MULTIPLE ---
+        dbname_to_restore = self.db_manager.conn_params.get("dbname", "N/D")
+        if dbname_to_restore == "N/D": # Controllo di sicurezza
+            QMessageBox.critical(self, "Errore Configurazione", "Nome del database di destinazione non configurato correttamente.")
+            return
+
+        reply = QMessageBox.warning(self, "Conferma Ripristino Critico",
+                                     f"<b>ATTENZIONE ESTREMA!</b>\n\n"
+                                     f"Stai per ripristinare il database dal file:\n'{os.path.basename(restore_file)}'\n"
+                                     f"sul database di destinazione:\n<b>'{dbname_to_restore}'</b> "
+                                     f"(Host: {self.db_manager.conn_params.get('host', 'N/D')}, "
+                                     f"Utente: {self.db_manager.conn_params.get('user', 'N/D')}).\n\n"
+                                     "<b>Questa operazione SOVRASCRIVERÀ tutti i dati correnti nel database di destinazione e NON PUÒ ESSERE ANNULLATA.</b>\n\n"
+                                     "Si raccomanda VIVAMENTE di aver effettuato un backup recente e verificato del database corrente prima di procedere.\n\n"
+                                     "Sei assolutamente sicuro di voler continuare?",
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel) # Usare Cancel per maggiore enfasi
+        if reply == QMessageBox.Cancel:
+            self.output_text_edit.append("<i>Ripristino annullato dall'utente (prima conferma).</i>")
+            return
+
+        text_confirm, ok = QInputDialog.getText(self, "Conferma Finale Ripristino Obbligatoria",
+                                                f"Per confermare il ripristino che sovrascriverà PERMANENTEMENTE il database '{dbname_to_restore}',\n"
+                                                f"digita il nome del database qui sotto (deve corrispondere esattamente):")
+        if not ok:
+            self.output_text_edit.append("<i>Ripristino annullato dall'utente (dialogo conferma nome DB chiuso).</i>")
+            return
+        if text_confirm.strip() != dbname_to_restore:
+            QMessageBox.critical(self, "Ripristino Annullato",
+                                 f"Il nome del database inserito ('{text_confirm.strip()}') non corrisponde a '{dbname_to_restore}'.\n"
+                                 "Ripristino annullato per sicurezza.")
+            self.output_text_edit.append("<font color='red'>Ripristino annullato: conferma nome database fallita.</font>")
+            return
+        # --- FINE AVVISI E CONFERME ---
+
+        # --- Richiesta Password ---
+        password, ok = QInputDialog.getText(self, "Autenticazione Database per Ripristino",
+                                            f"Inserisci la password per l'utente '{self.db_manager.conn_params.get('user', 'N/D')}' "
+                                            f"per il database '{dbname_to_restore}':",
+                                            QLineEdit.Password)
+        if not ok:
+            self.output_text_edit.append("<i>Ripristino annullato (dialogo password chiuso).</i>")
+            return
+        if not password.strip(): # Controlla se la password è vuota o solo spazi
+            QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota per il ripristino.")
+            self.output_text_edit.append("<font color='orange'>Ripristino fallito: password non fornita.</font>")
+            return
+        # --- Fine Richiesta Password ---
+
+        self._update_ui_for_process(True)
+        self.output_text_edit.clear() # Pulisci output precedente
+        self.output_text_edit.append(f"Avvio ripristino del database '{dbname_to_restore}' da: {restore_file}...\n")
+        self.output_text_edit.append("<font color='orange'><b>AVVISO: L'applicazione potrebbe non rispondere durante l'operazione di ripristino. Attendere il completamento.</b></font>\n")
+        QApplication.processEvents() # Forza l'aggiornamento della UI prima di un'operazione lunga
+
+        # Disconnessione temporanea del pool di connessioni dell'applicazione
+        # Questo è FONDAMENTALE per pg_restore, specialmente con --clean,
+        # per evitare errori di "database in uso".
+        # Il metodo disconnect_pool() deve chiudere tutte le connessioni nel pool.
+        # Il metodo reconnect_pool() deve ricreare/riaprire il pool.
+        # Questi metodi andranno implementati in CatastoDBManager.
+        
+        self.output_text_edit.append("<i>Tentativo di chiudere le connessioni attive al database...</i>\n")
+        QApplication.processEvents()
+        # --- DISCONNESSIONE POOL ---
+        self.output_text_edit.append("<i>Tentativo di chiudere le connessioni attive dell'applicazione al database...</i>\n")
+        QApplication.processEvents()
+        if not self.db_manager.disconnect_pool(): # DECOMMENTA E USA
+            QMessageBox.critical(self, "Errore Critico Ripristino",
+                                 "Impossibile chiudere le connessioni esistenti al database prima del ripristino.\n"
+                                 "L'operazione è stata annullata per sicurezza.")
+            self.output_text_edit.append("<font color='red'><b>FALLITO: Impossibile chiudere le connessioni al database. Ripristino annullato.</b></font>")
+            self._update_ui_for_process(False)
+            return
+        self.output_text_edit.append("<i>Connessioni dell'applicazione al database chiuse temporaneamente.</i>\n")
+        QApplication.processEvents()
+        # --- FINE DISCONNESSIONE POOL ---
+        command_parts = self.db_manager.get_restore_command_parts(
+            backup_file_path=restore_file,
+            pg_tool_executable_path_ui=self.pg_restore_path_edit.text().strip() # Prende da UI
+        )
+
+        if not command_parts:
+            self.output_text_edit.append("<font color='red'><b>ERRORE: Impossibile costruire il comando di ripristino. Controllare il percorso dell'eseguibile e i log.</b></font>")
+            self._update_ui_for_process(False)
+            # self.db_manager.reconnect_pool() # Riattiva il pool se era stato disconnesso
+            QMessageBox.critical(self, "Errore Comando", "Impossibile preparare il comando di ripristino.")
+            return
+
+        executable = command_parts[0]
+        args = command_parts[1:]
+
+        self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
+
+        process_env = self.process.processEnvironment()
+        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{self.db_manager.conn_params.get('user')}'...</i>\n")
+        try:
+            process_env.insert("PGPASSWORD", password)
+            self.process.setProcessEnvironment(process_env)
+            self.output_text_edit.append("<i>PGPASSWORD impostata per questo processo.</i>\n")
+        except Exception as e:
+            self.output_text_edit.append(f"<font color='red'><b>ERRORE nell'impostare PGPASSWORD: {e}</b></font>\n")
+            # Non necessariamente blocchiamo qui, pg_restore potrebbe fallire dopo
+
+
+        # Il segnale finished verrà gestito da _handle_process_finished,
+        # che chiamerà _update_ui_for_process(False).
+        # In _handle_process_finished, dopo un ripristino (e solo se successo),
+        # si dovrebbe chiamare self.db_manager.reconnect_pool().
+        self.process.setProperty("is_restore_operation", True) # Proprietà per identificare l'operazione
+        self.process.start(executable, args)
 
 
 class RicercaAvanzataImmobiliWidget(QWidget):
@@ -4545,12 +5195,32 @@ class CatastoMainWindow(QMainWindow):
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.tabs.addTab(GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
 
-        # --- Tab Sistema (placeholder per Audit, Backup) ---
-        sistema_sub_tabs = QTabWidget()
-        placeholder_sistema = QWidget(sistema_sub_tabs)
-        placeholder_sistema_layout = QVBoxLayout(placeholder_sistema)
-        placeholder_sistema_layout.addWidget(QLabel("Funzionalità di Sistema (Audit, Backup, Manutenzione) da implementare qui."))
-        sistema_sub_tabs.addTab(placeholder_sistema, "Info Sistema")
+        # --- Tab Sistema ---
+        sistema_sub_tabs = QTabWidget() # Continuiamo a usare un QTabWidget per futuri sotto-tab
+
+        if self.db_manager: # Assicurati che db_manager sia inizializzato
+            # Aggiungi il AuditLogViewerWidget come primo sotto-tab
+            self.audit_viewer_widget = AuditLogViewerWidget(self.db_manager, sistema_sub_tabs)
+            sistema_sub_tabs.addTab(self.audit_viewer_widget, "Log di Audit")
+
+            # ---> QUI È L'AGGIUNTA IMPORTANTE <---
+            self.backup_restore_widget = BackupRestoreWidget(self.db_manager, sistema_sub_tabs)
+            sistema_sub_tabs.addTab(self.backup_restore_widget, "Backup/Ripristino")
+            # ---> FINE AGGIUNTA <---
+
+        else:
+            # Fallback se db_manager non è pronto (non dovrebbe succedere se il login è ok)
+            error_widget_audit = QLabel("Errore: DB Manager non inizializzato per il Log di Audit.")
+            sistema_sub_tabs.addTab(error_widget_audit, "Log di Audit")
+            error_widget_backup = QLabel("Errore: DB Manager non inizializzato per Backup/Ripristino.")
+            sistema_sub_tabs.addTab(error_widget_backup, "Backup/Ripristino")
+
+
+        # Qui potresti aggiungere altri widget per Manutenzione ecc. come altri sotto-tab
+        # Esempio:
+        # manutenzione_widget = ManutenzioneWidget(self.db_manager, sistema_sub_tabs) # Dovrai creare ManutenzioneWidget
+        # sistema_sub_tabs.addTab(manutenzione_widget, "Manutenzione DB")
+
         self.tabs.addTab(sistema_sub_tabs, "Sistema")
 
         # La chiamata a self.update_ui_based_on_role() avverrà dopo in perform_initial_setup,
@@ -4679,19 +5349,44 @@ def run_gui_app():
     
     # Applica UN SOLO stylesheet principale all'avvio
     app.setStyleSheet("""
-        * { 
-            font-size: 11pt; /* Dimensione font globale */
+        * {
+            font-size: 10pt;
+            color: #202020; /* Testo scuro di default per tutti i widget */
         }
         QMainWindow {
-            background-color: #353535; /* Esempio: Sfondo scuro per coerenza con la palette */
-            /* Se usi una QPalette per QPalette.Window, potresti non aver bisogno di questo */
+            background-color: #F0F0F0; /* Sfondo principale grigio molto chiaro */
         }
+        QWidget { /* Sfondo di base per i widget figli, se non specificato diversamente */
+            background-color: #F0F0F0;
+        }
+
+        /* ----- Etichette ----- */
+        QLabel {
+            color: #101010; /* Testo leggermente più scuro per le etichette */
+            background-color: transparent; /* Assicura che non abbiano sfondo proprio se non voluto */
+        }
+
+        /* ----- Campi di Input ----- */
+        QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
+            background-color: #FFFFFF; /* Sfondo bianco per input */
+            color: #202020;
+            border: 1px solid #B0B0B0; /* Bordo grigio medio */
+            border-radius: 3px;
+            padding: 4px; /* Aumentato leggermente il padding */
+        }
+        QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
+            border: 1px solid #0078D7; /* Bordo blu quando l'input ha il focus */
+        }
+
+        /* ----- Pulsanti ----- */
         QPushButton {
-            background-color: #4CAF50; 
+            background-color: #4CAF50; /* Pulsanti di azione principali verdi */
             color: white;
+            border: 1px solid #3E8E41; /* Bordo leggermente più scuro del bg */
             border-radius: 5px;
-            padding: 5px;
+            padding: 6px 12px; /* Padding per dare respiro */
             font-weight: bold;
+            min-width: 70px; /* Larghezza minima per coerenza */
         }
         QPushButton:hover {
             background-color: #45a049;
@@ -4699,56 +5394,269 @@ def run_gui_app():
         QPushButton:pressed {
             background-color: #3e8e41;
         }
-        QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-            background-color: #2E2E2E; /* Sfondo scuro per input */
-            color: #E0E0E0; /* Testo chiaro per input */
-            border: 1px solid #505050;
-            border-radius: 3px;
-            padding: 3px;
+        QPushButton:disabled { /* Stile per pulsanti disabilitati */
+            background-color: #D0D0D0;
+            color: #808080;
+            border-color: #B0B0B0;
         }
-        QLabel {
-            color: #E0E0E0; /* Testo chiaro per etichette */
+        /* Pulsanti secondari o meno impattanti (se necessario, si possono usare classi oggetto)
+        QPushButton#secondaryButton {
+            background-color: #E0E0E0;
+            color: #202020;
+            border: 1px solid #B0B0B0;
         }
-        QTabWidget::pane { 
-            border-top: 2px solid #505050;
-            margin-top: -1px; 
+        QPushButton#secondaryButton:hover { background-color: #D0D0D0; }
+        QPushButton#secondaryButton:pressed { background-color: #C0C0C0; }
+        */
+
+        /* ----- Tabs ----- */
+        QTabWidget::pane {
+            border: 1px solid #C0C0C0;       /* Bordo del contenuto del tab */
+            border-top: none;                /* Rimuoviamo il bordo superiore del pane, sarà gestito dai tab */
+            background-color: #F8F8F8;       /* Sfondo del pane */
         }
-        QTabBar::tab { 
-            background: #3E3E3E;
-            color: #E0E0E0;
-            border: 1px solid #505050;
-            border-bottom-color: #505050; 
+
+        QTabBar {
+            /* Opzionale: se vuoi un bordo sotto l'intera barra dei tab che li separi dal pane */
+            /* border-bottom: 1px solid #C0C0C0; */
+            /* Se si usa il bordo sopra, i tab potrebbero necessitare di aggiustamenti per sovrapporsi */
+        }
+
+        QTabBar::tab {
+            background: #E0E0E0;             /* Sfondo tab non selezionato */
+            color: #303030;                  /* Testo tab non selezionato */
+            border-top: 1px solid #C0C0C0;
+            border-left: 1px solid #C0C0C0;
+            border-right: 1px solid #C0C0C0;
+            border-bottom: 1px solid #C0C0C0; /* Tutti i tab hanno un bordo inferiore */
             border-top-left-radius: 4px;
             border-top-right-radius: 4px;
             min-width: 8ex;
-            padding: 3px 5px;
+            padding: 6px 9px;                /* Padding consistente */
+            margin-right: 1px;               /* Piccola spaziatura tra i tab */
+            /* Assicurati che non ci sia un margin-bottom residuo qui che possa causare problemi */
         }
-        QTabBar::tab:selected, QTabBar::tab:hover {
-            background: #4A4A4A;
-            color: white;
+
+        QTabBar::tab:hover {
+            background: #D5D5D5;
+            color: #101010;
         }
+
         QTabBar::tab:selected {
-            border-color: #606060;
-            border-bottom-color: #4A4A4A; 
+            background: #F8F8F8;             /* Sfondo tab selezionato (uguale al pane per effetto "fuso") */
+            color: #000000;                  /* Testo tab selezionato più scuro/nero */
+            font-weight: bold;
+            border-top: 1px solid #C0C0C0;
+            border-left: 1px solid #C0C0C0;
+            border-right: 1px solid #C0C0C0;
+            border-bottom: 1px solid #F8F8F8; /* TRUCCO: Bordo inferiore dello stesso colore dello sfondo del tab/pane */
+                                              /* Questo fa "scomparire" il bordo inferiore, facendolo sembrare connesso al pane. */
+            /* Nessun margin-bottom negativo necessario con questo approccio se il pane non ha bordo superiore */
+            /* padding: 5px 8px; // Assicurarsi che il padding sia lo stesso dello stato non selezionato */
         }
+
+        /* ----- Tabelle ----- */
         QTableWidget {
-            gridline-color: #505050; 
-            background-color: #2E2E2E;
-            color: #E0E0E0;
-            alternate-background-color: #353535; 
+            gridline-color: #D0D0D0; /* Griglia chiara */
+            background-color: #FFFFFF; /* Sfondo tabella bianco */
+            color: #202020;
+            alternate-background-color: #F5F5F5; /* Alternanza righe grigio molto chiaro */
+            selection-background-color: #0078D7; /* Blu per selezione */
+            selection-color: white;              /* Testo bianco su selezione */
+            border: 1px solid #C0C0C0;
         }
-        QHeaderView::section { 
-            background-color: #3E3E3E;
-            color: #E0E0E0;
-            padding: 4px;
-            border: 1px solid #505050;
+        QHeaderView::section {
+            background-color: #E8E8E8; /* Sfondo header tabella */
+            color: #202020;
+            padding: 5px;
+            border: 1px solid #C0C0C0;
+            border-bottom-width: 2px; /* Bordo inferiore più marcato per separare dall'area dati */
             font-weight: bold;
         }
-        QToolTip { /* Stile per i ToolTip tramite QSS */
-            background-color: #555555;
-            color: white;
-            border: 1px solid #666666;
+
+        /* ----- QComboBox ----- */
+        QComboBox {
+            background-color: white;
+            color: #202020;
+            border: 1px solid #B0B0B0;
+            border-radius: 3px;
+            padding: 4px;
+            min-width: 6em;
+        }
+        QComboBox:hover {
+            border-color: #808080;
+        }
+        QComboBox::drop-down { /* Pulsante per la tendina */
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 20px;
+            border-left-width: 1px;
+            border-left-color: #C0C0C0;
+            border-left-style: solid;
+            border-top-right-radius: 3px;
+            border-bottom-right-radius: 3px;
+            background: #E8E8E8;
+        }
+        QComboBox::down-arrow {
+            /* Se usi icone custom, qui va l'icona per la freccia scura.
+               Altrimenti, Qt dovrebbe usare una freccia di sistema che si adatta.
+               image: url(path/to/your/dark_arrow_icon.png);
+            */
+            width: 10px;
+            height: 10px;
+        }
+        QComboBox QAbstractItemView { /* La lista a discesa */
+            background-color: #FFFFFF;
+            color: #202020;
+            border: 1px solid #B0B0B0;
+            selection-background-color: #0078D7; /* Blu per selezione item */
+            selection-color: white;
+            outline: 0px;
             padding: 2px;
+        }
+
+        /* ----- ToolTips ----- */
+        QToolTip {
+            background-color: #FFFFE0; /* Giallo chiaro classico per tooltip */
+            color: black;
+            border: 1px solid #B0B0B0;
+            padding: 3px;
+        }
+
+        /* ----- QMessageBox (Dialoghi di Messaggio) ----- */
+        QMessageBox {
+            background-color: #F0F0F0; /* Sfondo del dialogo */
+        }
+        QMessageBox QLabel { /* Etichette di testo dentro QMessageBox */
+            color: #202020; /* Testo scuro */
+            background-color: transparent;
+            /*min-width: 150px; // Assicura che il testo abbia spazio */
+        }
+        /* I QPushButton in QMessageBox erediteranno lo stile globale dei QPushButton */
+
+        /* ----- QMenuBar e QMenu (Menu a Tendina) ----- */
+        QMenuBar {
+            background-color: #E8E8E8; /* Sfondo barra menu */
+            color: #202020;
+            spacing: 2px;
+        }
+        QMenuBar::item {
+            background: transparent;
+            padding: 4px 10px;
+            border-radius: 3px;
+        }
+        QMenuBar::item:selected {
+            background: #D0D0D0;
+            color: black;
+        }
+        QMenuBar::item:pressed {
+            background: #C0C0C0; /* Un po' più scuro quando premuto */
+        }
+        QMenu {
+            background-color: #FFFFFF; /* Sfondo menu a tendina bianco */
+            color: #202020;
+            border: 1px solid #B0B0B0;
+            padding: 4px;
+        }
+        QMenu::item {
+            padding: 5px 25px 5px 25px;
+            border-radius: 3px;
+        }
+        QMenu::item:selected {
+            background-color: #0078D7; /* Blu per highlight selezione azione */
+            color: white;
+        }
+        QMenu::separator {
+            height: 1px;
+            background: #D0D0D0; /* Separatore chiaro */
+            margin: 4px 0px 4px 0px;
+        }
+        QMenu::icon {
+            padding-left: 5px;
+        }
+
+        /* ----- ScrollArea e ScrollBar (se necessario uno stile specifico) ----- */
+        QScrollArea {
+            border: 1px solid #C0C0C0;
+            background: white;
+        }
+        QScrollBar:horizontal {
+            border: none;
+            background: #E0E0E0;
+            height: 12px;
+            margin: 0px 15px 0 15px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #B0B0B0;
+            min-width: 20px;
+            border-radius: 6px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            border: none;
+            background: #C0C0C0;
+            width: 14px;
+            subcontrol-origin: margin;
+        }
+        QScrollBar::add-line:horizontal { subcontrol-position: right; }
+        QScrollBar::sub-line:horizontal { subcontrol-position: left; }
+
+        QScrollBar:vertical {
+            border: none;
+            background: #E0E0E0;
+            width: 12px;
+            margin: 15px 0 15px 0;
+        }
+        QScrollBar::handle:vertical {
+            background: #B0B0B0;
+            min-height: 20px;
+            border-radius: 6px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            border: none;
+            background: #C0C0C0;
+            height: 14px;
+            subcontrol-origin: margin;
+        }
+        QScrollBar::add-line:vertical { subcontrol-position: bottom; }
+        QScrollBar::sub-line:vertical { subcontrol-position: top; }
+
+        /* ----- Altri Widget Comuni ----- */
+        QGroupBox {
+            background-color: #F5F5F5; /* Sfondo leggermente diverso per i group box */
+            border: 1px solid #C0C0C0;
+            border-radius: 4px;
+            margin-top: 2ex; /* Spazio per il titolo */
+            font-weight: bold;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left; /* Posizione titolo */
+            padding: 0 5px 0 5px;
+            left: 10px; /* Spostamento del titolo */
+            color: #101010;
+        }
+        QCheckBox {
+            spacing: 5px; /* Spazio tra checkbox e testo */
+        }
+        QCheckBox::indicator { /* Il quadratino della checkbox */
+            width: 16px;
+            height: 16px;
+            border: 1px solid #B0B0B0;
+            border-radius: 3px;
+            background-color: white;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #4CAF50; /* Verde quando checkato */
+            border-color: #3E8E41;
+            image: url(path/to/your/checkmark_white_icon.png); /* Icona di spunta bianca, opzionale */
+        }
+        QCheckBox::indicator:disabled {
+            background-color: #E0E0E0;
+            border-color: #C0C0C0;
+        }
+        QFrame#status_frame { /* Se hai un QFrame con objectName='status_frame' per la status bar */
+            background-color: #E0E0E0;
+            border-top: 1px solid #B0B0B0;
         }
     """)
 

@@ -229,7 +229,7 @@ def esegui_login(db: CatastoDBManager) -> bool:
         if tentativi < max_tentativi:
             print(f"Tentativi rimasti: {max_tentativi - tentativi}")
             input("Premi INVIO per riprovare...")
-
+    self.set_audit_session_variables(app_user_id, session_id_valido)    
     print("Numero massimo di tentativi di login raggiunto. Uscita dal programma.")
     return False
 
@@ -1667,6 +1667,7 @@ def menu_utenti(db: CatastoDBManager) -> bool:
              logged_in_user_id = None
              logged_in_user_info = None
              current_session_id = None
+                # Chiama la funzione per pulire il contesto DB
              db.clear_session_app_user() # Pulisce anche il contesto DB per l'audit
              print("Verrai reindirizzato alla schermata di login.")
              input("\nPremi INVIO per continuare...") 

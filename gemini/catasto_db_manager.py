@@ -23,6 +23,7 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 import json
 import uuid
 import os
+import shutil # Per trovare i percorsi degli eseguibili
 
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
@@ -1304,6 +1305,8 @@ class CatastoDBManager:
         """Chiama la procedura SQL logout_utente e resetta il contesto di sessione."""
         if user_id is None or session_id is None: logger.warning("Tentativo logout senza user_id/session_id."); self.clear_session_app_user(); return False
         success = False
+        #if self.db_manager:
+        self.clear_audit_session_variables() # Chiamata corretta al metodo della stessa classe
         try:
             call_proc = "CALL logout_utente(%s, %s, %s)"
             success = self.execute_query(call_proc, (user_id, session_id, client_ip))
@@ -1314,6 +1317,7 @@ class CatastoDBManager:
              # Resetta sempre le variabili di sessione dopo il logout
              self.clear_session_app_user()
         return success
+        
 
     def check_permission(self, utente_id: int, permesso_nome: str) -> bool:
         """Chiama la funzione SQL ha_permesso."""
@@ -1508,7 +1512,140 @@ class CatastoDBManager:
             return False
 
     # --- Metodi Sistema Backup (Invariati rispetto a comune_id) ---
+    def get_audit_logs(self,
+                       filters: Optional[Dict[str, Any]] = None,
+                       page: int = 1,
+                       page_size: int = 50, # Numero di record per pagina
+                       sort_by: str = 'timestamp', # Colonna di default per l'ordinamento
+                       sort_order: str = 'DESC' # Ordine di default
+                      ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Recupera i record dalla tabella audit_log con filtri, paginazione e ordinamento.
 
+        Args:
+            filters: Un dizionario contenente i filtri. Chiavi possibili:
+                'table_name': str (ricerca parziale con ILIKE)
+                'operation_char': str ('I', 'U', o 'D')
+                'app_user_id': int
+                'record_id': int
+                'start_datetime': datetime
+                'end_datetime': datetime
+                'search_text_json': str (ricerca parziale ILIKE su dati_prima e dati_dopo)
+                'ip_address': str (ricerca parziale ILIKE)
+            page: Numero della pagina da recuperare (1-based).
+            page_size: Numero di record per pagina.
+            sort_by: Nome della colonna per l'ordinamento (default: 'timestamp').
+                     Colonne valide: 'id', 'timestamp', 'tabella', 'operazione', 'record_id', 'app_user_id', 'ip_address'.
+            sort_order: 'ASC' o 'DESC' (default: 'DESC').
+
+        Returns:
+            Una tupla contenente:
+                - Una lista di dizionari, dove ogni dizionario rappresenta un record di log.
+                - Il numero totale di record che soddisfano i filtri (per la paginazione).
+        """
+        if filters is None:
+            filters = {}
+
+        query_conditions = []
+        query_params = []
+
+        # Costruzione delle condizioni WHERE in base ai filtri
+        if filters.get("table_name"):
+            query_conditions.append("tabella ILIKE %s")
+            query_params.append(f"%{filters['table_name']}%")
+        
+        if filters.get("operation_char"):
+            query_conditions.append("operazione = %s")
+            query_params.append(filters["operation_char"])
+            
+        if filters.get("app_user_id") is not None: # Controlla esplicitamente per None perché 0 è un ID valido
+            query_conditions.append("app_user_id = %s")
+            query_params.append(filters["app_user_id"])
+
+        if filters.get("record_id") is not None:
+            query_conditions.append("record_id = %s")
+            query_params.append(filters["record_id"])
+
+        if filters.get("start_datetime"):
+            query_conditions.append("timestamp >= %s")
+            query_params.append(filters["start_datetime"])
+
+        if filters.get("end_datetime"):
+            query_conditions.append("timestamp <= %s")
+            query_params.append(filters["end_datetime"])
+            
+        if filters.get("ip_address"):
+            query_conditions.append("ip_address ILIKE %s")
+            query_params.append(f"%{filters['ip_address']}%")
+
+        if filters.get("search_text_json"):
+            # Attenzione: questa ricerca può essere lenta su grandi volumi di dati JSON
+            # se non ci sono indici GIN appropriati sui campi JSONB.
+            json_search_text = f"%{filters['search_text_json']}%"
+            query_conditions.append("(dati_prima::text ILIKE %s OR dati_dopo::text ILIKE %s)")
+            query_params.extend([json_search_text, json_search_text])
+
+        where_clause = ""
+        if query_conditions:
+            where_clause = "WHERE " + " AND ".join(query_conditions)
+
+        # Query per contare il totale dei record (per la paginazione)
+        count_query = f"SELECT COUNT(*) FROM {self.schema}.audit_log {where_clause};"
+
+        # Validazione e costruzione della clausola ORDER BY
+        allowed_sort_columns = ['id', 'timestamp', 'tabella', 'operazione', 'record_id', 'app_user_id', 'ip_address']
+        if sort_by not in allowed_sort_columns:
+            sort_by = 'timestamp' # Default sicuro
+        if sort_order.upper() not in ['ASC', 'DESC']:
+            sort_order = 'DESC' # Default sicuro
+        
+        order_by_clause = f"ORDER BY {sort_by} {sort_order.upper()}"
+        if sort_by != 'id': # Aggiungi 'id' come secondo criterio per un ordinamento stabile
+            order_by_clause += f", id {sort_order.upper()}"
+
+
+        # Calcolo dell'offset per la paginazione
+        offset = (page - 1) * page_size
+
+        # Query per recuperare i dati paginati
+        data_query = f"""
+            SELECT id, timestamp, app_user_id, session_id, tabella, operazione, record_id, ip_address, utente, dati_prima, dati_dopo
+            FROM {self.schema}.audit_log
+            {where_clause}
+            {order_by_clause}
+            LIMIT %s OFFSET %s;
+        """
+        query_params_data = query_params + [page_size, offset]
+        
+        logs = []
+        total_records = 0
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    # Esegui la query di conteggio
+                    self.logger.debug(f"Audit Log Count Query: {cur.mogrify(count_query, query_params).decode('utf-8', 'ignore')}")
+                    cur.execute(count_query, query_params)
+                    total_records_result = cur.fetchone()
+                    if total_records_result:
+                        total_records = total_records_result[0]
+                    
+                    if total_records > 0:
+                        # Esegui la query per i dati
+                        self.logger.debug(f"Audit Log Data Query: {cur.mogrify(data_query, query_params_data).decode('utf-8', 'ignore')}")
+                        cur.execute(data_query, query_params_data)
+                        logs = [dict(row) for row in cur.fetchall()]
+                        self.logger.info(f"Recuperati {len(logs)} record di audit log (pagina {page} di {((total_records - 1) // page_size) + 1}). Totale filtrati: {total_records}")
+                    else:
+                        self.logger.info("Nessun record di audit log trovato con i filtri specificati.")
+                        
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB durante il recupero dei log di audit: {e}", exc_info=True)
+            # Potresti voler sollevare un'eccezione qui o ritornare un indicatore di errore
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei log di audit: {e}", exc_info=True)
+
+        return logs, total_records
     def register_backup_log(self, nome_file: str, utente: str, tipo: str, esito: bool,
                             percorso_file: str, dimensione_bytes: Optional[int] = None,
                             messaggio: Optional[str] = None) -> Optional[int]:
@@ -1524,25 +1661,121 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB reg log backup '{nome_file}': {db_err}")
         except Exception as e: logger.error(f"Errore Python reg log backup '{nome_file}': {e}"); self.rollback()
         return None
+    
+    def _find_executable(self, name: str) -> Optional[str]:
+        """Cerca un eseguibile nel PATH di sistema."""
+        executable_path = shutil.which(name)
+        if executable_path:
+            self.logger.info(f"Trovato eseguibile '{name}' in: {executable_path}")
+            return executable_path
+        else:
+            self.logger.warning(f"Eseguibile '{name}' non trovato nel PATH di sistema.")
+            return None
 
-    def get_backup_command_suggestion(self, tipo: str = 'completo') -> Optional[str]:
-        """Chiama la funzione SQL get_backup_commands."""
-        try:
-            query = "SELECT get_backup_commands(%s) AS commands"
-            if self.execute_query(query, (tipo,)): result = self.fetchone(); return result.get('commands') if result else None
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_backup_cmd (tipo: {tipo}): {db_err}"); return None
-        except Exception as e: logger.error(f"Errore Python get_backup_cmd (tipo: {tipo}): {e}"); return None
-        return None
+    def _resolve_executable_path(self, user_provided_path: str, default_name: str) -> Optional[str]:
+        # Se l'utente fornisce un percorso valido, usa quello
+        if user_provided_path and os.path.isabs(user_provided_path) and os.path.exists(user_provided_path) and os.path.isfile(user_provided_path):
+            self.logger.info(f"Utilizzo del percorso eseguibile fornito dall'utente: {user_provided_path} (per default {default_name})")
+            return user_provided_path
+        elif user_provided_path: 
+            self.logger.warning(f"Percorso fornito '{user_provided_path}' per '{default_name}' non valido. Tento di cercare '{default_name}' nel PATH.")
 
-    def get_restore_command_suggestion(self, backup_log_id: int) -> Optional[str]:
-        """Chiama la funzione SQL get_restore_commands."""
-        try:
-            query = "SELECT get_restore_commands(%s) AS command"
-            if self.execute_query(query, (backup_log_id,)): result = self.fetchone(); return result.get('command') if result else None
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_restore_cmd (ID: {backup_log_id}): {db_err}"); return None
-        except Exception as e: logger.error(f"Errore Python get_restore_cmd (ID: {backup_log_id}): {e}"); return None
-        return None
+        # Altrimenti, cerca il default_name nel PATH
+        found_path_in_system = shutil.which(default_name) # default_name qui sarà "pg_restore.exe" o "psql.exe"
+        if found_path_in_system:
+            self.logger.info(f"Trovato eseguibile '{default_name}' nel PATH di sistema: {found_path_in_system}")
+            return found_path_in_system
+        else:
+            self.logger.error(f"Eseguibile '{default_name}' non trovato nel PATH e nessun percorso valido fornito.")
+            return None
 
+    def get_backup_command_parts(self,
+                                 backup_file_path: str,
+                                 pg_dump_executable_path_ui: str, # Percorso dalla UI
+                                 format_type: str = "custom",
+                                 include_blobs: bool = False
+                                ) -> Optional[List[str]]:
+        
+        actual_pg_dump_path = self._resolve_executable_path(pg_dump_executable_path_ui, "pg_dump.exe") # o solo "pg_dump" per cross-platform
+        if not actual_pg_dump_path:
+            return None # Errore già loggato da _resolve_executable_path
+
+        # ... (resto del metodo come prima, usando actual_pg_dump_path)
+        # Assicurati che db_user, db_host, db_port, db_name siano recuperati correttamente
+        if not all([self.conn_params.get("user"), self.conn_params.get("host"),
+                    str(self.conn_params.get("port")), self.conn_params.get("dbname")]):
+            self.logger.error("Parametri di connessione mancanti per il backup.")
+            return None
+
+        db_user = self.conn_params.get("user")
+        db_host = self.conn_params.get("host")
+        db_port = str(self.conn_params.get("port"))
+        db_name = self.conn_params.get("dbname")
+
+        command = [actual_pg_dump_path]
+        command.extend(["-U", db_user])
+        command.extend(["-h", db_host])
+        command.extend(["-p", db_port])
+
+        if format_type == "custom":
+            command.extend(["-Fc"])
+        elif format_type == "plain":
+            command.extend(["-Fp"])
+        else:
+            self.logger.error(f"Formato di backup non supportato: {format_type}")
+            return None
+
+        command.extend(["--file", backup_file_path])
+        
+        if include_blobs:
+            command.extend(["--blobs"])
+        
+        command.append(db_name)
+        
+        self.logger.info(f"Comando di backup preparato: {' '.join(command)}")
+        return command
+
+    def get_restore_command_parts(self,
+                                  backup_file_path: str,
+                                  pg_tool_executable_path_ui: str # Percorso dalla UI per pg_restore o psql
+                                 ) -> Optional[List[str]]:
+        
+        db_user = self.conn_params.get("user")
+        db_host = self.conn_params.get("host")
+        db_port = str(self.conn_params.get("port"))
+        db_name = self.conn_params.get("dbname")
+
+        if not all([db_user, db_host, db_port, db_name]):
+            self.logger.error("Parametri di connessione mancanti per il ripristino.")
+            return None
+
+        command: List[str] = []
+        filename, file_extension = os.path.splitext(backup_file_path)
+        file_extension = file_extension.lower()
+
+        actual_pg_tool_path = None
+        if file_extension in [".dump", ".backup", ".custom"]:
+            actual_pg_tool_path = self._resolve_executable_path(pg_tool_executable_path_ui, "pg_restore.exe") # o "pg_restore"
+            if not actual_pg_tool_path: return None
+            
+            command = [actual_pg_tool_path]
+            command.extend(["-U", db_user, "-h", db_host, "-p", db_port, "-d", db_name])
+            command.extend(["--clean", "--if-exists", "--verbose"]) # Aggiunto verbose per pg_restore
+            command.append(backup_file_path)
+            
+        elif file_extension == ".sql":
+            actual_pg_tool_path = self._resolve_executable_path(pg_tool_executable_path_ui, "psql.exe") # o "psql"
+            if not actual_pg_tool_path: return None
+
+            command = [actual_pg_tool_path]
+            command.extend(["-U", db_user, "-h", db_host, "-p", db_port, "-d", db_name])
+            command.extend(["-f", backup_file_path, "-v", "ON_ERROR_STOP=1"])
+        else:
+            self.logger.error(f"Formato file di backup non riconosciuto: '{file_extension}'")
+            return None
+            
+        self.logger.info(f"Comando di ripristino preparato: {' '.join(command)}")
+        return command
     def cleanup_old_backup_logs(self, giorni_conservazione: int = 30) -> bool:
         """Chiama la procedura SQL pulizia_backup_vecchi."""
         try:
@@ -1760,78 +1993,122 @@ class CatastoDBManager:
         
     # All'interno della classe CatastoDBManager, nel file catasto_db_manager.py
 
-    def ricerca_avanzata_immobili_gui(self,
-                                   comune_id: Optional[int] = None,
-                                   localita_id: Optional[int] = None,
-                                   natura_search: Optional[str] = None,
-                                   classificazione_search: Optional[str] = None,
-                                   consistenza_search: Optional[str] = None,
-                                   piani_min: Optional[int] = None,
-                                   piani_max: Optional[int] = None,
-                                   vani_min: Optional[int] = None,
-                                   vani_max: Optional[int] = None,
-                                   nome_possessore_search: Optional[str] = None,
-                                   data_inizio_possesso_search: Optional[date] = None, # Corrisponde a p_data_inizio_possesso
-                                   data_fine_possesso_search: Optional[date] = None   # Corrisponde a p_data_fine_possesso
-                                   ) -> List[Dict[str, Any]]:
-        """
-        Esegue una ricerca avanzata di immobili utilizzando la funzione SQL dedicata
-        e restituisce i risultati formattati per la GUI.
-        """
-        if not self.conn and not self.pool: # Modificato per controllare il pool o la connessione singola
-            self.logger.error("Nessuna connessione al database o pool disponibile per ricerca_avanzata_immobili_gui.")
-            return []
-
-        # Query con segnaposto POSIZIONALI
-        query = sql.SQL("""
-            SELECT * FROM {schema}.cerca_immobili_avanzato(
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            );
-        """).format(schema=sql.Identifier(self.schema)) # Usa sql.Identifier per lo schema
-
-        # I parametri DEVONO essere nell'esatto ordine della definizione della funzione SQL:
-        # p_comune_id, p_localita_id, p_natura_search, p_classificazione_search,
-        # p_consistenza_search, p_piani_min, p_piani_max, p_vani_min, p_vani_max,
-        # p_nome_possessore_search, p_data_inizio_possesso, p_data_fine_possesso
-        params = (
-            comune_id,
-            localita_id,
-            natura_search,
-            classificazione_search,
-            consistenza_search,
-            piani_min,
-            piani_max,
-            vani_min,
-            vani_max,
-            nome_possessore_search,
-            data_inizio_possesso_search, # Nome della variabile Python
-            data_fine_possesso_search    # Nome della variabile Python
-        )
-
-        self.logger.debug(f"Chiamata a {self.schema}.cerca_immobili_avanzato con parametri POSIZIONALI: {params}")
-
-        conn_to_use = None
+    def ricerca_avanzata_immobili_gui(self, comune_id: Optional[int] = None, localita_id: Optional[int] = None,
+                                      natura_search: Optional[str] = None, classificazione_search: Optional[str] = None,
+                                      consistenza_search: Optional[str] = None, # Ricerca testuale per consistenza
+                                      piani_min: Optional[int] = None, piani_max: Optional[int] = None,
+                                      vani_min: Optional[int] = None, vani_max: Optional[int] = None,
+                                      nome_possessore_search: Optional[str] = None,
+                                      data_inizio_possesso_search: Optional[date] = None, # Previsto per il futuro
+                                      data_fine_possesso_search: Optional[date] = None    # Previsto per il futuro
+                                     ) -> List[Dict[str, Any]]:
         try:
-            conn_to_use = self._get_connection() # Ottieni connessione dal pool o singola
-            with conn_to_use.cursor(cursor_factory=extras.RealDictCursor) as cur:
-                cur.execute(query, params)
-                results = cur.fetchall()
-                # conn_to_use.commit() # Non necessario per un SELECT
-            self.logger.info(f"Ricerca avanzata immobili GUI ha restituito {len(results)} risultati.")
-            return results if results else []
-        except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB specifico durante l'esecuzione di ricerca_avanzata_immobili_gui: {db_err}", exc_info=True)
-            if conn_to_use:
-                # conn_to_use.rollback() # Non necessario se autocommit è off e non ci sono modifiche
-                pass
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    # La stringa della query ora corrisponde ai 12 parametri della funzione SQL estesa
+                    # I cast ::TIPODATO sono una buona pratica se i default nella funzione SQL non sono espliciti con ::TIPODATO
+                    # o se si vuole essere estremamente sicuri.
+                    # Se la funzione SQL ha DEFAULT NULL e tipi chiari, i cast qui potrebbero non essere strettamente necessari
+                    # ma non fanno male.
+                    query = f"""
+                        SELECT * FROM {self.schema}.ricerca_avanzata_immobili(
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        )
+                    """
+                    # Nota: i parametri devono essere nell'ordine esatto definito dalla funzione SQL
+                    params = (
+                        comune_id, localita_id, natura_search, classificazione_search, consistenza_search,
+                        piani_min, piani_max, vani_min, vani_max, nome_possessore_search,
+                        data_inizio_possesso_search, data_fine_possesso_search
+                    )
+
+                    self.logger.debug(f"Chiamata a {self.schema}.ricerca_avanzata_immobili con parametri POSIZIONALI: {params}")
+                    cur.execute(query, params)
+                    results = [dict(row) for row in cur.fetchall()]
+                    self.logger.info(f"Ricerca avanzata immobili ha restituito {len(results)} risultati.")
+                    return results
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB specifico durante l'esecuzione di ricerca_avanzata_immobili_gui: {e}", exc_info=True)
+            # Potresti voler sollevare un'eccezione personalizzata o gestire l'errore qui
             return []
         except Exception as e:
-            self.logger.error(f"Errore generico durante l'esecuzione di ricerca_avanzata_immobili_gui: {e}", exc_info=True)
+            self.logger.error(f"Errore generico durante ricerca_avanzata_immobili_gui: {e}", exc_info=True)
             return []
-        finally:
-            if conn_to_use:
-                self._release_connection(conn_to_use) # Rilascia connessione al pool o gestisci singola
+    def set_audit_session_variables(self, app_user_id: Optional[int], session_id: Optional[str]):
+        """Imposta le variabili di sessione per l'audit log."""
+        if app_user_id is None or session_id is None:
+            self.logger.warning("Tentativo di impostare variabili di sessione audit con None.")
+            return False # o solleva un errore
 
+        # Usare una connessione dedicata per questi SET non transazionali,
+        # oppure assicurarsi che la connessione corrente non sia in una transazione fallita.
+        # Idealmente, questi SET dovrebbero essere eseguiti all'inizio di ogni "sessione" logica dell'utente con il DB.
+        try:
+            with self._get_connection() as conn: # Usa il metodo corretto per ottenere una connessione
+                with conn.cursor() as cur:
+                    # È buona norma usare placeholder anche per current_setting se il valore viene da input,
+                    # ma qui stiamo definendo il nome della variabile.
+                    # Assicurati che lo schema 'catasto' esista se prefissi le variabili.
+                    # PostgreSQL non supporta placeholder per i nomi delle GUC.
+                    # Il quoting è importante se i valori possono contenere caratteri speciali.
+                    # psycopg2 farà il quoting corretto per i valori.
+
+                    # SQL per impostare la variabile di sessione (GUC - Grand Unified Configuration)
+                    # Queste variabili devono essere prefissate da un nome di estensione custom o un nome univoco.
+                    # Ad es., se hai un'estensione "catasto_app", potresti usare "catasto_app.user_id".
+                    # Altrimenti, un prefisso come "catasto_audit.user_id".
+                    # Per semplicità, uso "catasto.app_user_id" assumendo che non crei conflitti.
+
+                    # Pulisce prima le impostazioni precedenti per la sessione corrente
+                    cur.execute("RESET catasto.app_user_id;")
+                    cur.execute("RESET catasto.session_id;")
+
+                    # Imposta i nuovi valori
+                    cur.execute(f"SET session catasto.app_user_id = '{app_user_id}';") # Intentionally not using %s for GUC name
+                    cur.execute(f"SET session catasto.session_id = %s;", (session_id,))
+
+                    # Per verificare (opzionale, per debug):
+                    # cur.execute("SELECT current_setting('catasto.app_user_id', true), current_setting('catasto.session_id', true);")
+                    # self.logger.debug(f"Audit session variables set: {cur.fetchone()}")
+
+                    conn.commit() # I SET sono a livello di sessione, ma il commit chiude la transazione del cursor.
+                                # Per i GUC di sessione, non sono transazionali nel senso stretto,
+                                # ma è bene gestire il ciclo di vita della connessione/cursore.
+                    self.logger.info(f"Variabili di sessione per audit impostate: app_user_id={app_user_id}, session_id={session_id[:8]}...")
+                    return True
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB durante l'impostazione delle variabili di sessione audit: {e}")
+            # Potrebbe essere necessario invalidare la connessione nel pool se l'errore è grave
+            return False
+        except Exception as e:
+            self.logger.error(f"Errore generico durante l'impostazione delle variabili di sessione audit: {e}")
+            return False
+
+    def clear_audit_session_variables(self):
+        """Pulisce le variabili di sessione per l'audit log (es. al logout)."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("RESET catasto.app_user_id;")
+                    cur.execute("RESET catasto.session_id;")
+                    conn.commit()
+                    self.logger.info("Variabili di sessione per audit resettate.")
+                    return True
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB durante il reset delle variabili di sessione audit: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il reset delle variabili di sessione audit: {e}")
+            return False
+
+    # Nel tuo metodo `login_user` o dove gestisci il login dell'utente applicativo in CatastoDBManager,
+    # dopo aver verificato le credenziali e ottenuto l'app_user_id e generato/recuperato un session_id:
+    # self.set_audit_session_variables(app_user_id, session_id_valido)
+
+    # E nel metodo `logout_user`:
+    # self.clear_audit_session_variables()
+    # E anche nel `disconnect` o `closeEvent` della GUI per sicurezza.    
+        
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":
     print("Esecuzione test minimale CatastoDBManager...")

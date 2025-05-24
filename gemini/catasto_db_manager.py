@@ -15,6 +15,7 @@ import psycopg2
 import psycopg2.errors # Importa specificamente gli errori
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+from psycopg2 import sql, extras, pool
 import sys
 import logging
 from datetime import date, datetime
@@ -44,24 +45,62 @@ logger = logging.getLogger("CatastoDB")
 # --- Classe CatastoDBManager ---
 
 class CatastoDBManager:
-    """Classe per la gestione delle operazioni sul database catastale."""
+    def __init__(self, dbname, user, password, host, port, 
+                 schema="catasto", 
+                 log_file="db_core.log", 
+                 log_level=logging.DEBUG): # <--- ASSICURATI CHE log_level SIA QUI COME PARAMETRO
 
-    def __init__(self, dbname: str = "catasto_storico", user: str = "postgres",
-                 password: str = "Markus74", host: str = "localhost", port: int = 5432,
-                 schema: str = "catasto"):
-        """Inizializza il gestore del database."""
         self.conn_params = {
-            "dbname": dbname, "user": user, "password": password,
-            "host": host, "port": port
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+            "host": host,
+            "port": port
         }
         self.schema = schema
-        # Imposta il search_path nelle opzioni di connessione
-        self.conn_params['options'] = f'-c search_path={self.schema},public'
         self.conn = None
-        self.cur = None
-        self.cursor = None # Inizializza a None
-        self.active_transaction = False
-        logger.info(f"Inizializzato gestore per database {dbname} (schema: {schema})")
+        self.pool = None
+        self.keep_alive_query = "SELECT 1"
+        self.application_name = "CatastoApp"
+
+        # --- INIZIALIZZAZIONE DEL LOGGER ---
+        self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}")
+        
+        # Usa il parametro log_level dalla firma del metodo
+        self.logger.setLevel(log_level) # <--- USA IL PARAMETRO log_level QUI
+
+        if not self.logger.handlers:
+            log_format_str = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+            formatter = logging.Formatter(log_format_str)
+
+            try:
+                file_h = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+                file_h.setFormatter(formatter)
+                self.logger.addHandler(file_h)
+            except Exception as e:
+                print(f"ATTENZIONE: Impossibile creare il file handler per il logger {self.logger.name} su {log_file}: {e}")
+
+            if log_level == logging.DEBUG or not getattr(sys, 'frozen', False):
+                console_h = logging.StreamHandler(sys.stdout)
+                console_h.setFormatter(formatter)
+                self.logger.addHandler(console_h)
+        # --- FINE INIZIALIZZAZIONE LOGGER ---
+
+        self.logger.info(f"Inizializzato gestore per database {self.conn_params['dbname']} (schema: {self.schema}) con log_level: {logging.getLevelName(self.logger.getEffectiveLevel())}")
+        
+        try:
+            self.pool = psycopg2.pool.SimpleConnectionPool(
+                minconn=1,
+                maxconn=5,
+                **self.conn_params,
+                options=f'-c search_path={self.schema},public -c application_name={self.application_name}'
+            )
+            self.logger.info(f"Pool di connessioni PostgreSQL per '{self.application_name}' inizializzato con successo.")
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore durante l'inizializzazione del pool di connessioni PostgreSQL: {e}", exc_info=True)
+            self.pool = None
+            # raise # Considera di rilanciare se il pool è critico
+
 
     # --- Metodi Base Connessione e Transazione ---
 
@@ -96,6 +135,79 @@ class CatastoDBManager:
             logger.error(f"Errore durante la disconnessione: {e}")
         finally:
              self.conn = None; self.cur = None
+    def _get_connection(self):
+        """
+        Ottiene una connessione dal pool se disponibile e inizializzato,
+        altrimenti tenta di utilizzare/stabilire la connessione singola self.conn.
+        Solleva un'eccezione se nessuna connessione può essere ottenuta.
+        """
+        conn = None
+        if self.pool:
+            try:
+                conn = self.pool.getconn()
+                if conn:
+                    self.logger.debug(f"Connessione ottenuta dal pool. Dettagli: {conn.dsn}")
+                    # Opzionale: imposta search_path qui se non fatto nelle opzioni del pool o se serve riconferma
+                    # with conn.cursor() as cur:
+                    #     cur.execute(f"SET search_path TO {self.schema}, public;")
+                    #     cur.execute(f"SET application_name TO '{self.application_name}';")
+                    # conn.commit() # se search_path e application_name lo richiedono
+                    return conn
+            except psycopg2.Error as e:
+                self.logger.error(f"Errore nell'ottenere una connessione dal pool: {e}. Tento fallback su connessione singola.", exc_info=True)
+                # Non fare self.pool = None qui, il pool potrebbe essere temporaneamente esaurito
+        
+        # Fallback o uso primario della connessione singola se il pool non è usato/disponibile
+        self.logger.debug("Pool non disponibile o errore, tento di usare/stabilire connessione singola.")
+        if not self.conn or self.conn.closed:
+            self.logger.debug("Connessione singola non attiva o chiusa, tento di (ri)connettere.")
+            if not self.connect(): # Tenta di stabilire la connessione singola
+                self.logger.error("Impossibile stabilire la connessione singola al database in _get_connection.")
+                raise psycopg2.OperationalError("Impossibile ottenere una connessione valida al database.")
+        
+        if self.conn and not self.conn.closed:
+             self.logger.debug(f"Utilizzo della connessione singola esistente. Dettagli: {self.conn.dsn}")
+             return self.conn
+        else: # Questo non dovrebbe accadere se self.connect() ha successo
+            self.logger.error("Fallimento critico: nessuna connessione disponibile dopo tentativi.")
+            raise psycopg2.OperationalError("Nessuna connessione al database disponibile dopo tutti i tentativi.")
+
+
+    def _release_connection(self, conn_to_release):
+        """
+        Rilascia una connessione al pool se proviene dal pool.
+        Non fa nulla per la connessione singola self.conn (verrà chiusa da disconnect).
+        """
+        if self.pool and conn_to_release is not self.conn: # Solo se abbiamo un pool E la connessione non è quella singola
+            try:
+                self.pool.putconn(conn_to_release)
+                self.logger.debug(f"Connessione rilasciata al pool. Dettagli DSN: {conn_to_release.dsn if not conn_to_release.closed else 'CONN CHIUSA'}")
+            except psycopg2.Error as e:
+                self.logger.error(f"Errore nel rilasciare la connessione al pool: {e}. La connessione potrebbe essere chiusa forzatamente.", exc_info=True)
+                # Come fallback, chiudi la connessione se non può essere restituita al pool
+                try:
+                    if not conn_to_release.closed:
+                        conn_to_release.close()
+                except psycopg2.Error:
+                    pass # Ignora errori sulla chiusura forzata
+            except Exception as ex: # Cattura altri errori come "pool non accetta più connessioni"
+                 self.logger.error(f"Errore generico nel rilasciare la connessione al pool: {ex}. La connessione potrebbe essere chiusa forzatamente.", exc_info=True)
+                 try:
+                    if not conn_to_release.closed:
+                        conn_to_release.close()
+                 except psycopg2.Error:
+                    pass
+        elif conn_to_release is self.conn:
+            self.logger.debug("Tentativo di rilasciare la connessione singola self.conn, nessuna azione richiesta qui.")
+        else:
+            self.logger.warning(f"Tentativo di rilasciare una connessione sconosciuta o pool non attivo. Connessione DSN: {conn_to_release.dsn if conn_to_release and not conn_to_release.closed else 'N/A o CHIUSA'}")
+            # Opzionalmente, chiudi connessioni sconosciute per sicurezza se non fanno parte del pool o di self.conn
+            # if conn_to_release and not conn_to_release.closed:
+            #     try:
+            #         conn_to_release.close()
+            #     except psycopg2.Error:
+            #         pass
+
 
     def commit(self):
         """Conferma le modifiche al database."""
@@ -1512,20 +1624,53 @@ class CatastoDBManager:
             # Potresti non voler fare rollback per un NameError, dipende se una transazione è attiva
             # self.rollback() # Commentato per ora per NameError
             return []
-    def ricerca_avanzata_immobili(self, comune_id: Optional[int] = None, natura: Optional[str] = None, # Usa comune_id
-                                 localita: Optional[str] = None, classificazione: Optional[str] = None,
-                                 possessore: Optional[str] = None) -> List[Dict]:
+    def ricerca_avanzata_immobili_gui(self,
+                                   comune_id: Optional[int] = None,
+                                   localita_id: Optional[int] = None,
+                                   natura_search: Optional[str] = None,
+                                   classificazione_search: Optional[str] = None,
+                                   consistenza_search: Optional[str] = None,
+                                   piani_min: Optional[int] = None,
+                                   piani_max: Optional[int] = None,
+                                   vani_min: Optional[int] = None,
+                                   vani_max: Optional[int] = None,
+                                   nome_possessore_search: Optional[str] = None,
+                                   data_inizio_possesso_search: Optional[date] = None, # Nome corretto dal metodo Python
+                                   data_fine_possesso_search: Optional[date] = None   # Nome corretto dal metodo Python
+                                   ) -> List[Dict[str, Any]]:
         """Chiama la funzione SQL ricerca_avanzata_immobili (DA DEFINIRE e MODIFICARE per comune_id)."""
         logger.warning("La funzione SQL 'ricerca_avanzata_immobili' potrebbe non essere definita o aggiornata per comune_id.")
-        try:
-            # Assumiamo firma SQL: ricerca_avanzata_immobili(INTEGER, VARCHAR, VARCHAR, VARCHAR, VARCHAR)
-            query = "SELECT * FROM ricerca_avanzata_immobili(%s, %s, %s, %s, %s)"
-            params = (comune_id, natura, localita, classificazione, possessore) # Passa ID
-            if self.execute_query(query, params): return self.fetchall()
-        except psycopg2.errors.UndefinedFunction: logger.warning("Funzione 'ricerca_avanzata_immobili' non trovata."); return []
-        except psycopg2.Error as db_err: logger.error(f"Errore DB ricerca_avanzata_immobili: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python ricerca_avanzata_immobili: {e}"); return []
-        return []
+        # Query con segnaposto posizionali
+        query = """
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            );
+        """
+        # I parametri devono essere NELL'ESATTO ORDINE della definizione della funzione SQL
+        params = (
+            comune_id,                     # p_comune_id INTEGER
+            localita_id,                   # p_localita_id INTEGER
+            natura_search,                 # p_natura_search TEXT
+            classificazione_search,        # p_classificazione_search TEXT
+            consistenza_search,            # p_consistenza_search TEXT
+            piani_min,                     # p_piani_min INTEGER
+            piani_max,                     # p_piani_max INTEGER
+            vani_min,                      # p_vani_min INTEGER
+            vani_max,                      # p_vani_max INTEGER
+            nome_possessore_search,        # p_nome_possessore_search TEXT
+            data_inizio_possesso_search,   # p_data_inizio_possesso DATE
+            data_fine_possesso_search      # p_data_fine_possesso DATE
+        )
+
+        self.logger.debug(f"Chiamata a catasto.cerca_immobili_avanzato con parametri POSIZIONALI: {params}")
+
+        if self.execute_query(query, params):
+            results = self.fetchall()
+            self.logger.info(f"Ricerca avanzata immobili GUI ha restituito {len(results)} risultati.")
+            return results if results else []
+        else:
+            self.logger.error("Errore durante l'esecuzione di ricerca_avanzata_immobili_gui.")
+            return []
 
     # --- Metodi Funzionalità Storiche Avanzate (MODIFICATI) ---
 
@@ -1613,80 +1758,79 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB link doc-partita: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python link doc-partita: {e}"); self.rollback(); return False
         
+    # All'interno della classe CatastoDBManager, nel file catasto_db_manager.py
+
     def ricerca_avanzata_immobili_gui(self,
-                                 comune_id: Optional[int] = None,
-                                 localita_id: Optional[int] = None,
-                                 natura_search: Optional[str] = None,
-                                 classificazione_search: Optional[str] = None,
-                                 consistenza_search: Optional[str] = None,
-                                 piani_min: Optional[int] = None,
-                                 piani_max: Optional[int] = None,
-                                 vani_min: Optional[int] = None,
-                                 vani_max: Optional[int] = None,
-                                 nome_possessore_search: Optional[str] = None,
-                                 data_inizio_possesso_search: Optional[date] = None,
-                                 data_fine_possesso_search: Optional[date] = None
-                                 ) -> List[Dict[str, Any]]:
+                                   comune_id: Optional[int] = None,
+                                   localita_id: Optional[int] = None,
+                                   natura_search: Optional[str] = None,
+                                   classificazione_search: Optional[str] = None,
+                                   consistenza_search: Optional[str] = None,
+                                   piani_min: Optional[int] = None,
+                                   piani_max: Optional[int] = None,
+                                   vani_min: Optional[int] = None,
+                                   vani_max: Optional[int] = None,
+                                   nome_possessore_search: Optional[str] = None,
+                                   data_inizio_possesso_search: Optional[date] = None, # Corrisponde a p_data_inizio_possesso
+                                   data_fine_possesso_search: Optional[date] = None   # Corrisponde a p_data_fine_possesso
+                                   ) -> List[Dict[str, Any]]:
         """
-        Esegue una ricerca avanzata di immobili chiamando la funzione SQL `cerca_immobili_avanzato`.
-        Questo metodo è pensato per essere chiamato dalla GUI.
+        Esegue una ricerca avanzata di immobili utilizzando la funzione SQL dedicata
+        e restituisce i risultati formattati per la GUI.
         """
-        # La funzione SQL è catasto.cerca_immobili_avanzato
-        # Prende i seguenti parametri, come definito in 17_funzione_ricerca_immobili.sql:
-        # p_comune_id INT, p_localita_id INT, p_natura VARCHAR, p_classificazione VARCHAR,
-        # p_consistenza_search VARCHAR, p_piani_min INT, p_piani_max INT,
-        # p_vani_min INT, p_vani_max INT, p_nome_possessore VARCHAR,
-        # p_data_inizio_possesso DATE, p_data_fine_possesso DATE
-        
-        query = """
-            SELECT * FROM catasto.cerca_immobili_avanzato(
-                p_comune_id => %s,
-                p_localita_id => %s,
-                p_natura => %s,
-                p_classificazione => %s,
-                p_consistenza_search => %s,
-                p_piani_min => %s,
-                p_piani_max => %s,
-                p_vani_min => %s,
-                p_vani_max => %s,
-                p_nome_possessore => %s,
-                p_data_inizio_possesso => %s,
-                p_data_fine_possesso => %s
+        if not self.conn and not self.pool: # Modificato per controllare il pool o la connessione singola
+            self.logger.error("Nessuna connessione al database o pool disponibile per ricerca_avanzata_immobili_gui.")
+            return []
+
+        # Query con segnaposto POSIZIONALI
+        query = sql.SQL("""
+            SELECT * FROM {schema}.cerca_immobili_avanzato(
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             );
-        """
-        
-        # Prepara i parametri per la ricerca ILIKE nella funzione SQL
+        """).format(schema=sql.Identifier(self.schema)) # Usa sql.Identifier per lo schema
+
+        # I parametri DEVONO essere nell'esatto ordine della definizione della funzione SQL:
+        # p_comune_id, p_localita_id, p_natura_search, p_classificazione_search,
+        # p_consistenza_search, p_piani_min, p_piani_max, p_vani_min, p_vani_max,
+        # p_nome_possessore_search, p_data_inizio_possesso, p_data_fine_possesso
         params = (
-            comune_id, 
-            localita_id, 
-            f"%{natura_search}%" if natura_search else None,
-            f"%{classificazione_search}%" if classificazione_search else None,
-            f"%{consistenza_search}%" if consistenza_search else None,
-            piani_min, 
+            comune_id,
+            localita_id,
+            natura_search,
+            classificazione_search,
+            consistenza_search,
+            piani_min,
             piani_max,
-            vani_min, 
+            vani_min,
             vani_max,
-            f"%{nome_possessore_search}%" if nome_possessore_search else None,
-            data_inizio_possesso_search,
-            data_fine_possesso_search
+            nome_possessore_search,
+            data_inizio_possesso_search, # Nome della variabile Python
+            data_fine_possesso_search    # Nome della variabile Python
         )
-        
-        risultati = []
+
+        self.logger.debug(f"Chiamata a {self.schema}.cerca_immobili_avanzato con parametri POSIZIONALI: {params}")
+
+        conn_to_use = None
         try:
-            # Assicurati che self.execute_query gestisca correttamente la connessione
-            # e il cursore, e che self.fetchall restituisca una lista di dizionari.
-            if self.execute_query(query, params):
-                risultati = self.fetchall()
-                logger.info(f"Ricerca avanzata immobili (GUI) ha prodotto {len(risultati)} risultati.")
-            # else: execute_query potrebbe aver loggato un errore se ha restituito False
-        except psycopg2.Error as db_err: # Errore specifico del database
-            logger.error(f"Errore DB in ricerca_avanzata_immobili_gui: {db_err}")
-            # Potresti voler rilanciare l'eccezione o gestirla in modo più specifico
-            # se la GUI deve sapere del fallimento.
-        except Exception as e: # Altri errori Python
-            logger.error(f"Errore Python imprevisto in ricerca_avanzata_immobili_gui: {e}", exc_info=True)
-        
-        return risultati
+            conn_to_use = self._get_connection() # Ottieni connessione dal pool o singola
+            with conn_to_use.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute(query, params)
+                results = cur.fetchall()
+                # conn_to_use.commit() # Non necessario per un SELECT
+            self.logger.info(f"Ricerca avanzata immobili GUI ha restituito {len(results)} risultati.")
+            return results if results else []
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB specifico durante l'esecuzione di ricerca_avanzata_immobili_gui: {db_err}", exc_info=True)
+            if conn_to_use:
+                # conn_to_use.rollback() # Non necessario se autocommit è off e non ci sono modifiche
+                pass
+            return []
+        except Exception as e:
+            self.logger.error(f"Errore generico durante l'esecuzione di ricerca_avanzata_immobili_gui: {e}", exc_info=True)
+            return []
+        finally:
+            if conn_to_use:
+                self._release_connection(conn_to_use) # Rilascia connessione al pool o gestisci singola
 
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

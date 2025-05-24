@@ -2098,3 +2098,187 @@ HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe e
 2025-05-23 18:14:08,506 - CatastoGUI - INFO - Connessione al database chiusa.
 2025-05-23 18:14:08,516 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
 2025-05-23 18:14:08,540 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-23 18:58:19,993 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 18:58:20,199 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 18:58:29,779 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 18:58:30,100 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 18:58:30,162 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 3a34bcaa...
+2025-05-23 18:58:31,548 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-23 18:58:32,257 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:58:32,365 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-23 18:58:32,830 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:58:32,842 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-23 18:58:32,843 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-23 18:58:32,844 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-23 18:58:32,844 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-23 18:58:32,844 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-23 18:58:45,901 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-23 18:58:45,902 - CatastoGUI - INFO - Chiusura applicazione: esecuzione logout di sicurezza per utente ID: 1...
+2025-05-23 18:58:45,928 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 3a34bcaa...
+2025-05-23 18:58:45,931 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 18:58:45,931 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-23 18:58:45,932 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-23 18:58:45,955 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-23 18:58:52,301 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 18:58:52,395 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-23 18:58:59,179 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-23 18:58:59,542 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-23 18:58:59,552 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione e6bdbcf2...
+2025-05-23 18:59:01,150 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-23 18:59:01,711 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:59:01,816 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-23 18:59:02,112 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-23 18:59:02,120 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-23 18:59:02,120 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-23 18:59:02,121 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-23 18:59:02,121 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-23 18:59:02,121 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-23 18:59:38,130 - CatastoGUI - INFO - Dialogo inserimento comune annullato da utente 'admin'.
+2025-05-23 18:59:44,554 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione e6bdbcf2...
+2025-05-23 18:59:46,683 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-23 18:59:46,685 - CatastoDB - INFO - Disconnessione completata
+2025-05-23 18:59:46,685 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-23 18:59:46,685 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-23 18:59:46,700 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-23 19:11:28,886 - CatastoDB - INFO - Inizializzato gestore per database catasto_storico (schema: catasto)
+2025-05-23 19:22:12,998 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-23 19:24:45,657 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-24 07:47:56,368 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-24 07:47:56,549 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-24 07:47:56,634 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-24 07:48:05,105 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-24 07:48:05,403 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-24 07:48:05,472 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione aa206c37...
+2025-05-24 07:48:07,859 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-24 07:48:08,600 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 07:48:08,703 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-24 07:48:09,105 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 07:48:09,109 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-24 07:48:09,110 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-24 07:48:09,110 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-24 07:48:09,110 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-24 07:48:09,111 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-24 07:48:15,042 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: 
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                p_comune_id => %s,
+     ... Errore: ERRORE:  la funzione catasto.cerca_immobili_avanzato(p_comune_id => unknown, p_localita_id => unknown, p_natura => unknown, p_classificazione => unknown, p_consistenza_search => unknown, p_piani_min => unknown, p_piani_max => unknown, p_vani_min => unknown, p_vani_max => unknown, p_nome_possessore => unknown, p_data_inizio_possesso => unknown, p_data_fine_possesso => unknown) non esiste
+LINE 2:             SELECT * FROM catasto.cerca_immobili_avanzato(
+                                  ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-24 07:48:15,043 - CatastoDB - INFO - Rollback eseguito.
+2025-05-24 07:55:02,605 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione aa206c37...
+2025-05-24 07:55:05,493 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-24 07:55:05,500 - CatastoDB - INFO - Disconnessione completata
+2025-05-24 07:55:05,500 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-24 07:55:05,501 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-24 07:55:05,526 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-24 07:55:20,928 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-24 07:55:21,239 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-24 07:55:21,306 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-24 07:55:30,131 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-24 07:55:30,473 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-24 07:55:30,517 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione e01f4765...
+2025-05-24 07:55:32,220 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-24 07:55:32,990 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 07:55:33,087 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-24 07:55:33,391 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 07:55:33,398 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-24 07:55:33,399 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-24 07:55:33,399 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-24 07:55:33,399 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-24 07:55:33,399 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-24 07:55:39,816 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: 
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                p_comune_id => %s,
+     ... Errore: ERRORE:  la funzione catasto.cerca_immobili_avanzato(p_comune_id => unknown, p_localita_id => unknown, p_natura => unknown, p_classificazione => unknown, p_consistenza_search => unknown, p_piani_min => unknown, p_piani_max => unknown, p_vani_min => unknown, p_vani_max => unknown, p_nome_possessore => unknown, p_data_inizio_possesso => unknown, p_data_fine_possesso => unknown) non esiste
+LINE 2:             SELECT * FROM catasto.cerca_immobili_avanzato(
+                                  ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-24 07:55:39,817 - CatastoDB - INFO - Rollback eseguito.
+2025-05-24 07:56:40,202 - CatastoDB - ERROR - Errore DB durante l'esecuzione della query: 
+            SELECT * FROM catasto.cerca_immobili_avanzato(
+                p_comune_id => %s,
+     ... Errore: ERRORE:  la funzione catasto.cerca_immobili_avanzato(p_comune_id => integer, p_localita_id => unknown, p_natura => unknown, p_classificazione => unknown, p_consistenza_search => unknown, p_piani_min => unknown, p_piani_max => unknown, p_vani_min => unknown, p_vani_max => unknown, p_nome_possessore => unknown, p_data_inizio_possesso => unknown, p_data_fine_possesso => unknown) non esiste
+LINE 2:             SELECT * FROM catasto.cerca_immobili_avanzato(
+                                  ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-24 07:56:40,202 - CatastoDB - INFO - Rollback eseguito.
+2025-05-24 07:58:47,127 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione e01f4765...
+2025-05-24 07:58:49,983 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-24 07:58:49,986 - CatastoDB - INFO - Disconnessione completata
+2025-05-24 07:58:49,987 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-24 07:58:49,987 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-24 07:58:50,008 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-24 08:02:48,042 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-24 08:02:48,125 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-24 08:02:48,189 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-24 08:02:56,235 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-24 08:02:58,132 - CatastoGUI - WARNING - Login GUI fallito (pwd errata) per ID: 1
+2025-05-24 08:03:00,952 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-24 08:03:01,328 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-24 08:03:01,382 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 2054251a...
+2025-05-24 08:03:02,897 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-24 08:03:03,437 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 08:03:03,531 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-24 08:03:03,824 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 08:03:03,833 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-24 08:03:03,833 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-24 08:03:03,871 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-24 08:03:03,872 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-24 08:03:03,872 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-24 08:03:09,192 - CatastoDB_catasto_storico_localhost - DEBUG - Chiamata a catasto.cerca_immobili_avanzato con parametri POSIZIONALI: (None, None, None, None, None, None, None, None, None, None, None, None)
+2025-05-24 08:03:09,193 - CatastoDB_catasto_storico_localhost - ERROR - Errore generico durante l'esecuzione di ricerca_avanzata_immobili_gui: 'CatastoDBManager' object has no attribute '_get_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1742, in ricerca_avanzata_immobili_gui
+    conn_to_use = self._get_connection() # Ottieni connessione dal pool o singola
+                  ^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute '_get_connection'
+2025-05-24 08:09:04,429 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 2054251a...
+2025-05-24 08:09:06,060 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-24 08:09:06,062 - CatastoDB - INFO - Disconnessione completata
+2025-05-24 08:09:06,062 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-24 08:09:06,062 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-24 08:09:06,094 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-24 08:09:14,134 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-24 08:09:14,231 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-24 08:09:14,415 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-24 08:09:20,151 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-24 08:09:20,477 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-24 08:09:20,527 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione afc27e4b...
+2025-05-24 08:09:21,800 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-24 08:09:22,347 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 08:09:22,459 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-24 08:09:22,772 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-24 08:09:22,779 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-24 08:09:22,779 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-24 08:09:22,780 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-24 08:09:22,780 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-24 08:09:22,780 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-24 08:09:26,917 - CatastoDB_catasto_storico_localhost - DEBUG - Chiamata a catasto.cerca_immobili_avanzato con parametri POSIZIONALI: (None, None, None, None, None, None, None, None, None, None, None, None)
+2025-05-24 08:09:26,918 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-24 08:09:26,963 - CatastoDB_catasto_storico_localhost - ERROR - Errore DB specifico durante l'esecuzione di ricerca_avanzata_immobili_gui: ERRORE:  la funzione catasto.cerca_immobili_avanzato(unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) non esiste
+LINE 2:             SELECT * FROM "catasto".cerca_immobili_avanzato(
+                                  ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1817, in ricerca_avanzata_immobili_gui
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 236, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedFunction: ERRORE:  la funzione catasto.cerca_immobili_avanzato(unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) non esiste
+LINE 2:             SELECT * FROM "catasto".cerca_immobili_avanzato(
+                                  ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-24 08:09:26,996 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-24 08:09:32,408 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione afc27e4b...
+2025-05-24 08:09:34,802 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-24 08:09:34,804 - CatastoDB - INFO - Disconnessione completata
+2025-05-24 08:09:34,804 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-24 08:09:34,804 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-24 08:09:34,827 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0

@@ -4003,7 +4003,7 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         results_layout = QVBoxLayout(results_group)
         self.risultati_immobili_table = QTableWidget()
         # Colonne basate sulla funzione SQL cerca_immobili_avanzato
-        self.risultati_immobili_table.setColumnCount(10) 
+        self.risultati_immobili_table.setColumnCount(10)
         self.risultati_immobili_table.setHorizontalHeaderLabels([
             "ID Imm.", "Part. N.", "Comune", "Località", "Natura", 
             "Class.", "Consist.", "Piani", "Vani", "Possessori"
@@ -4066,6 +4066,22 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         p_vani_max = self.vani_max_spinbox.value() if self.vani_max_spinbox.value() != 0 else None
 
         p_nome_possessore = self.nome_possessore_edit.text().strip() or None
+        
+        # --- STAMPE DI DEBUG DA AGGIUNGERE/DECOMMENTARE ---
+        print("-" * 30)
+        print("DEBUG GUI: Parametri inviati a ricerca_avanzata_immobili_gui:")
+        print(f"  comune_id: {p_comune_id} (tipo: {type(p_comune_id)})")
+        print(f"  localita_id: {p_localita_id} (tipo: {type(p_localita_id)})")
+        print(f"  natura_search: '{p_natura}' (tipo: {type(p_natura)})")
+        print(f"  classificazione_search: '{p_classificazione}' (tipo: {type(p_classificazione)})")
+        print(f"  consistenza_search: '{p_consistenza_search}' (tipo: {type(p_consistenza_search)})")
+        print(f"  piani_min: {p_piani_min} (tipo: {type(p_piani_min)})")
+        print(f"  piani_max: {p_piani_max} (tipo: {type(p_piani_max)})")
+        print(f"  vani_min: {p_vani_min} (tipo: {type(p_vani_min)})")
+        print(f"  vani_max: {p_vani_max} (tipo: {type(p_vani_max)})")
+        print(f"  nome_possessore_search: '{p_nome_possessore}' (tipo: {type(p_nome_possessore)})")
+        print("-" * 30)
+        # --- FINE STAMPE DI DEBUG ---
 
         try:
             immobili_trovati = self.db_manager.ricerca_avanzata_immobili_gui(
@@ -4664,7 +4680,7 @@ def run_gui_app():
     # Applica UN SOLO stylesheet principale all'avvio
     app.setStyleSheet("""
         * { 
-            font-size: 10pt; /* Dimensione font globale */
+            font-size: 11pt; /* Dimensione font globale */
         }
         QMainWindow {
             background-color: #353535; /* Esempio: Sfondo scuro per coerenza con la palette */
@@ -4743,10 +4759,18 @@ def run_gui_app():
                              "Puoi installarla con: pip install fpdf2")
 
     db_config_gui = {
-        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
-        "host": "localhost", "port": 5432, "schema": "catasto"
-        }
-    db_manager_gui = CatastoDBManager(**db_config_gui)
+    "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
+    "host": "localhost", "port": 5432, "schema": "catasto"
+    }
+    # Non è necessario specificare log_file o log_level qui se i default nel costruttore vanno bene
+    db_manager_gui = CatastoDBManager(**db_config_gui) 
+
+    # Se volessi sovrascrivere i default, potresti fare:
+    # db_manager_gui = CatastoDBManager(
+    #     **db_config_gui,
+    #     log_file="mio_log_personale.log",
+    #     log_level=logging.WARNING
+    # )
 
     if not db_manager_gui.connect():
         QMessageBox.critical(None, "Errore Connessione Database",

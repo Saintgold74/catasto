@@ -505,6 +505,68 @@ class CatastoDBManager:
         except Exception as e:
             logger.error(f"Errore Python in get_possessori_by_comune: {e}")
         return []
+    def get_possessori_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
+        """
+        Recupera tutti i possessori associati a una data partita, inclusi i dettagli
+        del legame dalla tabella partita_possessore.
+
+        Args:
+            partita_id: L'ID della partita per cui recuperare i possessori.
+
+        Returns:
+            Una lista di dizionari, dove ogni dizionario rappresenta un possessore associato
+            e contiene: 'id_relazione_partita_possessore' (partita_possessore.id),
+                         'possessore_id' (possessore.id), 
+                         'nome_completo_possessore' (possessore.nome_completo),
+                         'paternita_possessore' (possessore.paternita),
+                         'titolo_possesso' (partita_possessore.titolo),
+                         'quota_possesso' (partita_possessore.quota),
+                         'tipo_partita_rel' (partita_possessore.tipo_partita).
+        """
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            self.logger.error("get_possessori_per_partita: partita_id non valido.")
+            return []
+
+        query = f"""
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                {self.schema}.partita_possessore pp
+            JOIN
+                {self.schema}.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = %s
+            ORDER BY
+                pos.nome_completo;
+        """
+        
+        possessori_associati = []
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_possessori_per_partita per partita_id {partita_id}: {cur.mogrify(query, (partita_id,)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (partita_id,))
+                results = cur.fetchall()
+                if results:
+                    possessori_associati = [dict(row) for row in results]
+                self.logger.info(f"Trovati {len(possessori_associati)} possessori per la partita ID {partita_id}.")
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB durante il recupero dei possessori per la partita ID {partita_id}: {e}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei possessori per la partita ID {partita_id}: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        
+        return possessori_associati
+
 
     def insert_localita(self, comune_id: int, nome: str, tipo: str, # Usa comune_id
                       civico: Optional[int] = None) -> Optional[int]:
@@ -1120,6 +1182,122 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB get_partite_complete_view: {db_err}"); return []
         except Exception as e: logger.error(f"Errore Python get_partite_complete_view: {e}"); return []
 
+    
+    def aggiungi_possessore_a_partita(self, 
+                                     partita_id: int, 
+                                     possessore_id: int,
+                                     tipo_partita_rel: str, # Questo è il campo 'tipo_partita' in partita_possessore
+                                     titolo: str, 
+                                     quota: Optional[str]
+                                    ) -> bool: # Restituisce True in caso di successo, altrimenti solleva eccezione
+        """
+        Aggiunge un legame tra una partita e un possessore nella tabella partita_possessore.
+
+        Args:
+            partita_id: ID della partita.
+            possessore_id: ID del possessore.
+            tipo_partita_rel: Il tipo di partita per questo legame (es. 'principale', 'secondaria').
+                              Deve corrispondere al check constraint della tabella.
+            titolo: Il titolo di possesso (es. 'proprietà esclusiva').
+            quota: La quota di possesso (es. '1/2', opzionale).
+
+        Returns:
+            True se l'inserimento ha successo.
+
+        Raises:
+            DBDataError: Se i parametri di input non sono validi.
+            DBUniqueConstraintError: Se il legame partita-possessore esiste già (violazione UNIQUE).
+            DBMError: Per altri errori generici del database (es. Foreign Key violation se partita_id o possessore_id non esistono).
+        """
+        if not all([isinstance(partita_id, int) and partita_id > 0,
+                    isinstance(possessore_id, int) and possessore_id > 0,
+                    isinstance(titolo, str) and titolo.strip(),
+                    isinstance(tipo_partita_rel, str) and tipo_partita_rel in ['principale', 'secondaria']]):
+            msg = "Parametri non validi forniti per aggiungere possessore a partita."
+            self.logger.error(f"aggiungi_possessore_a_partita: {msg} - P_ID:{partita_id}, POSS_ID:{possessore_id}, Titolo:'{titolo}', TipoRel:'{tipo_partita_rel}'")
+            raise DBDataError(msg)
+        
+        # Quota può essere None o una stringa. Se è una stringa vuota, la trattiamo come None.
+        if quota is not None and not isinstance(quota, str):
+             raise DBDataError(f"La quota fornita ('{quota}') non è una stringa valida o None.")
+        actual_quota = quota.strip() if isinstance(quota, str) and quota.strip() else None
+
+
+        query = f"""
+            INSERT INTO {self.schema}.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        """
+        params = (partita_id, possessore_id, tipo_partita_rel, titolo.strip(), actual_quota)
+        
+        conn = None
+        new_relation_id = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query aggiungi_possessore_a_partita: {cur.mogrify(query, params).decode('utf-8', 'ignore')}")
+                cur.execute(query, params)
+                new_relation_id = cur.fetchone()[0] if cur.rowcount > 0 else None
+                conn.commit()
+                
+                if new_relation_id:
+                    self.logger.info(f"Possessore ID {possessore_id} associato con successo alla partita ID {partita_id} (ID Relazione: {new_relation_id}).")
+                    return True # Successo
+                else:
+                    # Questo non dovrebbe accadere se l'INSERT va a buon fine e RETURNING id è usato
+                    # a meno che l'insert non fallisca silenziosamente (improbabile con i vincoli DB)
+                    self.logger.error(f"aggiungi_possessore_a_partita: Inserimento fallito senza eccezione DB esplicita per P_ID:{partita_id}, POSS_ID:{possessore_id}.")
+                    raise DBMError("Inserimento del legame partita-possessore fallito senza un errore database specifico.")
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve))
+            self.logger.warning(f"Violazione di unicità (vincolo: {constraint_name}) aggiungendo possessore {possessore_id} a partita {partita_id}: {error_detail}")
+            # Il vincolo di unicità in partita_possessore è UNIQUE(partita_id, possessore_id)
+            if constraint_name == "partita_possessore_partita_id_possessore_id_key": # Verifica il nome esatto del tuo vincolo
+                msg = "Questo possessore è già associato a questa partita."
+            else:
+                msg = f"Impossibile associare il possessore: i dati violano un vincolo di unicità (vincolo: {constraint_name})."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        
+        except psycopg2.errors.ForeignKeyViolation as fke:
+            if conn: conn.rollback()
+            constraint_name = getattr(fke.diag, 'constraint_name', "N/D")
+            error_detail = getattr(fke, 'pgerror', str(fke))
+            self.logger.error(f"Violazione Foreign Key (vincolo: {constraint_name}) aggiungendo legame per P_ID:{partita_id}, POSS_ID:{possessore_id}: {error_detail}")
+            msg = f"Impossibile associare il possessore: la partita o il possessore specificati non esistono (vincolo: {constraint_name})."
+            raise DBMError(msg) from fke # Potresti creare una DBForeignKeyError specifica
+
+        except psycopg2.errors.CheckViolation as cve: # Per il check su tipo_partita
+            if conn: conn.rollback()
+            constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(cve, 'pgerror', str(cve))
+            self.logger.error(f"Violazione CHECK constraint (vincolo: {constraint_name}) per legame P_ID:{partita_id}, POSS_ID:{possessore_id}: {error_detail}")
+            msg = f"Il valore per 'tipo partita nel legame' ('{tipo_partita_rel}') non è valido (ammessi: 'principale', 'secondaria')."
+            raise DBDataError(msg) from cve
+
+        except psycopg2.Error as e:
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB generico aggiungendo possessore a partita (P_ID:{partita_id}, POSS_ID:{possessore_id}): {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante l'associazione del possessore: {error_detail}") from e
+        
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto Python aggiungendo possessore a partita (P_ID:{partita_id}, POSS_ID:{possessore_id}): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'associazione: {e}") from e
+        
+        finally:
+            if conn:
+                self.release_connection(conn)
+        
+        return False # Non dovrebbe essere raggiunto se le eccezioni sono sollevate correttamente
+
+    
+    
     def get_cronologia_variazioni(self, comune_origine_id: Optional[int] = None, tipo_variazione: Optional[str] = None, limit: int = 100) -> List[Dict]: # Usa comune_id
         """Recupera dati dalla vista materializzata mv_cronologia_variazioni (aggiornata), filtrando per ID."""
         try:

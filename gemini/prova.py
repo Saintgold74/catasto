@@ -1658,16 +1658,16 @@ class ModificaPartitaDialog(QDialog):
 
         possessori_buttons_layout = QHBoxLayout()
         self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
-        # self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita) # Implementeremo
+        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita) # Implementeremo
         possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
 
         self.btn_modifica_legame_possessore = QPushButton("Modifica Legame...")
-        # self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore) # Implementeremo
+        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore) # Implementeremo
         self.btn_modifica_legame_possessore.setEnabled(False)
         possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
 
         self.btn_rimuovi_possessore = QPushButton("Rimuovi dalla Partita")
-        # self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita) # Implementeremo
+        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita) # Implementeremo
         self.btn_rimuovi_possessore.setEnabled(False)
         possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
         possessori_buttons_layout.addStretch()
@@ -1721,27 +1721,225 @@ class ModificaPartitaDialog(QDialog):
         if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
 
 
+    # All'interno della classe ModificaPartitaDialog in prova.py
+
     def _load_possessori_associati(self):
-        # Questo metodo chiamerà db_manager.get_possessori_per_partita(self.partita_id)
-        # e popolerà self.possessori_table.
-        self.possessori_table.setRowCount(0) # Pulisce la tabella
-        # try:
-        #     possessori = self.db_manager.get_possessori_per_partita(self.partita_id) # Metodo da creare
-        #     if possessori:
-        #         self.possessori_table.setRowCount(len(possessori))
-        #         for row, poss_data in enumerate(possessori):
-        #             # Popola le colonne: ID Relazione (partita_possessore.id), ID Possessore, Nome Completo, Titolo, Quota
-        #             self.possessori_table.setItem(row, 0, QTableWidgetItem(str(poss_data.get('id_relazione_partita_possessore')))) # ID da partita_possessore
-        #             self.possessori_table.setItem(row, 1, QTableWidgetItem(str(poss_data.get('possessore_id'))))
-        #             self.possessori_table.setItem(row, 2, QTableWidgetItem(poss_data.get('nome_completo_possessore')))
-        #             self.possessori_table.setItem(row, 3, QTableWidgetItem(poss_data.get('titolo_possesso')))
-        #             self.possessori_table.setItem(row, 4, QTableWidgetItem(poss_data.get('quota_possesso')))
-        #     self.possessori_table.resizeColumnsToContents()
-        # except Exception as e:
-        #     gui_logger.error(f"Errore caricamento possessori per partita {self.partita_id}: {e}", exc_info=True)
-        #     QMessageBox.warning(self, "Errore Caricamento Possessori", f"Impossibile caricare i possessori: {e}")
-        #self.output_text_edit.append(f"DEBUG: _load_possessori_associati per partita ID {self.partita_id} (da implementare)\n") # Placeholder
-        self._aggiorna_stato_pulsanti_possessori()
+        self.possessori_table.setRowCount(0)
+        self.possessori_table.setSortingEnabled(False)
+        gui_logger.info(f"DEBUG: Inizio _load_possessori_associati per partita ID: {self.partita_id}")
+
+
+        if not self.db_manager:
+            QMessageBox.critical(self, "Errore", "DB Manager non disponibile per caricare i possessori.")
+            self._aggiorna_stato_pulsanti_possessori()
+            return
+        if self.partita_id is None:
+            QMessageBox.warning(self, "Errore", "ID Partita non specificato.")
+            self._aggiorna_stato_pulsanti_possessori()
+            return
+            
+        gui_logger.info(f"Caricamento possessori associati per partita ID: {self.partita_id}")
+        try:
+            # Questa chiamata ora funziona e restituisce i dati, secondo il tuo log
+            possessori = self.db_manager.get_possessori_per_partita(self.partita_id)
+            gui_logger.info(f"DEBUG: Dati possessori ricevuti dal DB: {possessori}") # Stampa i dati ricevuti
+
+            
+            if possessori: # Se la lista 'possessori' non è vuota
+                self.possessori_table.setRowCount(len(possessori))
+                gui_logger.info(f"DEBUG: Tabella impostata a {len(possessori)} righe.")
+                for row_idx, poss_data in enumerate(possessori): # Itera sui dizionari restituiti
+                    gui_logger.info(f"DEBUG: Popolamento riga {row_idx}, dati: {poss_data}")
+                    col = 0
+                    
+                    # Colonna 0: ID Relazione (partita_possessore.id)
+                    id_rel_val = poss_data.get('id_relazione_partita_possessore', '')
+                    id_rel_item = QTableWidgetItem(str(id_rel_val))
+                    id_rel_item.setData(Qt.UserRole, id_rel_val) # Salva l'ID per uso futuro
+                    self.possessori_table.setItem(row_idx, col, id_rel_item); col+=1
+                    
+                    # Colonna 1: ID Possessore (possessore.id)
+                    id_poss_val = poss_data.get('possessore_id', '')
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(str(id_poss_val))); col+=1
+                    
+                    # Colonna 2: Nome Completo Possessore
+                    nome_val = poss_data.get('nome_completo_possessore', 'N/D')
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(nome_val)); col+=1
+                    
+                    # Colonna 3: Titolo Possesso
+                    titolo_val = poss_data.get('titolo_possesso', 'N/D')
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(titolo_val)); col+=1
+                    
+                    # Colonna 4: Quota Possesso
+                    quota_val = poss_data.get('quota_possesso', 'N/D')
+                    self.possessori_table.setItem(row_idx, col, QTableWidgetItem(quota_val)); col+=1
+                
+                self.possessori_table.resizeColumnsToContents()
+                gui_logger.info("DEBUG: Popolamento tabella completato.")
+            else:
+                gui_logger.info(f"DEBUG: Nessun possessore (lista vuota) per la partita ID {self.partita_id}")
+                gui_logger.info(f"Nessun possessore trovato (lista vuota) per la partita ID {self.partita_id}")
+                # Potresti voler mostrare un messaggio nella tabella, es:
+                self.possessori_table.setRowCount(1)
+                self.possessori_table.setItem(0, 0, QTableWidgetItem("Nessun possessore associato a questa partita."))
+                self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount()) # Occupa l'intera riga
+
+        except Exception as e: # Cattura eccezioni generiche durante il popolamento della tabella
+            gui_logger.error(f"Errore durante il popolamento della tabella possessori per partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Popolamento Tabella", 
+                                 f"Si è verificato un errore durante la visualizzazione dei possessori associati:\n{e}")
+        finally:
+            self.possessori_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsanti_possessori()
+            
+    def _aggiungi_possessore_a_partita(self):
+        gui_logger.debug(f"Richiesta aggiunta possessore per partita ID {self.partita_id}")
+
+        # Passo 1: Seleziona o Crea il Possessore
+        # Usiamo il PossessoreSelectionDialog esistente. Potrebbe essere necessario adattarlo
+        # per restituire solo l'ID e il nome, e non chiedere la quota qui.
+        # Assumiamo che self.partita_data_originale sia popolato e contenga 'comune_id'
+        comune_id_partita = self.partita_data_originale.get('comune_id') if self.partita_data_originale else None
+        if comune_id_partita is None:
+             # Questo è un fallback, il comune_id dovrebbe essere noto dalla partita
+             QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere possessore.")
+             # Potresti chiedere all'utente di selezionare un comune di riferimento per il nuovo possessore se la partita non ha comune_id (improbabile)
+             # dialog_comune = ComuneSelectionDialog(self.db_manager, self, title="Seleziona Comune di Riferimento per il Possessore")
+             # if dialog_comune.exec_() == QDialog.Accepted:
+             #     comune_id_partita = dialog_comune.selected_comune_id
+             # else:
+             return
+        
+        # Adattiamo la chiamata a PossessoreSelectionDialog
+        # La versione esistente di PossessoreSelectionDialog potrebbe già fare al caso nostro
+        # se restituisce un dizionario 'selected_possessore' con 'id' e 'nome_completo'.
+        # Il dialogo originale chiedeva anche la quota, che ora vogliamo chiedere separatamente.
+        # Per ora, immaginiamo che PossessoreSelectionDialog restituisca solo le info del possessore.
+        
+        # Per questo esempio, simuliamo la selezione di un possessore.
+        # Nella realtà, qui apriresti il tuo PossessoreSelectionDialog.
+        # Dovrai modificare PossessoreSelectionDialog per non chiedere la quota
+        # e per restituire solo i dati del possessore (ID, nome).
+
+        # --- Inizio Blocco Selezione/Creazione Possessore (DA ADATTARE CON IL TUO DIALOGO) ---
+        possessore_dialog = PossessoreSelectionDialog(self.db_manager, comune_id_partita, self) # Passa comune_id della partita
+        # Modifica PossessoreSelectionDialog per non chiedere la quota lì
+        # e per far sì che self.selected_possessore contenga {'id': ..., 'nome_completo': ...}
+        
+        selected_possessore_id = None
+        selected_possessore_nome = None
+
+        if possessore_dialog.exec_() == QDialog.Accepted:
+            if hasattr(possessore_dialog, 'selected_possessore') and possessore_dialog.selected_possessore:
+                selected_possessore_id = possessore_dialog.selected_possessore.get('id')
+                selected_possessore_nome = possessore_dialog.selected_possessore.get('nome_completo')
+            else: # Fallback se la struttura di selected_possessore è diversa
+                 # o se il dialogo è stato adattato per restituire ID e nome in modo diverso.
+                 # Per esempio, se hai attributi self.selected_possessore_id e self.selected_possessore_nome
+                 if hasattr(possessore_dialog, 'selected_possessore_id_attr') and hasattr(possessore_dialog, 'selected_possessore_nome_attr'):
+                     selected_possessore_id = possessore_dialog.selected_possessore_id_attr
+                     selected_possessore_nome = possessore_dialog.selected_possessore_nome_attr
+
+        if not selected_possessore_id or not selected_possessore_nome:
+            gui_logger.info("Nessun possessore selezionato o creato.")
+            return
+        # --- Fine Blocco Selezione/Creazione Possessore ---
+
+        gui_logger.info(f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
+
+        # Passo 2: Chiedi Titolo e Quota per questo legame
+        # Determina il tipo della partita corrente per passarlo al dialogo (se necessario)
+        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale') # Default a 'principale'
+
+        dettagli_legame = DettagliLegamePossessoreDialog.get_details(selected_possessore_nome, tipo_partita_corrente, self)
+
+        if not dettagli_legame:
+            gui_logger.info("Inserimento dettagli legame annullato.")
+            return
+            
+        titolo_possesso = dettagli_legame["titolo"]
+        quota_possesso = dettagli_legame["quota"]
+        # tipo_partita_rel = dettagli_legame.get("tipo_partita_rel", tipo_partita_corrente)
+        # Per ora, il tipo_partita_rel per la tabella partita_possessore sarà quello della partita corrente.
+        # Questo campo nella tabella partita_possessore ha un CHECK ('principale', 'secondaria')
+        # e deve essere NOT NULL.
+        tipo_partita_rel_da_usare = tipo_partita_corrente
+
+
+        # Passo 3: Chiama il metodo del DBManager per aggiungere il legame
+        try:
+            # Metodo da creare in CatastoDBManager:
+            # aggiungi_possessore_a_partita(self, partita_id: int, possessore_id: int, 
+            #                              tipo_partita_rel: str, titolo: str, quota: Optional[str])
+            success = self.db_manager.aggiungi_possessore_a_partita(
+                partita_id=self.partita_id,
+                possessore_id=selected_possessore_id,
+                tipo_partita_rel=tipo_partita_rel_da_usare, # Dalla partita che si sta modificando
+                titolo=titolo_possesso,
+                quota=quota_possesso
+            )
+
+            if success:
+                gui_logger.info(f"Possessore ID {selected_possessore_id} aggiunto con successo alla partita ID {self.partita_id}")
+                QMessageBox.information(self, "Successo", 
+                                        f"Possessore '{selected_possessore_nome}' aggiunto alla partita.")
+                self._load_possessori_associati() # Aggiorna la tabella dei possessori
+            # else: # Se aggiungi_possessore_a_partita restituisce False (non solleva eccezione)
+            #     QMessageBox.critical(self, "Errore", "Impossibile aggiungere il possessore alla partita.")
+        
+        # Gestione delle eccezioni che potrebbero essere sollevate da aggiungi_possessore_a_partita
+        except DBUniqueConstraintError as uve_rel: # Se il legame partita-possessore esiste già
+            gui_logger.warning(f"Violazione unicità aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {uve_rel}")
+            QMessageBox.warning(self, "Errore di Unicità",
+                                f"Impossibile aggiungere il possessore:\n{uve_rel.message}\n"
+                                "Questo possessore potrebbe essere già associato a questa partita.")
+        except (DBMError, DBDataError) as dbe_rel:
+            gui_logger.error(f"Errore DB aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {dbe_rel}")
+            QMessageBox.critical(self, "Errore Database",
+                                 f"Errore durante l'aggiunta del possessore alla partita:\n{dbe_rel.message}")
+        except AttributeError as ae: # Se il metodo non esiste in db_manager
+            gui_logger.critical(f"Metodo 'aggiungi_possessore_a_partita' non trovato: {ae}", exc_info=True)
+            QMessageBox.critical(self, "Errore Implementazione", "Funzionalità per aggiungere possessore non completamente implementata nel gestore database.")
+        except Exception as e_rel:
+            gui_logger.critical(f"Errore imprevisto aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {e_rel}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e_rel}")
+
+    def _modifica_legame_possessore(self):
+        selected_items = self.possessori_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella per modificarne il legame.")
+            return
+
+        # L'ID della relazione partita_possessore è memorizzato in UserRole della prima colonna
+        id_relazione_partita_possessore = selected_items[0].data(Qt.UserRole)
+        nome_possessore = self.possessori_table.item(selected_items[0].row(), 2).text() # Colonna Nome Completo
+
+        gui_logger.debug(f"Richiesta modifica legame per relazione ID {id_relazione_partita_possessore} (Possessore: {nome_possessore})")
+        QMessageBox.information(self, "Da Implementare", f"Funzionalità 'Modifica Legame' per relazione ID {id_relazione_partita_possessore} da implementare.")
+        # Logica futura:
+        # 1. Recuperare i dati attuali del legame (titolo, quota) basati su id_relazione_partita_possessore.
+        # 2. Aprire un dialogo pre-compilato per modificare titolo e quota.
+        # 3. Chiamare self.db_manager.aggiorna_legame_partita_possessore(...).
+        # 4. Se successo, chiamare self._load_possessori_associati().
+
+    def _rimuovi_possessore_da_partita(self):
+        selected_items = self.possessori_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella da rimuovere dalla partita.")
+            return
+
+        id_relazione_partita_possessore = selected_items[0].data(Qt.UserRole)
+        nome_possessore = self.possessori_table.item(selected_items[0].row(), 2).text()
+
+        reply = QMessageBox.question(self, "Conferma Rimozione Possessore",
+                                     f"Sei sicuro di voler rimuovere il possessore '{nome_possessore}' da questa partita (ID relazione: {id_relazione_partita_possessore})?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            gui_logger.debug(f"Richiesta rimozione legame per relazione ID {id_relazione_partita_possessore} (Possessore: {nome_possessore})")
+            QMessageBox.information(self, "Da Implementare", f"Funzionalità 'Rimuovi Possessore' per relazione ID {id_relazione_partita_possessore} da implementare.")
+            # Logica futura:
+            # 1. Chiamare self.db_manager.rimuovi_possessore_da_partita(id_relazione_partita_possessore).
+            # 2. Se successo, chiamare self._load_possessori_associati().
 
 
     def _save_changes(self): # Questo ora salva SOLO i dati generali della partita
@@ -1892,8 +2090,8 @@ class ModificaPartitaDialog(QDialog):
                                  f"Si è verificato un errore di sistema imprevisto durante il salvataggio:\n"
                                  f"{type(e).__name__}: {e}\n"
                                  "Controllare i log dell'applicazione per il traceback completo.")
-        gui_logger.error(f"Errore salvataggio dati generali partita ID {self.partita_id}: {e}", exc_info=True)
-        QMessageBox.critical(self, error_title, error_message)
+            gui_logger.error(f"Errore salvataggio dati generali partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, error_title, error_message)
 
 
     # Metodi placeholder per le azioni sui possessori (da implementare successivamente)
@@ -1927,6 +2125,98 @@ class ModificaPartitaDialog(QDialog):
     #         # Poi self._load_possessori_associati()
 
 # Non dimenticare di importare ModificaPartitaDialog dove serve, ad esempio in PartiteComuneDialog
+class DettagliLegamePossessoreDialog(QDialog):
+    def __init__(self, nome_possessore_selezionato: str, partita_tipo: str, 
+                 titolo_attuale: Optional[str] = None, # Nuovo
+                 quota_attuale: Optional[str] = None,   # Nuovo
+                 parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Dettagli Legame per {nome_possessore_selezionato}")
+        self.setMinimumWidth(400)
+
+        self.titolo: Optional[str] = None
+        self.quota: Optional[str] = None
+        # self.tipo_partita_rel: str = partita_tipo
+
+        layout = QFormLayout(self)
+
+        self.titolo_edit = QLineEdit()
+        self.titolo_edit.setPlaceholderText("Es. proprietà esclusiva, usufrutto")
+        self.titolo_edit.setText(titolo_attuale if titolo_attuale is not None else "proprietà esclusiva") # Pre-compila
+        layout.addRow("Titolo di Possesso (*):", self.titolo_edit)
+
+        self.quota_edit = QLineEdit()
+        self.quota_edit.setPlaceholderText("Es. 1/1, 1/2 (lasciare vuoto se non applicabile)")
+        self.quota_edit.setText(quota_attuale if quota_attuale is not None else "") # Pre-compila
+        layout.addRow("Quota (opzionale):", self.quota_edit)
+
+        # Campo tipo_partita_rel dalla tabella partita_possessore:
+        # La tabella `partita_possessore` ha un campo `tipo_partita VARCHAR(20) NOT NULL CHECK (tipo_partita IN ('principale', 'secondaria'))`
+        # Questo sembra ridondante se la partita stessa ha un tipo.
+        # Se deve essere sempre uguale al tipo della partita a cui si sta aggiungendo il possessore,
+        # allora non serve un input utente, lo prenderemo dalla partita.
+        # Se può essere diverso, allora serve un input.
+        # Per ora, assumiamo che sia ereditato o non strettamente necessario per l'input utente qui,
+        # ma lo passiamo al costruttore per un uso futuro.
+        # self.tipo_partita_rel_combo = QComboBox()
+        # self.tipo_partita_rel_combo.addItems(["principale", "secondaria"])
+        # if partita_tipo:
+        #     idx = self.tipo_partita_rel_combo.findText(partita_tipo, Qt.MatchFixedString)
+        #     if idx >= 0: self.tipo_partita_rel_combo.setCurrentIndex(idx)
+        # layout.addRow("Tipo Partita nel Legame (*):", self.tipo_partita_rel_combo)
+
+
+        buttons_layout = QHBoxLayout()
+        self.ok_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOkButton), "OK")
+        self.ok_button.clicked.connect(self._accept_details)
+        self.cancel_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCancelButton), "Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addWidget(self.cancel_button)
+        layout.addRow(buttons_layout)
+        self.setLayout(layout)
+        self.titolo_edit.setFocus()
+
+    def _accept_details(self):
+        titolo_val = self.titolo_edit.text().strip()
+        if not titolo_val:
+            QMessageBox.warning(self, "Dato Mancante", "Il titolo di possesso è obbligatorio.")
+            self.titolo_edit.setFocus()
+            return
+        self.titolo = titolo_val
+        self.quota = self.quota_edit.text().strip() or None
+        self.accept()
+
+    @staticmethod # Metodo statico per facilitare la chiamata
+    def get_details(nome_possessore: str, tipo_partita_attuale: str, parent=None) -> Optional[Dict[str, Any]]:
+        dialog = DettagliLegamePossessoreDialog(nome_possessore, tipo_partita_attuale, parent)
+        if dialog.exec_() == QDialog.Accepted:
+            return {
+                "titolo": dialog.titolo,
+                "quota": dialog.quota,
+                # "tipo_partita_rel": dialog.tipo_partita_rel # Se si usa il combo
+            }
+        return None
+     # NUOVO Metodo statico per la modifica
+    @staticmethod
+    def get_details_for_edit_legame(nome_possessore: str, tipo_partita_attuale: str, 
+                                    titolo_init: str, quota_init: Optional[str], 
+                                    parent=None) -> Optional[Dict[str, Any]]:
+        dialog = DettagliLegamePossessoreDialog(nome_possessore, tipo_partita_attuale, 
+                                                titolo_attuale=titolo_init, 
+                                                quota_attuale=quota_init, 
+                                                parent=parent)
+        dialog.setWindowTitle(f"Modifica Legame per {nome_possessore}") # Titolo specifico per modifica
+        if dialog.exec_() == QDialog.Accepted:
+            return {
+                "titolo": dialog.titolo,
+                "quota": dialog.quota,
+            }
+        return None
+
+
+
 class PossessoriComuneDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
         super().__init__(parent)

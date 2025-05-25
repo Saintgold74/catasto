@@ -42,8 +42,26 @@ if not logging.getLogger("CatastoDB").hasHandlers():
     )
 logger = logging.getLogger("CatastoDB")
 # logger.setLevel(logging.DEBUG) # Decommenta per vedere query mogrify
+# ------------ ECCEZIONI PERSONALIZZATE ------------
+class DBMError(Exception):
+    """Classe base per errori specifici del DBManager."""
+    pass
 
-# --- Classe CatastoDBManager ---
+class DBUniqueConstraintError(DBMError):
+    """Sollevata quando un vincolo di unicità viene violato."""
+    def __init__(self, message, constraint_name=None, details=None):
+        super().__init__(message)
+        self.constraint_name = constraint_name
+        self.details = details
+
+class DBNotFoundError(DBMError):
+    """Sollevata quando un record atteso non viene trovato per un'operazione."""
+    pass
+
+class DBDataError(DBMError):
+    """Sollevata per errori relativi a dati o parametri forniti non validi."""
+    pass
+# -------------------------------------------------
 
 class CatastoDBManager:
     def __init__(self, dbname, user, password, host, port, 
@@ -608,6 +626,151 @@ class CatastoDBManager:
             logger.error(f"Errore Python in get_partita_details (ID: {partita_id}): {e}")
         return None
 
+    def update_partita(self, partita_id: int, dati_modificati: Dict[str, Any]):
+        """
+        Aggiorna i dati di una partita esistente nel database.
+        Solleva eccezioni specifiche in caso di errore.
+
+        Args:
+            partita_id: L'ID della partita da aggiornare.
+            dati_modificati: Un dizionario contenente i campi della partita da aggiornare.
+                             Campi attesi e gestiti: 'numero_partita', 'tipo', 
+                             'data_impianto', 'data_chiusura', 'numero_provenienza', 'stato'.
+
+        Raises:
+            DBDataError: Se partita_id o dati_modificati non sono validi.
+            DBNotFoundError: Se la partita con l'ID specificato non viene trovata.
+            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità (es. numero_partita duplicato nel comune).
+            DBMError: Per altri errori generici del database.
+        """
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            self.logger.error(f"update_partita: partita_id non valido: {partita_id}")
+            raise DBDataError(f"ID partita non valido: {partita_id}")
+        if not isinstance(dati_modificati, dict):
+            self.logger.error(f"update_partita: dati_modificati non è un dizionario per partita ID {partita_id}.")
+            raise DBDataError("Formato dati per l'aggiornamento non valido.")
+
+        set_clauses = []
+        params = []
+        conn = None # Inizializza conn a None per il blocco finally
+
+        # Mappa dei campi permessi e se possono essere NULL
+        # (nome_campo_dict, nome_colonna_db, is_nullable)
+        allowed_fields = {
+            "numero_partita": ("numero_partita", False),
+            "tipo": ("tipo", False),
+            "data_impianto": ("data_impianto", True),
+            "data_chiusura": ("data_chiusura", True),
+            "numero_provenienza": ("numero_provenienza", True),
+            "stato": ("stato", False),
+        }
+
+        for key_dict, (col_db, _) in allowed_fields.items():
+            if key_dict in dati_modificati:
+                set_clauses.append(f"{col_db} = %s")
+                params.append(dati_modificati[key_dict])
+            # Se un campo NOT NULL non è in dati_modificati, causerà un errore se si tenta di impostarlo a NULL
+            # La logica della UI dovrebbe garantire che i campi NOT NULL abbiano sempre un valore.
+
+        # Verifica che i campi obbligatori (se li consideriamo tali per un UPDATE) siano presenti.
+        # La tabella ha già i suoi vincoli NOT NULL che verranno applicati dal DB.
+        # Qui ci assicuriamo solo che l'UPDATE abbia senso.
+        if "numero_partita" not in dati_modificati or dati_modificati.get("numero_partita") is None:
+            raise DBDataError("Il campo 'numero_partita' è obbligatorio e non può essere nullo per l'aggiornamento.")
+        if "tipo" not in dati_modificati or dati_modificati.get("tipo") is None:
+            raise DBDataError("Il campo 'tipo' è obbligatorio e non può essere nullo per l'aggiornamento.")
+        if "stato" not in dati_modificati or dati_modificati.get("stato") is None:
+            raise DBDataError("Il campo 'stato' è obbligatorio e non può essere nullo per l'aggiornamento.")
+
+
+        if not set_clauses:
+            self.logger.info(f"update_partita: Nessun campo valido fornito per l'aggiornamento della partita ID {partita_id} (esclusa data_modifica).")
+            # Decidi se questo è un errore o un "no-op" che consideri successo.
+            # Aggiorniamo comunque data_modifica.
+            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+            # Se solo data_modifica, params è vuoto fino all'aggiunta di partita_id
+        else:
+            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+
+
+        query = f"""
+            UPDATE {self.schema}.partita
+            SET {', '.join(set_clauses)}
+            WHERE id = %s;
+        """
+        # Aggiungi partita_id alla fine della lista dei parametri per la clausola WHERE
+        params.append(partita_id)
+        params_tuple = tuple(params)
+
+        try:
+            conn = self._get_connection() # Ottieni la connessione
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query UPDATE partita ID {partita_id}: {cur.mogrify(query, params_tuple).decode('utf-8', 'ignore')}")
+                cur.execute(query, params_tuple)
+
+                if cur.rowcount == 0:
+                    # Se rowcount è 0, la riga con l'ID specificato non esiste.
+                    # (Con data_modifica = CURRENT_TIMESTAMP, se la riga esistesse, rowcount dovrebbe essere 1)
+                    conn.rollback() # Annulla la transazione (anche se probabilmente non ha fatto nulla)
+                    self.logger.warning(f"Tentativo di aggiornare partita ID {partita_id} che non è stata trovata.")
+                    raise DBNotFoundError(f"Nessuna partita trovata con ID {partita_id} per l'aggiornamento.")
+                
+                conn.commit()
+                self.logger.info(f"Partita ID {partita_id} aggiornata con successo. Righe modificate: {cur.rowcount}")
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve))
+            self.logger.error(f"Errore di violazione di unicità (vincolo: {constraint_name}) durante l'aggiornamento della partita ID {partita_id}: {error_detail}")
+            # Messaggio più specifico per il vincolo comune_id, numero_partita
+            if constraint_name == "partita_comune_id_numero_partita_key": # Assumendo sia questo il nome del tuo vincolo UNIQUE
+                msg = "Il numero di partita specificato è già in uso per il comune associato."
+            else:
+                msg = f"Violazione di un vincolo di unicità (vincolo: {constraint_name}). I dati inseriti sono duplicati."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        
+        except psycopg2.errors.CheckViolation as cve:
+            if conn: conn.rollback()
+            constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(cve, 'pgerror', str(cve))
+            self.logger.error(f"Errore di violazione di CHECK constraint (vincolo: {constraint_name}) per partita ID {partita_id}: {error_detail}")
+            msg = f"I dati forniti violano una regola di validazione del database (vincolo: {constraint_name})."
+            # Esempi: tipo partita non valido, stato non valido
+            if constraint_name == "partita_tipo_check":
+                msg = "Il 'tipo' di partita specificato non è valido (ammessi: 'principale', 'secondaria')."
+            elif constraint_name == "partita_stato_check":
+                msg = "Lo 'stato' della partita specificato non è valido (ammessi: 'attiva', 'inattiva')."
+            raise DBDataError(msg) from cve
+
+        except psycopg2.Error as e: # Altri errori specifici di psycopg2/DB
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB generico durante l'aggiornamento della partita ID {partita_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante l'aggiornamento della partita: {error_detail}") from e
+        
+        except Exception as e: # Catch-all per altri errori Python imprevisti
+            if conn and not conn.closed: conn.rollback() # Controlla se conn è definita e non chiusa
+            self.logger.error(f"Errore imprevisto Python durante l'aggiornamento della partita ID {partita_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'aggiornamento: {e}") from e
+        
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia la connessione al pool
+
+    # Assicurati di avere il metodo release_connection se usi un pool
+    # def release_connection(self, conn):
+    #     if self.conn_pool and conn:
+    #         self.conn_pool.putconn(conn)
+    #         self.logger.debug("Connessione rilasciata al pool.")
+    # O se non usi un pool esplicito ma chiudi le connessioni:
+    # def release_connection(self, conn):
+    #     if conn:
+    #         conn.close()
+    #         self.logger.debug("Connessione chiusa.")
+
+    
+    
     def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None, # Usa comune_id
                       possessore: Optional[str] = None, immobile_natura: Optional[str] = None) -> List[Dict]:
         """Ricerca partite con filtri multipli (MODIFICATO per comune_id)."""
@@ -1803,6 +1966,7 @@ class CatastoDBManager:
         except Exception as e: logger.error(f"Errore Python get_backup_logs: {e}"); return []
         return []
 
+    
     # --- Metodi Ricerca Avanzata (MODIFICATI) ---
 
     # All'interno della classe CatastoDBManager

@@ -61,6 +61,17 @@ except ImportError:
     FPDF_AVAILABLE = False
     # QMessageBox.warning(None, "Avviso Dipendenza", "La libreria FPDF non è installata. L'esportazione in PDF non sarà disponibile.")
     # Non mostrare il messaggio qui, ma gestire la disabilitazione dei pulsanti PDF.
+try:
+    from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
+except ImportError:
+    # Fallback o definizione locale se preferisci non importare direttamente
+    # (ma l'importazione è più pulita se sono definite in db_manager)
+    class DBMError(Exception): pass
+    class DBUniqueConstraintError(DBMError): pass
+    class DBNotFoundError(DBMError): pass
+    class DBDataError(DBMError): pass
+    QMessageBox.warning(None, "Avviso Importazione", 
+                         "Eccezioni DB personalizzate non trovate in catasto_db_manager, usando definizioni fallback.")
 
 
 try:
@@ -1423,18 +1434,17 @@ class PartiteComuneDialog(QDialog):
         self.db_manager = db_manager
         self.comune_id = comune_id
         self.nome_comune = nome_comune
+        # Aggiungi per tracciare l'utente loggato, se necessario per l'audit di modifica
+        # self.current_user_info = getattr(parent, 'logged_in_user_info', None) if parent else None
+
 
         self.setWindowTitle(f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
-        self.setMinimumSize(800, 500) # Dimensioni generose per la tabella
+        self.setMinimumSize(850, 550) # Leggermente più grande per il nuovo pulsante
 
         layout = QVBoxLayout(self)
 
-        # Filtro (opzionale, per ora semplice tabella)
-        # Si potrebbe aggiungere un QLineEdit per filtrare le partite per numero o possessore
-
-        # Tabella Partite
+        # ... (Tabella Partite come prima) ...
         self.partite_table = QTableWidget()
-        # ID, Numero, Tipo, Stato, Data Impianto, Possessori (stringa), Num. Immobili
         self.partite_table.setColumnCount(7)
         self.partite_table.setHorizontalHeaderLabels([
             "ID Partita", "Numero", "Tipo", "Stato",
@@ -1442,37 +1452,96 @@ class PartiteComuneDialog(QDialog):
         ])
         self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.partite_table.setSelectionMode(QTableWidget.SingleSelection) # O ExtendedSelection se vuoi multiselezione
+        self.partite_table.setSelectionMode(QTableWidget.SingleSelection)
         self.partite_table.setAlternatingRowColors(True)
-        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # O ResizeToContents
         self.partite_table.setSortingEnabled(True)
-        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata) # Per aprire PartitaDetailsDialog
+        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata)
+        # Disabilita il pulsante modifica se nessuna riga è selezionata
+        self.partite_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsante_modifica)
+
 
         layout.addWidget(self.partite_table)
 
-        # Pulsante Chiudi
+        # --- Pulsanti Azione ---
+        action_buttons_layout = QHBoxLayout()
+
+        self.btn_apri_dettaglio = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogInfoView), "Vedi Dettagli")
+        self.btn_apri_dettaglio.clicked.connect(self.apri_dettaglio_partita_selezionata_da_pulsante)
+        self.btn_apri_dettaglio.setEnabled(False) # Inizialmente disabilitato
+        action_buttons_layout.addWidget(self.btn_apri_dettaglio)
+
+        self.btn_modifica_partita = QPushButton("Modifica Partita") # USARE ICONA ADATTA
+        self.btn_modifica_partita.setToolTip("Modifica i dati della partita selezionata")
+        self.btn_modifica_partita.clicked.connect(self.apri_modifica_partita_selezionata)
+        self.btn_modifica_partita.setEnabled(False) # Inizialmente disabilitato
+        action_buttons_layout.addWidget(self.btn_modifica_partita)
+        
+        action_buttons_layout.addStretch()
+
         self.close_button = QPushButton("Chiudi")
         self.close_button.clicked.connect(self.accept)
-        layout.addWidget(self.close_button, alignment=Qt.AlignRight)
+        action_buttons_layout.addWidget(self.close_button)
+        
+        layout.addLayout(action_buttons_layout)
 
         self.setLayout(layout)
         self.load_partite_data()
 
-    def load_partite_data(self):
-        """Carica le partite per il comune specificato."""
+    def _aggiorna_stato_pulsante_modifica(self):
+        """Abilita/disabilita il pulsante modifica in base alla selezione."""
+        has_selection = bool(self.partite_table.selectedItems())
+        self.btn_modifica_partita.setEnabled(has_selection)
+        self.btn_apri_dettaglio.setEnabled(has_selection)
+
+    def _get_selected_partita_id(self) -> Optional[int]:
+        """Restituisce l'ID della partita attualmente selezionata nella tabella."""
+        selected_items = self.partite_table.selectedItems()
+        if not selected_items:
+            return None
+        
+        row = self.partite_table.currentRow()
+        if row < 0:
+            return None
+        
+        partita_id_item = self.partite_table.item(row, 0) # Colonna ID Partita
+        if partita_id_item and partita_id_item.text().isdigit():
+            return int(partita_id_item.text())
+        return None
+
+    def apri_dettaglio_partita_selezionata_da_pulsante(self):
+        """Azione per il pulsante 'Vedi Dettagli'."""
+        partita_id = self._get_selected_partita_id()
+        if partita_id is not None:
+            partita_details_data = self.db_manager.get_partita_details(partita_id)
+            if partita_details_data:
+                details_dialog = PartitaDetailsDialog(partita_details_data, self)
+                details_dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
+        else:
+            QMessageBox.information(self, "Nessuna Selezione", "Seleziona una partita dalla tabella per vederne i dettagli.")
+
+
+    def apri_modifica_partita_selezionata(self):
+        partita_id = self._get_selected_partita_id()
+        if partita_id is not None:
+            # Qui istanzieremo e apriremo ModificaPartitaDialog
+            # Passando self.db_manager, partita_id, e self (come parent)
+            # Esempio:
+            dialog = ModificaPartitaDialog(self.db_manager, partita_id, self)
+            if dialog.exec_() == QDialog.Accepted:
+                self.load_partite_data() # Ricarica i dati se le modifiche sono state salvate
+                QMessageBox.information(self, "Modifica Partita", "Modifiche alla partita salvate con successo.")
+        else:
+            QMessageBox.warning(self, "Nessuna Selezione", "Per favore, seleziona una partita da modificare.")
+
+    # ... (load_partite_data e apri_dettaglio_partita_selezionata (per doppio click) come prima) ...
+    def load_partite_data(self): # Assicurati che questo metodo esista e funzioni
         self.partite_table.setRowCount(0)
         self.partite_table.setSortingEnabled(False)
-
         try:
-            # Assumiamo che db_manager.get_partite_by_comune(comune_id) esista
-            # e restituisca una lista di dizionari con le chiavi necessarie.
-            # Dal tuo catasto_db_manager.py, la query in get_partite_by_comune include:
-            # p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
-            # p.data_chiusura, p.stato,
-            # string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-            # COUNT(DISTINCT i.id) as num_immobili
-            partite_list = self.db_manager.get_partite_by_comune(self.comune_id) #
-
+            partite_list = self.db_manager.get_partite_by_comune(self.comune_id)
             if partite_list:
                 self.partite_table.setRowCount(len(partite_list))
                 for row_idx, partita in enumerate(partite_list):
@@ -1481,42 +1550,383 @@ class PartiteComuneDialog(QDialog):
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col+=1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col+=1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col+=1
-                    
                     data_imp = partita.get('data_impianto')
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col+=1
-                    
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col+=1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col+=1
-                
                 self.partite_table.resizeColumnsToContents()
             else:
                 gui_logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id}")
-        except AttributeError as ae:
-            gui_logger.error(f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_partite_by_comune' esista.")
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Funzione dati partite non trovata: {ae}")
         except Exception as e:
             gui_logger.error(f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
         finally:
             self.partite_table.setSortingEnabled(True)
+        self._aggiorna_stato_pulsante_modifica() # Aggiorna stato dopo caricamento
 
-    def apri_dettaglio_partita_selezionata(self, item):
-         """Apre il dialogo dei dettagli per la partita selezionata."""
+    def apri_dettaglio_partita_selezionata(self, item: QTableWidgetItem): # Per doppio click
          if not item: return
-         row = item.row()
-         partita_id_str = self.partite_table.item(row, 0).text()
-         if partita_id_str.isdigit():
-             partita_id = int(partita_id_str)
-          # Il metodo get_partita_details già esiste nel tuo db_manager
-             partita_details_data = self.db_manager.get_partita_details(partita_id) #
+         partita_id = self._get_selected_partita_id() # Usa l'helper
+         if partita_id is not None:
+             partita_details_data = self.db_manager.get_partita_details(partita_id)
              if partita_details_data:
-                 # Assumendo che PartitaDetailsDialog esista e sia importato
                  details_dialog = PartitaDetailsDialog(partita_details_data, self)
                  details_dialog.exec_()
              else:
                  QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
-         else:
-             QMessageBox.warning(self, "ID Non Valido", "ID partita non valido nella riga selezionata.")
+class ModificaPartitaDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, partita_id: int, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.partita_id = partita_id
+        self.partita_data_originale = None
+
+        self.setWindowTitle(f"Modifica Partita ID: {self.partita_id}")
+        self.setMinimumWidth(600) # Potrebbe servire più larghezza per i tab
+        self.setMinimumHeight(500) # E altezza
+
+        self._init_ui()
+        self._load_partita_data()
+        self._load_possessori_associati() # Carica i possessori per il nuovo tab
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        # --- Tab Widget Principale ---
+        self.tab_widget = QTabWidget(self)
+        main_layout.addWidget(self.tab_widget)
+
+        # --- Tab 1: Dati Generali Partita ---
+        self.tab_dati_generali = QWidget()
+        form_layout_generali = QFormLayout(self.tab_dati_generali) # Layout per questo tab
+
+        self.id_label = QLabel(str(self.partita_id))
+        form_layout_generali.addRow("ID Partita:", self.id_label)
+        self.comune_label = QLabel("Comune non specificato")
+        form_layout_generali.addRow("Comune:", self.comune_label)
+
+        self.numero_partita_spinbox = QSpinBox()
+        self.numero_partita_spinbox.setRange(1, 999999)
+        form_layout_generali.addRow("Numero Partita (*):", self.numero_partita_spinbox)
+
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["principale", "secondaria"])
+        form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
+
+        self.data_impianto_edit = QDateEdit()
+        self.data_impianto_edit.setCalendarPopup(True)
+        self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_impianto_edit.setSpecialValueText(" ")
+        self.data_impianto_edit.setDate(QDate())
+        form_layout_generali.addRow("Data Impianto:", self.data_impianto_edit)
+
+        self.data_chiusura_edit = QDateEdit()
+        self.data_chiusura_edit.setCalendarPopup(True)
+        self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_chiusura_edit.setSpecialValueText(" ")
+        self.data_chiusura_edit.setDate(QDate())
+        form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
+
+        self.numero_provenienza_spinbox = QSpinBox()
+        self.numero_provenienza_spinbox.setRange(0, 999999)
+        self.numero_provenienza_spinbox.setSpecialValueText("Nessuno")
+        form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_spinbox)
+
+        self.stato_combo = QComboBox()
+        self.stato_combo.addItems(["attiva", "inattiva"])
+        form_layout_generali.addRow("Stato (*):", self.stato_combo)
+
+        self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
+
+        # --- Tab 2: Possessori Associati ---
+        self.tab_possessori = QWidget()
+        layout_possessori = QVBoxLayout(self.tab_possessori)
+
+        self.possessori_table = QTableWidget()
+        # ID Relazione (partita_possessore.id), ID Possessore, Nome Completo, Titolo, Quota
+        self.possessori_table.setColumnCount(5)
+        self.possessori_table.setHorizontalHeaderLabels([
+            "ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"
+        ])
+        self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.possessori_table.horizontalHeader().setStretchLastSection(True) # Ultima colonna si estende
+        self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
+        layout_possessori.addWidget(self.possessori_table)
+
+        possessori_buttons_layout = QHBoxLayout()
+        self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
+        # self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita) # Implementeremo
+        possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
+
+        self.btn_modifica_legame_possessore = QPushButton("Modifica Legame...")
+        # self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore) # Implementeremo
+        self.btn_modifica_legame_possessore.setEnabled(False)
+        possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
+
+        self.btn_rimuovi_possessore = QPushButton("Rimuovi dalla Partita")
+        # self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita) # Implementeremo
+        self.btn_rimuovi_possessore.setEnabled(False)
+        possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
+        possessori_buttons_layout.addStretch()
+        layout_possessori.addLayout(possessori_buttons_layout)
+
+        self.tab_widget.addTab(self.tab_possessori, "Possessori Associati")
+
+        # --- Pulsanti Salva/Annulla (comuni a tutto il dialogo) ---
+        buttons_layout = QHBoxLayout()
+        self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
+        self.save_button.setToolTip("Salva solo le modifiche apportate nel tab 'Dati Generali'")
+        self.save_button.clicked.connect(self._save_changes) # Questo salva solo i dati generali
+        
+        self.close_dialog_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
+        self.close_dialog_button.setToolTip("Chiude il dialogo. Le modifiche ai possessori sono salvate individualmente.")
+        self.close_dialog_button.clicked.connect(self.accept) # O reject se non si vuole propagare Accepted
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.save_button) # Pulsante per salvare i dati generali della partita
+        buttons_layout.addWidget(self.close_dialog_button) # Pulsante per chiudere
+        main_layout.addLayout(buttons_layout)
+
+        self.setLayout(main_layout)
+
+    def _aggiorna_stato_pulsanti_possessori(self):
+        has_selection = bool(self.possessori_table.selectedItems())
+        self.btn_modifica_legame_possessore.setEnabled(has_selection)
+        self.btn_rimuovi_possessore.setEnabled(has_selection)
+
+    def _load_partita_data(self):
+        # ... (come prima, popola i campi del tab "Dati Generali") ...
+        self.partita_data_originale = self.db_manager.get_partita_details(self.partita_id)
+        if not self.partita_data_originale:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
+            from PyQt5.QtCore import QTimer # Importazione locale
+            QTimer.singleShot(0, self.reject)
+            return
+
+        self.comune_label.setText(self.partita_data_originale.get('comune_nome', "N/D"))
+        self.numero_partita_spinbox.setValue(self.partita_data_originale.get('numero_partita', 0))
+        tipo_idx = self.tipo_combo.findText(self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
+        if tipo_idx >= 0: self.tipo_combo.setCurrentIndex(tipo_idx)
+        data_impianto = self.partita_data_originale.get('data_impianto')
+        if data_impianto: self.data_impianto_edit.setDate(QDate(data_impianto.year, data_impianto.month, data_impianto.day))
+        else: self.data_impianto_edit.setDate(QDate())
+        data_chiusura = self.partita_data_originale.get('data_chiusura')
+        if data_chiusura: self.data_chiusura_edit.setDate(QDate(data_chiusura.year, data_chiusura.month, data_chiusura.day))
+        else: self.data_chiusura_edit.setDate(QDate())
+        self.numero_provenienza_spinbox.setValue(self.partita_data_originale.get('numero_provenienza') or 0)
+        stato_idx = self.stato_combo.findText(self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
+        if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
+
+
+    def _load_possessori_associati(self):
+        # Questo metodo chiamerà db_manager.get_possessori_per_partita(self.partita_id)
+        # e popolerà self.possessori_table.
+        self.possessori_table.setRowCount(0) # Pulisce la tabella
+        # try:
+        #     possessori = self.db_manager.get_possessori_per_partita(self.partita_id) # Metodo da creare
+        #     if possessori:
+        #         self.possessori_table.setRowCount(len(possessori))
+        #         for row, poss_data in enumerate(possessori):
+        #             # Popola le colonne: ID Relazione (partita_possessore.id), ID Possessore, Nome Completo, Titolo, Quota
+        #             self.possessori_table.setItem(row, 0, QTableWidgetItem(str(poss_data.get('id_relazione_partita_possessore')))) # ID da partita_possessore
+        #             self.possessori_table.setItem(row, 1, QTableWidgetItem(str(poss_data.get('possessore_id'))))
+        #             self.possessori_table.setItem(row, 2, QTableWidgetItem(poss_data.get('nome_completo_possessore')))
+        #             self.possessori_table.setItem(row, 3, QTableWidgetItem(poss_data.get('titolo_possesso')))
+        #             self.possessori_table.setItem(row, 4, QTableWidgetItem(poss_data.get('quota_possesso')))
+        #     self.possessori_table.resizeColumnsToContents()
+        # except Exception as e:
+        #     gui_logger.error(f"Errore caricamento possessori per partita {self.partita_id}: {e}", exc_info=True)
+        #     QMessageBox.warning(self, "Errore Caricamento Possessori", f"Impossibile caricare i possessori: {e}")
+        #self.output_text_edit.append(f"DEBUG: _load_possessori_associati per partita ID {self.partita_id} (da implementare)\n") # Placeholder
+        self._aggiorna_stato_pulsanti_possessori()
+
+
+    def _save_changes(self): # Questo ora salva SOLO i dati generali della partita
+
+        # --- 1. Raccogli i dati dai campi del form ---
+        # Raccogli i dati dai campi del form
+        dati_modificati = {
+            "numero_partita": self.numero_partita_spinbox.value(),
+            "tipo": self.tipo_combo.currentText(),
+            "stato": self.stato_combo.currentText(),
+        }
+        q_data_impianto = self.data_impianto_edit.date()
+        if q_data_impianto.isValid() and self.data_impianto_edit.text().strip() != "":
+            dati_modificati["data_impianto"] = q_data_impianto.toPyDate()
+        else:
+            dati_modificati["data_impianto"] = None
+        q_data_chiusura = self.data_chiusura_edit.date()
+        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip() != "":
+            dati_modificati["data_chiusura"] = q_data_chiusura.toPyDate()
+        else:
+            dati_modificati["data_chiusura"] = None
+        num_prov_value = self.numero_provenienza_spinbox.value()
+        if self.numero_provenienza_spinbox.text() == self.numero_provenienza_spinbox.specialValueText():
+            dati_modificati["numero_provenienza"] = None
+        else:
+            dati_modificati["numero_provenienza"] = num_prov_value
+
+        if dati_modificati["numero_partita"] <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
+            self.numero_partita_spinbox.setFocus()
+            self.numero_partita_spinbox.selectAll()
+            return
+        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
+            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
+                QMessageBox.warning(self, "Date Non Valide", "La data di chiusura non può essere precedente alla data di impianto.")
+                self.data_chiusura_edit.setFocus()
+                return
+        try:
+            gui_logger.info(f"Tentativo di aggiornare i dati generali della partita ID {self.partita_id} con: {dati_modificati}")
+            self.db_manager.update_partita(self.partita_id, dati_modificati) # Assumiamo che questo sollevi eccezioni in caso di errore
+            gui_logger.info(f"Dati generali della Partita ID {self.partita_id} aggiornati con successo.")
+            # Non chiamare self.accept() qui, perché il pulsante "Salva Modifiche Dati Generali" non deve chiudere il dialogo principale
+            # Il dialogo principale si chiude con il pulsante "Chiudi"
+            QMessageBox.information(self, "Salvataggio Dati Generali", "Modifiche ai dati generali della partita salvate con successo.")
+            # Ricarica i dati generali per riflettere eventuali normalizzazioni o valori di default dal DB
+            self._load_partita_data() 
+            # Il parent (PartiteComuneDialog) verrà aggiornato solo quando questo dialogo si chiude con Accept.
+            # Dobbiamo decidere se il salvataggio dei dati generali deve emettere un segnale o se il parent si aggiorna solo alla chiusura.
+            # Per ora, il parent si aggiorna quando il dialogo ModificaPartitaDialog viene 'accepted'.
+            # Il pulsante "Chiudi" ora fa self.accept(), quindi il parent aggiornerà.
+
+        except (DBUniqueConstraintError, DBNotFoundError, DBDataError, DBMError, AttributeError, Exception) as e:
+            # Riusa la logica di gestione eccezioni che avevi già perfezionato per mostrare i messaggi appropriati
+            # (quella che inizia con DBUniqueConstraintError as uve: etc.)
+            # Questa è una semplificazione, dovresti avere i blocchi except specifici qui
+            error_title = "Errore Salvataggio"
+            error_message = f"Errore durante il salvataggio dei dati generali:\n{type(e).__name__}: {str(e)}"
+            if isinstance(e, DBUniqueConstraintError):
+                error_title = "Errore di Unicità"
+                error_message = f"Impossibile salvare i dati generali:\n{e.message}\nIl numero di partita potrebbe essere già in uso."
+                if hasattr(self, 'numero_partita_spinbox'): self.numero_partita_spinbox.setFocus()
+
+        q_data_chiusura = self.data_chiusura_edit.date()
+        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip() != "":
+            dati_modificati["data_chiusura"] = q_data_chiusura.toPyDate()
+        else:
+            dati_modificati["data_chiusura"] = None
+            
+        num_prov_value = self.numero_provenienza_spinbox.value()
+        # Controlla se il testo visualizzato è il testo speciale per "valore nullo"
+        if self.numero_provenienza_spinbox.text() == self.numero_provenienza_spinbox.specialValueText():
+            dati_modificati["numero_provenienza"] = None
+        elif num_prov_value == 0 and self.numero_provenienza_spinbox.minimum() == 0 : # Se 0 è un valore valido e non lo specialValueText
+             # Se 0 è un valore valido e non "Nessuno", allora usa 0.
+             # Se 0 è interpretato come "Nessuno" o non specificato E non è lo specialValueText
+             # allora la logica qui potrebbe aver bisogno di aggiustamenti in base a come vuoi trattare 0.
+             # Per ora, se specialValueText non matcha e il valore è 0, assumiamo che 0 sia un valore valido
+             # (anche se il DB potrebbe avere NULL per questo). Se 0 deve essere NULL, allora:
+             # dati_modificati["numero_provenienza"] = None if num_prov_value == 0 else num_prov_value
+             dati_modificati["numero_provenienza"] = num_prov_value # Lascia decidere al DB se 0 è valido o deve essere NULL
+        else:
+            dati_modificati["numero_provenienza"] = num_prov_value
+
+
+        # --- 2. Validazione input a livello di UI (opzionale, ma buona pratica) ---
+        # Esempio: se il numero partita non può essere zero o negativo
+        if dati_modificati["numero_partita"] <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
+            self.numero_partita_spinbox.setFocus()
+            self.numero_partita_spinbox.selectAll()
+            return # Interrompe il salvataggio
+
+        # Aggiungi qui altre validazioni preliminari della UI se necessario.
+        # Ad esempio, controllare che data_chiusura non sia precedente a data_impianto.
+        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
+            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
+                QMessageBox.warning(self, "Date Non Valide", 
+                                    "La data di chiusura non può essere precedente alla data di impianto.")
+                self.data_chiusura_edit.setFocus()
+                return # Interrompe il salvataggio
+
+        # --- 3. Tentativo di aggiornamento del database e gestione errori ---
+        try:
+            gui_logger.info(f"Tentativo di aggiornare la partita ID {self.partita_id} con i dati: {dati_modificati}")
+            self.db_manager.update_partita(self.partita_id, dati_modificati)
+            
+            # Se update_partita NON solleva eccezioni, l'operazione è andata a buon fine
+            gui_logger.info(f"Partita ID {self.partita_id} aggiornata con successo nel database.")
+            self.accept() # Chiude il dialogo e restituisce QDialog.Accepted
+
+        except DBUniqueConstraintError as uve:
+            gui_logger.warning(f"Violazione di unicità durante l'aggiornamento della partita ID {self.partita_id} con numero {dati_modificati.get('numero_partita')}: {uve}")
+            QMessageBox.warning(self, "Errore di Unicità",
+                                f"Impossibile salvare le modifiche:\n{uve.message}\n"
+                                "Il numero di partita specificato potrebbe essere già in uso per il comune di appartenenza.")
+            if hasattr(self, 'numero_partita_spinbox'): # Assicurati che il widget esista
+                self.numero_partita_spinbox.setFocus()
+                self.numero_partita_spinbox.selectAll()
+        
+        except DBNotFoundError as nfe:
+            gui_logger.error(f"Partita ID {self.partita_id} non trovata per l'aggiornamento: {nfe}")
+            QMessageBox.critical(self, "Errore Aggiornamento",
+                                 f"Impossibile salvare le modifiche:\n{nfe.message}\nLa partita potrebbe essere stata eliminata da un altro utente.")
+            self.reject() # Chiude il dialogo indicando fallimento o che la risorsa non c'è più
+
+        except DBDataError as dde: # Per errori di validazione sollevati dal DBManager o dal DB (es. CheckConstraint)
+            gui_logger.warning(f"Errore nei dati forniti per l'aggiornamento della partita ID {self.partita_id}: {dde}")
+            QMessageBox.warning(self, "Errore Dati Non Validi",
+                                f"Impossibile salvare le modifiche:\n{dde.message}\n"
+                                "Verificare la correttezza dei valori inseriti.")
+            # Potresti voler mettere il focus sul campo problematico se l'errore lo indica
+
+        except DBMError as dbe: # Altri errori DB gestiti e sollevati dal db_manager
+            gui_logger.error(f"Errore database gestito durante l'aggiornamento della partita ID {self.partita_id}: {dbe}")
+            QMessageBox.critical(self, "Errore Database",
+                                 f"Si è verificato un errore durante il salvataggio nel database:\n{dbe.message}")
+        
+        except AttributeError as ae: # Cattura specificamente AttributeError
+            gui_logger.critical(f"Errore di attributo (probabile bug di programmazione) durante l'aggiornamento della partita ID {self.partita_id}: {ae}", exc_info=True)
+            QMessageBox.critical(self, "Errore Interno Applicazione",
+                                 f"Si è verificato un errore interno (AttributeError):\n{ae}\n"
+                                 "Questo indica un problema nel codice dell'applicazione.\n"
+                                 "Contattare lo sviluppatore fornendo i dettagli dal log.")
+
+        except Exception as e: # Catch-all per qualsiasi altra eccezione Python imprevista
+            gui_logger.critical(f"Errore critico e imprevisto durante il salvataggio delle modifiche alla partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico Imprevisto",
+                                 f"Si è verificato un errore di sistema imprevisto durante il salvataggio:\n"
+                                 f"{type(e).__name__}: {e}\n"
+                                 "Controllare i log dell'applicazione per il traceback completo.")
+        gui_logger.error(f"Errore salvataggio dati generali partita ID {self.partita_id}: {e}", exc_info=True)
+        QMessageBox.critical(self, error_title, error_message)
+
+
+    # Metodi placeholder per le azioni sui possessori (da implementare successivamente)
+    # def _aggiungi_possessore_a_partita(self):
+    #     self.output_text_edit.append("DEBUG: _aggiungi_possessore_a_partita da implementare\n")
+    #     # Qui apri dialogo per selezionare possessore e inserire titolo/quota
+    #     # Poi chiama db_manager.aggiungi_possessore_a_partita(...)
+    #     # Poi self._load_possessori_associati()
+
+    # def _modifica_legame_possessore(self):
+    #     selected_items = self.possessori_table.selectedItems()
+    #     if not selected_items: return
+    #     id_relazione = int(self.possessori_table.item(selected_items[0].row(), 0).text())
+    #     self.output_text_edit.append(f"DEBUG: _modifica_legame_possessore per ID Relazione {id_relazione} (da implementare)\n")
+    #     # Qui apri dialogo per modificare titolo/quota per id_relazione
+    #     # Poi chiama db_manager.aggiorna_legame_partita_possessore(...)
+    #     # Poi self._load_possessori_associati()
+
+    # def _rimuovi_possessore_da_partita(self):
+    #     selected_items = self.possessori_table.selectedItems()
+    #     if not selected_items: return
+    #     id_relazione = int(self.possessori_table.item(selected_items[0].row(), 0).text())
+    #     nome_possessore = self.possessori_table.item(selected_items[0].row(), 2).text()
+        
+    #     reply = QMessageBox.question(self, "Conferma Rimozione",
+    #                                  f"Rimuovere il possessore '{nome_possessore}' da questa partita?",
+    #                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+    #     if reply == QMessageBox.Yes:
+    #         self.output_text_edit.append(f"DEBUG: _rimuovi_possessore_da_partita per ID Relazione {id_relazione} (da implementare)\n")
+    #         # Chiama db_manager.rimuovi_possessore_da_partita(id_relazione)
+    #         # Poi self._load_possessori_associati()
+
+# Non dimenticare di importare ModificaPartitaDialog dove serve, ad esempio in PartiteComuneDialog
 class PossessoriComuneDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):
         super().__init__(parent)

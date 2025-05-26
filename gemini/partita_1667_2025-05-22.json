@@ -1,0 +1,57 @@
+{
+    "id": 1667,
+    "comune_id": 4,
+    "numero_partita": 1008,
+    "tipo": "principale",
+    "data_impianto": "1994-05-19",
+    "data_chiusura": null,
+    "numero_provenienza": null,
+    "stato": "attiva",
+    "data_creazione": "2025-05-19T13:31:39.030528",
+    "data_modifica": "2025-05-19T13:31:39.030528",
+    "comune_nome": "Comune Stress Test 4",
+    "possessori": [
+        [
+            302,
+            "Possessore 4-2 Rossi",
+            "proprietÃ  esclusiva",
+            null
+        ]
+    ],
+    "immobili": [
+        [
+            4524,
+            "Edificio Stress 3",
+            null,
+            null,
+            "208 mq",
+            "Classe Stress 5",
+            "Via Stress 4-15",
+            "via",
+            48
+        ],
+        [
+            4523,
+            "Edificio Stress 2",
+            null,
+            null,
+            "195 mq",
+            "Classe Stress 4",
+            "Via Stress 4-16",
+            "via",
+            50
+        ],
+        [
+            4522,
+            "Edificio Stress 1",
+            null,
+            null,
+            "153 mq",
+            "Classe Stress 4",
+            "Via Stress 4-7",
+            "via",
+            83
+        ]
+    ],
+    "variazioni": []
+}

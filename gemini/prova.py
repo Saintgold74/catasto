@@ -6290,19 +6290,23 @@ class CatastoMainWindow(QMainWindow):
             gui_logger.warning("Tentativo di logout senza una sessione utente o db_manager validi.")
 
 
-    def closeEvent(self, event: QCloseEvent): # Specificare il tipo dell'evento
-        gui_logger.info("Evento closeEvent intercettato.")
-        # Registra il logout se l'utente chiude la finestra mentre è loggato
-        if self.logged_in_user_id and self.current_session_id and self.db_manager:
-            gui_logger.info(f"Chiusura applicazione: esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id}...")
-            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui) #
+    def closeEvent(self, event: QCloseEvent): # QCloseEvent deve essere importato in prova.py
+        gui_logger.info("Evento closeEvent intercettato in CatastoMainWindow.")
 
-        if self.db_manager:
-            self.db_manager.disconnect()
-            gui_logger.info("Connessione al database chiusa.")
+        # Esegui il logout dell'utente applicativo se loggato
+        if hasattr(self, 'logged_in_user_id') and self.logged_in_user_id and \
+           hasattr(self, 'current_session_id') and self.current_session_id and \
+           hasattr(self, 'db_manager') and self.db_manager:
+            gui_logger.info(f"Chiusura applicazione: esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id}...")
+            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui) # Assicurati che client_ip_address_gui sia definito
+            self.db_manager.clear_audit_session_variables() 
+
+        # Chiudi il pool di connessioni del database
+        if hasattr(self, 'db_manager') and self.db_manager:
+            self.db_manager.close_pool() 
+            gui_logger.info("Pool di connessioni al database chiuso.")
 
         gui_logger.info("Applicazione GUI Catasto Storico terminata.")
-        # QApplication.instance().quit() # Non sempre necessario qui se event.accept() è chiamato
         event.accept() # Conferma la chiusura della finestra
 
 # --- Fine Classe CatastoMainWindow ---
@@ -6643,12 +6647,44 @@ def run_gui_app():
     #     log_level=logging.WARNING
     # )
 
-    if not db_manager_gui.connect():
-        QMessageBox.critical(None, "Errore Connessione Database",
-                             "Impossibile connettersi al database.\n"
-                             "Verifica i parametri di connessione e che il server PostgreSQL sia in esecuzione.\n"
+    db_manager_gui = CatastoDBManager(
+        dbname=db_config_gui["dbname"], 
+        user=db_config_gui["user"], 
+        password=db_config_gui["password"],
+        host=db_config_gui["host"], 
+        port=db_config_gui["port"],
+        schema=db_config_gui.get("schema", "catasto"), # Usa .get() per schema opzionale
+        # Assicurati di passare anche min_conn, max_conn, application_name, log_file, log_level
+        # se li hai resi parametri obbligatori del __init__ o se vuoi sovrascrivere i default.
+        # Esempio basato sulla firma __init__ che abbiamo discusso:
+        application_name="CatastoAppGUI_Main", # Nome specifico per l'istanza principale
+        log_file="catasto_main_db.log",
+        log_level=logging.DEBUG, # O il livello che preferisci per la produzione
+        min_conn=1,
+        max_conn=5 # O i valori che preferisci per il pool principale
+    )
+
+    # Verifica se il pool è stato inizializzato con successo nel costruttore
+    if db_manager_gui.pool is None: # <--- NUOVO CONTROLLO
+        QMessageBox.critical(None, "Errore Inizializzazione Database",
+                             "Impossibile inizializzare il pool di connessioni al database.\n"
+                             "Verifica i parametri di connessione, che il server PostgreSQL sia in esecuzione e i log dell'applicazione.\n"
                              "L'applicazione verrà chiusa.")
+        # db_manager_gui.close_pool() # Non necessario se il pool è None, ma per sicurezza
         sys.exit(1)
+    else:
+        # Opzionale: potresti voler "testare" il pool ottenendo e rilasciando una connessione
+        # per essere sicuro che sia veramente funzionante, ma __init__ dovrebbe già loggare errori.
+        try:
+            conn_test = db_manager_gui._get_connection()
+            db_manager_gui._release_connection(conn_test)
+            gui_logger.info("Test di connessione iniziale al pool riuscito.")
+        except Exception as test_conn_err:
+            QMessageBox.critical(None, "Errore Connessione Pool",
+                                 f"Il pool sembra inizializzato, ma non è possibile ottenere una connessione:\n{test_conn_err}\n"
+                                 "L'applicazione verrà chiusa.")
+            db_manager_gui.close_pool()
+            sys.exit(1)
 
     main_window_instance = None # Riferimento alla finestra principale
     login_success = False
@@ -6669,11 +6705,11 @@ def run_gui_app():
                 # Questo caso non dovrebbe accadere se LoginDialog.accept() è chiamato solo su login valido
                 QMessageBox.critical(None, "Errore Login", "Dati di login non validi ricevuti dal dialogo.")
                 # Potrebbe essere meglio chiudere l'app qui o loggare e ritentare
-                db_manager_gui.disconnect()
+                db_manager_gui.close_pool() # <--- USA QUESTO
                 sys.exit(1) # Uscita critica
         else: # LoginDialog è stato chiuso o cancellato
             gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
-            if db_manager_gui: db_manager_gui.disconnect()
+            if db_manager_gui: db_manager_gui.close_pool() # <--- USA QUESTO
             sys.exit(0) # Uscita pulita
             
     if main_window_instance and login_success:
@@ -6707,7 +6743,7 @@ def run_gui_app():
         # che non ha portato a un'uscita anticipata.
         gui_logger.error("Avvio dell'applicazione fallito: main_window_instance non inizializzata o login non riuscito prima di app.exec_().")
         if db_manager_gui: # Assicurati che db_manager_gui sia definito
-            db_manager_gui.disconnect()
+            db_manager_gui.close_pool() # <--- USA QUESTO
         sys.exit(1)
 
     

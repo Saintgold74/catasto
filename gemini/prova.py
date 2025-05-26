@@ -3941,32 +3941,42 @@ class LocalitaSelectionDialog(QDialog):
         else:
             self.ok_button.setText("Crea e Seleziona")
     
-    def load_localita(self, filter_text=None):
+    def load_localita(self, filter_text: Optional[str] = None):
         """Carica le località dal database con filtro opzionale."""
         self.localita_table.setRowCount(0)
-        
+        self.localita_table.setSortingEnabled(False) # Disabilita all'inizio
+
         if self.comune_id:
-            # Esegue una query diretta per le località
-            query = "SELECT id, nome, tipo, civico FROM localita WHERE comune_id = %s ORDER BY tipo, nome, civico"
-            if self.db_manager.execute_query(query, (self.comune_id,)):
-                localita = self.db_manager.fetchall()
+            try:
+                # Chiama il nuovo metodo del DBManager
+                localita_results = self.db_manager.get_localita_by_comune(self.comune_id, filter_text)
                 
-                if localita:
-                    # Filtra se necessario
-                    if filter_text:
-                        localita = [l for l in localita if filter_text.lower() in l.get('nome', '').lower()]
-                    
-                    self.localita_table.setRowCount(len(localita))
-                    
-                    for i, loc in enumerate(localita):
+                if localita_results:
+                    self.localita_table.setRowCount(len(localita_results))
+                    for i, loc in enumerate(localita_results):
                         self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
                         self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        
                         civico_text = str(loc.get('civico', '')) if loc.get('civico') is not None else "-"
                         self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
-                
-                self.localita_table.resizeColumnsToContents()
+                    self.localita_table.resizeColumnsToContents()
+                else:
+                    pass # Nessun risultato
+            except AttributeError as ae: 
+                gui_logger.error(f"Metodo get_localita_by_comune non trovato nel db_manager: {ae}")
+                QMessageBox.critical(self, "Errore Funzionalità", "Funzione per caricare località non implementata.")
+            except Exception as e:
+                gui_logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare le località: {e}")
+            finally: # <-- Allineato con il try
+                self.localita_table.setSortingEnabled(True)
+        else: # comune_id non è settato
+            self.localita_table.setRowCount(1)
+            self.localita_table.setItem(0,0,QTableWidgetItem("Selezionare prima un comune."))
+            # self.localita_table.setSpan(0,0,1,4) # Occupa tutta la riga
+            # Se si vuole che il sorting sia abilitato anche in questo caso,
+            # si potrebbe duplicare la chiamata o metterla alla fine del metodo.
+            self.localita_table.setSortingEnabled(True) # Riabilita anche qui se necessario
     
     def filter_localita(self):
         """Filtra le località in base al testo inserito."""
@@ -6059,26 +6069,42 @@ class CatastoMainWindow(QMainWindow):
         self.logged_in_user_info = user_info
         self.current_session_id = session_id
 
-        db_name = "N/D"
-        if hasattr(self.db_manager, 'conn_params') and self.db_manager.conn_params: # Controllo robustezza
-            db_name = self.db_manager.conn_params.get('dbname', 'N/D')
-        self.db_status_label.setText(f"Database: Connesso ({db_name})")
+        # --- Aggiornamento etichetta stato DB ---
+        db_name_to_display = "ERRORE_NOME_DB" # Default se qualcosa va storto nel recupero
+        connection_seems_ok = False
 
-        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D') # Assicurati che logged_in_user_info sia impostato
-        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+        if self.db_manager and self.db_manager.pool: # Il pool è il nostro indicatore principale ora
+            gui_logger.info("DEBUG perform_initial_setup: db_manager e pool esistono.")
+            if hasattr(self.db_manager, '_conn_params_dict') and self.db_manager._conn_params_dict:
+                db_name_to_display = self.db_manager._conn_params_dict.get('dbname', 'N/D')
+                gui_logger.info(f"DEBUG perform_initial_setup: db_name recuperato: {db_name_to_display}")
+            else:
+                gui_logger.warning("DEBUG perform_initial_setup: db_manager non ha _conn_params_dict o è vuoto.")
+            
+            # Dato che run_gui_app ha già testato la connessione al pool con successo,
+            # possiamo considerare la connessione "attiva" a questo punto.
+            connection_seems_ok = True 
+        else:
+            gui_logger.error("DEBUG perform_initial_setup: db_manager o db_manager.pool NON esistono!")
+            db_name_to_display = "Gestore DB non inizializzato"
 
-         # ---> AGGIUNGI QUESTA RIGA PER DEFINIRE ruolo_display <---
-        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D') 
-        
+        if connection_seems_ok:
+            new_label_text = f"Database: Connesso ({db_name_to_display})"
+            self.db_status_label.setText(new_label_text)
+            gui_logger.info(f"DEBUG perform_initial_setup: db_status_label IMPOSTATO A: '{new_label_text}'")
+        else:
+            new_label_text = f"Database: NON CONNESSO ({db_name_to_display})"
+            self.db_status_label.setText(new_label_text)
+            gui_logger.warning(f"DEBUG perform_initial_setup: db_status_label IMPOSTATO A: '{new_label_text}'")
+        # --- Fine aggiornamento etichetta stato DB ---
+
+        # Aggiornamento etichetta utente (come prima)
+        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
         self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
-
         self.logout_button.setEnabled(True)
-        # L'abilitazione di btn_nuovo_comune_toolbar è gestita da update_ui_based_on_role
 
         self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
-        self.setup_tabs() # Configura i tab
-        self.update_ui_based_on_role() # Applica i permessi UI subito dopo aver impostato i tab
-        self.show()
         
         gui_logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
@@ -6086,7 +6112,7 @@ class CatastoMainWindow(QMainWindow):
         self.update_ui_based_on_role()
 
         gui_logger.info(">>> CatastoMainWindow: Chiamata a self.show()")
-        self.show() # <-- ESSENZIALE
+        self.show()
         gui_logger.info(">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
 
     # All'interno della classe CatastoMainWindow in prova.py

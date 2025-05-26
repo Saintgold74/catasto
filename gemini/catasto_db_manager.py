@@ -339,29 +339,36 @@ class CatastoDBManager:
         return comuni_list
     
     def get_all_comuni_details(self) -> List[Dict[str, Any]]:
-        """
-        Recupera i dettagli disponibili di tutti i comuni dalla tabella catasto.comune.
-        I campi codice_catastale, data_istituzione, data_soppressione, note
-        NON sono presenti nella tabella 'comune' attuale e quindi non verranno popolati.
-        """
-        query_effettiva = """
+        """Recupera i dettagli disponibili di tutti i comuni."""
+        conn = None
+        comuni_list = []
+        # Query basata sulla tua precedente implementazione di get_all_comuni_details
+        query = """
             SELECT 
                 id, 
-                nome AS nome_comune, -- La GUI si aspetta 'nome_comune'
+                nome AS nome_comune,
                 provincia,
-                regione -- Aggiungiamo regione se può essere utile, anche se la GUI non la usa direttamente
-                -- codice_catastale, data_istituzione, data_soppressione, note (NON PRESENTI IN 'comune')
+                regione 
             FROM catasto.comune 
             ORDER BY nome_comune;
         """
         try:
-            if self.execute_query(query_effettiva):
-                return self.fetchall()
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_all_comuni_details: {query}")
+                cur.execute(query)
+                results = cur.fetchall()
+                if results:
+                    comuni_list = [dict(row) for row in results]
+                self.logger.info(f"Recuperati {len(comuni_list)} comuni per get_all_comuni_details.")
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB in get_all_comuni_details: {db_err}")
+            self.logger.error(f"Errore DB in get_all_comuni_details: {db_err}", exc_info=True)
         except Exception as e:
-            logger.error(f"Errore Python in get_all_comuni_details: {e}")
-        return []
+            self.logger.error(f"Errore Python in get_all_comuni_details: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return comuni_list
 
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
         """Verifica se un possessore esiste (per nome completo e comune_id) e ritorna il suo ID."""
@@ -1192,35 +1199,66 @@ class CatastoDBManager:
 
     # --- Metodi Viste Materializzate (MODIFICATI per comune_id e query join) ---
 
-    def get_statistiche_comune(self) -> List[Dict]:
-        """Recupera dati dalla vista materializzata mv_statistiche_comune (aggiornata)."""
+    def get_statistiche_comune(self) -> List[Dict[str, Any]]:
+        """Recupera dati dalla vista materializzata mv_statistiche_comune."""
+        conn = None
+        stats_list = []
+        query = f"SELECT * FROM {self.schema}.mv_statistiche_comune ORDER BY comune;" # Usa self.schema
         try:
-            # La vista SQL è stata aggiornata per usare join e nome comune
-            query = "SELECT * FROM mv_statistiche_comune ORDER BY comune"
-            if self.execute_query(query): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_statistiche_comune: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python get_statistiche_comune: {e}"); return []
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_statistiche_comune: {query}")
+                cur.execute(query)
+                results = cur.fetchall()
+                if results:
+                    stats_list = [dict(row) for row in results]
+                self.logger.info(f"Recuperate {len(stats_list)} righe da mv_statistiche_comune.")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_statistiche_comune: {db_err}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_statistiche_comune: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return stats_list
 
-    def get_immobili_per_tipologia(self, comune_id: Optional[int] = None, limit: int = 100) -> List[Dict]: # Usa comune_id
-        """Recupera dati dalla vista materializzata mv_immobili_per_tipologia (aggiornata), filtrando per ID."""
+    def get_immobili_per_tipologia(self, comune_id: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        conn = None
+        immobili_list = []
+        params = []
+        query_base = f"SELECT * FROM {self.schema}.mv_immobili_per_tipologia" # Usa self.schema
+
+        if comune_id is not None:
+            # Assumendo che mv_immobili_per_tipologia abbia comune_nome, e comune.id sia la FK
+            # Questa query è un esempio, potrebbe necessitare di adattamenti basati sulla struttura esatta della vista
+            query = f"""
+                 SELECT m.* FROM {self.schema}.mv_immobili_per_tipologia m
+                 JOIN {self.schema}.comune c ON m.comune_nome = c.nome -- o come la vista si collega al comune
+                 WHERE c.id = %s
+                 ORDER BY m.comune_nome, m.classificazione LIMIT %s;
+            """
+            params = [comune_id, limit]
+        else:
+            query = f"{query_base} ORDER BY comune_nome, classificazione LIMIT %s;"
+            params = [limit]
+        
         try:
-            params = []
-            # La vista SQL è stata aggiornata per usare nome comune
-            query = "SELECT * FROM mv_immobili_per_tipologia" # La vista ha 'comune_nome'
-            if comune_id is not None:
-                 # Filtra direttamente sulla vista se il nome è univoco,
-                 # altrimenti serve un JOIN o modifica della vista per includere ID
-                 query = """
-                     SELECT m.* FROM mv_immobili_per_tipologia m
-                     JOIN comune c ON m.comune_nome = c.nome
-                     WHERE c.id = %s
-                 """
-                 params.append(comune_id)
-
-            query += " ORDER BY comune_nome, classificazione LIMIT %s"; params.append(limit)
-            if self.execute_query(query, tuple(params)): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_immobili_per_tipologia: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python get_immobili_per_tipologia: {e}"); return []
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_immobili_per_tipologia: {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
+                results = cur.fetchall()
+                if results:
+                    immobili_list = [dict(row) for row in results]
+                self.logger.info(f"Recuperate {len(immobili_list)} righe da mv_immobili_per_tipologia.")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_immobili_per_tipologia: {db_err}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_immobili_per_tipologia: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return immobili_list
 
     def get_partite_complete_view(self, comune_id: Optional[int] = None, stato: Optional[str] = None, limit: int = 100) -> List[Dict]: # Usa comune_id
         """Recupera dati dalla vista materializzata mv_partite_complete (aggiornata), filtrando per ID."""
@@ -1748,22 +1786,46 @@ class CatastoDBManager:
     # --- Metodi Sistema Utenti e Audit (Invariati rispetto a comune_id) ---
 
     def set_session_app_user(self, user_id: Optional[int], client_ip: Optional[str] = None) -> bool:
-        """Imposta variabili di sessione PostgreSQL per l'audit."""
-        if not self.conn or self.conn.closed: logger.warning("Tentativo set var sessione senza connessione."); return False
+        """
+        Imposta variabili di sessione PostgreSQL per tracciamento generico (diverso da audit log specifico).
+        Usa il pool di connessioni. Se queste sono le stesse variabili di audit, considera di unificare.
+        """
+        # Queste variabili sembrano diverse da 'catasto.app_user_id' e 'catasto.session_id' usate per l'audit.
+        # Se sono le stesse, questo metodo potrebbe essere ridondante con set_audit_session_variables.
+        # Assumiamo per ora che 'app.user_id' e 'app.ip_address' siano GUC separate.
+        self.logger.debug(f"Tentativo di impostare var sessione app: app.user_id='{user_id}', app.ip_address='{client_ip}'")
+        conn = None
         try:
-            user_id_str = str(user_id) if user_id is not None else None; ip_str = client_ip if client_ip is not None else None
-            if self.execute_query("SELECT set_config('app.user_id', %s, FALSE);", (user_id_str,)) and \
-               self.execute_query("SELECT set_config('app.ip_address', %s, FALSE);", (ip_str,)):
-                logger.debug(f"Var sessione impostate: app.user_id='{user_id_str}', app.ip_address='{ip_str}'")
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                user_id_str = str(user_id) if user_id is not None else None
+                ip_str = client_ip if client_ip is not None else None
+                
+                # Usa SELECT set_config per impostare GUCs di sessione.
+                # Il terzo argomento 'false' significa che l'impostazione dura per la sessione.
+                cur.execute("SELECT set_config('app.user_id', %s, false);", (user_id_str,))
+                cur.execute("SELECT set_config('app.ip_address', %s, false);", (ip_str,))
+                conn.commit() # Necessario per rendere effettivi i set_config non locali alla transazione
+                self.logger.info(f"Variabili di sessione applicative impostate: app.user_id='{user_id_str}', app.ip_address='{ip_str}'")
                 return True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB impostando var sessione applicative: {db_err}", exc_info=True)
             return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB set var sessione: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python set var sessione: {e}"); return False
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python impostando var sessione applicative: {e}", exc_info=True)
+            return False
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def clear_session_app_user(self):
-        """Resetta le variabili di sessione PostgreSQL per l'audit."""
-        logger.debug("Reset variabili di sessione app.")
-        self.set_session_app_user(user_id=None, client_ip=None)
+        """Resetta le variabili di sessione PostgreSQL 'app.user_id' e 'app.ip_address'."""
+        self.logger.info("Reset variabili di sessione applicative (app.user_id, app.ip_address).")
+        # Richiama set_session_app_user con None per resettarle.
+        # In alternativa, si potrebbe usare RESET nome_variabile;
+        return self.set_session_app_user(user_id=None, client_ip=None)
 
     def get_audit_log(self, tabella: Optional[str]=None, operazione: Optional[str]=None,
                       record_id: Optional[int]=None, data_inizio: Optional[date]=None,
@@ -1981,36 +2043,39 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB verifica permesso '{permesso_nome}' per utente ID {utente_id}: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python verifica permesso '{permesso_nome}' per utente ID {utente_id}: {e}"); return False
 
-    def get_utenti(self, solo_attivi: Optional[bool] = None) -> List[Dict]:
-        """
-        Recupera un elenco di utenti dal database.
-        È possibile filtrare per utenti solo attivi.
-        """
+    def get_utenti(self, solo_attivi: Optional[bool] = None) -> List[Dict[str, Any]]:
+        """Recupera un elenco di utenti, usando il pool."""
+        conn = None
+        utenti_list = []
+        query = f"SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM {self.schema}.utente"
+        conditions = []
+        params = []
+
+        if solo_attivi is not None:
+            conditions.append("attivo = %s")
+            params.append(solo_attivi)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY username;"
+        
         try:
-            query = "SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM utente"
-            conditions = []
-            params = []
-
-            if solo_attivi is not None:
-                conditions.append("attivo = %s")
-                params.append(solo_attivi)
-
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-
-            query += " ORDER BY username"
-
-            if self.execute_query(query, tuple(params) if params else None):
-                utenti = self.fetchall()
-                logger.info(f"Recuperati {len(utenti)} utenti.")
-                return utenti
-            return []
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_utenti: {cur.mogrify(query, tuple(params) if params else None).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params) if params else None)
+                results = cur.fetchall()
+                if results:
+                    utenti_list = [dict(row) for row in results]
+                self.logger.info(f"Recuperati {len(utenti_list)} utenti.")
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB durante il recupero degli utenti: {db_err}")
-            return []
+            self.logger.error(f"Errore DB durante il recupero degli utenti: {db_err}", exc_info=True)
         except Exception as e:
-            logger.error(f"Errore Python durante il recupero degli utenti: {e}")
-            return []
+            self.logger.error(f"Errore Python durante il recupero degli utenti: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return utenti_list
     def get_utente_by_id(self, utente_id: int) -> Optional[Dict]:
         """Recupera i dettagli di un singolo utente tramite ID."""
         try:

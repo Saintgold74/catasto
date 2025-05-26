@@ -308,31 +308,29 @@ class CatastoDBManager:
             self.rollback()
             return None
     def get_comuni(self, search_term: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Recupera comuni (ID, nome, provincia, regione) con filtro opzionale per nome."""
         conn = None
         comuni_list = []
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                select_clause = "SELECT id, nome, provincia, regione FROM catasto.comune"
+                query_base = f"SELECT id, nome, provincia, regione FROM {self.schema}.comune"
                 if search_term:
-                    query = f"{select_clause} WHERE nome ILIKE %s ORDER BY nome"
+                    query = f"{query_base} WHERE nome ILIKE %s ORDER BY nome"
                     params = (f"%{search_term}%",)
                 else:
-                    query = f"{select_clause} ORDER BY nome"
+                    query = f"{query_base} ORDER BY nome"
                     params = None
                 
                 self.logger.debug(f"Esecuzione get_comuni: {cur.mogrify(query, params).decode('utf-8', 'ignore') if params else query}")
                 cur.execute(query, params)
                 results = cur.fetchall()
-                if results:
-                    comuni_list = [dict(row) for row in results]
+                comuni_list = [dict(row) for row in results] if results else []
                 self.logger.info(f"Recuperati {len(comuni_list)} comuni (search_term: '{search_term}').")
         except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB in get_comuni (search_term: '{search_term}'): {db_err}", exc_info=True)
-            # Non sollevare eccezione, restituisce lista vuota come da comportamento precedente
+            self.logger.error(f"Errore DB in get_comuni: {db_err}", exc_info=True)
+            # Non sollevare eccezione, comportamento precedente restituiva lista vuota
         except Exception as e:
-            self.logger.error(f"Errore Python in get_comuni (search_term: '{search_term}'): {e}", exc_info=True)
+            self.logger.error(f"Errore Python in get_comuni: {e}", exc_info=True)
         finally:
             if conn:
                 self._release_connection(conn)
@@ -342,16 +340,11 @@ class CatastoDBManager:
         """Recupera i dettagli disponibili di tutti i comuni."""
         conn = None
         comuni_list = []
-        # Query basata sulla tua precedente implementazione di get_all_comuni_details
-        query = """
-            SELECT 
-                id, 
-                nome AS nome_comune,
-                provincia,
-                regione 
-            FROM catasto.comune 
-            ORDER BY nome_comune;
-        """
+        query = f"""
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM {self.schema}.comune ORDER BY nome_comune;
+        """ # Corretta per riflettere le colonne esistenti
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -412,24 +405,64 @@ class CatastoDBManager:
             self.rollback()
             return None
 
-    def get_possessori_by_comune(self, comune_id: int) -> List[Dict]: # Usa comune_id
-        """Recupera possessori per comune ID, includendo il nome del comune."""
+    def get_possessori_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+        conn = None
+        possessori_list = []
+        query = f"""
+            SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
+                   pos.nome_completo, pos.attivo
+            FROM {self.schema}.possessore pos
+            JOIN {self.schema}.comune c ON pos.comune_id = c.id
+            WHERE pos.comune_id = %s ORDER BY pos.nome_completo;
+        """
         try:
-            # Query SQL aggiornata per JOIN
-            query = """
-                SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
-                    pos.nome_completo, pos.attivo
-                FROM catasto.possessore pos  -- Schema qualificato
-                JOIN catasto.comune c ON pos.comune_id = c.id -- Chiave corretta se è comune.id e possessore.comune_id
-                WHERE pos.comune_id = %s ORDER BY pos.nome_completo;
-            """
-            if self.execute_query(query, (comune_id,)):
-                return self.fetchall()
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_possessori_by_comune per comune_id {comune_id}")
+                cur.execute(query, (comune_id,))
+                results = cur.fetchall()
+                possessori_list = [dict(row) for row in results] if results else []
+                self.logger.info(f"Recuperati {len(possessori_list)} possessori per comune ID {comune_id}.")
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB in get_possessori_by_comune: {db_err}")
+            self.logger.error(f"Errore DB in get_possessori_by_comune (ID: {comune_id}): {db_err}", exc_info=True)
         except Exception as e:
-            logger.error(f"Errore Python in get_possessori_by_comune: {e}")
-        return []
+            self.logger.error(f"Errore Python in get_possessori_by_comune (ID: {comune_id}): {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return possessori_list
+
+    def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Recupera località per comune_id, con filtro opzionale per nome."""
+        conn = None
+        localita_list = []
+        
+        query_base = f"SELECT id, nome, tipo, civico FROM {self.schema}.localita WHERE comune_id = %s"
+        params: List[Union[int, str]] = [comune_id] # Usa Union da typing
+
+        if filter_text:
+            query_base += " AND nome ILIKE %s"
+            params.append(f"%{filter_text}%")
+        
+        query = query_base + " ORDER BY tipo, nome, civico;"
+
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_localita_by_comune per comune_id {comune_id}: {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
+                results = cur.fetchall()
+                if results:
+                    localita_list = [dict(row) for row in results]
+                self.logger.info(f"Recuperate {len(localita_list)} località per comune ID {comune_id} (filtro: '{filter_text}').")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_localita_by_comune: {db_err}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_localita_by_comune: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return localita_list
     def get_possessori_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
         """
         Recupera tutti i possessori associati a una data partita, inclusi i dettagli
@@ -493,76 +526,330 @@ class CatastoDBManager:
         return possessori_associati
 
 
-    def insert_localita(self, comune_id: int, nome: str, tipo: str, # Usa comune_id
-                      civico: Optional[int] = None) -> Optional[int]:
-        """Inserisce o recupera una località (basato su comune_id, nome, civico). Ritorna l'ID."""
-        # Vincolo UNIQUE su comune_id, nome, civico
-        query_insert = """
-            INSERT INTO localita (comune_id, nome, tipo, civico)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (comune_id, nome, civico) DO NOTHING
-            RETURNING id
+    def insert_localita(self, comune_id: int, nome: str, tipo: str,
+                        civico: Optional[int] = None) -> Optional[int]:
         """
-        query_select = """
-            SELECT id FROM localita
-            WHERE comune_id = %s AND nome = %s AND (
-                  (civico IS NULL AND %s IS NULL) OR (civico = %s)
-            )
+        Inserisce una nuova località se non esiste una combinazione identica 
+        (comune_id, nome, civico), altrimenti recupera l'ID della località esistente.
+        Ritorna l'ID della località (nuova o esistente).
+        Solleva eccezioni specifiche in caso di errore.
         """
+        if not (isinstance(comune_id, int) and comune_id > 0):
+            raise DBDataError(f"ID comune non valido per inserimento località: {comune_id}")
+        if not (isinstance(nome, str) and nome.strip()):
+            raise DBDataError("Il nome della località è obbligatorio.")
+        if not (isinstance(tipo, str) and tipo.strip()): # Aggiungi validazione per i valori di 'tipo' se necessario
+            raise DBDataError("Il tipo di località è obbligatorio.")
+
+        # Normalizza civico: se è 0 e vuoi trattarlo come NULL, fallo qui.
+        # La tua tabella ha UNIQUE(comune_id, nome, civico), quindi NULL è distinto.
+        actual_civico = civico if civico is not None and civico > 0 else None # Esempio: tratta 0 come NULL
+
+        conn = None
+        localita_id: Optional[int] = None
+
+        # Query 1: Tentativo di inserimento con ON CONFLICT DO NOTHING
+        # Questo approccio è buono perché è atomico.
+        # Se c'è un conflitto, non fa nulla e non restituisce 'id'.
+        # Se non c'è conflitto, inserisce e restituisce 'id'.
+        query_insert_on_conflict = f"""
+            INSERT INTO {self.schema}.localita (comune_id, nome, tipo, civico, data_creazione, data_modifica)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (comune_id, nome, civico) DO NOTHING 
+            RETURNING id; 
+        """ 
+        # Nota: ON CONFLICT (comune_id, nome, civico) DO NOTHING significa che se il civico è NULL,
+        # il conflitto si verifica solo se anche il record esistente ha civico NULL.
+        # Se il tuo vincolo UNIQUE gestisce i NULL in modo diverso (es. UNIQUE NULLS NOT DISTINCT),
+        # questa query potrebbe comportarsi diversamente. Assumiamo UNIQUE standard.
+
+        # Query 2: Se l'INSERT non ha restituito un ID (a causa di ON CONFLICT DO NOTHING),
+        # selezioniamo l'ID della riga esistente.
+        query_select_existing = f"""
+            SELECT id FROM {self.schema}.localita
+            WHERE comune_id = %s AND nome = %s AND
+                  ((civico IS NULL AND %s IS NULL) OR (civico = %s));
+        """
+        
         try:
-            inserted_id = None
-            if self.execute_query(query_insert, (comune_id, nome, tipo, civico)):
-                result = self.fetchone()
-                if result:
-                    inserted_id = result['id']
-                    self.commit()
-                    logger.info(f"Località '{nome}' (Comune ID: {comune_id}) inserita con ID: {inserted_id}")
-                    return inserted_id
-            elif self.conn is None or self.conn.closed: return None
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Tentativo INSERT ON CONFLICT per località: C_ID={comune_id}, Nome='{nome}', Civico={actual_civico}")
+                cur.execute(query_insert_on_conflict, (comune_id, nome.strip(), tipo.strip(), actual_civico))
+                
+                insert_result = cur.fetchone()
+                
+                if insert_result and insert_result['id']:
+                    localita_id = insert_result['id']
+                    conn.commit()
+                    self.logger.info(f"Località '{nome}' (Comune ID: {comune_id}) inserita con successo. ID: {localita_id}.")
+                else:
+                    # Conflitto o nessun ID restituito, la località dovrebbe già esistere. Cercala.
+                    self.logger.info(f"Località '{nome}' (Comune ID: {comune_id}) non inserita (probabile conflitto o nessun ID restituito). Tento SELECT.")
+                    # Non c'è bisogno di rollback qui perché "DO NOTHING" non dovrebbe aver modificato nulla
+                    # se c'è stato un conflitto. Se non c'è stato conflitto ma RETURNING id non ha funzionato,
+                    # il commit precedente non sarebbe comunque avvenuto.
+                    
+                    cur.execute(query_select_existing, (comune_id, nome.strip(), actual_civico, actual_civico))
+                    select_result = cur.fetchone()
+                    if select_result and select_result['id']:
+                        localita_id = select_result['id']
+                        self.logger.info(f"Località '{nome}' (Comune ID: {comune_id}) già esistente trovata. ID: {localita_id}.")
+                        # Nessun commit necessario per un SELECT
+                    else:
+                        # Questo caso è strano: INSERT non ha fatto nulla (presunto conflitto),
+                        # ma il SELECT non la trova. Potrebbe indicare un problema con la gestione dei NULL
+                        # nel vincolo UNIQUE o nella query SELECT, o una race condition (improbabile qui).
+                        conn.rollback() # Meglio fare un rollback per sicurezza
+                        self.logger.error(f"Logica inconsistente in insert_localita: non inserita e non trovata per C_ID={comune_id}, Nome='{nome}', Civico={actual_civico}.")
+                        raise DBMError("Impossibile inserire o trovare la località specificata dopo un conflitto apparente.")
+            
+            if localita_id is None: # Non dovrebbe essere raggiunto se la logica sopra è corretta
+                 raise DBMError("ID località non determinato dopo tentativo di inserimento/selezione.")
 
-            logger.info(f"Località '{nome}' (Comune ID: {comune_id}) potrebbe esistere già. Tentativo selezione.")
-            if self.execute_query(query_select, (comune_id, nome, civico, civico)):
-                existing = self.fetchone()
-                if existing:
-                    logger.info(f"Località '{nome}' (Comune ID: {comune_id}) trovata con ID: {existing['id']}")
-                    return existing['id']
-                else: logger.warning(f"Località '{nome}' (Comune ID: {comune_id}) non trovata."); return None
-            return None
-
-        except psycopg2.Error as db_err:
-            if db_err.pgcode == psycopg2.errors.ForeignKeyViolation:
-                 logger.error(f"Errore FK in insert_localita: Comune ID {comune_id} non valido? Dettagli: {db_err}")
+        except psycopg2.errors.ForeignKeyViolation as fke:
+            if conn: conn.rollback()
+            constraint_name = getattr(fke.diag, 'constraint_name', "N/D")
+            self.logger.error(f"Violazione FK (vincolo: {constraint_name}) inserendo località '{nome}' per comune ID {comune_id}: {fke.pgerror}")
+            if constraint_name == "localita_comune_id_fkey": # Nome del tuo vincolo FK
+                msg = f"Il comune con ID {comune_id} non esiste. Impossibile inserire la località."
             else:
-                 logger.error(f"Errore DB in insert_localita '{nome}': {db_err}")
-            return None
-        except Exception as e: logger.error(f"Errore Python in insert_localita '{nome}': {e}"); self.rollback(); return None
-
-    def get_partite_by_comune(self, comune_id: int) -> List[Dict]: # Usa comune_id
-        """Recupera partite per comune ID, includendo nome comune."""
-        try:
-            # Query SQL aggiornata
-            query = """
-                SELECT
-                    p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
-                    p.data_chiusura, p.stato,
-                    string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-                    COUNT(DISTINCT i.id) as num_immobili
-                FROM partita p
-                JOIN comune c ON p.comune_id = c.id
-                LEFT JOIN partita_possessore pp ON p.id = pp.partita_id
-                LEFT JOIN possessore pos ON pp.possessore_id = pos.id
-                LEFT JOIN immobile i ON p.id = i.partita_id
-                WHERE p.comune_id = %s
-                GROUP BY p.id, c.nome -- Raggruppa per id e nome comune
-                ORDER BY p.numero_partita
-            """
-            if self.execute_query(query, (comune_id,)):
-                return self.fetchall()
+                msg = f"Errore di riferimento a dati esterni (vincolo: {constraint_name})."
+            raise DBMError(msg) from fke
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB in get_partite_by_comune: {db_err}")
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB generico in insert_localita '{nome}': {db_err.pgerror}", exc_info=True)
+            raise DBMError(f"Errore database durante l'inserimento della località: {db_err.pgerror}") from db_err
         except Exception as e:
-            logger.error(f"Errore Python in get_partite_by_comune: {e}")
-        return []
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto Python in insert_localita '{nome}': {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        
+        return localita_id
+    def get_localita_details(self, localita_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Recupera i dettagli completi di una singola località, incluso il nome del comune.
+
+        Args:
+            localita_id: L'ID della località da recuperare.
+
+        Returns:
+            Un dizionario contenente i dettagli della località se trovata, altrimenti None.
+            Il dizionario includerà: 'id', 'nome', 'tipo', 'civico', 
+                                     'comune_id', 'comune_nome'.
+        """
+        if not isinstance(localita_id, int) or localita_id <= 0:
+            self.logger.error(f"get_localita_details: localita_id non valido: {localita_id}")
+            return None
+
+        query = f"""
+            SELECT
+                loc.id,
+                loc.nome,
+                loc.tipo,
+                loc.civico,
+                loc.comune_id,
+                com.nome AS comune_nome
+            FROM
+                {self.schema}.localita loc
+            JOIN
+                {self.schema}.comune com ON loc.comune_id = com.id
+            WHERE
+                loc.id = %s;
+        """
+        
+        conn = None
+        localita_data = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_localita_details per localita_id {localita_id}: {cur.mogrify(query, (localita_id,)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (localita_id,))
+                result = cur.fetchone()
+                
+                if result:
+                    localita_data = dict(result)
+                    self.logger.info(f"Dettagli recuperati per la località ID {localita_id}: {localita_data.get('nome')}")
+                else:
+                    self.logger.warning(f"Nessuna località trovata con ID {localita_id}.")
+                    # Non sollevare DBNotFoundError qui, il chiamante potrebbe voler gestire None diversamente
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB durante il recupero dei dettagli della località ID {localita_id}: {db_err}", exc_info=True)
+            # Non sollevare eccezione, restituisci None come da firma
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei dettagli della località ID {localita_id}: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        
+        return localita_data
+    
+    def update_localita(self, localita_id: int, dati_modificati: Dict[str, Any]):
+        """
+        Aggiorna i dati di una località esistente nel database.
+        Solleva eccezioni specifiche in caso di errore.
+
+        Args:
+            localita_id: L'ID della località da aggiornare.
+            dati_modificati: Un dizionario contenente i campi della località da aggiornare.
+                             Campi attesi e gestiti: 'nome', 'tipo', 'civico'.
+                             Il comune_id non viene modificato qui.
+
+        Raises:
+            DBDataError: Se localita_id o dati_modificati non sono validi, o se mancano campi obbligatori.
+            DBNotFoundError: Se la località con l'ID specificato non viene trovata.
+            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità 
+                                     (es. nome+civico duplicato nel comune).
+            DBMError: Per altri errori generici del database.
+        """
+        if not isinstance(localita_id, int) or localita_id <= 0:
+            self.logger.error(f"update_localita: localita_id non valido: {localita_id}")
+            raise DBDataError(f"ID località non valido: {localita_id}")
+        if not isinstance(dati_modificati, dict):
+            self.logger.error(f"update_localita: dati_modificati non è un dizionario per località ID {localita_id}.")
+            raise DBDataError("Formato dati per l'aggiornamento non valido.")
+
+        set_clauses = []
+        params = []
+        conn = None
+
+        # Campi permessi per la modifica della località
+        allowed_fields = {
+            "nome": ("nome", True), # nome è NOT NULL
+            "tipo": ("tipo", True), # tipo è NOT NULL e ha un CHECK constraint
+            "civico": ("civico", False) # civico può essere NULL
+        }
+
+        # Validazione e costruzione della clausola SET
+        nome_fornito = dati_modificati.get("nome", "").strip()
+        if not nome_fornito:
+            raise DBDataError("Il nome della località è obbligatorio e non può essere vuoto.")
+        set_clauses.append("nome = %s")
+        params.append(nome_fornito)
+
+        tipo_fornito = dati_modificati.get("tipo")
+        valid_tipi = ["regione", "via", "borgata"] # Basato sul tuo schema
+        if not tipo_fornito or tipo_fornito not in valid_tipi:
+            raise DBDataError(f"Il tipo di località '{tipo_fornito}' non è valido. Valori ammessi: {', '.join(valid_tipi)}.")
+        set_clauses.append("tipo = %s")
+        params.append(tipo_fornito)
+
+        # Civico può essere None
+        if "civico" in dati_modificati: # Solo se la chiave è presente, per permettere di non passarla
+            set_clauses.append("civico = %s")
+            params.append(dati_modificati["civico"]) # Sarà None se il QSpinBox era "Nessuno" o 0 (a seconda della logica UI)
+        
+        # Aggiungi sempre data_modifica
+        set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+
+        if not set_clauses: # Non dovrebbe accadere data la validazione sopra, ma per sicurezza
+            self.logger.info(f"update_localita: Nessun campo valido fornito per aggiornare località ID {localita_id} (esclusa data_modifica).")
+            # Anche se aggiorniamo solo data_modifica, lo consideriamo un update
+            pass # Si aggiornerà comunque data_modifica
+
+        query = f"""
+            UPDATE {self.schema}.localita
+            SET {', '.join(set_clauses)}
+            WHERE id = %s;
+        """
+        params.append(localita_id) # Aggiungi localita_id per la clausola WHERE
+        params_tuple = tuple(params)
+
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query UPDATE località ID {localita_id}: {cur.mogrify(query, params_tuple).decode('utf-8', 'ignore')}")
+                cur.execute(query, params_tuple)
+
+                if cur.rowcount == 0:
+                    # Verifica se la località esiste per distinguere "non trovata" da "dati identici"
+                    cur.execute(f"SELECT 1 FROM {self.schema}.localita WHERE id = %s", (localita_id,))
+                    if not cur.fetchone():
+                        conn.rollback()
+                        self.logger.warning(f"Tentativo di aggiornare località ID {localita_id} non trovata.")
+                        raise DBNotFoundError(f"Nessuna località trovata con ID {localita_id} per l'aggiornamento.")
+                    # Se la riga esiste ma rowcount è 0, i dati (escl. data_modifica) erano identici.
+                    # data_modifica è comunque aggiornata (e PostgreSQL >10 dovrebbe dare rowcount=1).
+                    self.logger.info(f"Dati per località ID {localita_id} erano identici o solo data_modifica aggiornata. Righe formalmente modificate: {cur.rowcount}")
+                
+                conn.commit()
+                self.logger.info(f"Località ID {localita_id} aggiornata con successo.")
+                # Non c'è un return True esplicito, il successo è l'assenza di eccezioni
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve))
+            self.logger.error(f"Errore di unicità (vincolo: {constraint_name}) aggiornando località ID {localita_id}: {error_detail}")
+            # Il vincolo è UNIQUE(comune_id, nome, civico)
+            if constraint_name == "localita_comune_id_nome_civico_key": # Verifica il nome esatto del tuo vincolo
+                msg = "Una località con lo stesso nome e civico (o assenza di civico) esiste già in questo comune."
+            else:
+                msg = f"I dati forniti violano un vincolo di unicità (vincolo: {constraint_name})."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        
+        except psycopg2.errors.CheckViolation as cve: # Per il CHECK su 'tipo'
+            if conn: conn.rollback()
+            constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(cve, 'pgerror', str(cve))
+            self.logger.error(f"Errore CHECK constraint (vincolo: {constraint_name}) per località ID {localita_id}: {error_detail}")
+            if constraint_name == "localita_tipo_check": # Nome del tuo CHECK constraint
+                 msg = f"Il 'tipo' di località specificato ('{dati_modificati.get('tipo')}') non è valido."
+            else:
+                 msg = f"I dati forniti violano una regola di validazione (vincolo: {constraint_name})."
+            raise DBDataError(msg) from cve
+
+        except psycopg2.Error as e: # Altri errori DB
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB generico aggiornando località ID {localita_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante l'aggiornamento della località: {error_detail}") from e
+        
+        except Exception as e: # Errori Python imprevisti
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto Python aggiornando località ID {localita_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        
+        finally:
+            if conn:
+                self._release_connection(conn)
+    def get_partite_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+        conn = None
+        partite_list = []
+        query = f"""
+            SELECT
+                p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
+                p.data_chiusura, p.stato,
+                string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
+                COUNT(DISTINCT i.id) as num_immobili
+            FROM {self.schema}.partita p
+            JOIN {self.schema}.comune c ON p.comune_id = c.id
+            LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
+            LEFT JOIN {self.schema}.possessore pos ON pp.possessore_id = pos.id
+            LEFT JOIN {self.schema}.immobile i ON p.id = i.partita_id
+            WHERE p.comune_id = %s
+            GROUP BY p.id, c.nome 
+            ORDER BY p.numero_partita;
+        """
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_partite_by_comune per comune_id {comune_id}")
+                cur.execute(query, (comune_id,))
+                results = cur.fetchall()
+                partite_list = [dict(row) for row in results] if results else []
+                self.logger.info(f"Recuperate {len(partite_list)} partite per comune ID {comune_id}.")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_partite_by_comune (comune_id: {comune_id}): {db_err}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_partite_by_comune (comune_id: {comune_id}): {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return partite_list
 
     def get_partita_details(self, partita_id: int) -> Optional[Dict[str, Any]]:
         """Recupera dettagli completi di una partita, usando il pool e una singola connessione."""
@@ -1712,23 +1999,69 @@ class CatastoDBManager:
     # --- Metodi Manutenzione e Ottimizzazione (Invariati rispetto a comune_id) ---
 
     def verifica_integrita_database(self) -> Tuple[bool, str]:
-        """Chiama la procedura SQL verifica_integrita_database e cattura i messaggi."""
-        # Implementazione originale OK
-        messages = []; original_notice_handler = None; problemi_trovati = False; output_msg = ""
-        if not self.conn or self.conn.closed: return True, "Errore: Connessione DB non attiva."
+        """Chiama la procedura SQL verifica_integrita_database e cattura i messaggi (notices)."""
+        messages: List[str] = []
+        problemi_trovati = False
+        output_msg = ""
+        conn = None
+
+        def notice_handler(notice):
+            messages.append(str(notice).strip().replace("NOTICE: ", ""))
+
         try:
-            if hasattr(self.conn, 'notices'): original_notice_handler = self.conn.notices.copy(); self.conn.notices.append(lambda notice: messages.append(str(notice).strip().replace("NOTICE: ","")))
-            else: self.conn.add_notice_handler(lambda notice: messages.append(str(notice).strip().replace("NOTICE: ","")))
-            if self.execute_query("CALL verifica_integrita_database(NULL)"): self.commit()
-            else: problemi_trovati = True; messages.append("Errore esecuzione procedura verifica_integrita_database.")
+            conn = self._get_connection() # Ottiene una connessione dal pool
+            
+            # Aggiungi il gestore di avvisi alla connessione specifica
+            # Nota: conn.notices è una lista in psycopg2 >= 2. notices.append() è il modo.
+            # Per versioni più vecchie o per essere sicuri, add_notice_handler potrebbe essere usato ma è più complesso da resettare.
+            # Per semplicità e compatibilità, usiamo l'approccio di pulire e aggiungere.
+            
+            original_notices_list_ref = None
+            if hasattr(conn, 'notices'): # psycopg2.extensions.connection.notices
+                original_notices_list_ref = conn.notices[:] # Copia la lista attuale
+                conn.notices.clear() # Pulisci per questa chiamata
+                conn.notices.append(notice_handler)
+            else: # Fallback per versioni/casi in cui .notices non è una lista modificabile
+                  # Questo è più complesso perché add_notice_handler non ha un remove_notice_handler facile
+                self.logger.warning("Attributo conn.notices non trovato come lista, i notice potrebbero non essere catturati.")
+
+            with conn.cursor() as cur:
+                # Assumendo che la procedura esista e sia CALLable
+                self.logger.debug("Chiamata a procedura verifica_integrita_database(NULL)")
+                cur.execute(f"CALL {self.schema}.verifica_integrita_database(NULL);")
+                conn.commit() # Se la procedura fa modifiche o richiede commit per rilasciare risorse
+            
+            # Ora messages dovrebbe contenere i notice
             for msg in messages:
-                if "Problemi" in msg or "Problema:" in msg or "WARNING:" in msg: problemi_trovati = True
+                if "Problemi" in msg or "Problema:" in msg or "WARNING:" in msg or "ERRORE:" in msg: # Aggiunto ERRORE
+                    problemi_trovati = True
                 output_msg += msg + "\n"
-            if not problemi_trovati and not output_msg: output_msg = "Nessun problema di integrità rilevato."
-        except psycopg2.Error as db_err: logger.error(f"Errore DB verifica integrità: {db_err}"); output_msg = f"Errore DB verifica: {db_err}"; problemi_trovati = True
-        except Exception as e: logger.error(f"Errore Python verifica integrità: {e}"); output_msg = f"Errore Python verifica: {e}"; problemi_trovati = True
+            
+            if not output_msg and not problemi_trovati: # Se non ci sono messaggi e nessun problema flaggato
+                output_msg = "Nessun problema di integrità rilevato o nessun avviso emesso dalla procedura."
+            elif not problemi_trovati and output_msg: # Se ci sono messaggi ma nessuno è stato flaggato come problema
+                output_msg = "Verifica completata con i seguenti avvisi/messaggi:\n" + output_msg
+            
+            self.logger.info(f"Verifica integrità completata. Problemi trovati: {problemi_trovati}. Output: {output_msg.strip()[:200]}...")
+
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB durante verifica integrità: {db_err}", exc_info=True)
+            output_msg = f"Errore DB durante la verifica: {getattr(db_err, 'pgerror', str(db_err))}"
+            problemi_trovati = True
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python durante verifica integrità: {e}", exc_info=True)
+            output_msg = f"Errore di sistema durante la verifica: {e}"
+            problemi_trovati = True
         finally:
-            if hasattr(self.conn, 'notices') and original_notice_handler is not None: self.conn.notices = original_notice_handler
+            if conn:
+                # Ripristina il gestore di avvisi originale, se possibile
+                if hasattr(conn, 'notices') and original_notices_list_ref is not None:
+                    conn.notices.clear()
+                    conn.notices.extend(original_notices_list_ref)
+                self._release_connection(conn)
+        
         return problemi_trovati, output_msg.strip()
 
     def refresh_materialized_views(self) -> bool:

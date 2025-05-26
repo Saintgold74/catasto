@@ -3832,125 +3832,323 @@ class ImmobileDialog(QDialog):
         self.accept()
 
       # --- Dialog per la Selezione delle Località ---
+# All'interno della classe LocalitaSelectionDialog in prova.py
+
+# All'interno della classe LocalitaSelectionDialog in prova.py
+
 class LocalitaSelectionDialog(QDialog):
-    def __init__(self, db_manager, comune_id, parent=None):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, parent=None):
         super(LocalitaSelectionDialog, self).__init__(parent)
         self.db_manager = db_manager
         self.comune_id = comune_id
-        self.selected_localita_id = None
-        self.selected_localita_name = None
+        # Non più necessari se il dialogo non restituisce una selezione diretta al chiamante
+        # self.selected_localita_id = None 
+        # self.selected_localita_name = None 
         
-        self.setWindowTitle("Seleziona Località")
-        self.setMinimumSize(600, 400)
+        self.setWindowTitle(f"Gestione Località per Comune ID: {self.comune_id}") # Titolo più specifico
+        self.setMinimumSize(650, 450)
         
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         
-        # Tab per selezione o creazione
-        tabs = QTabWidget()
-        
-        # Tab Seleziona
+        self.tabs = QTabWidget(self)
+        layout.addWidget(self.tabs) # Aggiungi il QTabWidget al layout principale
+
+        # --- Tab 1: Seleziona/Modifica Esistente ---
         select_tab = QWidget()
-        select_layout = QVBoxLayout()
+        select_layout = QVBoxLayout(select_tab)
         
-        # Filtro
         filter_layout = QHBoxLayout()
-        filter_label = QLabel("Filtra per nome:")
+        filter_layout.addWidget(QLabel("Filtra per nome:"))
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Digita per filtrare...")
-        self.filter_edit.textChanged.connect(self.filter_localita)
-        
-        filter_layout.addWidget(filter_label)
+        self.filter_edit.textChanged.connect(self.load_localita) # Collegato a load_localita
         filter_layout.addWidget(self.filter_edit)
-        
         select_layout.addLayout(filter_layout)
         
-        # Tabella località
         self.localita_table = QTableWidget()
         self.localita_table.setColumnCount(4)
         self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
-        self.localita_table.setAlternatingRowColors(True)
+        self.localita_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.localita_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.localita_table.itemDoubleClicked.connect(self.select_from_table)
-        
+        self.localita_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_azione_localita)
+        self.localita_table.itemDoubleClicked.connect(self.apri_modifica_localita_selezionata)
         select_layout.addWidget(self.localita_table)
-        
+
+        select_action_layout = QHBoxLayout()
+        self.btn_modifica_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogDetailedView), "Modifica Selezionata")
+        self.btn_modifica_localita.setToolTip("Modifica i dati della località selezionata")
+        self.btn_modifica_localita.clicked.connect(self.apri_modifica_localita_selezionata)
+        self.btn_modifica_localita.setEnabled(False)
+        select_action_layout.addWidget(self.btn_modifica_localita)
+        select_action_layout.addStretch()
+        select_layout.addLayout(select_action_layout)
+
         select_tab.setLayout(select_layout)
-        tabs.addTab(select_tab, "Seleziona Esistente")
-        
-        # Tab Crea
+        self.tabs.addTab(select_tab, "Visualizza e Modifica Località")
+
+        # --- Tab 2: Crea Nuova Località ---
         create_tab = QWidget()
-        create_layout = QGridLayout()
+        create_form_layout = QFormLayout(create_tab) # Usiamo QFormLayout per pulizia
         
-        # Nome
-        nome_label = QLabel("Nome località:")
-        self.nome_edit = QLineEdit()
+        # === QUI LA CORREZIONE: Crea i widget PRIMA di usarli ===
+        self.nome_edit_nuova = QLineEdit() # Crea l'istanza
+        self.tipo_combo_nuova = QComboBox() # Crea l'istanza
+        self.tipo_combo_nuova.addItems(["regione", "via", "borgata"])
+        self.civico_spinbox_nuova = QSpinBox() # Crea l'istanza
+        self.civico_spinbox_nuova.setMinimum(0)
+        self.civico_spinbox_nuova.setMaximum(99999)
+        self.civico_spinbox_nuova.setSpecialValueText("Nessuno")
+        # === FINE CORREZIONE ===
+
+        create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova) # Usa un nome diverso per il QLineEdit
+       
+        create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
+         # Se 0 è "Nessuno"
+        create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
         
-        create_layout.addWidget(nome_label, 0, 0)
-        create_layout.addWidget(self.nome_edit, 0, 1)
-        
-        # Tipo
-        tipo_label = QLabel("Tipo:")
-        self.tipo_combo = QComboBox()
-        self.tipo_combo.addItems(["regione", "via", "borgata"])
-        
-        create_layout.addWidget(tipo_label, 1, 0)
-        create_layout.addWidget(self.tipo_combo, 1, 1)
-        
-        # Civico
-        civico_label = QLabel("Civico (solo per vie):")
-        self.civico_edit = QSpinBox()
-        self.civico_edit.setMinimum(0)
-        self.civico_edit.setMaximum(9999)
-        self.civico_edit.setSpecialValueText("Nessun civico")
-        
-        create_layout.addWidget(civico_label, 2, 0)
-        create_layout.addWidget(self.civico_edit, 2, 1)
-        
-        create_tab.setLayout(create_layout)
-        tabs.addTab(create_tab, "Crea Nuova")
-        
-        layout.addWidget(tabs)
-        
-        # Pulsanti
+        self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+        self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab) # Nuovo metodo handler
+        create_form_layout.addRow(self.btn_salva_nuova_localita)
+
+        # Ho rimosso i vecchi QLineEdit nome_edit, tipo_combo, civico_edit dal livello di self
+        # e li ho creati specifici per il tab "Crea Nuova" per evitare conflitti se fossero usati altrove.
+        # Devi definirli come attributi di istanza se vuoi accedervi in altri metodi,
+        # ad esempio self.nome_edit_nuova = QLineEdit()
+        # Lo faccio ora:
+        self.nome_edit_nuova = QLineEdit()
+        # (Le righe sopra nel create_form_layout diventano:)
+        # create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
+        # ... e così via per tipo_combo_nuova e civico_spinbox_nuova ...
+        # Questa parte è già stata corretta nel codice che ti ho fornito prima, 
+        # la lascio qui per completezza del ragionamento.
+        # Ricontrolla che i widget del tab "Crea Nuova" abbiano nomi univoci se necessario.
+        # Per ora, il codice che ti ho fornito in precedenza per LocalitaSelectionDialog
+        # usava self.nome_edit, self.tipo_combo, self.civico_edit per il tab di creazione.
+        # Questo va bene SE il dialogo è usato solo per questo. Se i tab coesistono e hanno
+        # campi simili, è meglio usare nomi di attributi distinti per i widget di ogni tab.
+        # Per ora, lasciamo i nomi originali (self.nome_edit, etc.) per il tab "Crea Nuova"
+        # come erano nel codice che hai confermato funzionare per l'inserimento.
+
+        # --- Tab Crea (codice esistente per i campi, assicurati che i nomi siano ok) ---
+        # create_tab = QWidget() # Già definito
+        # create_layout = QGridLayout(create_tab) # o QFormLayout
+        # self.nome_edit = QLineEdit() ...
+        # self.tipo_combo = QComboBox() ...
+        # self.civico_edit = QSpinBox() ...
+        # ... aggiungi al create_layout ...
+        # self.btn_salva_nuova_localita = QPushButton("Salva Nuova Località")
+        # self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
+        # create_layout.addWidget(self.btn_salva_nuova_localita)
+        # create_tab.setLayout(create_layout)
+        # self.tabs.addTab(create_tab, "Crea Nuova")
+        # Questa parte era già stata gestita da handle_selection_or_creation
+        # quando current_tab_index == 1. Non duplichiamo i widget.
+        # Il tab "Crea Nuova" userà i self.nome_edit, self.tipo_combo, self.civico_edit
+        # già definiti e il pulsante "OK" cambierà la sua azione.
+
+        # Il tab "Crea Nuova" è già gestito dalla logica di self.handle_selection_or_creation
+        # quando self.tabs.currentIndex() è 1, utilizzando i campi QLineEdit, QComboBox, QSpinBox
+        # che erano definiti a livello di self. Per ora manteniamo quella logica.
+        # La modifica principale è sui pulsanti in fondo al dialogo.
+
+        # --- Pulsante Chiudi (precedentemente "Annulla") ---
         buttons_layout = QHBoxLayout()
-        
-        self.ok_button = QPushButton("Seleziona")
-        self.ok_button.clicked.connect(self.handle_selection)
-        
-        self.cancel_button = QPushButton("Annulla")
-        self.cancel_button.clicked.connect(self.reject)
-        
-        buttons_layout.addWidget(self.ok_button)
-        buttons_layout.addWidget(self.cancel_button)
-        
+        self.chiudi_button = QPushButton("Chiudi") # Rinominato da self.cancel_button
+        self.chiudi_button.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton))
+        self.chiudi_button.clicked.connect(self.reject) # self.reject() è appropriato per chiudere senza un'azione "OK"
+
+        # Rimuoviamo self.ok_button se non serve più per una selezione esplicita
+        # buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addStretch() # Spinge il pulsante a destra
+        buttons_layout.addWidget(self.chiudi_button)
         layout.addLayout(buttons_layout)
         
         self.setLayout(layout)
         
-        # Carica le località iniziali
-        self.current_tab = 0
-        tabs.currentChanged.connect(self.tab_changed)
-        self.load_localita()
-    
-    def tab_changed(self, index):
-        """Gestisce il cambio di tab."""
-        self.current_tab = index
-        if index == 0:
-            self.ok_button.setText("Seleziona")
-        else:
-            self.ok_button.setText("Crea e Seleziona")
-    
-    def load_localita(self, filter_text: Optional[str] = None):
-        """Carica le località dal database con filtro opzionale."""
-        self.localita_table.setRowCount(0)
-        self.localita_table.setSortingEnabled(False) # Disabilita all'inizio
+        # self.tabs.currentChanged.connect(self._tab_changed) # Non serve più se ok_button è rimosso
+        self._aggiorna_stato_pulsanti_azione_localita() # Chiama per stato iniziale
 
+        self.load_localita()
+
+    # Rimuovi _tab_changed se il pulsante OK principale è stato rimosso
+    # def _tab_changed(self, index): ...
+
+    # Modifica handle_selection_or_creation se il pulsante OK è rimosso.
+    # Se il pulsante OK è rimosso, le azioni di "selezione" (per un chiamante)
+    # o "creazione" devono essere gestite diversamente.
+    # Per ora, assumiamo che il "doppio click" o "Modifica Selezionata" siano per la modifica,
+    # e il tab "Crea Nuova" necessiti di un suo pulsante "Salva Nuova"
+    # oppure il vecchio pulsante OK ora serve solo per il tab "Crea Nuova".
+
+    # Dato il tuo input, vuoi eliminare "Seleziona" (il vecchio self.ok_button quando era in modalità selezione)
+    # e trasformare "Annulla" in "Chiudi".
+    # Questo significa che il dialogo non è più pensato per *restituire una selezione*.
+    # Il suo scopo diventa:
+    # 1. Mostrare le località.
+    # 2. Permettere di modificarle (aprendo ModificaLocalitaDialog).
+    # 3. Permettere di crearne di nuove (dal tab "Crea Nuova", che avrà bisogno di un suo pulsante di salvataggio).
+
+    # Se è così, la logica di handle_selection_or_creation va rivista o rimossa,
+    # e il tab "Crea Nuova" ha bisogno del suo pulsante "Salva".
+    # Ho aggiunto btn_salva_nuova_localita nel tab "Crea Nuova".
+
+    def _salva_nuova_localita_da_tab(self): # NUOVO METODO per il pulsante nel tab "Crea Nuova"
+        nome = self.nome_edit.text().strip() # Assumendo che questi siano i QLineEdit del tab "Crea"
+        tipo = self.tipo_combo.currentText()
+        civico_val = self.civico_edit.value()
+        civico = civico_val if self.civico_edit.text() != self.civico_edit.specialValueText() and civico_val > 0 else None
+
+        if not nome:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+            self.nome_edit.setFocus()
+            return
+        if not self.comune_id:
+            QMessageBox.critical(self, "Errore Interno", "ID Comune non specificato per la creazione della località.")
+            return
+
+        try:
+            localita_id_creata = self.db_manager.insert_localita(
+                self.comune_id, nome, tipo, civico
+            )
+            if localita_id_creata is not None:
+                QMessageBox.information(self, "Località Creata", f"Località '{nome}' registrata con ID: {localita_id_creata}")
+                self.load_localita() # Ricarica la lista nel tab "Visualizza/Modifica"
+                self.tabs.setCurrentIndex(0) # Torna al primo tab
+                # Pulisci i campi del form di creazione
+                self.nome_edit.clear()
+                self.tipo_combo.setCurrentIndex(0) # o un default
+                self.civico_edit.setValue(self.civico_edit.minimum()) # o 0 e special value text
+            # else: gestito da eccezioni in insert_localita
+        except (DBDataError, DBMError) as dbe:
+            gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{dbe.message if hasattr(dbe, 'message') else str(dbe)}")
+        except Exception as e:
+            gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
+    
+    # Rimuovi il vecchio `handle_selection_or_creation` se non più usato dal pulsante OK generale.
+    # def handle_selection_or_creation(self): ... (RIMUOVERE SE OK BUTTON È RIMOSSO)
+
+    # ... (resto dei metodi: load_localita, filter_localita, apri_modifica_localita_selezionata, _get_selected_localita_id_from_table)
+
+    def _tab_changed(self, index):
+        """Gestisce il cambio di tab e aggiorna il testo del pulsante OK."""
+        if index == 0: # Tab "Seleziona/Modifica Esistente"
+            self.ok_button.setText("Seleziona Località")
+            self.ok_button.setToolTip("Conferma la località selezionata dalla tabella.")
+        else: # Tab "Crea Nuova"
+            self.ok_button.setText("Crea e Seleziona")
+            self.ok_button.setToolTip("Crea la nuova località e la seleziona.")
+        self._aggiorna_stato_pulsanti_azione_localita()
+
+
+    def _aggiorna_stato_pulsanti_azione_localita(self):
+        """Abilita/disabilita il pulsante Modifica Località."""
+        # Il pulsante Modifica è visibile solo se il tab "Visualizza e Modifica" è attivo
+        is_select_tab_active = (self.tabs.currentIndex() == 0) 
+        has_selection_in_table = bool(self.localita_table.selectedItems())
+        
+        # Abilita il pulsante "Modifica Selezionata" solo se siamo nel tab corretto 
+        # E se una riga è selezionata nella tabella
+        self.btn_modifica_localita.setEnabled(is_select_tab_active and has_selection_in_table)
+        
+        # La riga seguente che si riferiva a self.ok_button va rimossa:
+        # self.ok_button.setEnabled(True) # Rimuovi questa riga
+
+
+    def _get_selected_localita_id_from_table(self) -> Optional[int]: # NUOVO METODO HELPER
+        selected_items = self.localita_table.selectedItems()
+        if not selected_items:
+            return None
+        current_row = self.localita_table.currentRow()
+        if current_row < 0: return None
+        id_item = self.localita_table.item(current_row, 0) # Colonna ID
+        if id_item and id_item.text().isdigit():
+            return int(id_item.text())
+        return None
+
+    def apri_modifica_localita_selezionata(self): # NUOVO METODO
+        localita_id_sel = self._get_selected_localita_id_from_table()
+        if localita_id_sel is not None:
+            # Istanziamo e apriamo ModificaLocalitaDialog
+            dialog = ModificaLocalitaDialog(self.db_manager, localita_id_sel, self.comune_id, self) # Passa comune_id
+            if dialog.exec_() == QDialog.Accepted:
+                QMessageBox.information(self, "Modifica Località", "Modifiche alla località salvate con successo.")
+                self.load_localita(self.filter_edit.text().strip() or None) # Ricarica con filtro corrente
+        else:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona una località dalla tabella per modificarla.")
+
+    # Rinomina il vecchio handle_selection a handle_selection_or_creation
+    def handle_selection_or_creation(self): # Unico gestore per il pulsante OK
+        current_tab_index = self.tabs.currentIndex()
+        if current_tab_index == 0: # Tab "Seleziona/Modifica Esistente" -> Azione di Selezione
+            selected_rows = self.localita_table.selectedIndexes()
+            if not selected_rows:
+                QMessageBox.warning(self, "Attenzione", "Seleziona una località dalla tabella.")
+                return
+            row = selected_rows[0].row()
+            self.selected_localita_id = int(self.localita_table.item(row, 0).text())
+            nome = self.localita_table.item(row, 1).text()
+            tipo = self.localita_table.item(row, 2).text()
+            civico = self.localita_table.item(row, 3).text()
+            self.selected_localita_name = nome
+            if civico != "-": self.selected_localita_name += f", {civico}"
+            self.selected_localita_name += f" ({tipo})"
+            self.accept() # Conferma la selezione
+        
+        else:  # Tab "Crea Nuova" -> Azione di Creazione (come prima)
+            nome = self.nome_edit.text().strip()
+            tipo = self.tipo_combo.currentText()
+            civico_val = self.civico_edit.value()
+            # Se specialValueText è "Nessun civico" e civico_val è 0, allora è None
+            civico = civico_val if self.civico_edit.text() != self.civico_edit.specialValueText() and civico_val > 0 else None
+
+            if not nome:
+                QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+                self.nome_edit.setFocus()
+                return
+            if not self.comune_id:
+                QMessageBox.critical(self, "Errore Interno", "ID Comune non specificato.")
+                return
+
+            try:
+                localita_id_creata = self.db_manager.insert_localita(
+                    self.comune_id, nome, tipo, civico
+                )
+                if localita_id_creata is not None:
+                    self.selected_localita_id = localita_id_creata
+                    self.selected_localita_name = nome
+                    if civico: self.selected_localita_name += f", {civico}"
+                    self.selected_localita_name += f" ({tipo})"
+                    QMessageBox.information(self, "Località Creata/Trovata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}")
+                    self.load_localita() # Ricarica la lista nel tab "Seleziona"
+                    self.tabs.setCurrentIndex(0) # Torna al tab di selezione
+                    # Trova e seleziona la località appena creata (opzionale)
+                    for r in range(self.localita_table.rowCount()):
+                        if self.localita_table.item(r,0) and int(self.localita_table.item(r,0).text()) == self.selected_localita_id:
+                            self.localita_table.selectRow(r)
+                            break
+                    # Non chiamare self.accept() qui se l'utente deve poi selezionare dalla lista
+                    # o se il pulsante era "Crea e Seleziona", allora self.accept() è corretto.
+                    # Dato il testo "Crea e Seleziona", self.accept() ci sta.
+                    self.accept() 
+                # else: gestito da eccezioni
+            except (DBDataError, DBMError) as dbe:
+                gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{dbe.message if hasattr(dbe, 'message') else str(dbe)}")
+            except Exception as e:
+                gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
+
+    # ... (load_localita, filter_localita come prima, assicurati che _aggiorna_stato_pulsanti_azione_localita sia chiamato in load_localita)
+    def load_localita(self, filter_text: Optional[str] = None):
+        # ... (come l'avevamo implementata, chiamando db_manager.get_localita_by_comune) ...
+        self.localita_table.setRowCount(0)
+        self.localita_table.setSortingEnabled(False)
         if self.comune_id:
             try:
-                # Chiama il nuovo metodo del DBManager
                 localita_results = self.db_manager.get_localita_by_comune(self.comune_id, filter_text)
-                
                 if localita_results:
                     self.localita_table.setRowCount(len(localita_results))
                     for i, loc in enumerate(localita_results):
@@ -3960,85 +4158,151 @@ class LocalitaSelectionDialog(QDialog):
                         civico_text = str(loc.get('civico', '')) if loc.get('civico') is not None else "-"
                         self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
-                else:
-                    pass # Nessun risultato
-            except AttributeError as ae: 
-                gui_logger.error(f"Metodo get_localita_by_comune non trovato nel db_manager: {ae}")
-                QMessageBox.critical(self, "Errore Funzionalità", "Funzione per caricare località non implementata.")
             except Exception as e:
                 gui_logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare le località: {e}")
-            finally: # <-- Allineato con il try
-                self.localita_table.setSortingEnabled(True)
-        else: # comune_id non è settato
+        else:
             self.localita_table.setRowCount(1)
-            self.localita_table.setItem(0,0,QTableWidgetItem("Selezionare prima un comune."))
-            # self.localita_table.setSpan(0,0,1,4) # Occupa tutta la riga
-            # Se si vuole che il sorting sia abilitato anche in questo caso,
-            # si potrebbe duplicare la chiamata o metterla alla fine del metodo.
-            self.localita_table.setSortingEnabled(True) # Riabilita anche qui se necessario
-    
-    def filter_localita(self):
-        """Filtra le località in base al testo inserito."""
-        filter_text = self.filter_edit.text().strip()
-        self.load_localita(filter_text if filter_text else None)
-    
-    def select_from_table(self, item):
-        """Gestisce la selezione dalla tabella delle località."""
-        row = item.row()
-        self.handle_selection()
-    
-    def handle_selection(self):
-        """Gestisce la selezione o creazione della località."""
-        if self.current_tab == 0:  # Seleziona esistente
-            selected_rows = self.localita_table.selectedIndexes()
-            if not selected_rows:
-                QMessageBox.warning(self, "Attenzione", "Seleziona una località dalla tabella.")
-                return
-            
-            row = selected_rows[0].row()
-            
-            # Recupera i dati della località selezionata
-            self.selected_localita_id = int(self.localita_table.item(row, 0).text())
-            self.selected_localita_name = self.localita_table.item(row, 1).text()
-            
-            # Include il tipo e il civico nel nome visualizzato
-            tipo = self.localita_table.item(row, 2).text()
-            civico = self.localita_table.item(row, 3).text()
-            if civico != "-":
-                self.selected_localita_name += f", {civico}"
-            self.selected_localita_name += f" ({tipo})"
-            
-            self.accept()
+            self.localita_table.setItem(0,0,QTableWidgetItem("ID Comune non disponibile per caricare località."))
         
-        else:  # Crea nuova
-            nome = self.nome_edit.text().strip()
-            tipo = self.tipo_combo.currentText()
-            civico = self.civico_edit.value() if self.civico_edit.value() > 0 else None
-            
-            if not nome:
-                QMessageBox.warning(self, "Errore", "Il nome della località è obbligatorio.")
-                return
-            
-            # Inserisci nuova località
-            localita_id = self.db_manager.insert_localita(
-                self.comune_id, nome, tipo, civico
-            )
-            
-            if localita_id:
-                self.selected_localita_id = localita_id
-                self.selected_localita_name = nome
-                
-                # Include il tipo e il civico nel nome visualizzato
-                if civico:
-                    self.selected_localita_name += f", {civico}"
-                self.selected_localita_name += f" ({tipo})"
-                
-                self.accept()
-            else:
-                QMessageBox.critical(self, "Errore", "Errore durante l'inserimento della località.")
+        self.localita_table.setSortingEnabled(True)
+        self._aggiorna_stato_pulsanti_azione_localita() # Chiamata qui
 
-          # --- Scheda per Reportistica ---
+# In prova.py, aggiungi questa nuova classe
+
+class ModificaLocalitaDialog(QDialog):
+    def __init__(self, db_manager: CatastoDBManager, localita_id: int, comune_id_parent: int, parent=None): # Aggiunto comune_id_parent
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.localita_id = localita_id
+        self.comune_id_parent = comune_id_parent # ID del comune a cui questa località appartiene (non modificabile)
+        self.localita_data_originale = None
+
+        self.setWindowTitle(f"Modifica Dati Località ID: {self.localita_id}")
+        self.setMinimumWidth(450)
+
+        self._init_ui()
+        self._load_localita_data()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+
+        self.id_label = QLabel(str(self.localita_id))
+        form_layout.addRow("ID Località:", self.id_label)
+        self.comune_display_label = QLabel("Caricamento nome comune...") # Verrà popolato
+        form_layout.addRow("Comune di Appartenenza:", self.comune_display_label)
+
+        self.nome_edit = QLineEdit()
+        form_layout.addRow("Nome Località (*):", self.nome_edit)
+
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["regione", "via", "borgata"]) # Coerente con la tabella
+        form_layout.addRow("Tipo (*):", self.tipo_combo)
+
+        self.civico_spinbox = QSpinBox()
+        self.civico_spinbox.setMinimum(0) # 0 potrebbe significare "non applicabile"
+        self.civico_spinbox.setMaximum(99999)
+        self.civico_spinbox.setSpecialValueText("Nessuno") # Se 0 è "Nessuno"
+        form_layout.addRow("Numero Civico (0 se assente):", self.civico_spinbox)
+
+        layout.addLayout(form_layout)
+
+        buttons_layout = QHBoxLayout()
+        self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton),"Salva Modifiche")
+        self.save_button.clicked.connect(self._save_changes)
+        self.cancel_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCancelButton),"Annulla")
+        self.cancel_button.clicked.connect(self.reject)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.cancel_button)
+        layout.addLayout(buttons_layout)
+        self.setLayout(layout)
+
+    def _load_localita_data(self):
+        # Metodo da creare in CatastoDBManager: get_localita_details(localita_id)
+        # Dovrebbe restituire: id, nome, tipo, civico, comune_id, e il nome del comune (comune_nome)
+        self.localita_data_originale = self.db_manager.get_localita_details(self.localita_id) # Metodo da creare
+
+        if not self.localita_data_originale:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare dati per località ID: {self.localita_id}.")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self.reject)
+            return
+
+        self.nome_edit.setText(self.localita_data_originale.get('nome', ''))
+        
+        tipo_idx = self.tipo_combo.findText(self.localita_data_originale.get('tipo', ''), Qt.MatchFixedString)
+        if tipo_idx >= 0: self.tipo_combo.setCurrentIndex(tipo_idx)
+        
+        civico_val = self.localita_data_originale.get('civico')
+        if civico_val is not None:
+            self.civico_spinbox.setValue(civico_val)
+        else: # Se civico è NULL nel DB
+            self.civico_spinbox.setValue(self.civico_spinbox.minimum()) # Imposta a 0 (che potrebbe essere "Nessuno")
+            # o se 0 è un civico valido, dovresti avere un modo per distinguere
+            # Forse il QSpinBox non è ideale se NULL è molto diverso da 0.
+            # Un QLineEdit che accetta numeri o è vuoto potrebbe essere più flessibile per il civico.
+            # Per ora, lasciamo QSpinBox e 0 (con specialValueText) per NULL.
+
+        # Visualizza il nome del comune (non modificabile qui)
+        self.comune_display_label.setText(
+            f"{self.localita_data_originale.get('comune_nome', 'N/D')} (ID: {self.localita_data_originale.get('comune_id', 'N/D')})"
+        )
+        # Verifica che il comune_id della località corrisponda a quello del dialogo genitore
+        if self.localita_data_originale.get('comune_id') != self.comune_id_parent:
+            gui_logger.warning(f"Incoerenza Comune ID: Località {self.localita_id} appartiene a comune {self.localita_data_originale.get('comune_id')} ma aperta da contesto comune {self.comune_id_parent}")
+            # Potresti mostrare un avviso, ma per ora procediamo.
+
+
+    def _save_changes(self):
+        dati_modificati = {
+            "nome": self.nome_edit.text().strip(),
+            "tipo": self.tipo_combo.currentText(),
+        }
+        
+        civico_val = self.civico_spinbox.value()
+        if self.civico_spinbox.text() == self.civico_spinbox.specialValueText() or civico_val == 0:
+            dati_modificati["civico"] = None
+        else:
+            dati_modificati["civico"] = civico_val
+
+        if not dati_modificati["nome"]:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+            self.nome_edit.setFocus()
+            return
+        # Aggiungi altre validazioni UI se necessario
+        try:
+            gui_logger.info(f"Tentativo di aggiornare località ID {self.localita_id} con: {dati_modificati}")
+            self.db_manager.update_localita(self.localita_id, dati_modificati) # Chiamata al metodo
+
+            gui_logger.info(f"Località ID {self.localita_id} aggiornata con successo.")
+            self.accept() # Chiudi se ha successo
+
+        except DBUniqueConstraintError as uve:
+            gui_logger.warning(f"Violazione unicità per località ID {self.localita_id}: {uve.message}")
+            QMessageBox.warning(self, "Errore di Unicità",
+                                f"Impossibile salvare le modifiche:\n{uve.message}\n"
+                                "Una località con lo stesso nome e civico potrebbe già esistere in questo comune.")
+            self.nome_edit.setFocus() # O il campo civico se più appropriato
+        except DBNotFoundError as nfe:
+            gui_logger.error(f"Località ID {self.localita_id} non trovata per l'aggiornamento: {nfe.message}")
+            QMessageBox.critical(self, "Errore Aggiornamento", str(nfe.message))
+            self.reject() # Chiudi perché il record non esiste più
+        except DBDataError as dde:
+            gui_logger.warning(f"Errore dati per località ID {self.localita_id}: {dde.message}")
+            QMessageBox.warning(self, "Errore Dati Non Validi",
+                                f"Impossibile salvare le modifiche:\n{dde.message}")
+        except DBMError as dbe:
+            gui_logger.error(f"Errore DB aggiornando località ID {self.localita_id}: {dbe.message}")
+            QMessageBox.critical(self, "Errore Database", f"Errore salvataggio località:\n{dbe.message}")
+        except AttributeError as ae: # Per debug se il metodo non è ancora in db_manager
+            gui_logger.critical(f"Metodo 'update_localita' non trovato o altro AttributeError: {ae}", exc_info=True)
+            QMessageBox.critical(self, "Errore Implementazione", "Funzionalità non completamente implementata.")
+        except Exception as e:
+            gui_logger.critical(f"Errore imprevisto salvataggio località ID {self.localita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico", f"Errore imprevisto: {e}")
+
 class ReportisticaWidget(QWidget):
     def __init__(self, db_manager, parent=None):
         super(ReportisticaWidget, self).__init__(parent)

@@ -11112,3 +11112,384 @@ LINE 2:                     INSERT INTO catasto.sessioni_accesso
 2025-05-26 17:44:39,720 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
 2025-05-26 17:44:39,726 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
 2025-05-26 17:44:39,731 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:10:42,948 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:10:43,067 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:10:43,068 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:10:43,135 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:10:43,136 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:43,137 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:43,137 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:10:53,909 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:53,910 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:10:53,989 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:10:53,992 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:54,320 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:10:54,321 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:54,381 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 02f3b36c...
+2025-05-26 19:10:54,381 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:54,382 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:54,386 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=02f3b36c...
+2025-05-26 19:10:54,386 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:55,530 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:10:55,531 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:10:55,532 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:10:55,533 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:10:55,534 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:10:55,641 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:55,643 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:10:55,669 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:10:55,671 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:55,953 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:55,954 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:10:55,957 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:10:55,959 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:56,379 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:56,380 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:10:56,395 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:10:56,396 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:56,400 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:56,401 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:10:56,410 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:10:56,411 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:56,470 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:56,471 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:10:56,472 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:10:56,474 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 rilasciata al pool.
+2025-05-26 19:10:56,569 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2148562798240 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:10:56,571 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:10:56.566000'::timestamp AND timestamp <= '2025-05-26T19:10:56.567000'::timestamp;
+2025-05-26 19:10:56,599 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:10:56,638 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:10:56,640 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:10:56,771 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:10:56,772 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:10:56,773 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:15:48,770 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:15:48,902 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:15:48,903 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:15:48,978 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:15:48,979 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:15:48,980 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:15:48,981 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:15:58,342 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:15:58,343 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:15:58,412 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:15:58,414 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:15:58,747 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:15:58,747 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:15:58,812 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione a8acda2c...
+2025-05-26 19:15:58,813 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:15:58,814 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:15:58,818 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=a8acda2c...
+2025-05-26 19:15:58,819 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:00,144 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:16:00,145 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:16:00,145 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:16:00,147 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:16:00,148 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:16:00,247 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:00,248 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:16:00,256 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:16:00,257 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:00,540 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:00,542 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:16:00,544 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:16:00,545 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:00,946 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:00,947 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:16:00,954 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:16:00,955 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:00,960 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:00,961 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:16:00,964 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:16:00,965 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:01,016 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:01,017 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:16:01,020 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:16:01,021 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 rilasciata al pool.
+2025-05-26 19:16:01,098 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131175835296 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:16:01,100 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:16:01.095000'::timestamp AND timestamp <= '2025-05-26T19:16:01.096000'::timestamp;
+2025-05-26 19:16:01,113 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:16:01,199 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:16:01,201 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:16:01,316 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:16:01,321 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:16:01,321 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:16:18,599 - CatastoDB_catasto_storico_localhost_5432 - INFO - Trovato eseguibile 'pg_dump.exe' nel PATH: .\pg_dump.exe
+2025-05-26 19:16:18,601 - CatastoDB_catasto_storico_localhost_5432 - INFO - Comando di backup preparato: .\pg_dump.exe -U postgres -h localhost -p 5432 -Fc --file C:/Users/saint/catasto/gemini/catasto_storico_backup_20250526_191607.dump catasto_storico
+2025-05-26 19:19:14,654 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131173867248 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:14,680 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Variabili di sessione audit resettate (usando connessione esistente per logout).
+2025-05-26 19:19:14,685 - CatastoDB_catasto_storico_localhost_5432 - INFO - Logout registrato per utente ID 1, sessione a8acda2c...
+2025-05-26 19:19:14,686 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131173867248 rilasciata al pool.
+2025-05-26 19:19:15,859 - CatastoDB_catasto_storico_localhost_5432 - INFO - Reset variabili di sessione applicative (app.user_id, app.ip_address).
+2025-05-26 19:19:15,860 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Tentativo di impostare var sessione app: app.user_id='None', app.ip_address='None'
+2025-05-26 19:19:15,861 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131173867248 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:15,863 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione applicative impostate: app.user_id='None', app.ip_address='None'
+2025-05-26 19:19:15,864 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2131173867248 rilasciata al pool.
+2025-05-26 19:19:15,878 - CatastoGUI - INFO - Evento closeEvent intercettato in CatastoMainWindow.
+2025-05-26 19:19:15,879 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni chiuso con successo.
+2025-05-26 19:19:15,880 - CatastoGUI - INFO - Pool di connessioni al database chiuso.
+2025-05-26 19:19:15,880 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 19:19:15,896 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 19:19:23,873 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:19:23,947 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:19:23,948 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:19:24,024 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:19:24,025 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:24,026 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:24,026 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:19:30,118 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:30,120 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:19:30,136 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:19:30,138 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:30,459 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:19:30,459 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:30,517 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 4e60e69e...
+2025-05-26 19:19:30,518 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:30,518 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:30,519 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=4e60e69e...
+2025-05-26 19:19:30,520 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:32,518 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:19:32,518 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:19:32,519 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:19:32,520 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:19:32,522 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:19:32,577 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:32,578 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:19:32,582 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:19:32,583 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:32,802 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:32,804 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:19:32,806 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:19:32,807 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:33,130 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:33,131 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:19:33,134 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:19:33,135 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:33,140 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:33,141 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:19:33,144 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:19:33,145 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:33,179 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:33,180 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:19:33,181 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:19:33,182 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 rilasciata al pool.
+2025-05-26 19:19:33,214 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762106768 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:19:33,215 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:19:33.212000'::timestamp AND timestamp <= '2025-05-26T19:19:33.212000'::timestamp;
+2025-05-26 19:19:33,218 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:19:33,257 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:19:33,258 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:19:33,391 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:19:33,392 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:19:33,393 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:19:52,971 - CatastoDB_catasto_storico_localhost_5432 - WARNING - Percorso fornito 'C:\Program Files\PostgreSQL\17\bin' per 'pg_dump.exe' non valido. Tento ricerca nel PATH.
+2025-05-26 19:19:52,972 - CatastoDB_catasto_storico_localhost_5432 - INFO - Trovato eseguibile 'pg_dump.exe' nel PATH: .\pg_dump.exe
+2025-05-26 19:19:52,972 - CatastoDB_catasto_storico_localhost_5432 - INFO - Comando di backup preparato: .\pg_dump.exe -U postgres -h localhost -p 5432 -Fc --file C:/Users/saint/catasto/gemini/catasto_storico_backup_20250526_191939.dump catasto_storico
+2025-05-26 19:20:05,166 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762108400 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:05,179 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Variabili di sessione audit resettate (usando connessione esistente per logout).
+2025-05-26 19:20:05,183 - CatastoDB_catasto_storico_localhost_5432 - INFO - Logout registrato per utente ID 1, sessione 4e60e69e...
+2025-05-26 19:20:05,184 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762108400 rilasciata al pool.
+2025-05-26 19:20:06,268 - CatastoDB_catasto_storico_localhost_5432 - INFO - Reset variabili di sessione applicative (app.user_id, app.ip_address).
+2025-05-26 19:20:06,269 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Tentativo di impostare var sessione app: app.user_id='None', app.ip_address='None'
+2025-05-26 19:20:06,270 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762108400 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:06,272 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione applicative impostate: app.user_id='None', app.ip_address='None'
+2025-05-26 19:20:06,273 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2885762108400 rilasciata al pool.
+2025-05-26 19:20:06,285 - CatastoGUI - INFO - Evento closeEvent intercettato in CatastoMainWindow.
+2025-05-26 19:20:06,286 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni chiuso con successo.
+2025-05-26 19:20:06,287 - CatastoGUI - INFO - Pool di connessioni al database chiuso.
+2025-05-26 19:20:06,287 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 19:20:06,304 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 19:20:10,984 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:20:11,101 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:20:11,102 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:20:11,173 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:20:11,174 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:11,175 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:11,175 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:20:18,277 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:18,279 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:20:18,294 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:20:18,296 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:18,632 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:20:18,632 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:18,655 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione ce1e48ab...
+2025-05-26 19:20:18,656 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:18,656 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:18,658 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=ce1e48ab...
+2025-05-26 19:20:18,659 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,061 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:20:21,061 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:20:21,062 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:20:21,062 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:20:21,063 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:20:21,122 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,124 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:20:21,128 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:20:21,129 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,386 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,387 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:20:21,389 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:20:21,390 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,724 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,726 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:20:21,729 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:20:21,730 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,734 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,734 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:20:21,736 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:20:21,737 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,784 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,786 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:20:21,787 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:20:21,788 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 rilasciata al pool.
+2025-05-26 19:20:21,844 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2715212137872 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:20:21,846 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:20:21.843000'::timestamp AND timestamp <= '2025-05-26T19:20:21.843000'::timestamp;
+2025-05-26 19:20:21,849 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:20:21,927 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:20:21,928 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:20:22,065 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:20:22,068 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:20:22,069 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:20:47,818 - CatastoDB_catasto_storico_localhost_5432 - INFO - Utilizzo del percorso eseguibile fornito: C:\Program Files\PostgreSQL\17\bin\pg_dump.exe
+2025-05-26 19:20:47,819 - CatastoDB_catasto_storico_localhost_5432 - INFO - Comando di backup preparato: C:\Program Files\PostgreSQL\17\bin\pg_dump.exe -U postgres -h localhost -p 5432 -Fc --file C:/Users/saint/catasto/gemini/catasto_storico_backup_20250526_192026.dump catasto_storico
+2025-05-26 19:29:11,779 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:29:11,975 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:29:11,976 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:29:12,044 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:29:12,046 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:12,046 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:12,047 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:29:19,828 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:19,830 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:29:19,912 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:29:19,915 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:20,239 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:29:20,240 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:20,276 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 066e637e...
+2025-05-26 19:29:20,276 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:20,277 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:20,280 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=066e637e...
+2025-05-26 19:29:20,281 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,024 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:29:22,024 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:29:22,025 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:29:22,026 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:29:22,027 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:29:22,122 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,123 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:29:22,133 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:29:22,135 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,410 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,410 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:29:22,412 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:29:22,413 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,779 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,780 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:29:22,786 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:29:22,786 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,791 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,793 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:29:22,795 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:29:22,796 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,840 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,841 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:29:22,842 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:29:22,843 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 rilasciata al pool.
+2025-05-26 19:29:22,902 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926193824 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:29:22,904 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:29:22.900000'::timestamp AND timestamp <= '2025-05-26T19:29:22.900000'::timestamp;
+2025-05-26 19:29:22,911 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:29:22,984 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:29:22,986 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:29:24,321 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:29:24,328 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:29:24,330 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:30:44,858 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926195456 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:30:44,887 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Variabili di sessione audit resettate (usando connessione esistente per logout).
+2025-05-26 19:30:44,893 - CatastoDB_catasto_storico_localhost_5432 - INFO - Logout registrato per utente ID 1, sessione 066e637e...
+2025-05-26 19:30:44,894 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926195456 rilasciata al pool.
+2025-05-26 19:30:46,202 - CatastoDB_catasto_storico_localhost_5432 - INFO - Reset variabili di sessione applicative (app.user_id, app.ip_address).
+2025-05-26 19:30:46,203 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Tentativo di impostare var sessione app: app.user_id='None', app.ip_address='None'
+2025-05-26 19:30:46,204 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926195456 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:30:46,207 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione applicative impostate: app.user_id='None', app.ip_address='None'
+2025-05-26 19:30:46,208 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 2347926195456 rilasciata al pool.
+2025-05-26 19:30:46,227 - CatastoGUI - INFO - Evento closeEvent intercettato in CatastoMainWindow.
+2025-05-26 19:30:46,228 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni chiuso con successo.
+2025-05-26 19:30:46,229 - CatastoGUI - INFO - Pool di connessioni al database chiuso.
+2025-05-26 19:30:46,229 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 19:30:46,253 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 19:30:55,404 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:30:55,501 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoApp_Pool' inizializzato (min:1, max:5).
+2025-05-26 19:30:55,501 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (solo pool) per catasto_storico@localhost
+2025-05-26 19:30:55,565 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_Main' inizializzato (min:1, max:5).
+2025-05-26 19:30:55,566 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:30:55,567 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:30:55,568 - CatastoGUI - INFO - Test di connessione iniziale al pool riuscito.
+2025-05-26 19:31:02,589 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:02,590 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_user_credentials per username: admin
+2025-05-26 19:31:02,607 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-05-26 19:31:02,609 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:02,975 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 19:31:02,975 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:03,025 - CatastoDB_catasto_storico_localhost_5432 - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 74337733...
+2025-05-26 19:31:03,026 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:03,027 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:03,030 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=74337733...
+2025-05-26 19:31:03,031 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:04,816 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 19:31:04,816 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_manager e pool esistono.
+2025-05-26 19:31:04,817 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_name recuperato: catasto_storico
+2025-05-26 19:31:04,817 - CatastoGUI - INFO - DEBUG perform_initial_setup: db_status_label IMPOSTATO A: 'Database: Connesso (catasto_storico)'
+2025-05-26 19:31:04,818 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 19:31:04,879 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:04,881 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_all_comuni_details: 
+            SELECT id, nome AS nome_comune, provincia, regione, 
+                data_creazione, data_modifica 
+            FROM catasto.comune ORDER BY nome_comune;
+        
+2025-05-26 19:31:04,884 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni per get_all_comuni_details.
+2025-05-26 19:31:04,885 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:05,071 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:05,073 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_comuni: SELECT id, nome, provincia, regione FROM catasto.comune ORDER BY nome
+2025-05-26 19:31:05,074 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 8 comuni (search_term: 'None').
+2025-05-26 19:31:05,075 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:05,400 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:05,401 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_statistiche_comune: SELECT * FROM catasto.mv_statistiche_comune ORDER BY comune;
+2025-05-26 19:31:05,404 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 8 righe da mv_statistiche_comune.
+2025-05-26 19:31:05,405 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:05,410 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:05,411 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_immobili_per_tipologia: SELECT * FROM catasto.mv_immobili_per_tipologia ORDER BY comune_nome, classificazione LIMIT 100;
+2025-05-26 19:31:05,414 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 26 righe da mv_immobili_per_tipologia.
+2025-05-26 19:31:05,415 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:05,473 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:05,475 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Esecuzione get_utenti: SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM catasto.utente ORDER BY username;
+2025-05-26 19:31:05,477 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-05-26 19:31:05,478 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 rilasciata al pool.
+2025-05-26 19:31:05,528 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Connessione 3035653097120 ottenuta dal pool. DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=\'CatastoAppGUI_Main\''
+2025-05-26 19:31:05,529 - CatastoDB_catasto_storico_localhost_5432 - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T19:31:05.526000'::timestamp AND timestamp <= '2025-05-26T19:31:05.526000'::timestamp;
+2025-05-26 19:31:05,532 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 19:31:05,584 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 19:31:05,585 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 19:31:05,733 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 19:31:05,735 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 19:31:05,735 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 19:31:40,476 - CatastoDB_catasto_storico_localhost_5432 - INFO - Utilizzo del percorso eseguibile fornito: C:\Program Files\PostgreSQL\17\bin\pg_dump.exe
+2025-05-26 19:31:40,478 - CatastoDB_catasto_storico_localhost_5432 - INFO - Comando di backup preparato: C:\Program Files\PostgreSQL\17\bin\pg_dump.exe -U postgres -h localhost -p 5432 -Fc --file C:/Users/saint/catasto/gemini/catasto_storico_backup_20250526_193111.dump catasto_storico

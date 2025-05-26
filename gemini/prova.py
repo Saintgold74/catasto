@@ -5491,7 +5491,7 @@ class BackupRestoreWidget(QWidget):
         # Opzionale: percorso pg_dump se non nel PATH
         self.pg_dump_path_edit = QLineEdit()
         self.pg_dump_path_edit.setPlaceholderText("Es. C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe (opzionale)")
-        backup_layout.addRow("Percorso pg_dump (opz.):", self.pg_dump_path_edit)
+        backup_layout.addRow("Percorso pg_dump (opz.C:\Program Files\PostgreSQL\\17\\bin\pg_dump.exe):", self.pg_dump_path_edit)
 
 
         self.backup_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Esegui Backup")
@@ -5544,9 +5544,9 @@ class BackupRestoreWidget(QWidget):
 
     def _browse_backup_file_save_path(self):
         # Ottieni il nome del database usando il nuovo metodo del db_manager
-        current_dbname = self.db_manager.get_current_dbname()
-        default_db_name = current_dbname if current_dbname else "catasto_storico"
-        
+        current_dbname = self.db_manager.get_current_dbname() # Usa il nuovo metodo getter
+        default_db_name = current_dbname if current_dbname else "catasto_storico" # Fallback se get_current_dbname restituisce None
+
         default_filename = f"{default_db_name}_backup_{QDateTime.currentDateTime().toString('yyyyMMdd_HHmmss')}"
         
         if self.backup_format_combo.currentIndex() == 0: # Custom
@@ -5633,7 +5633,6 @@ class BackupRestoreWidget(QWidget):
                                     f"L'operazione di {operation_name.lower()} è stata completata con successo.")
         # --- FINE RICONNESSIONE POOL ---
     def _start_backup(self):
-        # Controllo del percorso del file di backup   
         backup_file = self.backup_file_path_edit.text()
         if not backup_file:
             QMessageBox.warning(self, "Percorso Mancante", "Selezionare un percorso e un nome file per il backup.")
@@ -5646,28 +5645,32 @@ class BackupRestoreWidget(QWidget):
             if reply == QMessageBox.No:
                 return
 
-        # --- Richiesta Password ---
-        password, ok = QInputDialog.getText(self, "Autenticazione Database",
-                                            f"Inserisci la password per l'utente '{self.db_manager.conn_params.get('user', 'N/D')}' "
-                                            f"sul database '{self.db_manager.conn_params.get('dbname', 'N/D')}':",
+            # --- Richiesta Password ---
+        db_user_for_prompt = self.db_manager.get_current_user() or "N/A" # Usa il getter
+        db_name_for_prompt = self.db_manager.get_current_dbname() or "N/A" # Usa il getter
+
+        password, ok = QInputDialog.getText(self, "Autenticazione Database per Backup",
+                                            f"Inserisci la password per l'utente '{db_user_for_prompt}' "
+                                            f"sul database '{db_name_for_prompt}':",
                                             QLineEdit.Password)
-        if not ok: # L'utente ha premuto Annulla o chiuso il dialogo
-            self.output_text_edit.append("<i>Backup annullato dall'utente (nessuna password inserita).</i>")
+        if not ok:
+            self.output_text_edit.append("<i>Backup annullato dall'utente.</i>")
             return
-        if not password: # L'utente ha premuto OK ma non ha inserito nulla (non dovrebbe succedere se inputMask è settato, ma meglio controllare)
+        if not password.strip(): # Controlla anche che la password non sia solo spazi
             QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota.")
             self.output_text_edit.append("<font color='orange'>Backup fallito: password non fornita.</font>")
             return
         # --- Fine Richiesta Password ---
 
         self._update_ui_for_process(True)
+        self.output_text_edit.clear() # Pulisci output precedente
         self.output_text_edit.append(f"Avvio backup su: {backup_file}...\n")
 
         command_parts = self.db_manager.get_backup_command_parts(
             backup_file_path=backup_file,
-            pg_dump_executable_path_ui=self.pg_dump_path_edit.text().strip(), # Passa il contenuto del campo
+            pg_dump_executable_path_ui=self.pg_dump_path_edit.text().strip(),
             format_type="custom" if self.backup_format_combo.currentIndex() == 0 else "plain",
-            include_blobs=False 
+            include_blobs=False # O come hai deciso
         )
 
         if not command_parts:
@@ -5681,20 +5684,17 @@ class BackupRestoreWidget(QWidget):
 
         self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
 
-        # --- Impostazione PGPASSWORD per QProcess ---
-        process_env = self.process.processEnvironment() # Ottieni l'ambiente corrente del QProcess
-                                                        # o QProcess.systemEnvironment() se vuoi partire da quello di sistema
-        
-        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{self.db_manager.conn_params.get('user')}'...</i>\n")
+        process_env = self.process.processEnvironment()
+        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{db_user_for_prompt}'...</i>\n") # Usa la variabile
         try:
-            process_env.insert("PGPASSWORD", password) # Usa la password fornita dall'utente
+            process_env.insert("PGPASSWORD", password)
             self.process.setProcessEnvironment(process_env)
             self.output_text_edit.append("<i>PGPASSWORD impostata per questo processo.</i>\n")
-        except Exception as e: # Gestione generica se l'insert fallisce per qualche motivo imprevisto
+        except Exception as e: 
             self.output_text_edit.append(f"<font color='red'><b>ERRORE nell'impostare PGPASSWORD: {e}</b></font>\n")
-            self.output_text_edit.append("<font color='orange'>Il backup potrebbe fallire o richiedere la password altrimenti.</font>\n")
-        # --- Fine Impostazione PGPASSWORD ---
-        
+            self.output_text_edit.append("<font color='orange'>Il backup potrebbe fallire o rimanere bloccato.</font>\n")
+
+        self.process.setProperty("is_restore_operation", False) # Assicura che sia False per il backup
         self.process.start(executable, args)
 
    

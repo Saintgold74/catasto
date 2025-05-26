@@ -207,7 +207,13 @@ class CatastoDBManager:
         """
         Restituisce il nome del database corrente.
         """
-        return self._conn_params_dict.get("dbname")
+        if hasattr(self, '_conn_params_dict') and self._conn_params_dict:
+            return self._conn_params_dict.get("dbname")
+        return None # O un default se preferisci
+    def get_current_user(self) -> Optional[str]: # NUOVO METODO
+        if hasattr(self, '_conn_params_dict') and self._conn_params_dict:
+            return self._conn_params_dict.get("user")
+        return None
     
 
     

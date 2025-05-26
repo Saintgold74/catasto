@@ -6751,3 +6751,1728 @@ HINT:  Usa il comando REFRESH MATERIALIZED VIEW.
 2025-05-25 17:34:56,915 - CatastoGUI - INFO - DEBUG: Popolamento riga 3, dati: {'id_relazione_partita_possessore': 1106, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
 2025-05-25 17:34:56,922 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
 2025-05-25 17:35:16,040 - CatastoGUI - INFO - Possessore selezionato/creato: ID 211, Nome: Possessore 3-11 Rossi
+2025-05-25 18:28:18,333 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-25 18:28:18,485 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-25 18:28:18,583 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-25 18:28:28,507 - CatastoGUI - WARNING - Login GUI fallito (utente 'admiin' non trovato/attivo).
+2025-05-25 18:28:32,451 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-25 18:28:32,764 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-25 18:28:32,818 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione f99d46e7...
+2025-05-25 18:28:32,819 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:32,821 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=f99d46e7...
+2025-05-25 18:28:34,279 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-25 18:28:34,674 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:28:34,794 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:34,796 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:28:34.717000'::timestamp AND timestamp <= '2025-05-25T18:28:34.718000'::timestamp;
+2025-05-25 18:28:34,811 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:28:34,929 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-25 18:28:35,174 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:28:35,259 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:35,259 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:28:35.194000'::timestamp AND timestamp <= '2025-05-25T18:28:35.194000'::timestamp;
+2025-05-25 18:28:35,269 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:28:35,294 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-25 18:28:35,295 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-25 18:28:35,295 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-25 18:28:35,295 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-25 18:28:35,296 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-25 18:28:45,873 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:45,874 - CatastoDB_catasto_storico_localhost - DEBUG - Chiamata a catasto.ricerca_avanzata_immobili con parametri POSIZIONALI: (2, None, None, None, None, None, None, None, None, None, None, None)
+2025-05-25 18:28:45,891 - CatastoDB_catasto_storico_localhost - ERROR - Errore DB specifico durante l'esecuzione di ricerca_avanzata_immobili_gui: ERRORE:  la funzione catasto.ricerca_avanzata_immobili(integer, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) non esiste
+LINE 2:                         SELECT * FROM catasto.ricerca_avanza...
+                                              ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 2368, in ricerca_avanzata_immobili_gui
+    cur.execute(query, params)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\extras.py", line 146, in execute
+    return super().execute(query, vars)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedFunction: ERRORE:  la funzione catasto.ricerca_avanzata_immobili(integer, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) non esiste
+LINE 2:                         SELECT * FROM catasto.ricerca_avanza...
+                                              ^
+HINT:  Nessuna funzione trovata con nome e tipi di argomenti forniti. Potrebbe essere necessario convertire i tipi esplicitamente.
+
+2025-05-25 18:28:59,563 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 563
+2025-05-25 18:28:59,564 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 563
+2025-05-25 18:28:59,626 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:59,627 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 563: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 563
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-25 18:28:59,637 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 563.
+2025-05-25 18:28:59,637 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:28:59,638 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 563, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-25 18:28:59,638 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-25 18:28:59,639 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 563, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-25 18:28:59,640 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-25 18:29:10,028 - CatastoGUI - INFO - Possessore selezionato/creato: ID 111, Nome: Possessore 2-11 Rossi
+2025-05-25 18:30:50,298 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-25 18:30:50,508 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-25 18:30:50,685 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-25 18:30:56,881 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-25 18:30:57,180 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-25 18:30:57,230 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 7f259117...
+2025-05-25 18:30:57,230 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:30:57,235 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=7f259117...
+2025-05-25 18:30:58,215 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-25 18:30:58,594 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:30:58,709 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:30:58,710 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:30:58.637000'::timestamp AND timestamp <= '2025-05-25T18:30:58.638000'::timestamp;
+2025-05-25 18:30:58,726 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:30:58,842 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-25 18:30:59,145 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:30:59,248 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:30:59,249 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:30:59.174000'::timestamp AND timestamp <= '2025-05-25T18:30:59.174000'::timestamp;
+2025-05-25 18:30:59,257 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:30:59,289 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-25 18:30:59,290 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-25 18:30:59,290 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-25 18:30:59,290 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-25 18:30:59,290 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-25 18:31:08,885 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1664
+2025-05-25 18:31:08,886 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1664
+2025-05-25 18:31:08,956 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:31:08,956 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1664: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1664
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-25 18:31:08,964 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 1664.
+2025-05-25 18:31:08,965 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:31:08,967 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 1664, 'possessore_id': 301, 'nome_completo_possessore': 'Possessore 4-1 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-25 18:31:08,967 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-25 18:31:08,967 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 1664, 'possessore_id': 301, 'nome_completo_possessore': 'Possessore 4-1 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-25 18:31:08,969 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-25 18:31:20,701 - CatastoGUI - INFO - Possessore selezionato/creato: ID 312, Nome: Possessore 4-12 Rossi
+2025-05-25 18:31:33,125 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:31:33,126 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1664, 312, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-25 18:31:33,144 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 312 associato con successo alla partita ID 1664 (ID Relazione: 2769).
+2025-05-25 18:31:33,144 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1874, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-25 18:33:24,067 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1668
+2025-05-25 18:33:24,068 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1668
+2025-05-25 18:33:24,139 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:33:24,140 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1668: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1668
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-25 18:33:24,152 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 1668.
+2025-05-25 18:33:24,153 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:33:24,154 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 1668, 'possessore_id': 302, 'nome_completo_possessore': 'Possessore 4-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-25 18:33:24,154 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-25 18:33:24,155 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 1668, 'possessore_id': 302, 'nome_completo_possessore': 'Possessore 4-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-25 18:33:24,156 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-25 18:33:34,914 - CatastoGUI - INFO - Possessore selezionato/creato: ID 312, Nome: Possessore 4-12 Rossi
+2025-05-25 18:33:44,286 - CatastoGUI - INFO - Inserimento dettagli legame annullato.
+2025-05-25 18:35:05,096 - CatastoGUI - INFO - Possessore selezionato/creato: ID 400, Nome: Possessore 4-100 Rossi
+2025-05-25 18:35:08,461 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:35:08,462 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1668, 400, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-25 18:35:08,486 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 400 associato con successo alla partita ID 1668 (ID Relazione: 2770).
+2025-05-25 18:35:08,486 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1874, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-25 18:39:03,654 - CatastoDB_catasto_storico_localhost - ERROR - Errore nell'ottenere una connessione dal pool: connection pool exhausted. Tento fallback su connessione singola.
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 166, in _get_connection
+    conn = self.pool.getconn()
+  File "C:\Users\saint\AppData\Local\Programs\Python\Python313\Lib\site-packages\psycopg2\pool.py", line 92, in _getconn
+    raise PoolError("connection pool exhausted")
+psycopg2.pool.PoolError: connection pool exhausted
+2025-05-25 18:39:03,664 - CatastoDB_catasto_storico_localhost - DEBUG - Pool non disponibile o errore, tento di usare/stabilire connessione singola.
+2025-05-25 18:39:03,665 - CatastoDB_catasto_storico_localhost - DEBUG - Utilizzo della connessione singola esistente. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432
+2025-05-25 18:39:03,667 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-25 18:39:03,685 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 7f259117...
+2025-05-25 18:39:05,330 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-25 18:39:05,331 - CatastoDB - INFO - Disconnessione completata
+2025-05-25 18:39:05,332 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-25 18:39:05,332 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-25 18:39:05,367 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-25 18:40:54,535 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-25 18:40:54,608 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-25 18:40:54,669 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-25 18:41:01,020 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-25 18:41:01,332 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-25 18:41:01,344 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione b80f74f8...
+2025-05-25 18:41:01,344 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:41:01,347 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=b80f74f8...
+2025-05-25 18:41:02,586 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-25 18:41:02,897 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:41:03,007 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:41:03,008 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:41:02.930000'::timestamp AND timestamp <= '2025-05-25T18:41:02.930000'::timestamp;
+2025-05-25 18:41:03,019 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:41:03,140 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-25 18:41:03,400 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:41:03,484 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:41:03,485 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:41:03.424000'::timestamp AND timestamp <= '2025-05-25T18:41:03.424000'::timestamp;
+2025-05-25 18:41:03,493 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:41:03,520 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-25 18:41:03,521 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-25 18:41:03,521 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-25 18:41:03,521 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-25 18:41:03,522 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-25 18:41:11,999 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 563
+2025-05-25 18:41:11,999 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 563
+2025-05-25 18:41:12,062 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:41:12,062 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 563: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 563
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-25 18:41:12,070 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 563.
+2025-05-25 18:41:12,071 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:41:12,071 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 563, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-25 18:41:12,072 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-25 18:41:12,072 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 563, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-25 18:41:12,073 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-25 18:41:21,017 - CatastoGUI - INFO - Possessore selezionato/creato: ID 111, Nome: Possessore 2-11 Rossi
+2025-05-25 18:48:04,533 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-25 18:48:04,648 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-25 18:48:04,715 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-25 18:48:11,764 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-25 18:48:12,060 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-25 18:48:12,118 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 632fc117...
+2025-05-25 18:48:12,118 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:12,122 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=632fc117...
+2025-05-25 18:48:13,027 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-25 18:48:13,425 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:48:13,529 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:13,530 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:48:13.465000'::timestamp AND timestamp <= '2025-05-25T18:48:13.466000'::timestamp;
+2025-05-25 18:48:13,545 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:48:13,649 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-25 18:48:13,899 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-25 18:48:14,088 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:14,089 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-24T18:48:13.920000'::timestamp AND timestamp <= '2025-05-25T18:48:13.920000'::timestamp;
+2025-05-25 18:48:14,096 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-25 18:48:14,121 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-25 18:48:14,122 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-25 18:48:14,122 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-25 18:48:14,122 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-25 18:48:14,123 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-25 18:48:22,855 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1120
+2025-05-25 18:48:22,856 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1120
+2025-05-25 18:48:22,919 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:22,919 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1120: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1120
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-25 18:48:22,927 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 1120.
+2025-05-25 18:48:22,929 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:22,930 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 1120, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-25 18:48:22,931 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-25 18:48:22,931 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 1120, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-25 18:48:22,932 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-25 18:48:32,946 - CatastoGUI - INFO - Possessore selezionato/creato: ID 501, Nome: Pippi Pippo fu Pasquale
+2025-05-25 18:48:34,660 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:34,661 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1120, 501, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-25 18:48:34,668 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 501 associato con successo alla partita ID 1120 (ID Relazione: 2771).
+2025-05-25 18:48:34,669 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1850, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-25 18:48:43,965 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-25 18:48:43,967 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-25 18:48:43,984 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 632fc117...
+2025-05-25 18:48:45,817 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-25 18:48:45,818 - CatastoDB - INFO - Disconnessione completata
+2025-05-25 18:48:45,819 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-25 18:48:45,819 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-25 18:48:45,856 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:36:32,124 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:36:32,255 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:36:32,380 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:36:38,896 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:36:39,188 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:36:39,246 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 66be9f4f...
+2025-05-26 08:36:39,247 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:36:39,251 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=66be9f4f...
+2025-05-26 08:36:40,755 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:36:41,178 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:36:41,297 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:36:41,298 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:36:41.228000'::timestamp AND timestamp <= '2025-05-26T08:36:41.228000'::timestamp;
+2025-05-26 08:36:41,323 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:36:41,448 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:36:41,773 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:36:41,869 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:36:41,870 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:36:41.796000'::timestamp AND timestamp <= '2025-05-26T08:36:41.796000'::timestamp;
+2025-05-26 08:36:41,877 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:36:41,917 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:36:41,917 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:36:41,917 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:36:41,917 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:36:41,918 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:36:50,203 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 563
+2025-05-26 08:36:50,264 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:36:50,265 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 563: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 563
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:36:50,275 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 563.
+2025-05-26 08:36:50,276 - CatastoGUI - ERROR - Errore durante il caricamento dei possessori per la partita ID 563: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1741, in _load_possessori_associati
+    possessori = self.db_manager.get_possessori_per_partita(self.partita_id)
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 566, in get_possessori_per_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-26 08:37:28,764 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:28,766 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 08:37:28,782 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 66be9f4f...
+2025-05-26 08:37:29,762 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 08:37:29,764 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 08:37:29,764 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 08:37:29,764 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 08:37:29,818 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:37:34,306 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:37:34,378 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:37:34,550 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:37:39,865 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:37:40,153 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:37:40,162 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6b4b1076...
+2025-05-26 08:37:40,162 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:40,165 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=6b4b1076...
+2025-05-26 08:37:40,999 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:37:41,272 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:37:41,467 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:41,468 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:37:41.302000'::timestamp AND timestamp <= '2025-05-26T08:37:41.302000'::timestamp;
+2025-05-26 08:37:41,474 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:37:41,594 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:37:41,872 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:37:41,978 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:41,979 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:37:41.900000'::timestamp AND timestamp <= '2025-05-26T08:37:41.900000'::timestamp;
+2025-05-26 08:37:41,986 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:37:42,013 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:37:42,014 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:37:42,014 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:37:42,014 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:37:42,014 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:37:47,645 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1120
+2025-05-26 08:37:47,707 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:47,708 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1120: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1120
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:37:47,719 - CatastoDB_catasto_storico_localhost - INFO - Trovati 2 possessori per la partita ID 1120.
+2025-05-26 08:37:47,720 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:57,359 - CatastoGUI - INFO - Possessore selezionato/creato: ID 210, Nome: Possessore 3-10 Rossi
+2025-05-26 08:37:58,453 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:37:58,454 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1120, 210, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 08:37:58,464 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 210 associato con successo alla partita ID 1120 (ID Relazione: 2772).
+2025-05-26 08:37:58,465 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1834, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-26 08:39:35,532 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:39:35,535 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 08:39:35,549 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 6b4b1076...
+2025-05-26 08:39:36,596 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 08:39:36,598 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 08:39:36,598 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 08:39:36,599 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 08:39:36,630 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:40:09,006 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:40:09,189 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:40:09,263 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:40:15,248 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:40:15,528 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:40:15,549 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 0623628c...
+2025-05-26 08:40:15,549 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:15,552 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=0623628c...
+2025-05-26 08:40:16,525 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:40:16,860 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:40:16,961 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:16,961 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:40:16.899000'::timestamp AND timestamp <= '2025-05-26T08:40:16.899000'::timestamp;
+2025-05-26 08:40:16,969 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:40:17,086 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:40:17,334 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:40:17,417 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:17,418 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:40:17.358000'::timestamp AND timestamp <= '2025-05-26T08:40:17.358000'::timestamp;
+2025-05-26 08:40:17,425 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:40:17,449 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:40:17,450 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:40:17,450 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:40:17,450 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:40:17,450 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:40:22,901 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 563
+2025-05-26 08:40:22,963 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:22,964 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 563: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 563
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:40:22,974 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 563.
+2025-05-26 08:40:22,987 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:29,533 - CatastoGUI - INFO - Possessore selezionato/creato: ID 111, Nome: Possessore 2-11 Rossi
+2025-05-26 08:40:32,131 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:32,132 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (563, 111, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 08:40:32,138 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 111 associato con successo alla partita ID 563 (ID Relazione: 2773).
+2025-05-26 08:40:32,139 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1840, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-26 08:40:37,158 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:40:37,160 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 08:40:37,175 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 0623628c...
+2025-05-26 08:40:38,360 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 08:40:38,362 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 08:40:38,362 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 08:40:38,363 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 08:40:38,391 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:47:29,850 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:47:29,986 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:47:30,045 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:47:35,865 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:47:36,163 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:47:36,216 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 8e40c3e6...
+2025-05-26 08:47:36,216 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:36,221 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=8e40c3e6...
+2025-05-26 08:47:37,394 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:47:37,821 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:47:37,931 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:37,932 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:47:37.866000'::timestamp AND timestamp <= '2025-05-26T08:47:37.866000'::timestamp;
+2025-05-26 08:47:37,946 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:47:38,061 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:47:38,356 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:47:38,438 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:38,439 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:47:38.377000'::timestamp AND timestamp <= '2025-05-26T08:47:38.377000'::timestamp;
+2025-05-26 08:47:38,446 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:47:38,473 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:47:38,473 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:47:38,474 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:47:38,474 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:47:38,474 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:47:45,384 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1121
+2025-05-26 08:47:45,384 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1121
+2025-05-26 08:47:45,446 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:45,447 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1121: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1121
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:47:45,457 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 1121.
+2025-05-26 08:47:45,459 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:45,461 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 1121, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:47:45,461 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-26 08:47:45,461 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 1121, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:47:45,463 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:47:52,955 - CatastoGUI - INFO - Possessore selezionato/creato: ID 300, Nome: Possessore 3-100 Rossi
+2025-05-26 08:47:54,050 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:47:54,050 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1121, 300, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 08:47:54,057 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 300 associato con successo alla partita ID 1121 (ID Relazione: 2774).
+2025-05-26 08:47:54,058 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1846, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-26 08:48:47,353 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:48:47,355 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 08:48:47,369 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 8e40c3e6...
+2025-05-26 08:48:48,497 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 08:48:48,498 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 08:48:48,499 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 08:48:48,499 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 08:48:48,541 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:49:02,894 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:49:02,961 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:49:03,019 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:49:07,404 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:49:07,684 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:49:07,692 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione aeca4d87...
+2025-05-26 08:49:07,692 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:07,695 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=aeca4d87...
+2025-05-26 08:49:09,173 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:49:09,511 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:49:09,703 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:09,703 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:49:09.531000'::timestamp AND timestamp <= '2025-05-26T08:49:09.531000'::timestamp;
+2025-05-26 08:49:09,713 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:49:09,819 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:49:10,114 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:49:10,197 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:10,198 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:49:10.135000'::timestamp AND timestamp <= '2025-05-26T08:49:10.135000'::timestamp;
+2025-05-26 08:49:10,204 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:49:10,231 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:49:10,231 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:49:10,231 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:49:10,232 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:49:10,232 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:49:23,613 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1119
+2025-05-26 08:49:23,614 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1119
+2025-05-26 08:49:23,676 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:23,677 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1119: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1119
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:49:23,686 - CatastoDB_catasto_storico_localhost - INFO - Trovati 2 possessori per la partita ID 1119.
+2025-05-26 08:49:23,687 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:23,688 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:49:23,688 - CatastoGUI - INFO - DEBUG: Tabella impostata a 2 righe.
+2025-05-26 08:49:23,688 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:49:23,689 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:49:23,689 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:49:32,197 - CatastoGUI - INFO - Possessore selezionato/creato: ID 501, Nome: Pippi Pippo fu Pasquale
+2025-05-26 08:49:33,709 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:49:33,710 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1119, 501, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 08:49:33,716 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 501 associato con successo alla partita ID 1119 (ID Relazione: 2775).
+2025-05-26 08:49:33,717 - CatastoGUI - CRITICAL - Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 1846, in _aggiungi_possessore_a_partita
+    success = self.db_manager.aggiungi_possessore_a_partita(
+        partita_id=self.partita_id,
+    ...<3 lines>...
+        quota=quota_possesso
+    )
+  File "C:\Users\saint\catasto\gemini\catasto_db_manager.py", line 1295, in aggiungi_possessore_a_partita
+    self.release_connection(conn)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'release_connection'. Did you mean: '_release_connection'?
+2025-05-26 08:50:46,328 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:50:46,330 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 08:50:46,336 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione aeca4d87...
+2025-05-26 08:50:47,481 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 08:50:47,482 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 08:50:47,482 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 08:50:47,483 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 08:50:47,505 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 08:50:52,345 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 08:50:52,413 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 08:50:52,585 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 08:50:57,314 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 08:50:57,596 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 08:50:57,617 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 68e9caa1...
+2025-05-26 08:50:57,618 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:50:57,621 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=68e9caa1...
+2025-05-26 08:50:58,393 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 08:50:58,780 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:50:58,873 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:50:58,874 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:50:58.810000'::timestamp AND timestamp <= '2025-05-26T08:50:58.810000'::timestamp;
+2025-05-26 08:50:58,881 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:50:58,974 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 08:50:59,236 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 08:50:59,423 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:50:59,424 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T08:50:59.260000'::timestamp AND timestamp <= '2025-05-26T08:50:59.260000'::timestamp;
+2025-05-26 08:50:59,431 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 08:50:59,459 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 08:50:59,460 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 08:50:59,460 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 08:50:59,460 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 08:50:59,460 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 08:51:04,895 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1119
+2025-05-26 08:51:04,896 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1119
+2025-05-26 08:51:04,967 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:04,968 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1119: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1119
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:51:04,977 - CatastoDB_catasto_storico_localhost - INFO - Trovati 3 possessori per la partita ID 1119.
+2025-05-26 08:51:04,978 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:04,980 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:51:04,980 - CatastoGUI - INFO - DEBUG: Tabella impostata a 3 righe.
+2025-05-26 08:51:04,980 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:04,980 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:04,981 - CatastoGUI - INFO - DEBUG: Popolamento riga 2, dati: {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:04,982 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:51:15,092 - CatastoGUI - INFO - Possessore selezionato/creato: ID 300, Nome: Possessore 3-100 Rossi
+2025-05-26 08:51:16,090 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:16,091 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (1119, 300, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 08:51:16,098 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 300 associato con successo alla partita ID 1119 (ID Relazione: 2776).
+2025-05-26 08:51:16,099 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:16,100 - CatastoGUI - INFO - Possessore ID 300 aggiunto con successo alla partita ID 1119
+2025-05-26 08:51:20,587 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1119
+2025-05-26 08:51:20,587 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1119
+2025-05-26 08:51:20,588 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:20,589 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1119: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1119
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:51:20,591 - CatastoDB_catasto_storico_localhost - INFO - Trovati 4 possessori per la partita ID 1119.
+2025-05-26 08:51:20,592 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:51:20,593 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 2776, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:51:20,594 - CatastoGUI - INFO - DEBUG: Tabella impostata a 4 righe.
+2025-05-26 08:51:20,595 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:20,595 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 2776, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:20,596 - CatastoGUI - INFO - DEBUG: Popolamento riga 2, dati: {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:20,596 - CatastoGUI - INFO - DEBUG: Popolamento riga 3, dati: {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:51:20,597 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:52:00,857 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1117
+2025-05-26 08:52:00,858 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1117
+2025-05-26 08:52:00,858 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:00,859 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1117: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1117
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:52:00,861 - CatastoDB_catasto_storico_localhost - INFO - Trovati 2 possessori per la partita ID 1117.
+2025-05-26 08:52:00,862 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:00,863 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2767, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 1117, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:52:00,863 - CatastoGUI - INFO - DEBUG: Tabella impostata a 2 righe.
+2025-05-26 08:52:00,864 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2767, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:52:00,864 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 1117, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:52:00,865 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:52:07,560 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1122
+2025-05-26 08:52:07,560 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1122
+2025-05-26 08:52:07,561 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:07,561 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1122: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1122
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 08:52:07,563 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 1122.
+2025-05-26 08:52:07,564 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:07,565 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 1122, 'possessore_id': 203, 'nome_completo_possessore': 'Possessore 3-3 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 08:52:07,565 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-26 08:52:07,566 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 1122, 'possessore_id': 203, 'nome_completo_possessore': 'Possessore 3-3 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 08:52:07,566 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 08:52:31,037 - CatastoGUI - INFO - Tentativo di aggiornare i dati generali della partita ID 1122 con: {'numero_partita': 9911, 'tipo': 'principale', 'stato': 'attiva', 'data_impianto': datetime.date(2010, 5, 19), 'data_chiusura': datetime.date(2025, 1, 1), 'numero_provenienza': None}
+2025-05-26 08:52:31,037 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:31,038 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE partita ID 1122: 
+            UPDATE catasto.partita
+            SET numero_partita = 9911, tipo = 'principale', data_impianto = '2010-05-19'::date, data_chiusura = '2025-01-01'::date, numero_provenienza = NULL, stato = 'attiva', data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 1122;
+        
+2025-05-26 08:52:31,046 - CatastoDB_catasto_storico_localhost - INFO - Partita ID 1122 aggiornata con successo. Righe modificate: 1
+2025-05-26 08:52:31,047 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:31,047 - CatastoGUI - INFO - Dati generali della Partita ID 1122 aggiornati con successo.
+2025-05-26 08:52:32,402 - CatastoGUI - INFO - Tentativo di aggiornare la partita ID 1122 con i dati: {'numero_partita': 9911, 'tipo': 'principale', 'stato': 'attiva', 'data_impianto': datetime.date(2010, 5, 19), 'data_chiusura': datetime.date(2025, 1, 1), 'numero_provenienza': None}
+2025-05-26 08:52:32,402 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:32,403 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE partita ID 1122: 
+            UPDATE catasto.partita
+            SET numero_partita = 9911, tipo = 'principale', data_impianto = '2010-05-19'::date, data_chiusura = '2025-01-01'::date, numero_provenienza = NULL, stato = 'attiva', data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 1122;
+        
+2025-05-26 08:52:32,405 - CatastoDB_catasto_storico_localhost - INFO - Partita ID 1122 aggiornata con successo. Righe modificate: 1
+2025-05-26 08:52:32,405 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 08:52:32,406 - CatastoGUI - INFO - Partita ID 1122 aggiornata con successo nel database.
+2025-05-26 09:01:09,283 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:01:09,473 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:01:09,574 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:01:15,772 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:01:16,086 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:01:16,123 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 6c4c1f4e...
+2025-05-26 09:01:16,125 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:16,131 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=6c4c1f4e...
+2025-05-26 09:01:17,094 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:01:17,505 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:01:17,618 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:17,619 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:01:17.547000'::timestamp AND timestamp <= '2025-05-26T09:01:17.548000'::timestamp;
+2025-05-26 09:01:17,630 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:01:17,734 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:01:18,021 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:01:18,108 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:18,108 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:01:18.047000'::timestamp AND timestamp <= '2025-05-26T09:01:18.047000'::timestamp;
+2025-05-26 09:01:18,117 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:01:18,143 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:01:18,143 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:01:18,143 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:01:18,144 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:01:18,144 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:01:23,940 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 561
+2025-05-26 09:01:23,941 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 561
+2025-05-26 09:01:24,005 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:24,006 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 561: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 561
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 09:01:24,015 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 561.
+2025-05-26 09:01:24,022 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:24,024 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 09:01:24,025 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-26 09:01:24,025 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:01:24,029 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 09:01:49,113 - CatastoGUI - INFO - Possessore selezionato/creato: ID 502, Nome: Pippo Puppi di Topolino
+2025-05-26 09:01:52,093 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:52,094 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiungi_possessore_a_partita: 
+            INSERT INTO catasto.partita_possessore
+                (partita_id, possessore_id, tipo_partita, titolo, quota, data_creazione, data_modifica)
+            VALUES
+                (561, 502, 'principale', 'propriet‡ esclusiva', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id; 
+        
+2025-05-26 09:01:52,103 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 502 associato con successo alla partita ID 561 (ID Relazione: 2777).
+2025-05-26 09:01:52,104 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:52,105 - CatastoGUI - INFO - Possessore ID 502 aggiunto con successo alla partita ID 561
+2025-05-26 09:01:53,732 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 561
+2025-05-26 09:01:53,732 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 561
+2025-05-26 09:01:53,732 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:53,733 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 561: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 561
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 09:01:53,735 - CatastoDB_catasto_storico_localhost - INFO - Trovati 2 possessori per la partita ID 561.
+2025-05-26 09:01:53,736 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:01:53,737 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2777, 'possessore_id': 502, 'nome_completo_possessore': 'Pippo Puppi di Topolino', 'paternita_possessore': 'di Topolino', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 09:01:53,738 - CatastoGUI - INFO - DEBUG: Tabella impostata a 2 righe.
+2025-05-26 09:01:53,738 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2777, 'possessore_id': 502, 'nome_completo_possessore': 'Pippo Puppi di Topolino', 'paternita_possessore': 'di Topolino', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:01:53,738 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:01:53,740 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 09:02:05,868 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:05,869 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query aggiorna_legame_partita_possessore ID 561: 
+            UPDATE catasto.partita_possessore
+            SET titolo = 'propriet√† esclusiva', quota = '1/2', data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 561;
+        
+2025-05-26 09:02:05,871 - CatastoDB_catasto_storico_localhost - INFO - Legame partita-possessore ID 561 aggiornato. Righe modificate: 1
+2025-05-26 09:02:05,872 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:05,873 - CatastoGUI - INFO - Legame ID 561 aggiornato con successo.
+2025-05-26 09:02:07,573 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 561
+2025-05-26 09:02:07,573 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 561
+2025-05-26 09:02:07,573 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:07,574 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 561: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 561
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 09:02:07,576 - CatastoDB_catasto_storico_localhost - INFO - Trovati 2 possessori per la partita ID 561.
+2025-05-26 09:02:07,577 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:07,578 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2777, 'possessore_id': 502, 'nome_completo_possessore': 'Pippo Puppi di Topolino', 'paternita_possessore': 'di Topolino', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': '1/2', 'tipo_partita_rel': 'principale'}]
+2025-05-26 09:02:07,579 - CatastoGUI - INFO - DEBUG: Tabella impostata a 2 righe.
+2025-05-26 09:02:07,579 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2777, 'possessore_id': 502, 'nome_completo_possessore': 'Pippo Puppi di Topolino', 'paternita_possessore': 'di Topolino', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:02:07,579 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': '1/2', 'tipo_partita_rel': 'principale'}
+2025-05-26 09:02:07,581 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 09:02:18,749 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:18,750 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query rimuovi_possessore_da_partita ID 2777: DELETE FROM catasto.partita_possessore WHERE id = 2777;
+2025-05-26 09:02:18,752 - CatastoDB_catasto_storico_localhost - INFO - Legame partita-possessore ID 2777 rimosso con successo. Righe modificate: 1
+2025-05-26 09:02:18,753 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:18,754 - CatastoGUI - INFO - Legame ID 2777 rimosso con successo.
+2025-05-26 09:02:20,589 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 561
+2025-05-26 09:02:20,589 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 561
+2025-05-26 09:02:20,590 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:20,591 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 561: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 561
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 09:02:20,593 - CatastoDB_catasto_storico_localhost - INFO - Trovati 1 possessori per la partita ID 561.
+2025-05-26 09:02:20,594 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:02:20,595 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': '1/2', 'tipo_partita_rel': 'principale'}]
+2025-05-26 09:02:20,595 - CatastoGUI - INFO - DEBUG: Tabella impostata a 1 righe.
+2025-05-26 09:02:20,595 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 561, 'possessore_id': 102, 'nome_completo_possessore': 'Possessore 2-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': '1/2', 'tipo_partita_rel': 'principale'}
+2025-05-26 09:02:20,596 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 09:03:12,797 - CatastoGUI - INFO - Tentativo di aggiornare i dati generali della partita ID 561 con: {'numero_partita': 1006, 'tipo': 'principale', 'stato': 'attiva', 'data_impianto': datetime.date(2020, 5, 19), 'data_chiusura': datetime.date(2025, 12, 10), 'numero_provenienza': None}
+2025-05-26 09:03:12,798 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:03:12,799 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE partita ID 561: 
+            UPDATE catasto.partita
+            SET numero_partita = 1006, tipo = 'principale', data_impianto = '2020-05-19'::date, data_chiusura = '2025-12-10'::date, numero_provenienza = NULL, stato = 'attiva', data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 561;
+        
+2025-05-26 09:03:12,815 - CatastoDB_catasto_storico_localhost - INFO - Partita ID 561 aggiornata con successo. Righe modificate: 1
+2025-05-26 09:03:12,816 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:03:12,817 - CatastoGUI - INFO - Dati generali della Partita ID 561 aggiornati con successo.
+2025-05-26 09:03:14,129 - CatastoGUI - INFO - Tentativo di aggiornare la partita ID 561 con i dati: {'numero_partita': 1006, 'tipo': 'principale', 'stato': 'attiva', 'data_impianto': datetime.date(2020, 5, 19), 'data_chiusura': datetime.date(2025, 12, 10), 'numero_provenienza': None}
+2025-05-26 09:03:14,129 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:03:14,130 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE partita ID 561: 
+            UPDATE catasto.partita
+            SET numero_partita = 1006, tipo = 'principale', data_impianto = '2020-05-19'::date, data_chiusura = '2025-12-10'::date, numero_provenienza = NULL, stato = 'attiva', data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 561;
+        
+2025-05-26 09:03:14,132 - CatastoDB_catasto_storico_localhost - INFO - Partita ID 561 aggiornata con successo. Righe modificate: 1
+2025-05-26 09:03:14,133 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:03:14,134 - CatastoGUI - INFO - Partita ID 561 aggiornata con successo nel database.
+2025-05-26 09:03:56,066 - CatastoDB - INFO - Ricerca avanzata possessori per 'Pippo Pippi' (soglia: 0.3) ha prodotto 2 risultati.
+2025-05-26 09:05:02,869 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:05:02,939 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:05:02,998 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:05:08,147 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:05:08,433 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:05:08,451 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 3f5fe691...
+2025-05-26 09:05:08,452 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:05:08,455 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=3f5fe691...
+2025-05-26 09:05:09,699 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:05:09,977 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:05:10,069 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:05:10,070 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:05:10.010000'::timestamp AND timestamp <= '2025-05-26T09:05:10.010000'::timestamp;
+2025-05-26 09:05:10,077 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:05:10,177 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:05:10,430 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:05:10,514 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:05:10,514 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:05:10.450000'::timestamp AND timestamp <= '2025-05-26T09:05:10.450000'::timestamp;
+2025-05-26 09:05:10,523 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:05:10,548 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:05:10,548 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:05:10,549 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:05:10,549 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:05:10,549 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:06:35,539 - CatastoGUI - INFO - DEBUG: Inizio _load_possessori_associati per partita ID: 1119
+2025-05-26 09:06:35,540 - CatastoGUI - INFO - Caricamento possessori associati per partita ID: 1119
+2025-05-26 09:06:35,601 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:06:35,602 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessori_per_partita per partita_id 1119: 
+            SELECT
+                pp.id AS id_relazione_partita_possessore,
+                pos.id AS possessore_id,
+                pos.nome_completo AS nome_completo_possessore,
+                pos.paternita AS paternita_possessore, 
+                pp.titolo AS titolo_possesso,
+                pp.quota AS quota_possesso,
+                pp.tipo_partita AS tipo_partita_rel 
+            FROM
+                catasto.partita_possessore pp
+            JOIN
+                catasto.possessore pos ON pp.possessore_id = pos.id
+            WHERE
+                pp.partita_id = 1119
+            ORDER BY
+                pos.nome_completo;
+        
+2025-05-26 09:06:35,610 - CatastoDB_catasto_storico_localhost - INFO - Trovati 4 possessori per la partita ID 1119.
+2025-05-26 09:06:35,611 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:06:35,612 - CatastoGUI - INFO - DEBUG: Dati possessori ricevuti dal DB: [{'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 2776, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}, {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}]
+2025-05-26 09:06:35,613 - CatastoGUI - INFO - DEBUG: Tabella impostata a 4 righe.
+2025-05-26 09:06:35,614 - CatastoGUI - INFO - DEBUG: Popolamento riga 0, dati: {'id_relazione_partita_possessore': 2775, 'possessore_id': 501, 'nome_completo_possessore': 'Pippi Pippo fu Pasquale', 'paternita_possessore': 'fu Pasquale', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:06:35,614 - CatastoGUI - INFO - DEBUG: Popolamento riga 1, dati: {'id_relazione_partita_possessore': 2776, 'possessore_id': 300, 'nome_completo_possessore': 'Possessore 3-100 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:06:35,614 - CatastoGUI - INFO - DEBUG: Popolamento riga 2, dati: {'id_relazione_partita_possessore': 2768, 'possessore_id': 211, 'nome_completo_possessore': 'Possessore 3-11 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet‡ esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:06:35,615 - CatastoGUI - INFO - DEBUG: Popolamento riga 3, dati: {'id_relazione_partita_possessore': 1119, 'possessore_id': 202, 'nome_completo_possessore': 'Possessore 3-2 Rossi', 'paternita_possessore': 'fu Stress Test', 'titolo_possesso': 'propriet√\xa0 esclusiva', 'quota_possesso': None, 'tipo_partita_rel': 'principale'}
+2025-05-26 09:06:35,616 - CatastoGUI - INFO - DEBUG: Popolamento tabella completato.
+2025-05-26 09:06:45,899 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:06:45,902 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:06:45,915 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 3f5fe691...
+2025-05-26 09:06:47,259 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 09:06:47,260 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 09:06:47,260 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 09:06:47,261 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 09:06:47,301 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 09:14:44,078 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:14:44,207 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:14:44,275 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:14:49,515 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:14:49,818 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:14:49,863 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione bbd35b75...
+2025-05-26 09:14:49,863 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:14:49,867 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=bbd35b75...
+2025-05-26 09:14:50,654 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:14:51,134 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:14:51,243 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:14:51,244 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:14:51.166000'::timestamp AND timestamp <= '2025-05-26T09:14:51.167000'::timestamp;
+2025-05-26 09:14:51,257 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:14:51,349 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:14:51,659 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:14:51,772 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:14:51,773 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:14:51.704000'::timestamp AND timestamp <= '2025-05-26T09:14:51.704000'::timestamp;
+2025-05-26 09:14:51,782 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:14:51,813 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:14:51,813 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:14:51,814 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:14:51,814 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:14:51,814 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:18:11,700 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:18:11,702 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:18:11,718 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione bbd35b75...
+2025-05-26 09:18:12,783 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 09:18:12,784 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 09:18:12,785 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 09:18:12,785 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 09:18:12,805 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 09:18:20,464 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:18:20,539 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:18:20,597 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:18:26,013 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:18:26,298 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:18:26,308 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 38282886...
+2025-05-26 09:18:26,308 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:18:26,311 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=38282886...
+2025-05-26 09:18:29,406 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:18:29,706 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:18:29,797 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:18:29,798 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:18:29.738000'::timestamp AND timestamp <= '2025-05-26T09:18:29.738000'::timestamp;
+2025-05-26 09:18:29,805 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:18:29,897 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:18:30,142 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:18:30,353 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:18:30,354 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:18:30.163000'::timestamp AND timestamp <= '2025-05-26T09:18:30.163000'::timestamp;
+2025-05-26 09:18:30,362 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:18:30,393 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:18:30,394 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:18:30,394 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:18:30,395 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:18:30,395 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:18:56,984 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:18:57,054 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:18:57,120 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:19:04,805 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:19:05,093 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:19:05,102 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 0d333c8e...
+2025-05-26 09:19:05,103 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:19:05,106 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=0d333c8e...
+2025-05-26 09:19:06,654 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:19:06,972 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:19:07,072 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:19:07,073 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:19:07.005000'::timestamp AND timestamp <= '2025-05-26T09:19:07.005000'::timestamp;
+2025-05-26 09:19:07,080 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:19:07,214 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:19:07,481 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:19:07,567 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:19:07,568 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:19:07.506000'::timestamp AND timestamp <= '2025-05-26T09:19:07.506000'::timestamp;
+2025-05-26 09:19:07,575 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:19:07,600 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:19:07,600 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:19:07,601 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:19:07,601 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:19:07,602 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:19:29,903 - CatastoDB - INFO - Ricerca avanzata possessori per 'Pippo Pippi' (soglia: 0.3) ha prodotto 2 risultati.
+2025-05-26 09:22:40,973 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:22:41,100 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:22:41,167 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:22:46,973 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:22:47,262 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:22:47,311 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 74f351ca...
+2025-05-26 09:22:47,311 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:22:47,316 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=74f351ca...
+2025-05-26 09:22:48,989 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:22:49,369 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:22:49,593 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:22:49,594 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:22:49.412000'::timestamp AND timestamp <= '2025-05-26T09:22:49.413000'::timestamp;
+2025-05-26 09:22:49,613 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:22:49,741 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:22:50,015 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:22:50,096 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:22:50,097 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:22:50.035000'::timestamp AND timestamp <= '2025-05-26T09:22:50.035000'::timestamp;
+2025-05-26 09:22:50,103 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:22:50,127 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:22:50,128 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:22:50,128 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:22:50,128 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:22:50,129 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:23:05,587 - CatastoDB - INFO - Ricerca avanzata possessori per 'pippo pippi' (soglia: 0.3) ha prodotto 2 risultati.
+2025-05-26 09:23:08,078 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:23:08,079 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 501: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 501;
+        
+2025-05-26 09:23:08,089 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 501.
+2025-05-26 09:23:08,091 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:23:17,685 - CatastoGUI - INFO - Nuovo comune di riferimento selezionato per possessore (non ancora salvato): ID 8, Nome: Altare
+2025-05-26 09:23:19,294 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 501 con i dati: {'nome_completo': 'Pippi Pippo fu Pasquale', 'cognome_nome': 'Pippi Pippo', 'paternita': 'fu Pasquale', 'attivo': True, 'comune_riferimento_id': 8}
+2025-05-26 09:23:19,295 - CatastoGUI - CRITICAL - Metodo 'update_possessore' non trovato o altro AttributeError: 'CatastoDBManager' object has no attribute 'update_possessore'
+Traceback (most recent call last):
+  File "C:\Users\saint\catasto\gemini\prova.py", line 2332, in _save_changes
+    self.db_manager.update_possessore(self.possessore_id, dati_modificati)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CatastoDBManager' object has no attribute 'update_possessore'. Did you mean: 'insert_possessore'?
+2025-05-26 09:26:38,309 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:26:38,419 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:26:38,600 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:26:43,992 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:26:44,278 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:26:44,330 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione db5217a8...
+2025-05-26 09:26:44,331 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:26:44,336 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=db5217a8...
+2025-05-26 09:26:45,806 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:26:46,199 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:26:46,311 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:26:46,312 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:26:46.245000'::timestamp AND timestamp <= '2025-05-26T09:26:46.246000'::timestamp;
+2025-05-26 09:26:46,324 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:26:46,445 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:26:46,696 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:26:46,788 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:26:46,789 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:26:46.724000'::timestamp AND timestamp <= '2025-05-26T09:26:46.724000'::timestamp;
+2025-05-26 09:26:46,799 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:26:46,823 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:26:46,824 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:26:46,824 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:26:46,824 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:26:46,825 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:26:55,286 - CatastoDB - INFO - Ricerca avanzata possessori per 'pippo pippi' (soglia: 0.3) ha prodotto 2 risultati.
+2025-05-26 09:26:57,295 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:26:57,296 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 501: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 501;
+        
+2025-05-26 09:26:57,305 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 501.
+2025-05-26 09:26:57,307 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:27:04,837 - CatastoGUI - INFO - Nuovo comune di riferimento selezionato per possessore (non ancora salvato): ID 8, Nome: Altare
+2025-05-26 09:27:06,390 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 501 con i dati: {'nome_completo': 'Pippi Pippo fu Pasquale', 'cognome_nome': 'Pippi Pippo', 'paternita': 'fu Pasquale', 'attivo': True, 'comune_riferimento_id': 8}
+2025-05-26 09:27:06,390 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:27:06,391 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE possessore ID 501: 
+            UPDATE catasto.possessore
+            SET nome_completo = 'Pippi Pippo fu Pasquale', cognome_nome = 'Pippi Pippo', paternita = 'fu Pasquale', attivo = true, comune_id = 8, data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 501;
+        
+2025-05-26 09:27:06,404 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 501 aggiornato con successo (righe affette potrebbero includere solo data_modifica).
+2025-05-26 09:27:06,405 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:27:06,406 - CatastoGUI - INFO - Possessore ID 501 aggiornato con successo.
+2025-05-26 09:27:08,636 - CatastoDB - INFO - Ricerca avanzata possessori per 'pippo pippi' (soglia: 0.3) ha prodotto 2 risultati.
+2025-05-26 09:27:25,208 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:27:25,208 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 501: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 501;
+        
+2025-05-26 09:27:25,210 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 501.
+2025-05-26 09:27:25,210 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:29:01,860 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:29:01,930 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:29:01,991 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:29:07,536 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:29:07,821 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:29:07,833 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 927574be...
+2025-05-26 09:29:07,833 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:29:07,836 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=927574be...
+2025-05-26 09:29:09,279 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:29:09,557 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:29:09,643 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:29:09,643 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:29:09.582000'::timestamp AND timestamp <= '2025-05-26T09:29:09.582000'::timestamp;
+2025-05-26 09:29:09,651 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:29:09,800 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:29:10,062 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:29:10,262 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:29:10,263 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:29:10.084000'::timestamp AND timestamp <= '2025-05-26T09:29:10.084000'::timestamp;
+2025-05-26 09:29:10,271 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:29:10,296 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:29:10,297 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:29:10,297 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:29:10,298 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:29:10,298 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:34:24,963 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:24,967 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:34:24,985 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 927574be...
+2025-05-26 09:34:26,101 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 09:34:26,103 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 09:34:26,103 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 09:34:26,104 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 09:34:26,134 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 09:34:32,379 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:34:32,449 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:34:32,508 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:34:38,155 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:34:38,438 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:34:38,447 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione b06f0b28...
+2025-05-26 09:34:38,447 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:38,451 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=b06f0b28...
+2025-05-26 09:34:39,786 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:34:40,098 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:34:40,195 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:40,195 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:34:40.131000'::timestamp AND timestamp <= '2025-05-26T09:34:40.131000'::timestamp;
+2025-05-26 09:34:40,201 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:34:40,286 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:34:40,533 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:34:40,620 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:40,621 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:34:40.555000'::timestamp AND timestamp <= '2025-05-26T09:34:40.555000'::timestamp;
+2025-05-26 09:34:40,629 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:34:40,652 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:34:40,652 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:34:40,653 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:34:40,653 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:34:40,653 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:34:46,814 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:46,815 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:34:46,826 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:34:46,827 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:52,966 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 214 con i dati: {'nome_completo': 'Possessore 3-14 Rossi', 'cognome_nome': 'Stress 14', 'paternita': 'fu Stress Test', 'attivo': False, 'comune_riferimento_id': 3}
+2025-05-26 09:34:52,966 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:52,967 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE possessore ID 214: 
+            UPDATE catasto.possessore
+            SET nome_completo = 'Possessore 3-14 Rossi', cognome_nome = 'Stress 14', paternita = 'fu Stress Test', attivo = false, comune_id = 3, data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 214;
+        
+2025-05-26 09:34:52,979 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 214 aggiornato con successo (righe affette potrebbero includere solo data_modifica).
+2025-05-26 09:34:52,980 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:52,981 - CatastoGUI - INFO - Possessore ID 214 aggiornato con successo.
+2025-05-26 09:34:59,150 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:34:59,150 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:34:59,152 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:34:59,154 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:05,640 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:05,641 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:35:05,643 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:35:05,644 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:21,352 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 214 con i dati: {'nome_completo': 'Possessore 3-14 Rossi', 'cognome_nome': 'Cippa Lippa', 'paternita': 'fu Stress Test', 'attivo': False, 'comune_riferimento_id': 3}
+2025-05-26 09:35:21,353 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:21,354 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE possessore ID 214: 
+            UPDATE catasto.possessore
+            SET nome_completo = 'Possessore 3-14 Rossi', cognome_nome = 'Cippa Lippa', paternita = 'fu Stress Test', attivo = false, comune_id = 3, data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 214;
+        
+2025-05-26 09:35:21,368 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 214 aggiornato con successo (righe affette potrebbero includere solo data_modifica).
+2025-05-26 09:35:21,370 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:21,371 - CatastoGUI - INFO - Possessore ID 214 aggiornato con successo.
+2025-05-26 09:35:36,140 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:36,141 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:35:36,144 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:35:36,145 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:35:55,174 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'Cippa Lippa' (soglia: 0.3).
+2025-05-26 09:35:59,291 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'Cippa Lippa' (soglia: 0.15000000000000002).
+2025-05-26 09:36:05,757 - CatastoDB - INFO - Nessun risultato per ricerca avanzata possessori: 'Cippa' (soglia: 0.15000000000000002).
+2025-05-26 09:36:22,208 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:22,208 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:36:22,210 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:36:22,212 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:28,559 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:28,560 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 300: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 300;
+        
+2025-05-26 09:36:28,562 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 300.
+2025-05-26 09:36:28,563 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:32,627 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:32,628 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:36:32,629 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:36:32,630 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:40,032 - CatastoGUI - INFO - Nuovo comune di riferimento selezionato per possessore (non ancora salvato): ID 8, Nome: Altare
+2025-05-26 09:36:41,701 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 214 con i dati: {'nome_completo': 'Possessore 3-14 Rossi', 'cognome_nome': 'Cippa Lippa', 'paternita': 'fu Stress Test', 'attivo': False, 'comune_riferimento_id': 8}
+2025-05-26 09:36:41,701 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:41,702 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE possessore ID 214: 
+            UPDATE catasto.possessore
+            SET nome_completo = 'Possessore 3-14 Rossi', cognome_nome = 'Cippa Lippa', paternita = 'fu Stress Test', attivo = false, comune_id = 8, data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 214;
+        
+2025-05-26 09:36:41,707 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 214 aggiornato con successo (righe affette potrebbero includere solo data_modifica).
+2025-05-26 09:36:41,707 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:36:41,708 - CatastoGUI - INFO - Possessore ID 214 aggiornato con successo.
+2025-05-26 09:38:20,233 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:38:20,235 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 214: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 214;
+        
+2025-05-26 09:38:20,238 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 214.
+2025-05-26 09:38:20,239 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:38:40,032 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:38:40,034 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:38:40,087 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione b06f0b28...
+2025-05-26 09:38:41,264 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 09:38:41,266 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 09:38:41,267 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 09:38:41,268 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 09:38:41,288 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 09:47:55,760 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:47:55,897 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:47:55,976 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:48:03,320 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:48:03,649 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:48:03,687 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 2f016ffc...
+2025-05-26 09:48:03,687 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:48:03,690 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=2f016ffc...
+2025-05-26 09:48:04,954 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:48:05,746 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:48:05,944 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:48:05,985 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:48:05.823000'::timestamp AND timestamp <= '2025-05-26T09:48:05.823000'::timestamp;
+2025-05-26 09:48:06,003 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:48:06,178 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:48:06,560 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:48:06,656 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:48:06,657 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:48:06.583000'::timestamp AND timestamp <= '2025-05-26T09:48:06.583000'::timestamp;
+2025-05-26 09:48:06,664 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:48:06,700 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:48:06,700 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:48:06,701 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:48:06,701 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:48:06,702 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:48:19,282 - CatastoGUI - INFO - Nessuna partita trovata per il comune ID: 8
+2025-05-26 09:48:31,334 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:48:31,336 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:48:31,348 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 2f016ffc...
+2025-05-26 09:48:32,579 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 09:48:32,581 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 09:48:32,581 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 09:48:32,582 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 09:48:32,605 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 09:58:52,786 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 09:58:52,947 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 09:58:53,133 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 09:59:09,831 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 09:59:10,199 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 09:59:10,271 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 14def8d4...
+2025-05-26 09:59:10,271 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:10,275 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=14def8d4...
+2025-05-26 09:59:11,479 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 09:59:12,512 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:59:12,667 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:12,668 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:59:12.585000'::timestamp AND timestamp <= '2025-05-26T09:59:12.585000'::timestamp;
+2025-05-26 09:59:12,682 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:59:12,898 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 09:59:13,463 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 09:59:13,576 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:13,576 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T09:59:13.497000'::timestamp AND timestamp <= '2025-05-26T09:59:13.497000'::timestamp;
+2025-05-26 09:59:13,584 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 09:59:13,623 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 09:59:13,624 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 09:59:13,624 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 09:59:13,624 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 09:59:13,625 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 09:59:21,295 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:21,296 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query get_possessore_full_details per possessore_id 502: 
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                catasto.possessore p
+            LEFT JOIN 
+                catasto.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id Ë NOT NULL nel tuo schema)
+            WHERE
+                p.id = 502;
+        
+2025-05-26 09:59:21,312 - CatastoDB_catasto_storico_localhost - INFO - Dettagli recuperati per il possessore ID 502.
+2025-05-26 09:59:21,314 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:32,979 - CatastoGUI - INFO - Nuovo comune di riferimento selezionato per possessore (non ancora salvato): ID 8, Nome: Altare
+2025-05-26 09:59:34,660 - CatastoGUI - INFO - DEBUG: _save_changes chiamato per possessore ID 502
+2025-05-26 09:59:34,698 - CatastoGUI - INFO - DEBUG: Dati dalla UI: {'nome_completo': 'Pippo Puppi di Topolino', 'cognome_nome': 'Pippo Puppi', 'paternita': 'di Topolino', 'attivo': True, 'comune_riferimento_id': 8}
+2025-05-26 09:59:34,699 - CatastoGUI - INFO - DEBUG: Chiamata a db_manager.update_possessore per ID 502
+2025-05-26 09:59:34,699 - CatastoGUI - INFO - Tentativo di aggiornare il possessore ID 502 con i dati: {'nome_completo': 'Pippo Puppi di Topolino', 'cognome_nome': 'Pippo Puppi', 'paternita': 'di Topolino', 'attivo': True, 'comune_riferimento_id': 8}
+2025-05-26 09:59:34,700 - CatastoDB_catasto_storico_localhost - INFO - DEBUG: update_possessore (DBManager) chiamato per ID 502 con dati: {'nome_completo': 'Pippo Puppi di Topolino', 'cognome_nome': 'Pippo Puppi', 'paternita': 'di Topolino', 'attivo': True, 'comune_riferimento_id': 8}
+2025-05-26 09:59:34,701 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:34,702 - CatastoDB_catasto_storico_localhost - DEBUG - Esecuzione query UPDATE possessore ID 502: 
+            UPDATE catasto.possessore
+            SET nome_completo = 'Pippo Puppi di Topolino', cognome_nome = 'Pippo Puppi', paternita = 'di Topolino', attivo = true, comune_id = 8, data_modifica = CURRENT_TIMESTAMP
+            WHERE id = 502;
+        
+2025-05-26 09:59:34,710 - CatastoDB_catasto_storico_localhost - INFO - Possessore ID 502 aggiornato con successo (righe affette potrebbero includere solo data_modifica).
+2025-05-26 09:59:34,711 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione rilasciata al pool. Dettagli DSN: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:34,711 - CatastoGUI - INFO - Possessore ID 502 aggiornato con successo.
+2025-05-26 09:59:34,712 - CatastoGUI - INFO - DEBUG: db_manager.update_possessore completato per ID 502
+2025-05-26 09:59:59,291 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 09:59:59,293 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 09:59:59,308 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 14def8d4...
+2025-05-26 10:00:00,560 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 10:00:00,562 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 10:00:00,563 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 10:00:00,563 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 10:00:00,606 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0
+2025-05-26 10:00:09,788 - CatastoDB_catasto_storico_localhost - INFO - Inizializzato gestore per database catasto_storico (schema: catasto) con log_level: DEBUG
+2025-05-26 10:00:09,889 - CatastoDB_catasto_storico_localhost - INFO - Pool di connessioni PostgreSQL per 'CatastoApp' inizializzato con successo.
+2025-05-26 10:00:10,009 - CatastoDB - INFO - Connessione stabilita con successo
+2025-05-26 10:00:15,249 - CatastoDB - INFO - Credenziali (incluso ruolo) recuperate per utente: admin, Ruolo: admin
+2025-05-26 10:00:15,703 - CatastoGUI - INFO - Login GUI OK per ID: 1
+2025-05-26 10:00:15,720 - CatastoDB - INFO - Registrato accesso: Utente ID 1, Azione login, Esito True, Sessione 52555676...
+2025-05-26 10:00:15,721 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 10:00:15,726 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=52555676...
+2025-05-26 10:00:17,367 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-05-26 10:00:18,110 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 10:00:18,367 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 10:00:18,368 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T10:00:18.189000'::timestamp AND timestamp <= '2025-05-26T10:00:18.189000'::timestamp;
+2025-05-26 10:00:18,372 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 10:00:18,567 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-05-26 10:00:19,162 - CatastoDB - INFO - Recuperati 1 utenti.
+2025-05-26 10:00:19,278 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 10:00:19,279 - CatastoDB_catasto_storico_localhost - DEBUG - Audit Log Count Query: SELECT COUNT(*) FROM catasto.audit_log WHERE timestamp >= '2025-05-25T10:00:19.194000'::timestamp AND timestamp <= '2025-05-26T10:00:19.194000'::timestamp;
+2025-05-26 10:00:19,292 - CatastoDB_catasto_storico_localhost - INFO - Nessun record di audit log trovato con i filtri specificati.
+2025-05-26 10:00:19,338 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-05-26 10:00:19,338 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-05-26 10:00:19,339 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-05-26 10:00:19,339 - CatastoGUI - INFO - >>> run_gui_app: Login successo, preparazione per app.exec_()
+2025-05-26 10:00:19,339 - CatastoGUI - INFO - >>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()
+2025-05-26 10:00:30,322 - CatastoDB_catasto_storico_localhost - DEBUG - Connessione ottenuta dal pool. Dettagli: user=postgres password=xxx dbname=catasto_storico host=localhost port=5432 options='-c search_path=catasto,public -c application_name=CatastoApp'
+2025-05-26 10:00:30,324 - CatastoDB_catasto_storico_localhost - INFO - Variabili di sessione per audit resettate.
+2025-05-26 10:00:30,328 - CatastoDB - INFO - Logout registrato per utente ID 1, sessione 52555676...
+2025-05-26 10:00:31,636 - CatastoGUI - INFO - Evento closeEvent intercettato.
+2025-05-26 10:00:31,638 - CatastoDB - INFO - Disconnessione completata
+2025-05-26 10:00:31,638 - CatastoGUI - INFO - Connessione al database chiusa.
+2025-05-26 10:00:31,639 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata.
+2025-05-26 10:00:31,664 - CatastoGUI - INFO - >>> run_gui_app: app.exec_() TERMINATO con codice: 0

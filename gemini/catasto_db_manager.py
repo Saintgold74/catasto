@@ -831,7 +831,129 @@ class CatastoDBManager:
     #         conn.close()
     #         self.logger.debug("Connessione chiusa.")
 
-    
+    def update_possessore(self, possessore_id: int, dati_modificati: Dict[str, Any]):
+        """
+        Aggiorna i dati di un possessore esistente nel database.
+        Solleva eccezioni specifiche in caso di errore.
+
+        Args:
+            possessore_id: L'ID del possessore da aggiornare.
+            dati_modificati: Un dizionario contenente i campi del possessore da aggiornare.
+                             Campi attesi e gestiti: 'nome_completo', 'cognome_nome', 
+                             'paternita', 'attivo', 'comune_riferimento_id'.
+
+        Raises:
+            DBDataError: Se possessore_id o dati_modificati non sono validi, o se mancano campi obbligatori.
+            DBNotFoundError: Se il possessore con l'ID specificato non viene trovato.
+            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità.
+            DBMError: Per altri errori generici del database.
+        """
+        self.logger.info(f"DEBUG: update_possessore (DBManager) chiamato per ID {possessore_id} con dati: {dati_modificati}") # NUOVA STAMPA
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            self.logger.error(f"update_possessore: possessore_id non valido: {possessore_id}")
+            raise DBDataError(f"ID possessore non valido: {possessore_id}")
+        if not isinstance(dati_modificati, dict):
+            self.logger.error(f"update_possessore: dati_modificati non è un dizionario per possessore ID {possessore_id}.")
+            raise DBDataError("Formato dati per l'aggiornamento non valido.")
+
+        set_clauses = []
+        params = []
+        conn = None
+
+        # Mappa dei campi permessi e se sono obbligatori per l'UPDATE (non nullabili nel DB)
+        # (nome_campo_dict, nome_colonna_db, is_required_in_dict_for_update)
+        # Nota: 'comune_id' nella tabella possessore è NOT NULL
+        allowed_fields = {
+            "nome_completo": ("nome_completo", True),
+            "cognome_nome": ("cognome_nome", False), # Può essere NULL nel DB
+            "paternita": ("paternita", False),       # Può essere NULL nel DB
+            "attivo": ("attivo", True),
+            "comune_riferimento_id": ("comune_id", True),
+        }
+
+        for key_dict, (col_db, is_required) in allowed_fields.items():
+            if key_dict in dati_modificati:
+                if dati_modificati[key_dict] is None and not is_required and key_dict not in ["cognome_nome", "paternita"]: # cognome_nome e paternita possono essere NULL
+                     # Per i campi opzionali che possono essere NULL nel DB, se il valore è None, lo impostiamo
+                    set_clauses.append(f"{col_db} = %s")
+                    params.append(None)
+                elif dati_modificati[key_dict] is not None:
+                    set_clauses.append(f"{col_db} = %s")
+                    params.append(dati_modificati[key_dict])
+                elif is_required: # Se è richiesto e None, è un errore di dati
+                    self.logger.error(f"update_possessore: Campo obbligatorio '{key_dict}' è None per possessore ID {possessore_id}.")
+                    raise DBDataError(f"Il campo '{key_dict}' è obbligatorio e non può essere nullo.")
+            elif is_required: # Se un campo richiesto manca completamente dal dizionario
+                self.logger.error(f"update_possessore: Campo obbligatorio '{key_dict}' mancante nei dati da aggiornare per possessore ID {possessore_id}.")
+                raise DBDataError(f"Il campo '{key_dict}' è obbligatorio per l'aggiornamento.")
+
+        if not set_clauses:
+            self.logger.info(f"update_possessore: Nessun campo valido fornito per l'aggiornamento del possessore ID {possessore_id} (esclusa data_modifica).")
+            # Aggiorniamo comunque data_modifica
+            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+        else:
+            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+
+        query = f"""
+            UPDATE {self.schema}.possessore
+            SET {', '.join(set_clauses)}
+            WHERE id = %s;
+        """
+        params.append(possessore_id) # Aggiungi possessore_id per la clausola WHERE
+        params_tuple = tuple(params)
+
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query UPDATE possessore ID {possessore_id}: {cur.mogrify(query, params_tuple).decode('utf-8', 'ignore')}")
+                cur.execute(query, params_tuple)
+
+                if cur.rowcount == 0:
+                    cur.execute(f"SELECT 1 FROM {self.schema}.possessore WHERE id = %s", (possessore_id,))
+                    if not cur.fetchone():
+                        conn.rollback()
+                        self.logger.warning(f"Tentativo di aggiornare possessore ID {possessore_id} non trovato.")
+                        raise DBNotFoundError(f"Nessun possessore trovato con ID {possessore_id} per l'aggiornamento.")
+                    # Se la riga esiste ma rowcount è 0, i dati erano identici (data_modifica si aggiorna comunque)
+                    self.logger.info(f"Dati per possessore ID {possessore_id} erano identici o solo data_modifica aggiornata. Righe formalmente modificate: {cur.rowcount}")
+                
+                conn.commit()
+                self.logger.info(f"Possessore ID {possessore_id} aggiornato con successo (righe affette potrebbero includere solo data_modifica).")
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve))
+            self.logger.error(f"Errore di violazione di unicità (vincolo: {constraint_name}) durante l'aggiornamento del possessore ID {possessore_id}: {error_detail}")
+            # Adatta il messaggio se hai vincoli di unicità specifici su possessore (es. nome_completo+comune_id)
+            msg = f"I dati forniti violano un vincolo di unicità (es. nome duplicato, vincolo: {constraint_name})."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        
+        except psycopg2.errors.ForeignKeyViolation as fke: # Es. se comune_riferimento_id non esiste
+            if conn: conn.rollback()
+            constraint_name = getattr(fke.diag, 'constraint_name', "N/D")
+            error_detail = getattr(fke, 'pgerror', str(fke))
+            self.logger.error(f"Violazione Foreign Key (vincolo: {constraint_name}) per possessore ID {possessore_id}: {error_detail}")
+            if constraint_name == "possessore_comune_id_fkey": # Nome del tuo vincolo FK
+                 msg = "Il comune di riferimento specificato non esiste."
+            else:
+                 msg = f"Impossibile aggiornare il possessore: errore di riferimento a dati esterni (vincolo: {constraint_name})."
+            raise DBMError(msg) from fke # O una DBForeignKeyError specifica
+
+        except psycopg2.Error as e:
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB generico durante l'aggiornamento del possessore ID {possessore_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante l'aggiornamento del possessore: {error_detail}") from e
+        
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto Python durante l'aggiornamento del possessore ID {possessore_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'aggiornamento: {e}") from e
+        
+        finally:
+            if conn:
+                self._release_connection(conn)
     
     def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None, # Usa comune_id
                       possessore: Optional[str] = None, immobile_natura: Optional[str] = None) -> List[Dict]:
@@ -1182,6 +1304,77 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB get_partite_complete_view: {db_err}"); return []
         except Exception as e: logger.error(f"Errore Python get_partite_complete_view: {e}"); return []
 
+    def aggiorna_legame_partita_possessore(self, 
+                                          partita_possessore_id: int, 
+                                          titolo: str, 
+                                          quota: Optional[str]
+                                          # , tipo_partita_rel: Optional[str] = None # Se vuoi permettere modifica anche di questo
+                                          ) -> bool: # Restituisce True o solleva eccezione
+        """
+        Aggiorna i dettagli (titolo, quota) di un legame esistente 
+        nella tabella partita_possessore.
+        """
+        if not (isinstance(partita_possessore_id, int) and partita_possessore_id > 0):
+            raise DBDataError(f"ID relazione partita-possessore non valido: {partita_possessore_id}")
+        if not (isinstance(titolo, str) and titolo.strip()):
+            raise DBDataError("Il titolo di possesso è obbligatorio.")
+        
+        actual_quota = quota.strip() if isinstance(quota, str) and quota.strip() else None
+        # tipo_partita_da_aggiornare = tipo_partita_rel # Se lo modifichi
+
+        set_clauses = ["titolo = %s", "quota = %s", "data_modifica = CURRENT_TIMESTAMP"]
+        params = [titolo.strip(), actual_quota]
+        
+        # if tipo_partita_da_aggiornare: # Se si modifica anche tipo_partita
+        #     if tipo_partita_da_aggiornare not in ['principale', 'secondaria']:
+        #         raise DBDataError(f"Tipo partita nel legame non valido: {tipo_partita_da_aggiornare}")
+        #     set_clauses.insert(0, "tipo_partita = %s") # Inserisci all'inizio per ordine parametri
+        #     params.insert(0, tipo_partita_da_aggiornare)
+
+        params.append(partita_possessore_id) # Per la clausola WHERE
+
+        query = f"""
+            UPDATE {self.schema}.partita_possessore
+            SET {', '.join(set_clauses)}
+            WHERE id = %s;
+        """
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query aggiorna_legame_partita_possessore ID {partita_possessore_id}: {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
+                
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    self.logger.warning(f"Tentativo di aggiornare legame partita-possessore ID {partita_possessore_id} non trovato o dati identici.")
+                    # Verifica se esiste
+                    cur.execute(f"SELECT 1 FROM {self.schema}.partita_possessore WHERE id = %s", (partita_possessore_id,))
+                    if not cur.fetchone():
+                        raise DBNotFoundError(f"Legame partita-possessore con ID {partita_possessore_id} non trovato.")
+                    # Se esiste ma rowcount è 0, i dati (escluso data_modifica) erano identici
+                    # data_modifica è comunque aggiornata, quindi consideralo un successo.
+                
+                conn.commit()
+                self.logger.info(f"Legame partita-possessore ID {partita_possessore_id} aggiornato. Righe modificate: {cur.rowcount if cur.rowcount > 0 else 1}")
+                return True
+
+        except (psycopg2.errors.CheckViolation, psycopg2.Error) as e: # Gestisce Check per tipo_partita se lo aggiungi
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            constraint_name = getattr(e.diag, 'constraint_name', "N/D") if hasattr(e, 'diag') else "N/D"
+            self.logger.error(f"Errore DB aggiornando legame {partita_possessore_id} (vincolo: {constraint_name}): {error_detail}", exc_info=True)
+            if isinstance(e, psycopg2.errors.CheckViolation) and "partita_possessore_tipo_partita_check" in str(e):
+                 raise DBDataError(f"Il valore per 'tipo partita nel legame' non è valido.") from e
+            raise DBMError(f"Errore database aggiornando legame: {error_detail}") from e
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto aggiornando legame {partita_possessore_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
     
     def aggiungi_possessore_a_partita(self, 
                                      partita_id: int, 
@@ -1292,11 +1485,105 @@ class CatastoDBManager:
         
         finally:
             if conn:
-                self.release_connection(conn)
+                self._release_connection(conn)
         
         return False # Non dovrebbe essere raggiunto se le eccezioni sono sollevate correttamente
 
-    
+    def rimuovi_possessore_da_partita(self, partita_possessore_id: int) -> bool: # Restituisce True o solleva eccezione
+        """
+        Rimuove un legame partita-possessore dalla tabella partita_possessore.
+        """
+        if not (isinstance(partita_possessore_id, int) and partita_possessore_id > 0):
+            raise DBDataError(f"ID relazione partita-possessore non valido: {partita_possessore_id}")
+
+        query = f"DELETE FROM {self.schema}.partita_possessore WHERE id = %s;"
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query rimuovi_possessore_da_partita ID {partita_possessore_id}: {cur.mogrify(query, (partita_possessore_id,)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (partita_possessore_id,))
+                
+                if cur.rowcount == 0:
+                    conn.rollback() # Anche se DELETE non dovrebbe fallire se la riga non c'è, è una buona pratica
+                    self.logger.warning(f"Tentativo di rimuovere legame partita-possessore ID {partita_possessore_id} non trovato.")
+                    raise DBNotFoundError(f"Nessun legame partita-possessore trovato con ID {partita_possessore_id} da rimuovere.")
+                
+                conn.commit()
+                self.logger.info(f"Legame partita-possessore ID {partita_possessore_id} rimosso con successo. Righe modificate: {cur.rowcount}")
+                return True
+
+        except psycopg2.Error as e: # Errore DB generico
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB rimuovendo legame {partita_possessore_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante la rimozione del legame: {error_detail}") from e
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto rimuovendo legame {partita_possessore_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+    def get_possessore_full_details(self, possessore_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Recupera i dettagli completi di un singolo possessore, incluso il nome del comune di riferimento.
+
+        Args:
+            possessore_id: L'ID del possessore da recuperare.
+
+        Returns:
+            Un dizionario contenente i dettagli del possessore se trovato, altrimenti None.
+            Il dizionario includerà: 'id', 'cognome_nome', 'paternita', 
+            'nome_completo', 'attivo', 'comune_riferimento_id', 'comune_riferimento_nome',
+            'data_creazione', 'data_modifica'.
+        """
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            self.logger.error(f"get_possessore_full_details: possessore_id non valido: {possessore_id}")
+            return None
+
+        query = f"""
+            SELECT
+                p.id,
+                p.cognome_nome,
+                p.paternita,
+                p.nome_completo,
+                p.attivo,
+                p.comune_id AS comune_riferimento_id, 
+                c.nome AS comune_riferimento_nome, -- Nome del comune dalla tabella comune
+                p.data_creazione,
+                p.data_modifica
+            FROM
+                {self.schema}.possessore p
+            LEFT JOIN 
+                {self.schema}.comune c ON p.comune_id = c.id -- LEFT JOIN per gestire possessori senza comune (anche se comune_id è NOT NULL nel tuo schema)
+            WHERE
+                p.id = %s;
+        """
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_possessore_full_details per possessore_id {possessore_id}: {cur.mogrify(query, (possessore_id,)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (possessore_id,))
+                possessore_data = cur.fetchone()
+                
+                if possessore_data:
+                    self.logger.info(f"Dettagli recuperati per il possessore ID {possessore_id}.")
+                    return dict(possessore_data)
+                else:
+                    self.logger.warning(f"Nessun possessore trovato con ID {possessore_id}.")
+                    return None
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore DB durante il recupero dei dettagli del possessore ID {possessore_id}: {e}", exc_info=True)
+            return None
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei dettagli del possessore ID {possessore_id}: {e}", exc_info=True)
+            return None
+        finally:
+            if conn:
+                self._release_connection(conn)
     
     def get_cronologia_variazioni(self, comune_origine_id: Optional[int] = None, tipo_variazione: Optional[str] = None, limit: int = 100) -> List[Dict]: # Usa comune_id
         """Recupera dati dalla vista materializzata mv_cronologia_variazioni (aggiornata), filtrando per ID."""

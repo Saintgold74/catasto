@@ -37,6 +37,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit) # Aggiunte QComboBox e QLineEdit per opzioni
 from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
 import os # Per gestire percorsi# <--- ASSICURATI CHE QDateTime SIA PRESENTE
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime # Assicurati che QDateTime sia qui
 
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
@@ -2787,15 +2788,17 @@ class InserimentoLocalitaWidget(QWidget):
         self.setLayout(layout)
     
     def select_comune(self):
-        """Apre il selettore di comuni."""
         dialog = ComuneSelectionDialog(self.db_manager, self)
         result = dialog.exec_()
-        
+
         if result == QDialog.Accepted and dialog.selected_comune_id:
             self.comune_id = dialog.selected_comune_id
             self.comune_display.setText(dialog.selected_comune_name)
-            # Aggiorna la lista delle località per il comune selezionato
-            self.refresh_localita()
+            self.refresh_localita() # <-- Chiamata per aggiornare la tabella delle località
+        # else: # Opzionale: resetta se l'utente annulla
+            # self.comune_id = None
+            # self.comune_display.setText("Nessun comune selezionato")
+            # self.refresh_localita() 
     
     def insert_localita(self):
         """Inserisce una nuova località."""
@@ -2831,26 +2834,42 @@ class InserimentoLocalitaWidget(QWidget):
     
     def refresh_localita(self):
         """Aggiorna la lista delle località per il comune selezionato."""
-        self.localita_table.setRowCount(0)
-        
-        if self.comune_id:
-            # Esegue una query diretta per le località
-            query = "SELECT id, nome, tipo, civico FROM localita WHERE comune_id = %s ORDER BY tipo, nome, civico"
-            if self.db_manager.execute_query(query, (self.comune_id,)):
-                localita = self.db_manager.fetchall()
+        self.localita_table.setRowCount(0) # Pulisce la tabella
+        self.localita_table.setSortingEnabled(False) # Disabilita sorting durante il popolamento
+
+        if self.comune_id: # Assicurati che comune_id sia stato impostato da select_comune
+            gui_logger.info(f"DEBUG: InserimentoLocalitaWidget - Chiamata refresh_localita per comune ID: {self.comune_id}")
+            try:
+                # Chiama il metodo refattorizzato del DBManager
+                localita_list = self.db_manager.get_localita_by_comune(self.comune_id) # Non serve filtro qui, vogliamo tutte le località del comune
                 
-                if localita:
-                    self.localita_table.setRowCount(len(localita))
-                    
-                    for i, loc in enumerate(localita):
+                if localita_list:
+                    self.localita_table.setRowCount(len(localita_list))
+                    for i, loc in enumerate(localita_list):
                         self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
                         self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        
                         civico_text = str(loc.get('civico', '')) if loc.get('civico') is not None else "-"
                         self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
-                
-                self.localita_table.resizeColumnsToContents()
+                    self.localita_table.resizeColumnsToContents()
+                else:
+                    gui_logger.info(f"Nessuna località trovata per il comune ID: {self.comune_id} in InserimentoLocalitaWidget.")
+                    # Potresti voler mostrare un messaggio nella tabella se è vuota
+                    # self.localita_table.setItem(0, 0, QTableWidgetItem("Nessuna località per questo comune."))
+                    # self.localita_table.setSpan(0, 0, 1, self.localita_table.columnCount())
+
+
+            except AttributeError as ae: # Se get_localita_by_comune non dovesse esistere (non dovrebbe succedere ora)
+                gui_logger.error(f"Metodo get_localita_by_comune non trovato nel db_manager (chiamato da InserimentoLocalitaWidget): {ae}")
+                QMessageBox.critical(self, "Errore Funzionalità", "Funzione per caricare località non implementata correttamente.")
+            except Exception as e:
+                gui_logger.error(f"Errore durante l'aggiornamento della lista località per comune {self.comune_id}: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Caricamento", f"Impossibile aggiornare la lista delle località: {e}")
+        else:
+            gui_logger.info("InserimentoLocalitaWidget - refresh_localita: Nessun comune_id selezionato.")
+            # La tabella è già stata pulita, quindi apparirà vuota.
+        
+        self.localita_table.setSortingEnabled(True) # Riabilita sorting
 
 # --- Scheda per statistiche (Vista MV) ---
 class StatisticheWidget(QWidget):
@@ -3861,7 +3880,7 @@ class LocalitaSelectionDialog(QDialog):
         filter_layout.addWidget(QLabel("Filtra per nome:"))
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Digita per filtrare...")
-        self.filter_edit.textChanged.connect(self.load_localita) # Collegato a load_localita
+        self.filter_edit.textChanged.connect(self.load_localita)
         filter_layout.addWidget(self.filter_edit)
         select_layout.addLayout(filter_layout)
         
@@ -5524,7 +5543,10 @@ class BackupRestoreWidget(QWidget):
         self.setLayout(main_layout)
 
     def _browse_backup_file_save_path(self):
-        default_db_name = self.db_manager.conn_params.get("dbname", "catasto_storico")
+        # Ottieni il nome del database usando il nuovo metodo del db_manager
+        current_dbname = self.db_manager.get_current_dbname()
+        default_db_name = current_dbname if current_dbname else "catasto_storico"
+        
         default_filename = f"{default_db_name}_backup_{QDateTime.currentDateTime().toString('yyyyMMdd_HHmmss')}"
         
         if self.backup_format_combo.currentIndex() == 0: # Custom
@@ -5537,7 +5559,6 @@ class BackupRestoreWidget(QWidget):
         filePath, _ = QFileDialog.getSaveFileName(self, "Salva Backup Database", default_filename, filter_str)
         if filePath:
             self.backup_file_path_edit.setText(filePath)
-
     def _browse_restore_file_open_path(self):
         filter_str = "File di Backup PostgreSQL (*.dump *.backup *.sql);;File Custom (*.dump *.backup);;File SQL (*.sql);;Tutti i file (*)"
         filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Backup per Ripristino", "", filter_str)

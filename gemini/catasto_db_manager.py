@@ -195,7 +195,19 @@ class CatastoDBManager:
             self.logger.error("Fallimento nella ricreazione del pool.")
             return False
 
+    def get_connection_parameters(self) -> Dict[str, Any]:
+        """
+        Restituisce una copia dei parametri di connessione base (esclusa la password per sicurezza).
+        """
+        params_copy = self._conn_params_dict.copy()
+        params_copy.pop('password', None) # Rimuovi la password per sicurezza se questo metodo fosse usato altrove
+        return params_copy
 
+    def get_current_dbname(self) -> Optional[str]:
+        """
+        Restituisce il nome del database corrente.
+        """
+        return self._conn_params_dict.get("dbname")
     
 
     
@@ -701,7 +713,7 @@ class CatastoDBManager:
         Raises:
             DBDataError: Se localita_id o dati_modificati non sono validi, o se mancano campi obbligatori.
             DBNotFoundError: Se la località con l'ID specificato non viene trovata.
-            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità 
+            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità
                                      (es. nome+civico duplicato nel comune).
             DBMError: Per altri errori generici del database.
         """
@@ -716,46 +728,45 @@ class CatastoDBManager:
         params = []
         conn = None
 
-        # Campi permessi per la modifica della località
-        allowed_fields = {
-            "nome": ("nome", True), # nome è NOT NULL
-            "tipo": ("tipo", True), # tipo è NOT NULL e ha un CHECK constraint
-            "civico": ("civico", False) # civico può essere NULL
-        }
-
         # Validazione e costruzione della clausola SET
         nome_fornito = dati_modificati.get("nome", "").strip()
         if not nome_fornito:
+            # Questo controllo dovrebbe essere fatto a livello UI, ma lo includiamo per robustezza.
             raise DBDataError("Il nome della località è obbligatorio e non può essere vuoto.")
         set_clauses.append("nome = %s")
         params.append(nome_fornito)
 
         tipo_fornito = dati_modificati.get("tipo")
-        valid_tipi = ["regione", "via", "borgata"] # Basato sul tuo schema
-        if not tipo_fornito or tipo_fornito not in valid_tipi:
-            raise DBDataError(f"Il tipo di località '{tipo_fornito}' non è valido. Valori ammessi: {', '.join(valid_tipi)}.")
+        # Assumendo che i valori validi per 'tipo' siano quelli definiti nel CHECK constraint della tabella.
+        # Potresti avere una lista di tipi validi qui per un controllo più stringente.
+        # Ad esempio: valid_tipi = ["regione", "via", "borgata"]
+        if not tipo_fornito: # or tipo_fornito not in valid_tipi:
+            raise DBDataError(f"Il tipo di località '{tipo_fornito}' non è valido o è mancante.")
         set_clauses.append("tipo = %s")
         params.append(tipo_fornito)
 
-        # Civico può essere None
-        if "civico" in dati_modificati: # Solo se la chiave è presente, per permettere di non passarla
+        # Civico può essere None (verrà gestito come NULL nel DB)
+        if "civico" in dati_modificati: # Controlla se la chiave 'civico' è presente
             set_clauses.append("civico = %s")
-            params.append(dati_modificati["civico"]) # Sarà None se il QSpinBox era "Nessuno" o 0 (a seconda della logica UI)
+            params.append(dati_modificati["civico"])
         
         # Aggiungi sempre data_modifica
         set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
 
-        if not set_clauses: # Non dovrebbe accadere data la validazione sopra, ma per sicurezza
-            self.logger.info(f"update_localita: Nessun campo valido fornito per aggiornare località ID {localita_id} (esclusa data_modifica).")
-            # Anche se aggiorniamo solo data_modifica, lo consideriamo un update
-            pass # Si aggiornerà comunque data_modifica
+        # Non dovremmo arrivare qui se nome o tipo sono mancanti a causa dei raise DBDataError precedenti
+        # if not set_clauses: # Questo controllo è ridondante se i campi sopra sono obbligatori
+        #     self.logger.info(f"update_localita: Nessun campo valido fornito per aggiornare località ID {localita_id} (esclusa data_modifica).")
+        #     # Potresti decidere di non fare nulla o sollevare un errore se solo data_modifica deve essere aggiornata.
+        #     # Per ora, assumiamo che almeno nome e tipo siano sempre aggiornati.
+        #     pass
+
 
         query = f"""
             UPDATE {self.schema}.localita
             SET {', '.join(set_clauses)}
             WHERE id = %s;
         """
-        params.append(localita_id) # Aggiungi localita_id per la clausola WHERE
+        params.append(localita_id)
         params_tuple = tuple(params)
 
         try:
@@ -768,7 +779,7 @@ class CatastoDBManager:
                     # Verifica se la località esiste per distinguere "non trovata" da "dati identici"
                     cur.execute(f"SELECT 1 FROM {self.schema}.localita WHERE id = %s", (localita_id,))
                     if not cur.fetchone():
-                        conn.rollback()
+                        conn.rollback() # Annulla la transazione se non ha fatto nulla
                         self.logger.warning(f"Tentativo di aggiornare località ID {localita_id} non trovata.")
                         raise DBNotFoundError(f"Nessuna località trovata con ID {localita_id} per l'aggiornamento.")
                     # Se la riga esiste ma rowcount è 0, i dati (escl. data_modifica) erano identici.
@@ -777,7 +788,7 @@ class CatastoDBManager:
                 
                 conn.commit()
                 self.logger.info(f"Località ID {localita_id} aggiornata con successo.")
-                # Non c'è un return True esplicito, il successo è l'assenza di eccezioni
+                # Il successo è l'assenza di eccezioni; nessun return True esplicito necessario.
 
         except psycopg2.errors.UniqueViolation as uve:
             if conn: conn.rollback()
@@ -785,13 +796,14 @@ class CatastoDBManager:
             error_detail = getattr(uve, 'pgerror', str(uve))
             self.logger.error(f"Errore di unicità (vincolo: {constraint_name}) aggiornando località ID {localita_id}: {error_detail}")
             # Il vincolo è UNIQUE(comune_id, nome, civico)
+            # Ricorda: comune_id non viene modificato qui, quindi il conflitto è su nome/civico nello stesso comune.
             if constraint_name == "localita_comune_id_nome_civico_key": # Verifica il nome esatto del tuo vincolo
                 msg = "Una località con lo stesso nome e civico (o assenza di civico) esiste già in questo comune."
             else:
                 msg = f"I dati forniti violano un vincolo di unicità (vincolo: {constraint_name})."
             raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
         
-        except psycopg2.errors.CheckViolation as cve: # Per il CHECK su 'tipo'
+        except psycopg2.errors.CheckViolation as cve:
             if conn: conn.rollback()
             constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
             error_detail = getattr(cve, 'pgerror', str(cve))
@@ -816,6 +828,7 @@ class CatastoDBManager:
         finally:
             if conn:
                 self._release_connection(conn)
+
     def get_partite_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
         conn = None
         partite_list = []

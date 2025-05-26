@@ -1,0 +1,57 @@
+{
+    "id": 1112,
+    "comune_id": 3,
+    "numero_partita": 1001,
+    "tipo": "principale",
+    "data_impianto": "2021-05-19",
+    "data_chiusura": null,
+    "numero_provenienza": null,
+    "stato": "attiva",
+    "data_creazione": "2025-05-19T13:31:39.030528",
+    "data_modifica": "2025-05-19T13:31:39.030528",
+    "comune_nome": "Comune Stress Test 3",
+    "possessori": [
+        [
+            201,
+            "Possessore 3-1 Rossi",
+            "proprietÃ  esclusiva",
+            null
+        ]
+    ],
+    "immobili": [
+        [
+            3002,
+            "Edificio Stress 2",
+            null,
+            null,
+            "215 mq",
+            "Classe Stress 1",
+            "Via Stress 3-11",
+            "via",
+            73
+        ],
+        [
+            3003,
+            "Edificio Stress 3",
+            null,
+            null,
+            "187 mq",
+            "Classe Stress 2",
+            "Via Stress 3-13",
+            "via",
+            85
+        ],
+        [
+            3001,
+            "Edificio Stress 1",
+            null,
+            null,
+            "219 mq",
+            "Classe Stress 5",
+            "Via Stress 3-4",
+            "via",
+            71
+        ]
+    ],
+    "variazioni": []
+}

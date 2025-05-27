@@ -183,7 +183,6 @@ class CatastoDBManager:
         # Verifica aggiuntiva che il pool sia ora attivo
         if self.pool:
             try:
-                # Tenta di ottenere e rilasciare una connessione per testare il pool
                 test_conn = self._get_connection()
                 self._release_connection(test_conn)
                 self.logger.info("Pool ricreato e testato con successo.")
@@ -204,15 +203,15 @@ class CatastoDBManager:
         return params_copy
 
     def get_current_dbname(self) -> Optional[str]:
-        """
-        Restituisce il nome del database corrente.
-        """
         if hasattr(self, '_conn_params_dict') and self._conn_params_dict:
             return self._conn_params_dict.get("dbname")
-        return None # O un default se preferisci
-    def get_current_user(self) -> Optional[str]: # NUOVO METODO
+        self.logger.warning("Tentativo di accesso a dbname fallito: _conn_params_dict non trovato o vuoto.")
+        return None
+
+    def get_current_user(self) -> Optional[str]:
         if hasattr(self, '_conn_params_dict') and self._conn_params_dict:
             return self._conn_params_dict.get("user")
+        self.logger.warning("Tentativo di accesso a user fallito: _conn_params_dict non trovato o vuoto.")
         return None
     
 

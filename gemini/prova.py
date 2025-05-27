@@ -5584,54 +5584,58 @@ class BackupRestoreWidget(QWidget):
         data = self.process.readAllStandardError().data().decode(errors='ignore')
         self.output_text_edit.append(f"<font color='red'>ERRORE: {data}</font>")
 
+    # All'interno della classe BackupRestoreWidget in prova.py
+
     def _handle_process_finished(self, exitCode, exitStatus):
         is_restore = self.process.property("is_restore_operation")
         self.process.setProperty("is_restore_operation", False) # Resetta la proprietà
 
         self.output_text_edit.append(f"<hr>DEBUG: Processo terminato. ExitCode: {exitCode}, ExitStatus: {exitStatus}, Operazione Ripristino: {is_restore}<hr>")
-        self._update_ui_for_process(False)
+        self._update_ui_for_process(False) # Riabilita UI (pulsanti, progress bar)
 
         operation_name = "Ripristino" if is_restore else "Backup"
+        success_message_box_needed = False # <--- INIZIALIZZA QUI a False
 
         if exitStatus == QProcess.CrashExit:
-            self.output_text_edit.append(f"<font color='red'><b>ERRORE: Il processo di {operation_name.lower()} è terminato inaspettatamente (crash).</b></font>")
+            self.output_text_edit.append(f"<font color='red'><b>ERRORE CRITICO: Il processo di {operation_name.lower()} è terminato inaspettatamente (crash).</b></font>")
             QMessageBox.critical(self, f"Errore Processo {operation_name}", f"Il processo di {operation_name.lower()} è terminato inaspettatamente.")
         elif exitCode != 0:
             self.output_text_edit.append(f"<font color='red'><b>FALLITO: Il processo di {operation_name.lower()} è terminato con codice d'errore: {exitCode}.</b></font>")
             QMessageBox.warning(self, f"Operazione {operation_name} Fallita",
                                 f"L'operazione di {operation_name.lower()} è fallita (codice: {exitCode}). Controllare l'output per i dettagli.")
-        else:
-            self.output_text_edit.append(f"<font color='green'><b>Operazione di {operation_name.lower()} completata con successo (secondo exit code 0).</b></font>")
-            QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                    f"L'operazione di {operation_name.lower()} è stata completata con successo.")
-            if is_restore:
-                QMessageBox.information(self, "Riconnessione Database",
-                                        "Il ripristino sembra completato. L'applicazione tenterà ora di riconnettersi al database.\n"
-                                        "Potrebbe essere necessario riavviare l'applicazione se si verificano problemi.")
-        
-        # --- RICONNESSIONE POOL DOPO IL RIPRISTINO ---
+        else: # exitCode == 0, il processo stesso ha terminato con successo
+            self.output_text_edit.append(f"<font color='green'><b>Comando di {operation_name.lower()} terminato (exit code 0). Verificare l'output per errori specifici del tool.</b></font>")
+            # Nota: pg_dump può scrivere errori su stderr e uscire comunque con 0.
+            # Il messaggio di "successo" finale dipende se stderr era vuoto o conteneva errori.
+            # Qui, per ora, assumiamo che exit code 0 sia "successo del processo".
+            success_message_box_needed = True # Imposta a True se l'exit code è 0
+
+        # --- Gestione Riconnessione Pool e Messaggio Finale ---
         if is_restore:
             self.output_text_edit.append("<i>Tentativo di ripristinare le connessioni dell'applicazione al database...</i>\n")
             QApplication.processEvents()
-            if self.db_manager.reconnect_pool(): # DECOMMENTA E USA
-                self.output_text_edit.append("<i>Connessioni dell'applicazione al database ripristinate.</i>\n")
-                if success_message_box: # Mostra il messaggio di successo solo ora
-                     QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                            f"L'operazione di {operation_name.lower()} è stata completata con successo.")
-                     QMessageBox.information(self, "Database Riconnesso",
-                                            "Il ripristino è completato e l'applicazione si è riconnessa al database.\n"
-                                            "Si consiglia di verificare i dati e, se necessario, riavviare l'applicazione.")
-
+            if self.db_manager.reconnect_pool_if_needed(): # Decommenta quando implementato
+                 self.output_text_edit.append("<i>Connessioni dell'applicazione al database ripristinate.</i>\n")
+                 if success_message_box_needed:
+                      QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                             f"L'operazione di {operation_name.lower()} è stata completata e le connessioni sono state ripristinate.")
+                      QMessageBox.information(self, "Verifica Dati",
+                                             "Il ripristino sembra completato. Si consiglia di verificare i dati e, se necessario, riavviare l'applicazione.")
             else:
-                self.output_text_edit.append("<font color='red'><b>FALLITO: Impossibile ripristinare le connessioni al database. Si prega di RIAVVIARE L'APPLICAZIONE.</b></font>\n")
-                QMessageBox.critical(self, "Errore Riconnessione Critico", 
-                                     "Impossibile ripristinare le connessioni al database dopo il ripristino.\n"
-                                     "L'applicazione deve essere riavviata.")
-                # Potresti voler chiudere l'app qui o disabilitare ulteriori interazioni DB
-        elif success_message_box: # Per operazioni diverse dal ripristino (es. backup)
-            QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                    f"L'operazione di {operation_name.lower()} è stata completata con successo.")
-        # --- FINE RICONNESSIONE POOL ---
+                 self.output_text_edit.append("<font color='red'><b>FALLITO: Impossibile ripristinare le connessioni al database. Si prega di RIAVVIARE L'APPLICAZIONE.</b></font>\n")
+                 QMessageBox.critical(self, "Errore Riconnessione Critico", 
+                                      "Impossibile ripristinare le connessioni al database dopo il ripristino.\n"
+                                      "L'applicazione deve essere riavviata.")
+            # Semplificazione temporanea senza gestione pool esplicita qui:
+            if success_message_box_needed:
+                QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                        f"Il comando di {operation_name.lower()} è terminato. Controllare l'output per il risultato effettivo.\n"
+                                        "Se il ripristino ha avuto successo, potrebbe essere necessario riavviare l'applicazione.")
+
+        elif success_message_box_needed: # Per operazioni diverse dal ripristino (es. backup)
+             QMessageBox.information(self, f"Operazione {operation_name} Completata",
+                                    f"Il comando di {operation_name.lower()} è terminato (exit code 0).\n"
+                                    "Controllare l'output per eventuali errori specifici dello strumento (es. pg_dump).")
     def _start_backup(self):
         backup_file = self.backup_file_path_edit.text()
         if not backup_file:
@@ -5645,20 +5649,22 @@ class BackupRestoreWidget(QWidget):
             if reply == QMessageBox.No:
                 return
 
-            # --- Richiesta Password ---
-        db_user_for_prompt = self.db_manager.get_current_user() or "N/A" # Usa il getter
-        db_name_for_prompt = self.db_manager.get_current_dbname() or "N/A" # Usa il getter
+         # --- Richiesta Password ---
+        # Recupera utente e dbname tramite i metodi getter del db_manager
+        db_user_for_prompt = self.db_manager.get_current_user() or "N/Utente"
+        db_name_for_prompt = self.db_manager.get_current_dbname() or "N/Database"
 
         password, ok = QInputDialog.getText(self, "Autenticazione Database per Backup",
                                             f"Inserisci la password per l'utente '{db_user_for_prompt}' "
                                             f"sul database '{db_name_for_prompt}':",
                                             QLineEdit.Password)
         if not ok:
-            self.output_text_edit.append("<i>Backup annullato dall'utente.</i>")
+            self.output_text_edit.append("<i>Backup annullato dall'utente (dialogo password chiuso).</i>")
             return
-        if not password.strip(): # Controlla anche che la password non sia solo spazi
+        if not password.strip(): 
             QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota.")
             self.output_text_edit.append("<font color='orange'>Backup fallito: password non fornita.</font>")
+            self._update_ui_for_process(False) # Assicurati di resettare la UI
             return
         # --- Fine Richiesta Password ---
 
@@ -5709,21 +5715,24 @@ class BackupRestoreWidget(QWidget):
             return
 
         # --- AVVISI E CONFERME MULTIPLE ---
-        dbname_to_restore = self.db_manager.conn_params.get("dbname", "N/D")
-        if dbname_to_restore == "N/D": # Controllo di sicurezza
-            QMessageBox.critical(self, "Errore Configurazione", "Nome del database di destinazione non configurato correttamente.")
+        # Recupera i dettagli del DB usando i metodi getter
+        dbname_to_restore = self.db_manager.get_current_dbname() or "Database Sconosciuto"
+        db_host_for_prompt = self.db_manager._conn_params_dict.get('host', 'N/A') # Potresti creare un getter anche per host e user se preferisci
+        db_user_for_prompt = self.db_manager.get_current_user() or "Utente Sconosciuto"
+
+        if dbname_to_restore == "Database Sconosciuto": # Controllo di sicurezza aggiuntivo
+            QMessageBox.critical(self, "Errore Configurazione", "Nome del database di destinazione non recuperabile.")
             return
 
         reply = QMessageBox.warning(self, "Conferma Ripristino Critico",
                                      f"<b>ATTENZIONE ESTREMA!</b>\n\n"
                                      f"Stai per ripristinare il database dal file:\n'{os.path.basename(restore_file)}'\n"
                                      f"sul database di destinazione:\n<b>'{dbname_to_restore}'</b> "
-                                     f"(Host: {self.db_manager.conn_params.get('host', 'N/D')}, "
-                                     f"Utente: {self.db_manager.conn_params.get('user', 'N/D')}).\n\n"
+                                     f"(Host: {db_host_for_prompt}, Utente DB: {db_user_for_prompt}).\n\n" # Aggiunto utente DB per chiarezza
                                      "<b>Questa operazione SOVRASCRIVERÀ tutti i dati correnti nel database di destinazione e NON PUÒ ESSERE ANNULLATA.</b>\n\n"
                                      "Si raccomanda VIVAMENTE di aver effettuato un backup recente e verificato del database corrente prima di procedere.\n\n"
                                      "Sei assolutamente sicuro di voler continuare?",
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel) # Usare Cancel per maggiore enfasi
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if reply == QMessageBox.Cancel:
             self.output_text_edit.append("<i>Ripristino annullato dall'utente (prima conferma).</i>")
             return
@@ -5744,23 +5753,24 @@ class BackupRestoreWidget(QWidget):
 
         # --- Richiesta Password ---
         password, ok = QInputDialog.getText(self, "Autenticazione Database per Ripristino",
-                                            f"Inserisci la password per l'utente '{self.db_manager.conn_params.get('user', 'N/D')}' "
-                                            f"per il database '{dbname_to_restore}':",
+                                            f"Inserisci la password per l'utente '{db_user_for_prompt}' " # Usa la variabile recuperata
+                                            f"per il database '{dbname_to_restore}':", # Usa la variabile recuperata
                                             QLineEdit.Password)
         if not ok:
             self.output_text_edit.append("<i>Ripristino annullato (dialogo password chiuso).</i>")
             return
-        if not password.strip(): # Controlla se la password è vuota o solo spazi
+        if not password.strip():
             QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota per il ripristino.")
             self.output_text_edit.append("<font color='orange'>Ripristino fallito: password non fornita.</font>")
+            self._update_ui_for_process(False) # Resetta UI
             return
         # --- Fine Richiesta Password ---
 
         self._update_ui_for_process(True)
-        self.output_text_edit.clear() # Pulisci output precedente
+        self.output_text_edit.clear()
         self.output_text_edit.append(f"Avvio ripristino del database '{dbname_to_restore}' da: {restore_file}...\n")
         self.output_text_edit.append("<font color='orange'><b>AVVISO: L'applicazione potrebbe non rispondere durante l'operazione di ripristino. Attendere il completamento.</b></font>\n")
-        QApplication.processEvents() # Forza l'aggiornamento della UI prima di un'operazione lunga
+        QApplication.processEvents()
 
         # Disconnessione temporanea del pool di connessioni dell'applicazione
         # Questo è FONDAMENTALE per pg_restore, specialmente con --clean,
@@ -5774,7 +5784,7 @@ class BackupRestoreWidget(QWidget):
         # --- DISCONNESSIONE POOL ---
         self.output_text_edit.append("<i>Tentativo di chiudere le connessioni attive dell'applicazione al database...</i>\n")
         QApplication.processEvents()
-        if not self.db_manager.disconnect_pool(): # DECOMMENTA E USA
+        if not self.db_manager.disconnect_pool_temporarily(): # Nome corretto del metodo
             QMessageBox.critical(self, "Errore Critico Ripristino",
                                  "Impossibile chiudere le connessioni esistenti al database prima del ripristino.\n"
                                  "L'operazione è stata annullata per sicurezza.")
@@ -5786,13 +5796,13 @@ class BackupRestoreWidget(QWidget):
         # --- FINE DISCONNESSIONE POOL ---
         command_parts = self.db_manager.get_restore_command_parts(
             backup_file_path=restore_file,
-            pg_tool_executable_path_ui=self.pg_restore_path_edit.text().strip() # Prende da UI
+            pg_tool_executable_path_ui=self.pg_restore_path_edit.text().strip()
         )
 
         if not command_parts:
             self.output_text_edit.append("<font color='red'><b>ERRORE: Impossibile costruire il comando di ripristino. Controllare il percorso dell'eseguibile e i log.</b></font>")
             self._update_ui_for_process(False)
-            # self.db_manager.reconnect_pool() # Riattiva il pool se era stato disconnesso
+            self.db_manager.reconnect_pool_if_needed() # Riattiva il pool se era stato disconnesso
             QMessageBox.critical(self, "Errore Comando", "Impossibile preparare il comando di ripristino.")
             return
 
@@ -5801,22 +5811,20 @@ class BackupRestoreWidget(QWidget):
 
         self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
 
+        executable = command_parts[0]
+        args = command_parts[1:]
+        self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
+
         process_env = self.process.processEnvironment()
-        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{self.db_manager.conn_params.get('user')}'...</i>\n")
+        self.output_text_edit.append(f"<i>Tentativo di impostare PGPASSWORD per l'utente '{db_user_for_prompt}'...</i>\n")
         try:
             process_env.insert("PGPASSWORD", password)
             self.process.setProcessEnvironment(process_env)
             self.output_text_edit.append("<i>PGPASSWORD impostata per questo processo.</i>\n")
         except Exception as e:
             self.output_text_edit.append(f"<font color='red'><b>ERRORE nell'impostare PGPASSWORD: {e}</b></font>\n")
-            # Non necessariamente blocchiamo qui, pg_restore potrebbe fallire dopo
 
-
-        # Il segnale finished verrà gestito da _handle_process_finished,
-        # che chiamerà _update_ui_for_process(False).
-        # In _handle_process_finished, dopo un ripristino (e solo se successo),
-        # si dovrebbe chiamare self.db_manager.reconnect_pool().
-        self.process.setProperty("is_restore_operation", True) # Proprietà per identificare l'operazione
+        self.process.setProperty("is_restore_operation", True)
         self.process.start(executable, args)
 
 

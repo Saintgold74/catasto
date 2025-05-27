@@ -123,6 +123,15 @@ def _verify_password(stored_hash: str, provided_password: str) -> bool:
     except Exception as e:
         gui_logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
         return False
+def qdate_to_datetime(q_date: QDate) -> Optional[date]:
+    if q_date.isNull() or not q_date.isValid(): # Controlla anche isValid
+        return None
+    return date(q_date.year(), q_date.month(), q_date.day())
+
+def datetime_to_qdate(dt_date: Optional[date]) -> QDate:
+    if dt_date is None:
+        return QDate() # Restituisce una QDate "nulla"
+    return QDate(dt_date.year, dt_date.month, dt_date.day)
 
 class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
@@ -1083,38 +1092,61 @@ class RicercaPartiteWidget(QWidget):
     
     def do_search(self):
         """Esegue la ricerca partite in base ai criteri."""
-        # Prepara i parametri
         comune_id = self.comune_id
-        numero_partita = self.numero_edit.value() if self.numero_edit.value() > 0 else None
+        numero_partita_val = self.numero_edit.value()
+        numero_partita = numero_partita_val if numero_partita_val > 0 and self.numero_edit.text() != self.numero_edit.specialValueText() else None
+        
         possessore = self.possessore_edit.text().strip() or None
         natura = self.natura_edit.text().strip() or None
         
-        # Esegue la ricerca
-        partite = self.db_manager.search_partite(
-            comune_id=comune_id,
-            numero_partita=numero_partita,
-            possessore=possessore,
-            immobile_natura=natura
-        )
+        # --- Stampa di DEBUG dei parametri inviati ---
+        gui_logger.debug(f"RicercaPartiteWidget.do_search - Parametri inviati al DBManager:")
+        gui_logger.debug(f"  comune_id: {comune_id} (tipo: {type(comune_id)})")
+        gui_logger.debug(f"  numero_partita: {numero_partita} (tipo: {type(numero_partita)})")
+        gui_logger.debug(f"  possessore: '{possessore}' (tipo: {type(possessore)})")
+        gui_logger.debug(f"  immobile_natura: '{natura}' (tipo: {type(natura)})")
+        # --- Fine Stampa di DEBUG ---
         
-        # Popola la tabella risultati
-        self.results_table.setRowCount(0)
-        
-        for partita in partite:
-            row_position = self.results_table.rowCount()
-            self.results_table.insertRow(row_position)
+        try:
+            partite = self.db_manager.search_partite(
+                comune_id=comune_id,
+                numero_partita=numero_partita,
+                possessore=possessore,
+                immobile_natura=natura
+            )
             
-            self.results_table.setItem(row_position, 0, QTableWidgetItem(str(partita.get('id', ''))))
-            self.results_table.setItem(row_position, 1, QTableWidgetItem(partita.get('comune_nome', '')))
-            self.results_table.setItem(row_position, 2, QTableWidgetItem(str(partita.get('numero_partita', ''))))
-            self.results_table.setItem(row_position, 3, QTableWidgetItem(partita.get('tipo', '')))
-            self.results_table.setItem(row_position, 4, QTableWidgetItem(partita.get('stato', '')))
-        
-        # Adatta le colonne al contenuto
-        self.results_table.resizeColumnsToContents()
-        
-        # Mostra un messaggio con il numero di risultati
-        QMessageBox.information(self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
+            # --- Stampa di DEBUG dei risultati ricevuti ---
+            gui_logger.debug(f"RicercaPartiteWidget.do_search - Risultati ricevuti dal DBManager (tipo: {type(partite)}):")
+            if partite is not None: # Controlla se partite è None prima di len()
+                gui_logger.debug(f"  Numero di partite ricevute: {len(partite)}")
+                # Se vuoi vedere i primi risultati per debug (attenzione con dati sensibili):
+                # for i, p_item in enumerate(partite[:3]): # Logga al massimo i primi 3
+                #    gui_logger.debug(f"    Partita {i}: {p_item}")
+            else:
+                gui_logger.debug("  Nessun risultato (variabile 'partite' è None).")
+            # --- Fine Stampa di DEBUG ---
+
+            self.results_table.setRowCount(0) # Pulisce la tabella prima di popolarla
+            
+            if partite: # Verifica se la lista 'partite' non è vuota
+                self.results_table.setRowCount(len(partite))
+                for row_idx, partita_data in enumerate(partite): # Usa nomi variabili chiari
+                    # Popolamento tabella come da suo codice esistente
+                    self.results_table.setItem(row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
+                    self.results_table.setItem(row_idx, 1, QTableWidgetItem(partita_data.get('comune_nome', '')))
+                    self.results_table.setItem(row_idx, 2, QTableWidgetItem(str(partita_data.get('numero_partita', ''))))
+                    self.results_table.setItem(row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '')))
+                    self.results_table.setItem(row_idx, 4, QTableWidgetItem(partita_data.get('stato', '')))
+                self.results_table.resizeColumnsToContents() # Adatta le colonne al contenuto
+                QMessageBox.information(self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
+            else:
+                gui_logger.info("RicercaPartiteWidget.do_search - Nessuna partita trovata o la lista risultati è vuota.")
+                QMessageBox.information(self, "Ricerca Completata", "Nessuna partita trovata con i criteri specificati.")
+
+        except Exception as e:
+            gui_logger.error(f"Errore imprevisto durante RicercaPartiteWidget.do_search: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore di Ricerca", f"Si è verificato un errore imprevisto durante la ricerca: {e}")
+
     
     def show_details(self):
         """Mostra i dettagli della partita selezionata."""
@@ -1612,14 +1644,15 @@ class ModificaPartitaDialog(QDialog):
         self.db_manager = db_manager
         self.partita_id = partita_id
         self.partita_data_originale = None
+        self.problematic_default_date_db = date(2000, 1, 1)# Definiamo la data problematica
 
         self.setWindowTitle(f"Modifica Partita ID: {self.partita_id}")
-        self.setMinimumWidth(600) # Potrebbe servire più larghezza per i tab
-        self.setMinimumHeight(500) # E altezza
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(500)
 
-        self._init_ui()
-        self._load_partita_data()
-        self._load_possessori_associati() # Carica i possessori per il nuovo tab
+        self._init_ui() # Chiama l'inizializzazione dell'UI
+        self._load_partita_data() # Carica i dati della partita
+        self._load_possessori_associati() # Carica i possessori per il tab
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -1630,11 +1663,11 @@ class ModificaPartitaDialog(QDialog):
 
         # --- Tab 1: Dati Generali Partita ---
         self.tab_dati_generali = QWidget()
-        form_layout_generali = QFormLayout(self.tab_dati_generali) # Layout per questo tab
+        form_layout_generali = QFormLayout(self.tab_dati_generali)
 
         self.id_label = QLabel(str(self.partita_id))
         form_layout_generali.addRow("ID Partita:", self.id_label)
-        self.comune_label = QLabel("Comune non specificato")
+        self.comune_label = QLabel("Comune non specificato") # Verrà popolato da _load_partita_data
         form_layout_generali.addRow("Comune:", self.comune_label)
 
         self.numero_partita_spinbox = QSpinBox()
@@ -1642,87 +1675,198 @@ class ModificaPartitaDialog(QDialog):
         form_layout_generali.addRow("Numero Partita (*):", self.numero_partita_spinbox)
 
         self.tipo_combo = QComboBox()
-        self.tipo_combo.addItems(["principale", "secondaria"])
+        self.tipo_combo.addItems(["principale", "secondaria"]) # Assicurati che questi siano i valori corretti
         form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
 
         self.data_impianto_edit = QDateEdit()
         self.data_impianto_edit.setCalendarPopup(True)
         self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_impianto_edit.setSpecialValueText(" ")
-        self.data_impianto_edit.setDate(QDate())
+        self.data_impianto_edit.setSpecialValueText(" ") # Permette di visualizzare come vuoto
+        self.data_impianto_edit.setDate(QDate()) # Data nulla di default
         form_layout_generali.addRow("Data Impianto:", self.data_impianto_edit)
 
         self.data_chiusura_edit = QDateEdit()
         self.data_chiusura_edit.setCalendarPopup(True)
         self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_chiusura_edit.setSpecialValueText(" ")
-        self.data_chiusura_edit.setDate(QDate())
+        self.data_chiusura_edit.setSpecialValueText(" ") # Permette di visualizzare come vuoto
+        self.data_chiusura_edit.setDate(QDate()) # Data nulla di default
         form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
 
         self.numero_provenienza_spinbox = QSpinBox()
-        self.numero_provenienza_spinbox.setRange(0, 999999)
-        self.numero_provenienza_spinbox.setSpecialValueText("Nessuno")
+        self.numero_provenienza_spinbox.setRange(0, 999999) # Assumendo che 0 sia per "Nessuno"
+        self.numero_provenienza_spinbox.setSpecialValueText("Nessuno") # Testo per quando il valore è 0 (o il minimo)
         form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_spinbox)
 
         self.stato_combo = QComboBox()
-        self.stato_combo.addItems(["attiva", "inattiva"])
+        self.stato_combo.addItems(["attiva", "inattiva"]) # Assicurati siano corretti
         form_layout_generali.addRow("Stato (*):", self.stato_combo)
 
         self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
-
-        # --- Tab 2: Possessori Associati ---
+        
+        # --- Tab 2: Possessori Associati (come da tuo codice esistente) ---
         self.tab_possessori = QWidget()
         layout_possessori = QVBoxLayout(self.tab_possessori)
 
         self.possessori_table = QTableWidget()
-        # ID Relazione (partita_possessore.id), ID Possessore, Nome Completo, Titolo, Quota
         self.possessori_table.setColumnCount(5)
         self.possessori_table.setHorizontalHeaderLabels([
             "ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"
         ])
+        # ... (altre impostazioni tabella possessori come da tuo codice) ...
         self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
         self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.possessori_table.horizontalHeader().setStretchLastSection(True) # Ultima colonna si estende
+        self.possessori_table.horizontalHeader().setStretchLastSection(True)
         self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
         layout_possessori.addWidget(self.possessori_table)
 
         possessori_buttons_layout = QHBoxLayout()
         self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
-        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita) # Implementeremo
+        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita)
         possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
 
         self.btn_modifica_legame_possessore = QPushButton("Modifica Legame...")
-        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore) # Implementeremo
+        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore)
         self.btn_modifica_legame_possessore.setEnabled(False)
         possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
 
         self.btn_rimuovi_possessore = QPushButton("Rimuovi dalla Partita")
-        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita) # Implementeremo
+        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita)
         self.btn_rimuovi_possessore.setEnabled(False)
         possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
         possessori_buttons_layout.addStretch()
         layout_possessori.addLayout(possessori_buttons_layout)
-
         self.tab_widget.addTab(self.tab_possessori, "Possessori Associati")
 
-        # --- Pulsanti Salva/Annulla (comuni a tutto il dialogo) ---
+        # --- Pulsanti Salva/Annulla ---
         buttons_layout = QHBoxLayout()
         self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
         self.save_button.setToolTip("Salva solo le modifiche apportate nel tab 'Dati Generali'")
-        self.save_button.clicked.connect(self._save_changes) # Questo salva solo i dati generali
+        self.save_button.clicked.connect(self._save_changes)
         
         self.close_dialog_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
         self.close_dialog_button.setToolTip("Chiude il dialogo. Le modifiche ai possessori sono salvate individualmente.")
-        self.close_dialog_button.clicked.connect(self.accept) # O reject se non si vuole propagare Accepted
+        self.close_dialog_button.clicked.connect(self.accept)
 
         buttons_layout.addStretch()
-        buttons_layout.addWidget(self.save_button) # Pulsante per salvare i dati generali della partita
-        buttons_layout.addWidget(self.close_dialog_button) # Pulsante per chiudere
+        buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.close_dialog_button)
         main_layout.addLayout(buttons_layout)
 
         self.setLayout(main_layout)
+
+    def _load_partita_data(self):
+        self.partita_data_originale = self.db_manager.get_partita_details(self.partita_id)
+        if not self.partita_data_originale:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
+            from PyQt5.QtCore import QTimer 
+            QTimer.singleShot(0, self.reject) 
+            return
+
+        self.comune_label.setText(self.partita_data_originale.get('comune_nome', "N/D"))
+        self.numero_partita_spinbox.setValue(self.partita_data_originale.get('numero_partita', 0))
+        
+        tipo_idx = self.tipo_combo.findText(self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
+        if tipo_idx >= 0: 
+            self.tipo_combo.setCurrentIndex(tipo_idx)
+        
+        stato_idx = self.stato_combo.findText(self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
+        if stato_idx >= 0: 
+            self.stato_combo.setCurrentIndex(stato_idx)
+
+        data_impianto_db = self.partita_data_originale.get('data_impianto')
+        if data_impianto_db and isinstance(data_impianto_db, date): # Usa 'date' importato
+            self.data_impianto_edit.setDate(datetime_to_qdate(data_impianto_db))
+        else:
+            self.data_impianto_edit.setDate(QDate())
+
+        data_chiusura_db = self.partita_data_originale.get('data_chiusura')
+        
+        if data_chiusura_db is None or data_chiusura_db == self.problematic_default_date_db:
+            self.data_chiusura_edit.setDate(QDate.currentDate())
+        elif isinstance(data_chiusura_db, date): # Usa 'date' importato
+            self.data_chiusura_edit.setDate(datetime_to_qdate(data_chiusura_db))
+        else:
+            self.data_chiusura_edit.setDate(QDate())
+        
+        num_prov_val = self.partita_data_originale.get('numero_provenienza')
+        if num_prov_val is not None:
+            self.numero_provenienza_spinbox.setValue(num_prov_val)
+        else:
+            self.numero_provenienza_spinbox.setValue(self.numero_provenienza_spinbox.minimum())
+
+
+
+    def _save_changes(self):
+        # Raccogli i dati dai campi del form
+        dati_modificati = {
+            "numero_partita": self.numero_partita_spinbox.value(),
+            "tipo": self.tipo_combo.currentText(),
+            "stato": self.stato_combo.currentText(),
+            # Inizializza le date a None, verranno popolate se valide
+            "data_impianto": None,
+            "data_chiusura": None,
+            "numero_provenienza": None,
+        }
+
+        q_data_impianto = self.data_impianto_edit.date()
+        # Controlla se la data è valida E se il testo non è vuoto (per via dello specialValueText)
+        if q_data_impianto.isValid() and self.data_impianto_edit.text().strip():
+            dati_modificati["data_impianto"] = qdate_to_datetime(q_data_impianto)
+        
+        q_data_chiusura = self.data_chiusura_edit.date()
+        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip():
+            dati_modificati["data_chiusura"] = qdate_to_datetime(q_data_chiusura)
+        
+        num_prov_value = self.numero_provenienza_spinbox.value()
+        # Controlla se il testo visualizzato è lo specialValueText
+        if self.numero_provenienza_spinbox.text() != self.numero_provenienza_spinbox.specialValueText() and num_prov_value != self.numero_provenienza_spinbox.minimum(): # Evita di salvare il valore speciale
+            dati_modificati["numero_provenienza"] = num_prov_value
+        # Se è lo special value text, numero_provenienza resta None, che è corretto.
+
+        # Validazione input
+        if dati_modificati["numero_partita"] <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
+            self.numero_partita_spinbox.setFocus()
+            return
+
+        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
+            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
+                QMessageBox.warning(self, "Date Non Valide", 
+                                    "La data di chiusura non può essere precedente alla data di impianto.")
+                self.data_chiusura_edit.setFocus()
+                return
+        
+        # Tentativo di aggiornamento del database (come da suo codice esistente)
+        try:
+            gui_logger.info(f"Tentativo di aggiornare i dati generali della partita ID {self.partita_id} con: {dati_modificati}")
+            self.db_manager.update_partita(self.partita_id, dati_modificati)
+            gui_logger.info(f"Dati generali della Partita ID {self.partita_id} aggiornati con successo.")
+            QMessageBox.information(self, "Salvataggio Dati Generali", "Modifiche ai dati generali della partita salvate con successo.")
+            self._load_partita_data() # Ricarica per coerenza, anche se il dialogo non si chiude
+            # self.accept() # Rimuovi questo se il pulsante "Salva" non deve chiudere il dialogo intero
+        except DBUniqueConstraintError as uve:
+            gui_logger.warning(f"Violazione di unicità aggiornando partita ID {self.partita_id}: {uve.message}")
+            QMessageBox.warning(self, "Errore di Unicità", f"Impossibile salvare i dati generali:\n{uve.message}")
+            if hasattr(self, 'numero_partita_spinbox'): self.numero_partita_spinbox.setFocus()
+        except DBNotFoundError as nfe:
+            gui_logger.error(f"Partita ID {self.partita_id} non trovata per aggiornamento: {nfe.message}")
+            QMessageBox.critical(self, "Errore Aggiornamento", str(nfe.message))
+            self.reject()
+        except DBDataError as dde:
+            gui_logger.warning(f"Errore dati aggiornando partita ID {self.partita_id}: {dde.message}")
+            QMessageBox.warning(self, "Errore Dati Non Validi", f"Impossibile salvare i dati generali:\n{dde.message}")
+        except DBMError as dbe:
+            gui_logger.error(f"Errore DB aggiornando partita ID {self.partita_id}: {dbe.message}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Errore salvataggio dati generali:\n{dbe.message}")
+        except AttributeError as ae:
+            gui_logger.critical(f"Errore di attributo (possibile bug) aggiornando partita ID {self.partita_id}: {ae}", exc_info=True)
+            QMessageBox.critical(self, "Errore Interno Applicazione", f"Errore interno (AttributeError):\n{ae}")
+        except Exception as e:
+            gui_logger.critical(f"Errore critico imprevisto aggiornando partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico Imprevisto", f"Errore di sistema imprevisto:\n{type(e).__name__}: {e}")
+
 
     def _aggiorna_stato_pulsanti_possessori(self):
         has_selection = bool(self.possessori_table.selectedItems())
@@ -2671,43 +2815,88 @@ class InserimentoPossessoreWidget(QWidget):
         cognome_nome = self.cognome_nome_edit.text().strip() # Recupera anche questo
         
         idx_comune = self.comune_combo.currentIndex()
-        comune_id_selezionato = self.comune_combo.itemData(idx_comune) if idx_comune >= 0 else None
+        # Assicurati che itemData restituisca un intero o sia convertibile
+        comune_id_selezionato_data = self.comune_combo.itemData(idx_comune)
+        comune_id_selezionato: Optional[int] = None
+        if comune_id_selezionato_data is not None:
+            try:
+                comune_id_selezionato = int(comune_id_selezionato_data)
+            except ValueError:
+                gui_logger.error(f"ID comune non valido nella combobox: {comune_id_selezionato_data}")
+                QMessageBox.warning(self, "Errore Interno", "ID comune selezionato non valido.")
+                return
         
         attivo = self.attivo_checkbox.isChecked()
 
+        # Validazione input lato UI (prima di chiamare il DBManager)
         if not nome_completo:
             QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Nome Completo' è obbligatorio.")
+            self.nome_completo_edit.setFocus()
             return
         if comune_id_selezionato is None:
             QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune di riferimento.")
+            self.comune_combo.setFocus()
             return
 
         try:
-            # Assumendo che db_manager.create_possessore accetti anche cognome_nome
-            # Se il tuo metodo create_possessore non lo accetta, dovrai modificarlo
-            # o non passare cognome_nome se non è un campo del DB.
-            success = self.db_manager.create_possessore(
+            # La chiamata a db_manager.create_possessore ora restituisce l'ID del nuovo possessore
+            # o solleva un'eccezione specifica in caso di errore.
+            new_possessore_id = self.db_manager.create_possessore(
                 nome_completo=nome_completo,
-                paternita=paternita if paternita else None, # Passa None se vuoto
+                paternita=paternita if paternita else None, 
                 comune_riferimento_id=comune_id_selezionato,
                 attivo=attivo,
-                cognome_nome=cognome_nome if cognome_nome else None # Passa anche questo
+                cognome_nome=cognome_nome if cognome_nome else None
             )
-            if success:
-                QMessageBox.information(self, "Successo", f"Possessore '{nome_completo}' creato con successo.")
+            
+            # Se create_possessore non solleva eccezioni e restituisce un ID, l'operazione è andata a buon fine.
+            if new_possessore_id is not None: # Controllo aggiuntivo, anche se dovrebbe sempre esserci un ID o un'eccezione.
+                QMessageBox.information(self, "Successo", 
+                                        f"Possessore '{nome_completo}' creato con successo. ID: {new_possessore_id}.")
                 # Pulisci i campi del form dopo il salvataggio
                 self.nome_completo_edit.clear()
                 self.paternita_edit.clear()
                 self.cognome_nome_edit.clear()
-                self.comune_combo.setCurrentIndex(-1) # Resetta combobox
-                self.attivo_checkbox.setChecked(True)
-                # Potresti voler ricaricare la tabella dei possessori, se ne hai una in questo widget
+                self.comune_combo.setCurrentIndex(-1) # Resetta la combobox (seleziona nessun item)
+                self.attivo_checkbox.setChecked(True) # Riporta al default
+                
+                # Opzionale: se InserimentoPossessoreWidget avesse una tabella per mostrare i possessori,
+                # qui si potrebbe chiamare un metodo per ricaricarla, ad esempio:
                 # self._carica_possessori_esistenti_in_tabella() 
             else:
-                QMessageBox.critical(self, "Errore Database", "Impossibile creare il possessore. Controllare i log.")
-        except Exception as e:
-            gui_logger.error(f"Errore durante il salvataggio del possessore: {e}")
-            QMessageBox.critical(self, "Errore Critico", f"Si è verificato un errore imprevisto: {e}")
+                # Questo blocco potrebbe non essere mai raggiunto se create_possessore
+                # solleva sempre un'eccezione in caso di fallimento piuttosto che restituire None.
+                # Ma lo teniamo per sicurezza nel caso create_possessore potesse restituire None
+                # per qualche fallimento "silenzioso" non gestito da eccezioni.
+                gui_logger.error("create_possessore ha restituito None senza sollevare un'eccezione esplicita.")
+                QMessageBox.critical(self, "Errore Inserimento", 
+                                     "Impossibile creare il possessore. Nessun ID restituito e nessun errore specifico dal database.")
+
+        except DBUniqueConstraintError as uve:
+            gui_logger.warning(f"Errore di unicità durante il salvataggio del possessore '{nome_completo}': {uve.message}")
+            QMessageBox.critical(self, "Errore di Unicità", 
+                                 f"Impossibile creare il possessore:\n{uve.message}")
+            # Potresti voler mettere il focus sul campo che ha causato il problema, se noto.
+            # Esempio: if "nome_completo" in uve.message.lower(): self.nome_completo_edit.setFocus()
+
+        except DBDataError as dde:
+            gui_logger.warning(f"Errore nei dati forniti per il possessore '{nome_completo}': {dde.message}")
+            QMessageBox.warning(self, "Dati Non Validi", 
+                                f"Impossibile creare il possessore:\n{dde.message}")
+            # Potresti voler mettere il focus sul campo problematico.
+            # Esempio: if "comune" in dde.message.lower(): self.comune_combo.setFocus()
+
+        except DBMError as dbe: # Altri errori specifici del DBManager ma non di unicità o dati.
+            gui_logger.error(f"Errore database gestito durante il salvataggio del possessore '{nome_completo}': {dbe.message}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", 
+                                 f"Si è verificato un errore durante la creazione del possessore nel database:\n{dbe.message}")
+        
+        except Exception as e: # Catch-all per qualsiasi altra eccezione Python imprevista
+            gui_logger.critical(f"Errore critico e imprevisto durante il salvataggio del possessore '{nome_completo}': {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico Imprevisto", 
+                                 f"Si è verificato un errore di sistema imprevisto durante il salvataggio:\n"
+                                 f"{type(e).__name__}: {e}\n"
+                                 "Controllare i log dell'applicazione per il traceback completo.")
 
 
 # --- Scheda per Localita ---
@@ -3300,144 +3489,69 @@ class RegistrazioneProprietaWidget(QWidget):
             
             self.immobili_table.setItem(i, 4, QTableWidgetItem(piani_vani))
     
+    # All'interno della classe RegistrazioneProprietaWidget in prova.py
+
     def register_property(self):
         """Registra la nuova proprietà nel database."""
-        # Validazione input
+        # Validazione input (come da suo codice esistente)
         if not self.comune_id:
             QMessageBox.warning(self, "Errore", "Seleziona un comune.")
             return
-        
-        if not self.possessori_data:
+        if not self.possessori_data: # Assicurati che self.possessori_data sia una lista di dizionari corretta
             QMessageBox.warning(self, "Errore", "Aggiungi almeno un possessore.")
             return
-        
-        if not self.immobili_data:
+        if not self.immobili_data: # Assicurati che self.immobili_data sia una lista di dizionari corretta
             QMessageBox.warning(self, "Errore", "Aggiungi almeno un immobile.")
             return
         
-        # Raccoglie i dati
         numero_partita = self.num_partita_edit.value()
         data_impianto = self.data_edit.date().toPyDate()
         
-        # Chiama la funzione del DB manager
-        result = self.db_manager.registra_nuova_proprieta(
-            self.comune_id,
-            numero_partita,
-            data_impianto,
-            self.possessori_data,
-            self.immobili_data
-        )
-        
-        if result:
-            QMessageBox.information(self, "Successo", "Nuova proprietà registrata con successo.")
-            
-            # Pulisce i campi
-            self.comune_id = None
-            self.comune_display.setText("Nessun comune selezionato")
-            self.num_partita_edit.setValue(1)
-            self.data_edit.setDate(QDate.currentDate())
-            self.possessori_data = []
-            self.immobili_data = []
-            self.update_possessori_table()
-            self.update_immobili_table()
-        else:
-            QMessageBox.critical(self, "Errore", "Errore durante la registrazione della proprietà.")
-
-class RicercaAvanzataWidget(QWidget):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        self.setWindowTitle("Ricerca Avanzata per Similarità") # Titolo del widget, anche se nel tab non si vede
-        
-        main_layout = QVBoxLayout(self)
-        
-        # --- Sezione Ricerca Possessori per Similarità ---
-        possessori_group = QGroupBox("Ricerca Avanzata Possessori per Similarità")
-        possessori_layout = QGridLayout(possessori_group)
-        
-        possessori_layout.addWidget(QLabel("Termine di ricerca (nome, cognome, paternità):"), 0, 0)
-        self.possessore_query_edit = QLineEdit()
-        self.possessore_query_edit.setPlaceholderText("Inserisci parte del nome, cognome o paternità...")
-        possessori_layout.addWidget(self.possessore_query_edit, 0, 1, 1, 2) # Span su 2 colonne
-        
-        possessori_layout.addWidget(QLabel("Soglia di similarità (0.0 - 1.0):"), 1, 0)
-        self.possessore_soglia_spinbox = QDoubleSpinBox()
-        self.possessore_soglia_spinbox.setMinimum(0.0)
-        self.possessore_soglia_spinbox.setMaximum(1.0)
-        self.possessore_soglia_spinbox.setSingleStep(0.05)
-        self.possessore_soglia_spinbox.setValue(0.2) # Valore di default
-        possessori_layout.addWidget(self.possessore_soglia_spinbox, 1, 1)
-        
-        self.btn_cerca_possessori_av = QPushButton("Cerca Possessori")
-        self.btn_cerca_possessori_av.setIcon(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView))
-        self.btn_cerca_possessori_av.clicked.connect(self._esegui_ricerca_possessori_avanzata)
-        possessori_layout.addWidget(self.btn_cerca_possessori_av, 1, 2)
-        
-        main_layout.addWidget(possessori_group)
-        
-        # Tabella per i risultati della ricerca possessori
-        self.risultati_possessori_table = QTableWidget()
-        self.risultati_possessori_table.setColumnCount(5) # ID, Nome Completo, Comune Nome, Similarità, Num. Partite
-        self.risultati_possessori_table.setHorizontalHeaderLabels([
-            "ID", "Nome Completo", "Comune Riferimento", "Similarità", "Num. Partite"
-        ])
-        self.risultati_possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.risultati_possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.risultati_possessori_table.setAlternatingRowColors(True)
-        self.risultati_possessori_table.horizontalHeader().setStretchLastSection(True)
-        self.risultati_possessori_table.itemDoubleClicked.connect(self._apri_dettaglio_possessore) # Opzionale
-        main_layout.addWidget(self.risultati_possessori_table)
-        
-        # TODO: Potresti aggiungere qui altre sezioni per ricerca avanzata immobili, partite, ecc.
-        # usando sub-tab o altri QGroupBox se necessario.
-
-        main_layout.addStretch() # Per spingere gli elementi in alto
-
-    def _esegui_ricerca_possessori_avanzata(self):
-        query_text = self.possessore_query_edit.text().strip()
-        similarity_threshold = self.possessore_soglia_spinbox.value()
-        
-        if not query_text:
-            QMessageBox.warning(self, "Input Mancante", "Inserisci un termine di ricerca per i possessori.")
-            return
-            
         try:
-            # Chiamata al metodo del db_manager (versione a 2 parametri)
-            risultati = self.db_manager.ricerca_avanzata_possessori(
-                query_text=query_text,
-                similarity_threshold=similarity_threshold
+            # Il metodo db_manager.registra_nuova_proprieta ora restituisce True
+            # o solleva un'eccezione specifica (DBUniqueConstraintError, DBDataError, DBMError).
+            success = self.db_manager.registra_nuova_proprieta(
+                self.comune_id,
+                numero_partita,
+                data_impianto,
+                self.possessori_data, 
+                self.immobili_data
             )
             
-            self.risultati_possessori_table.setRowCount(0) # Pulisce la tabella
-            
-            if not risultati:
-                QMessageBox.information(self, "Ricerca Avanzata", "Nessun possessore trovato con i criteri specificati.")
-                return
-                
-            self.risultati_possessori_table.setRowCount(len(risultati))
-            for row_idx, possessore in enumerate(risultati):
-                self.risultati_possessori_table.setItem(row_idx, 0, QTableWidgetItem(str(possessore.get('id', 'N/D'))))
-                self.risultati_possessori_table.setItem(row_idx, 1, QTableWidgetItem(possessore.get('nome_completo', 'N/D')))
-                self.risultati_possessori_table.setItem(row_idx, 2, QTableWidgetItem(possessore.get('comune_nome', 'N/D'))) # Dal JOIN nella funzione SQL
-                self.risultati_possessori_table.setItem(row_idx, 3, QTableWidgetItem(f"{possessore.get('similarity', 0.0):.3f}")) # Formatta la similarità
-                self.risultati_possessori_table.setItem(row_idx, 4, QTableWidgetItem(str(possessore.get('num_partite', 'N/D')))) # Dal COUNT nella funzione SQL
+            if success: # Se non ci sono state eccezioni e il metodo db_manager ha restituito True
+                QMessageBox.information(self, "Successo", "Nuova proprietà registrata con successo.")
+                # Pulisce i campi dell'interfaccia
+                self.comune_id = None
+                self.comune_display.setText("Nessun comune selezionato")
+                self.num_partita_edit.setValue(1) # O il suo valore di default
+                self.data_edit.setDate(QDate.currentDate())
+                self.possessori_data = [] # Resetta le liste interne
+                self.immobili_data = []
+                self.update_possessori_table() # Aggiorna le tabelle nella UI
+                self.update_immobili_table()
+            # else: Questo blocco non è più necessario se il fallimento è segnalato solo da eccezioni.
+            # QMessageBox.critical(self, "Errore", "Registrazione della proprietà fallita (DB manager ha restituito False).")
 
-            self.risultati_possessori_table.resizeColumnsToContents()
-            
-        except Exception as e:
-            gui_logger.error(f"Errore durante la ricerca avanzata possessori (GUI): {e}")
-            QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore: {e}")
-
-    def _apri_dettaglio_possessore(self, item): # Funzione opzionale
-         if item is None: return
-         row = item.row()
-         try:
-             possessore_id = int(self.risultati_possessori_table.item(row, 0).text())
-    #         # Qui potresti aprire un dialogo con i dettagli del possessore,
-    #         # simile a PartitaDetailsDialog ma per possessori.
-             QMessageBox.information(self, "Dettaglio", f"Dettaglio per possessore ID: {possessore_id} (da implementare).")
-         except (ValueError, TypeError) as e:
-             gui_logger.error(f"Errore nel recuperare ID possessore dalla tabella: {e}")
+        # Gestione delle eccezioni specifiche che registra_nuova_proprieta potrebbe sollevare
+        except DBUniqueConstraintError as uve:
+            gui_logger.error(f"Errore di unicità registrando la proprietà: {uve.message}", exc_info=True)
+            QMessageBox.critical(self, "Errore di Unicità", 
+                                 f"Impossibile registrare la proprietà:\n{uve.message}\n"
+                                 "Una partita con lo stesso numero potrebbe già esistere per questo comune, o altri dati sono duplicati.")
+        except DBDataError as dde: # Per errori nei dati JSON o altri dati non validi passati alla procedura
+            gui_logger.error(f"Errore nei dati forniti per la registrazione della proprietà: {dde.message}", exc_info=True)
+            QMessageBox.warning(self, "Dati Non Validi", 
+                                f"Impossibile registrare la proprietà:\n{dde.message}")
+        except DBMError as dbe: # Per altri errori generici provenienti dal DBManager o dal database
+            gui_logger.error(f"Errore database durante la registrazione della proprietà: {dbe.message}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", 
+                                 f"Si è verificato un errore durante la registrazione nel database:\n{dbe.message}")
+        except Exception as e: # Catch-all per altri errori Python imprevisti
+            gui_logger.critical(f"Errore critico e imprevisto durante la registrazione della proprietà: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico Imprevisto", 
+                                 f"Si è verificato un errore di sistema imprevisto durante la registrazione:\n"
+                                 f"{type(e).__name__}: {e}\n"
+                                 "Controllare i log dell'applicazione per il traceback completo.")
 
 # --- Dialog per la Selezione dei Possessori ---
 class PossessoreSelectionDialog(QDialog):
@@ -3812,12 +3926,30 @@ class ImmobileDialog(QDialog):
     
     def select_localita(self):
         """Apre un dialogo per selezionare la località."""
-        dialog = LocalitaSelectionDialog(self.db_manager, self.comune_id, self)
+        if self.comune_id is None: # Aggiunto controllo per sicurezza
+            QMessageBox.warning(self, "Comune Mancante", 
+                                "Selezionare un comune per la partita prima di scegliere una località per l'immobile.")
+            return
+
+        # Istanzia LocalitaSelectionDialog in MODALITÀ SELEZIONE
+        dialog = LocalitaSelectionDialog(self.db_manager, 
+                                         self.comune_id, 
+                                         self,  # parent
+                                         selection_mode=True) # <<<--- MODIFICA CHIAVE QUI
+        
         result = dialog.exec_()
         
-        if result == QDialog.Accepted and dialog.selected_localita_id:
-            self.localita_id = dialog.selected_localita_id
-            self.localita_display.setText(dialog.selected_localita_name)
+        if result == QDialog.Accepted: # L'utente ha premuto "Seleziona" in LocalitaSelectionDialog
+            if dialog.selected_localita_id is not None and dialog.selected_localita_name is not None:
+                self.localita_id = dialog.selected_localita_id
+                self.localita_display.setText(dialog.selected_localita_name)
+                gui_logger.info(f"ImmobileDialog: Località selezionata ID: {self.localita_id}, Nome: '{self.localita_display.text()}'")
+            else:
+                # Questo caso dovrebbe essere raro se _conferma_selezione in LocalitaSelectionDialog funziona correttamente
+                gui_logger.warning("ImmobileDialog: LocalitaSelectionDialog accettato ma ID/nome località non validi.")
+        # else: L'utente ha premuto "Annulla" o chiuso il dialogo LocalitaSelectionDialog,
+        # quindi non aggiorniamo nulla e la selezione precedente (o nessuna selezione) rimane.
+
     
     def handle_insert(self):
         """Gestisce l'inserimento dell'immobile."""
@@ -3855,24 +3987,32 @@ class ImmobileDialog(QDialog):
 
 # All'interno della classe LocalitaSelectionDialog in prova.py
 
+# All'interno di prova.py
+
 class LocalitaSelectionDialog(QDialog):
-    def __init__(self, db_manager: CatastoDBManager, comune_id: int, parent=None):
+    def __init__(self, db_manager: CatastoDBManager, comune_id: int, parent=None, 
+                 selection_mode: bool = False): # NUOVO parametro selection_mode
         super(LocalitaSelectionDialog, self).__init__(parent)
         self.db_manager = db_manager
         self.comune_id = comune_id
-        # Non più necessari se il dialogo non restituisce una selezione diretta al chiamante
-        # self.selected_localita_id = None 
-        # self.selected_localita_name = None 
+        self.selection_mode = selection_mode  # Memorizza la modalità operativa
         
-        self.setWindowTitle(f"Gestione Località per Comune ID: {self.comune_id}") # Titolo più specifico
+        self.selected_localita_id: Optional[int] = None
+        self.selected_localita_name: Optional[str] = None
+        
+        if self.selection_mode:
+            self.setWindowTitle(f"Seleziona Località per Comune ID: {self.comune_id}")
+        else:
+            self.setWindowTitle(f"Gestione Località per Comune ID: {self.comune_id}")
+            
         self.setMinimumSize(650, 450)
         
         layout = QVBoxLayout(self)
         
         self.tabs = QTabWidget(self)
-        layout.addWidget(self.tabs) # Aggiungi il QTabWidget al layout principale
+        layout.addWidget(self.tabs)
 
-        # --- Tab 1: Seleziona/Modifica Esistente ---
+        # --- Tab 1: Seleziona/Visualizza/Modifica Esistente ---
         select_tab = QWidget()
         select_layout = QVBoxLayout(select_tab)
         
@@ -3880,7 +4020,10 @@ class LocalitaSelectionDialog(QDialog):
         filter_layout.addWidget(QLabel("Filtra per nome:"))
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Digita per filtrare...")
-        self.filter_edit.textChanged.connect(self.load_localita)
+        # Connetti textChanged a una lambda che chiama load_localita e aggiorna i pulsanti
+        self.filter_edit.textChanged.connect(
+            lambda: (self.load_localita(), self._aggiorna_stato_pulsanti_azione_localita())
+        )
         filter_layout.addWidget(self.filter_edit)
         select_layout.addLayout(filter_layout)
         
@@ -3891,126 +4034,199 @@ class LocalitaSelectionDialog(QDialog):
         self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.localita_table.setSelectionMode(QTableWidget.SingleSelection)
         self.localita_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_azione_localita)
-        self.localita_table.itemDoubleClicked.connect(self.apri_modifica_localita_selezionata)
+        self.localita_table.itemDoubleClicked.connect(self._handle_double_click) # Gestirà doppio click
         select_layout.addWidget(self.localita_table)
 
         select_action_layout = QHBoxLayout()
         self.btn_modifica_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogDetailedView), "Modifica Selezionata")
         self.btn_modifica_localita.setToolTip("Modifica i dati della località selezionata")
         self.btn_modifica_localita.clicked.connect(self.apri_modifica_localita_selezionata)
-        self.btn_modifica_localita.setEnabled(False)
+        if self.selection_mode: # In modalità selezione, nascondi il pulsante "Modifica"
+            self.btn_modifica_localita.setVisible(False)
         select_action_layout.addWidget(self.btn_modifica_localita)
         select_action_layout.addStretch()
         select_layout.addLayout(select_action_layout)
-
-        select_tab.setLayout(select_layout)
-        self.tabs.addTab(select_tab, "Visualizza e Modifica Località")
+        self.tabs.addTab(select_tab, "Visualizza Località") # Cambiato nome tab per chiarezza
 
         # --- Tab 2: Crea Nuova Località ---
-        create_tab = QWidget()
-        create_form_layout = QFormLayout(create_tab) # Usiamo QFormLayout per pulizia
-        
-        # === QUI LA CORREZIONE: Crea i widget PRIMA di usarli ===
-        self.nome_edit_nuova = QLineEdit() # Crea l'istanza
-        self.tipo_combo_nuova = QComboBox() # Crea l'istanza
-        self.tipo_combo_nuova.addItems(["regione", "via", "borgata"])
-        self.civico_spinbox_nuova = QSpinBox() # Crea l'istanza
-        self.civico_spinbox_nuova.setMinimum(0)
-        self.civico_spinbox_nuova.setMaximum(99999)
-        self.civico_spinbox_nuova.setSpecialValueText("Nessuno")
-        # === FINE CORREZIONE ===
+        # Questo tab viene mostrato solo se non siamo in modalità selezione
+        if not self.selection_mode:
+            create_tab = QWidget()
+            create_form_layout = QFormLayout(create_tab)
+            self.nome_edit_nuova = QLineEdit()
+            self.tipo_combo_nuova = QComboBox()
+            self.tipo_combo_nuova.addItems(["regione", "via", "borgata"])
+            self.civico_spinbox_nuova = QSpinBox()
+            self.civico_spinbox_nuova.setMinimum(0)
+            self.civico_spinbox_nuova.setMaximum(99999)
+            self.civico_spinbox_nuova.setSpecialValueText("Nessuno")
+            create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
+            create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
+            create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
+            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+            self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
+            create_form_layout.addRow(self.btn_salva_nuova_localita)
+            self.tabs.addTab(create_tab, "Crea Nuova Località")
 
-        create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova) # Usa un nome diverso per il QLineEdit
-       
-        create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
-         # Se 0 è "Nessuno"
-        create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
-        
-        self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
-        self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab) # Nuovo metodo handler
-        create_form_layout.addRow(self.btn_salva_nuova_localita)
-
-        # Ho rimosso i vecchi QLineEdit nome_edit, tipo_combo, civico_edit dal livello di self
-        # e li ho creati specifici per il tab "Crea Nuova" per evitare conflitti se fossero usati altrove.
-        # Devi definirli come attributi di istanza se vuoi accedervi in altri metodi,
-        # ad esempio self.nome_edit_nuova = QLineEdit()
-        # Lo faccio ora:
-        self.nome_edit_nuova = QLineEdit()
-        # (Le righe sopra nel create_form_layout diventano:)
-        # create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
-        # ... e così via per tipo_combo_nuova e civico_spinbox_nuova ...
-        # Questa parte è già stata corretta nel codice che ti ho fornito prima, 
-        # la lascio qui per completezza del ragionamento.
-        # Ricontrolla che i widget del tab "Crea Nuova" abbiano nomi univoci se necessario.
-        # Per ora, il codice che ti ho fornito in precedenza per LocalitaSelectionDialog
-        # usava self.nome_edit, self.tipo_combo, self.civico_edit per il tab di creazione.
-        # Questo va bene SE il dialogo è usato solo per questo. Se i tab coesistono e hanno
-        # campi simili, è meglio usare nomi di attributi distinti per i widget di ogni tab.
-        # Per ora, lasciamo i nomi originali (self.nome_edit, etc.) per il tab "Crea Nuova"
-        # come erano nel codice che hai confermato funzionare per l'inserimento.
-
-        # --- Tab Crea (codice esistente per i campi, assicurati che i nomi siano ok) ---
-        # create_tab = QWidget() # Già definito
-        # create_layout = QGridLayout(create_tab) # o QFormLayout
-        # self.nome_edit = QLineEdit() ...
-        # self.tipo_combo = QComboBox() ...
-        # self.civico_edit = QSpinBox() ...
-        # ... aggiungi al create_layout ...
-        # self.btn_salva_nuova_localita = QPushButton("Salva Nuova Località")
-        # self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
-        # create_layout.addWidget(self.btn_salva_nuova_localita)
-        # create_tab.setLayout(create_layout)
-        # self.tabs.addTab(create_tab, "Crea Nuova")
-        # Questa parte era già stata gestita da handle_selection_or_creation
-        # quando current_tab_index == 1. Non duplichiamo i widget.
-        # Il tab "Crea Nuova" userà i self.nome_edit, self.tipo_combo, self.civico_edit
-        # già definiti e il pulsante "OK" cambierà la sua azione.
-
-        # Il tab "Crea Nuova" è già gestito dalla logica di self.handle_selection_or_creation
-        # quando self.tabs.currentIndex() è 1, utilizzando i campi QLineEdit, QComboBox, QSpinBox
-        # che erano definiti a livello di self. Per ora manteniamo quella logica.
-        # La modifica principale è sui pulsanti in fondo al dialogo.
-
-        # --- Pulsante Chiudi (precedentemente "Annulla") ---
+        # --- Pulsanti in fondo al dialogo ---
         buttons_layout = QHBoxLayout()
-        self.chiudi_button = QPushButton("Chiudi") # Rinominato da self.cancel_button
-        self.chiudi_button.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton))
-        self.chiudi_button.clicked.connect(self.reject) # self.reject() è appropriato per chiudere senza un'azione "OK"
-
-        # Rimuoviamo self.ok_button se non serve più per una selezione esplicita
-        # buttons_layout.addWidget(self.ok_button)
-        buttons_layout.addStretch() # Spinge il pulsante a destra
-        buttons_layout.addWidget(self.chiudi_button)
-        layout.addLayout(buttons_layout)
         
+        # Pulsante SELEZIONA (solo in modalità selezione)
+        self.select_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton),"Seleziona")
+        self.select_button.setToolTip("Conferma la località selezionata dalla tabella")
+        self.select_button.clicked.connect(self._conferma_selezione)
+        if not self.selection_mode: # Nascondi se non in modalità selezione
+            self.select_button.setVisible(False)
+        buttons_layout.addWidget(self.select_button)
+        
+        buttons_layout.addStretch()
+        
+        # Pulsante ANNULLA/CHIUDI
+        cancel_text = "Annulla" if self.selection_mode else "Chiudi"
+        self.chiudi_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), cancel_text)
+        self.chiudi_button.clicked.connect(self.reject) # self.reject chiude il dialogo senza segnalare accettazione
+        buttons_layout.addWidget(self.chiudi_button)
+        
+        layout.addLayout(buttons_layout)
         self.setLayout(layout)
         
-        # self.tabs.currentChanged.connect(self._tab_changed) # Non serve più se ok_button è rimosso
-        self._aggiorna_stato_pulsanti_azione_localita() # Chiama per stato iniziale
+        self.load_localita() # Carica i dati e aggiorna lo stato dei pulsanti
 
-        self.load_localita()
+    def _handle_double_click(self, item: QTableWidgetItem):
+        """Gestisce il doppio click sulla tabella."""
+        if self.selection_mode and self.tabs.currentIndex() == 0:
+            # Se in modalità selezione e nel tab di visualizzazione, il doppio click seleziona
+            self._conferma_selezione()
+        elif not self.selection_mode and self.tabs.currentIndex() == 0:
+            # Se non in modalità selezione, il doppio click apre la modifica
+            self.apri_modifica_localita_selezionata()
 
-    # Rimuovi _tab_changed se il pulsante OK principale è stato rimosso
-    # def _tab_changed(self, index): ...
+    def _conferma_selezione(self):
+        """Conferma la selezione della località e chiude il dialogo con Accept."""
+        if not self.selection_mode: # Questa azione è solo per la modalità selezione
+            return
 
-    # Modifica handle_selection_or_creation se il pulsante OK è rimosso.
-    # Se il pulsante OK è rimosso, le azioni di "selezione" (per un chiamante)
-    # o "creazione" devono essere gestite diversamente.
-    # Per ora, assumiamo che il "doppio click" o "Modifica Selezionata" siano per la modifica,
-    # e il tab "Crea Nuova" necessiti di un suo pulsante "Salva Nuova"
-    # oppure il vecchio pulsante OK ora serve solo per il tab "Crea Nuova".
+        if self.tabs.currentIndex() == 0: # Assicurati che siamo nel tab di visualizzazione/selezione
+            selected_items = self.localita_table.selectedItems()
+            if not selected_items:
+                QMessageBox.warning(self, "Nessuna Selezione", "Seleziona una località dalla tabella.")
+                return
+            
+            current_row = self.localita_table.currentRow()
+            if current_row < 0: return
 
-    # Dato il tuo input, vuoi eliminare "Seleziona" (il vecchio self.ok_button quando era in modalità selezione)
-    # e trasformare "Annulla" in "Chiudi".
-    # Questo significa che il dialogo non è più pensato per *restituire una selezione*.
-    # Il suo scopo diventa:
-    # 1. Mostrare le località.
-    # 2. Permettere di modificarle (aprendo ModificaLocalitaDialog).
-    # 3. Permettere di crearne di nuove (dal tab "Crea Nuova", che avrà bisogno di un suo pulsante di salvataggio).
+            try:
+                self.selected_localita_id = int(self.localita_table.item(current_row, 0).text())
+                nome = self.localita_table.item(current_row, 1).text()
+                tipo = self.localita_table.item(current_row, 2).text()
+                civico_item_text = self.localita_table.item(current_row, 3).text()
+                
+                self.selected_localita_name = nome
+                if civico_item_text and civico_item_text != "-":
+                    self.selected_localita_name += f", {civico_item_text}"
+                self.selected_localita_name += f" ({tipo})"
+                
+                gui_logger.info(f"LocalitaSelectionDialog: Località selezionata ID: {self.selected_localita_id}, Nome: '{self.selected_localita_name}'")
+                self.accept() # Chiude il dialogo e QDialog.Accepted viene restituito a exec_()
+            except ValueError:
+                QMessageBox.critical(self, "Errore Dati", "ID località non valido nella tabella.")
+            except Exception as e:
+                gui_logger.error(f"Errore in _conferma_selezione: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Errore durante la conferma della selezione: {e}")
+        # else: se siamo nel tab "Crea Nuova", il pulsante "Seleziona" non dovrebbe essere attivo o visibile
 
-    # Se è così, la logica di handle_selection_or_creation va rivista o rimossa,
-    # e il tab "Crea Nuova" ha bisogno del suo pulsante "Salva".
-    # Ho aggiunto btn_salva_nuova_localita nel tab "Crea Nuova".
+    def _aggiorna_stato_pulsanti_azione_localita(self):
+        is_select_tab_active = (self.tabs.currentIndex() == 0)
+        has_selection_in_table = bool(self.localita_table.selectedItems())
+        
+        # Pulsante Modifica (visibile e attivo solo se non in selection_mode)
+        self.btn_modifica_localita.setEnabled(
+            is_select_tab_active and has_selection_in_table and not self.selection_mode
+        )
+        
+        # Pulsante Seleziona (visibile e attivo solo se in selection_mode)
+        self.select_button.setEnabled(
+            is_select_tab_active and has_selection_in_table and self.selection_mode
+        )
+
+    def load_localita(self, filter_text: Optional[str] = None): # filter_text è già opzionale
+        self.localita_table.setRowCount(0)
+        self.localita_table.setSortingEnabled(False)
+        
+        # Usa il testo attuale dal QLineEdit del filtro, non il parametro 'filter_text' se non fornito
+        actual_filter_text = self.filter_edit.text().strip() if hasattr(self, 'filter_edit') and self.filter_edit else None
+
+        if self.comune_id:
+            try:
+                # Passa actual_filter_text al metodo del DBManager
+                localita_results = self.db_manager.get_localita_by_comune(self.comune_id, actual_filter_text)
+                if localita_results:
+                    self.localita_table.setRowCount(len(localita_results))
+                    for i, loc in enumerate(localita_results):
+                        self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                        self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '')))
+                        self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                        civico_text = str(loc.get('civico', '')) if loc.get('civico') is not None else "-"
+                        self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
+                    self.localita_table.resizeColumnsToContents()
+            except Exception as e:
+                gui_logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare le località: {e}")
+        
+        self.localita_table.setSortingEnabled(True)
+        self._aggiorna_stato_pulsanti_azione_localita() # Chiamata fondamentale qui
+
+    # Mantenga invariati i metodi _salva_nuova_localita_da_tab, 
+    # apri_modifica_localita_selezionata, e _get_selected_localita_id_from_table
+    # come erano nella sua ultima versione funzionante per quelle logiche.
+    # ... (copia qui i metodi _salva_nuova_localita_da_tab, apri_modifica_localita_selezionata, 
+    #  e _get_selected_localita_id_from_table dalla tua versione precedente del codice)
+    def _salva_nuova_localita_da_tab(self):
+        nome = self.nome_edit_nuova.text().strip()
+        tipo = self.tipo_combo_nuova.currentText()
+        civico_val = self.civico_spinbox_nuova.value()
+        civico = civico_val if self.civico_spinbox_nuova.text() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0 else None
+        if not nome:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+            self.nome_edit_nuova.setFocus()
+            return
+        if not self.comune_id:
+            QMessageBox.critical(self, "Errore Interno", "ID Comune non specificato. Impossibile creare località.")
+            return
+        try:
+            localita_id_creata = self.db_manager.insert_localita(self.comune_id, nome, tipo, civico)
+            if localita_id_creata is not None:
+                QMessageBox.information(self, "Località Creata", f"Località '{nome}' registrata con ID: {localita_id_creata}")
+                self.load_localita() 
+                self.tabs.setCurrentIndex(0) 
+                self.nome_edit_nuova.clear()
+                self.tipo_combo_nuova.setCurrentIndex(0) 
+                self.civico_spinbox_nuova.setValue(0) 
+        except (DBDataError, DBMError) as dbe:
+            gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{getattr(dbe, 'message', str(dbe))}")
+        except Exception as e:
+            gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
+
+    def apri_modifica_localita_selezionata(self):
+        localita_id_sel = self._get_selected_localita_id_from_table()
+        if localita_id_sel is not None:
+            dialog = ModificaLocalitaDialog(self.db_manager, localita_id_sel, self.comune_id, self)
+            if dialog.exec_() == QDialog.Accepted:
+                self.load_localita() 
+        else:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona una località dalla tabella per modificarla.")
+            
+    def _get_selected_localita_id_from_table(self) -> Optional[int]:
+        selected_items = self.localita_table.selectedItems()
+        if not selected_items: return None
+        current_row = self.localita_table.currentRow()
+        if current_row < 0: return None
+        id_item = self.localita_table.item(current_row, 0)
+        if id_item and id_item.text().isdigit():
+            return int(id_item.text())
+        return None
 
     def _salva_nuova_localita_da_tab(self): # NUOVO METODO per il pulsante nel tab "Crea Nuova"
         nome = self.nome_edit.text().strip() # Assumendo che questi siano i QLineEdit del tab "Crea"
@@ -5491,7 +5707,7 @@ class BackupRestoreWidget(QWidget):
         # Opzionale: percorso pg_dump se non nel PATH
         self.pg_dump_path_edit = QLineEdit()
         self.pg_dump_path_edit.setPlaceholderText("Es. C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe (opzionale)")
-        backup_layout.addRow("Percorso pg_dump (opz.C:\Program Files\PostgreSQL\\17\\bin\pg_dump.exe):", self.pg_dump_path_edit)
+        backup_layout.addRow("Percorso pg_dump (opz.C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe):", self.pg_dump_path_edit)
 
 
         self.backup_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Esegui Backup")
@@ -5703,7 +5919,8 @@ class BackupRestoreWidget(QWidget):
         self.process.setProperty("is_restore_operation", False) # Assicura che sia False per il backup
         self.process.start(executable, args)
 
-   
+    # All'interno della classe BackupRestoreWidget in prova.py
+# nel metodo _start_restore
 
     def _start_restore(self):
         restore_file = self.restore_file_path_edit.text()
@@ -5717,7 +5934,11 @@ class BackupRestoreWidget(QWidget):
         # --- AVVISI E CONFERME MULTIPLE ---
         # Recupera i dettagli del DB usando i metodi getter
         dbname_to_restore = self.db_manager.get_current_dbname() or "Database Sconosciuto"
-        db_host_for_prompt = self.db_manager._conn_params_dict.get('host', 'N/A') # Potresti creare un getter anche per host e user se preferisci
+
+        db_host_for_prompt = "N/Host" # Fallback
+        if hasattr(self.db_manager, '_conn_params_dict') and self.db_manager._conn_params_dict:
+             db_host_for_prompt = self.db_manager._conn_params_dict.get('host', 'N/Host')
+
         db_user_for_prompt = self.db_manager.get_current_user() or "Utente Sconosciuto"
 
         if dbname_to_restore == "Database Sconosciuto": # Controllo di sicurezza aggiuntivo
@@ -5728,7 +5949,7 @@ class BackupRestoreWidget(QWidget):
                                      f"<b>ATTENZIONE ESTREMA!</b>\n\n"
                                      f"Stai per ripristinare il database dal file:\n'{os.path.basename(restore_file)}'\n"
                                      f"sul database di destinazione:\n<b>'{dbname_to_restore}'</b> "
-                                     f"(Host: {db_host_for_prompt}, Utente DB: {db_user_for_prompt}).\n\n" # Aggiunto utente DB per chiarezza
+                                     f"(Host: {db_host_for_prompt}, Utente DB: {db_user_for_prompt}).\n\n"
                                      "<b>Questa operazione SOVRASCRIVERÀ tutti i dati correnti nel database di destinazione e NON PUÒ ESSERE ANNULLATA.</b>\n\n"
                                      "Si raccomanda VIVAMENTE di aver effettuato un backup recente e verificato del database corrente prima di procedere.\n\n"
                                      "Sei assolutamente sicuro di voler continuare?",
@@ -5753,8 +5974,8 @@ class BackupRestoreWidget(QWidget):
 
         # --- Richiesta Password ---
         password, ok = QInputDialog.getText(self, "Autenticazione Database per Ripristino",
-                                            f"Inserisci la password per l'utente '{db_user_for_prompt}' " # Usa la variabile recuperata
-                                            f"per il database '{dbname_to_restore}':", # Usa la variabile recuperata
+                                            f"Inserisci la password per l'utente '{db_user_for_prompt}' " 
+                                            f"per il database '{dbname_to_restore}':",
                                             QLineEdit.Password)
         if not ok:
             self.output_text_edit.append("<i>Ripristino annullato (dialogo password chiuso).</i>")
@@ -5762,29 +5983,20 @@ class BackupRestoreWidget(QWidget):
         if not password.strip():
             QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota per il ripristino.")
             self.output_text_edit.append("<font color='orange'>Ripristino fallito: password non fornita.</font>")
-            self._update_ui_for_process(False) # Resetta UI
+            self._update_ui_for_process(False) 
             return
         # --- Fine Richiesta Password ---
 
         self._update_ui_for_process(True)
-        self.output_text_edit.clear()
+        self.output_text_edit.clear() 
         self.output_text_edit.append(f"Avvio ripristino del database '{dbname_to_restore}' da: {restore_file}...\n")
         self.output_text_edit.append("<font color='orange'><b>AVVISO: L'applicazione potrebbe non rispondere durante l'operazione di ripristino. Attendere il completamento.</b></font>\n")
-        QApplication.processEvents()
+        QApplication.processEvents() 
 
-        # Disconnessione temporanea del pool di connessioni dell'applicazione
-        # Questo è FONDAMENTALE per pg_restore, specialmente con --clean,
-        # per evitare errori di "database in uso".
-        # Il metodo disconnect_pool() deve chiudere tutte le connessioni nel pool.
-        # Il metodo reconnect_pool() deve ricreare/riaprire il pool.
-        # Questi metodi andranno implementati in CatastoDBManager.
-        
-        self.output_text_edit.append("<i>Tentativo di chiudere le connessioni attive al database...</i>\n")
-        QApplication.processEvents()
-        # --- DISCONNESSIONE POOL ---
+        # Logica per la disconnessione temporanea del pool (se decommentata e implementata)
         self.output_text_edit.append("<i>Tentativo di chiudere le connessioni attive dell'applicazione al database...</i>\n")
         QApplication.processEvents()
-        if not self.db_manager.disconnect_pool_temporarily(): # Nome corretto del metodo
+        if not self.db_manager.disconnect_pool_temporarily(): # CORRETTO
             QMessageBox.critical(self, "Errore Critico Ripristino",
                                  "Impossibile chiudere le connessioni esistenti al database prima del ripristino.\n"
                                  "L'operazione è stata annullata per sicurezza.")
@@ -5793,7 +6005,7 @@ class BackupRestoreWidget(QWidget):
             return
         self.output_text_edit.append("<i>Connessioni dell'applicazione al database chiuse temporaneamente.</i>\n")
         QApplication.processEvents()
-        # --- FINE DISCONNESSIONE POOL ---
+
         command_parts = self.db_manager.get_restore_command_parts(
             backup_file_path=restore_file,
             pg_tool_executable_path_ui=self.pg_restore_path_edit.text().strip()
@@ -5802,14 +6014,14 @@ class BackupRestoreWidget(QWidget):
         if not command_parts:
             self.output_text_edit.append("<font color='red'><b>ERRORE: Impossibile costruire il comando di ripristino. Controllare il percorso dell'eseguibile e i log.</b></font>")
             self._update_ui_for_process(False)
-            self.db_manager.reconnect_pool_if_needed() # Riattiva il pool se era stato disconnesso
+            # Tentativo di riconnettere il pool se la disconnessione era avvenuta
+            self.output_text_edit.append("<i>Tentativo di ripristinare le connessioni dell'applicazione (dopo fallimento preparazione comando)...</i>")
+            if not self.db_manager.reconnect_pool_if_needed(): # CORRETTO
+                 self.output_text_edit.append("<font color='red'><b>FALLITO riconnessione pool. Riavviare l'app.</b></font>")
+            else:
+                 self.output_text_edit.append("<i>Connessioni applicazione ripristinate.</i>")
             QMessageBox.critical(self, "Errore Comando", "Impossibile preparare il comando di ripristino.")
             return
-
-        executable = command_parts[0]
-        args = command_parts[1:]
-
-        self.output_text_edit.append(f"Comando da eseguire: {executable} {' '.join(args)}\n")
 
         executable = command_parts[0]
         args = command_parts[1:]
@@ -5821,7 +6033,7 @@ class BackupRestoreWidget(QWidget):
             process_env.insert("PGPASSWORD", password)
             self.process.setProcessEnvironment(process_env)
             self.output_text_edit.append("<i>PGPASSWORD impostata per questo processo.</i>\n")
-        except Exception as e:
+        except Exception as e: 
             self.output_text_edit.append(f"<font color='red'><b>ERRORE nell'impostare PGPASSWORD: {e}</b></font>\n")
 
         self.process.setProperty("is_restore_operation", True)
@@ -5956,13 +6168,26 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         if not self.selected_comune_id:
             QMessageBox.warning(self, "Comune Mancante", "Seleziona prima un comune per filtrare le località.")
             return
-        dialog = LocalitaSelectionDialog(self.db_manager, self.selected_comune_id, self) # Usa LocalitaSelectionDialog
-        dialog.setWindowTitle(f"Seleziona Località per Comune ID: {self.selected_comune_id}")
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_localita_id:
-            self.selected_localita_id = dialog.selected_localita_id
-            self.localita_display_label.setText(f"{dialog.selected_localita_name} (ID: {self.selected_localita_id})")
-        elif not self.selected_localita_id:
-            self.localita_display_label.setText("Qualsiasi località")
+        
+        # Apre LocalitaSelectionDialog in MODALITÀ SELEZIONE
+        dialog = LocalitaSelectionDialog(self.db_manager, self.selected_comune_id, self, 
+                                         selection_mode=True) 
+        
+        if dialog.exec_() == QDialog.Accepted: # Se l'utente ha premuto "Seleziona" nel dialogo
+            if dialog.selected_localita_id is not None and dialog.selected_localita_name is not None:
+                self.selected_localita_id = dialog.selected_localita_id
+                self.localita_display_label.setText(f"{dialog.selected_localita_name} (ID: {self.selected_localita_id})")
+                gui_logger.info(f"RicercaAvanzataImmobili: Località selezionata ID: {self.selected_localita_id}, Nome: {dialog.selected_localita_name}")
+            else:
+                # Questo caso è improbabile se _conferma_selezione funziona, ma per sicurezza
+                gui_logger.warning("RicercaAvanzataImmobili: LocalitaSelectionDialog accettato ma nessun ID/nome località valido è stato restituito.")
+                # Potrebbe essere utile resettare qui, o lasciare la selezione precedente.
+                # self._reset_localita_ricerca() 
+        # else: # Dialogo annullato (premuto "Annulla" o chiuso)
+            # Non fare nulla, la selezione precedente (o nessuna selezione) rimane.
+            # Non è necessario chiamare self._reset_localita_ricerca() a meno che non sia il comportamento desiderato.
+            gui_logger.info("Selezione località annullata o dialogo chiuso.")
+
 
     def _reset_localita_ricerca(self):
         self.selected_localita_id = None
@@ -6420,9 +6645,9 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs.clear() # Pulisce i sotto-tab precedenti
         self.consultazione_sub_tabs.addTab(ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs), "Elenco Comuni")
         self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Partite")
-        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Possessori")
+        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Avanzata Possessori")
         self.consultazione_sub_tabs.addTab(RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Immobili Avanzata")
-        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione")
+        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione e Modifica")
 
         # --- Tab Inserimento e Gestione (MODIFICATO con pulsante "Nuovo Comune") ---
         # 1. Crea un widget contenitore principale per questo tab
@@ -6462,7 +6687,7 @@ class CatastoMainWindow(QMainWindow):
         self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
 
         # --- Tab Ricerca Avanzata Possessori ---
-        self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata Possessori")
+        #self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata Possessori")
 
         # --- Tab Esportazioni ---
         self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni")

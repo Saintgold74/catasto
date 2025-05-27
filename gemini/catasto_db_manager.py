@@ -398,29 +398,108 @@ class CatastoDBManager:
             logger.error(f"Errore Python in check_possessore_exists: {e}")
         return None
 
-    def insert_possessore(self, comune_id: int, cognome_nome: str, paternita: Optional[str], # Usa comune_id
-                        nome_completo: str, attivo: bool = True) -> Optional[int]:
-        """Inserisce un nuovo possessore usando la procedura SQL. Ritorna l'ID."""
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
+
+    def create_possessore(self, 
+                          nome_completo: str, 
+                          comune_riferimento_id: int,
+                          paternita: Optional[str] = None, 
+                          attivo: bool = True, 
+                          cognome_nome: Optional[str] = None
+                         ) -> Optional[int]: # Restituisce l'ID del nuovo possessore o None
+        """
+        Crea un nuovo possessore nel database.
+        Utilizza il pool di connessioni.
+        Solleva eccezioni specifiche in caso di errore (es. DBUniqueConstraintError).
+
+        Args:
+            nome_completo: Il nome completo del possessore (obbligatorio).
+            comune_riferimento_id: L'ID del comune di riferimento (obbligatorio).
+            paternita: La paternità del possessore (opzionale).
+            attivo: Stato del possessore (default True).
+            cognome_nome: Cognome e Nome separati, per ricerca/ordinamento (opzionale).
+
+        Returns:
+            L'ID del possessore appena creato se l'operazione ha successo, altrimenti None.
+            Solleva eccezioni in caso di errori DB che non riesce a gestire.
+        """
+        if not nome_completo or not nome_completo.strip():
+            self.logger.error("create_possessore: Il nome_completo è obbligatorio.")
+            raise DBDataError("Il nome completo del possessore è obbligatorio.")
+        if comune_riferimento_id is None or not isinstance(comune_riferimento_id, int) or comune_riferimento_id <= 0:
+            self.logger.error(f"create_possessore: comune_riferimento_id non valido: {comune_riferimento_id}")
+            raise DBDataError("ID del comune di riferimento non valido.")
+
+        query = f"""
+            INSERT INTO {self.schema}.possessore 
+                (nome_completo, paternita, comune_id, attivo, cognome_nome, data_creazione, data_modifica)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id;
+        """
+        # Gestisci i valori opzionali che potrebbero essere stringhe vuote passate dalla GUI
+        actual_paternita = paternita.strip() if isinstance(paternita, str) and paternita.strip() else None
+        actual_cognome_nome = cognome_nome.strip() if isinstance(cognome_nome, str) and cognome_nome.strip() else None
+        
+        params = (nome_completo.strip(), actual_paternita, comune_riferimento_id, attivo, actual_cognome_nome)
+        
+        conn = None
+        new_possessore_id = None
         try:
-            # Procedura SQL aggiornata per accettare comune_id
-            if self.execute_query("CALL inserisci_possessore(%s, %s, %s, %s, %s)",
-                                  (comune_id, cognome_nome, paternita, nome_completo, attivo)):
-                self.commit()
-                # Recupera l'ID
-                return self.check_possessore_exists(nome_completo, comune_id)
-            return None
-        except psycopg2.Error as db_err:
-            # Gestione specifica per violazione constraint (es. comune_id non esiste)
-            if db_err.pgcode == psycopg2.errors.ForeignKeyViolation:
-                 logger.error(f"Errore FK in insert_possessore: Comune ID {comune_id} non valido? Dettagli: {db_err}")
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query create_possessore: {cur.mogrify(query, params).decode('utf-8', 'ignore')}")
+                cur.execute(query, params)
+                result = cur.fetchone()
+                if result and result[0] is not None:
+                    new_possessore_id = result[0]
+                    conn.commit()
+                    self.logger.info(f"Possessore '{nome_completo}' (Comune ID: {comune_riferimento_id}) creato con successo. ID: {new_possessore_id}.")
+                else:
+                    # Questo non dovrebbe accadere se RETURNING id è usato e l'insert ha successo senza sollevare eccezioni
+                    conn.rollback() # Assicurati che la transazione sia annullata
+                    self.logger.error("create_possessore: Inserimento fallito, nessun ID restituito e nessuna eccezione DB esplicita.")
+                    raise DBMError("Creazione del possessore fallita senza un errore database specifico.")
+            
+            return new_possessore_id
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve)) # Dettaglio errore da PostgreSQL
+            self.logger.error(f"Errore di unicità (vincolo: {constraint_name}) creando possessore '{nome_completo}': {error_detail}")
+            # Potresti avere un vincolo UNIQUE su (nome_completo, comune_id) o altri campi.
+            # Adatta il messaggio in base ai tuoi vincoli specifici.
+            if "possessore_nome_completo_comune_id_key" in str(constraint_name).lower(): # Esempio di nome vincolo
+                 msg = f"Un possessore con nome '{nome_completo}' esiste già in questo comune."
             else:
-                 logger.error(f"Errore DB specifico in insert_possessore: {db_err}")
-            # Rollback è già stato fatto da execute_query
-            return None
-        except Exception as e:
-            logger.error(f"Errore Python in insert_possessore: {e}")
-            self.rollback()
-            return None
+                 msg = f"Impossibile creare il possessore: i dati violano un vincolo di unicità (vincolo: {constraint_name})."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        
+        except psycopg2.errors.ForeignKeyViolation as fke:
+            if conn: conn.rollback()
+            constraint_name = getattr(fke.diag, 'constraint_name', "N/D")
+            error_detail = getattr(fke, 'pgerror', str(fke))
+            self.logger.error(f"Violazione Foreign Key (vincolo: {constraint_name}) creando possessore '{nome_completo}': {error_detail}")
+            if "possessore_comune_id_fkey" in str(constraint_name).lower(): # Nome del tuo vincolo FK su comune_id
+                 msg = f"Il comune di riferimento specificato (ID: {comune_riferimento_id}) non esiste."
+            else:
+                 msg = f"Impossibile creare il possessore: errore di riferimento a dati esterni (vincolo: {constraint_name})."
+            raise DBMError(msg) from fke # Potresti creare una DBForeignKeyError specifica
+            
+        except psycopg2.Error as db_err: # Altri errori DB specifici
+            if conn: conn.rollback()
+            error_detail = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB generico creando possessore '{nome_completo}': {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante la creazione del possessore: {error_detail}") from db_err
+        
+        except Exception as e: # Errori Python imprevisti
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto creando possessore '{nome_completo}': {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante la creazione del possessore: {e}") from e
+        
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def get_possessori_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
         conn = None
@@ -1210,34 +1289,79 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
     
-    def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None, # Usa comune_id
-                      possessore: Optional[str] = None, immobile_natura: Optional[str] = None) -> List[Dict]:
-        """Ricerca partite con filtri multipli (MODIFICATO per comune_id)."""
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
+
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
+
+    def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None,
+                      possessore: Optional[str] = None, immobile_natura: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Ricerca partite con filtri multipli.
+        Utilizza il pool di connessioni e formatta i risultati come lista di dizionari.
+        """
+        conn = None  # Inizializza la variabile di connessione
         try:
-            conditions = []; params = []; joins = ""
+            conditions = []
+            params = []
+            current_joins_str = "" # Stringa per accumulare i JOIN necessari
+
+            # Colonne selezionate e tabella base (partita SEMPRE joinata con comune)
             select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.stato"
-            query_base = f"SELECT DISTINCT {select_cols} FROM partita p JOIN comune c ON p.comune_id = c.id" # JOIN
+            query_base = f"SELECT DISTINCT {select_cols} FROM {self.schema}.partita p JOIN {self.schema}.comune c ON p.comune_id = c.id"
 
             if possessore:
-                if "partita_possessore pp" not in joins:
-                    joins += " LEFT JOIN partita_possessore pp ON p.id = pp.partita_id LEFT JOIN possessore pos ON pp.possessore_id = pos.id"
-                conditions.append("pos.nome_completo ILIKE %s"); params.append(f"%{possessore}%")
+                join_possessore_str = f" JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id JOIN {self.schema}.possessore pos ON pp.possessore_id = pos.id"
+                if join_possessore_str not in current_joins_str: # Evita di aggiungere lo stesso JOIN più volte
+                    current_joins_str += join_possessore_str
+                conditions.append("pos.nome_completo ILIKE %s")
+                params.append(f"%{possessore}%")
+
             if immobile_natura:
-                if "immobile i" not in joins: joins += " LEFT JOIN immobile i ON p.id = i.partita_id"
-                conditions.append("i.natura ILIKE %s"); params.append(f"%{immobile_natura}%")
-            if comune_id is not None: # Filtro per ID
-                conditions.append("p.comune_id = %s"); params.append(comune_id)
+                join_immobile_str = f" JOIN {self.schema}.immobile i ON p.id = i.partita_id"
+                if join_immobile_str not in current_joins_str:
+                    current_joins_str += join_immobile_str
+                conditions.append("i.natura ILIKE %s")
+                params.append(f"%{immobile_natura}%")
+
+            if comune_id is not None:
+                conditions.append("p.comune_id = %s")
+                params.append(comune_id)
+
             if numero_partita is not None:
-                conditions.append("p.numero_partita = %s"); params.append(numero_partita)
+                conditions.append("p.numero_partita = %s")
+                params.append(numero_partita)
 
-            query = query_base + joins
-            if conditions: query += " WHERE " + " AND ".join(conditions)
-            query += " ORDER BY c.nome, p.numero_partita" # Ordina per nome
+            # Costruzione finale della query
+            query = query_base + current_joins_str # Aggiunge tutti i join necessari
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            query += " ORDER BY c.nome, p.numero_partita"
 
-            if self.execute_query(query, tuple(params)): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB in search_partite: {db_err}")
-        except Exception as e: logger.error(f"Errore Python in search_partite: {e}")
-        return []
+            # Logging della query e dei parametri (fondamentale per il debug)
+            self.logger.debug(f"CatastoDBManager.search_partite - Query: {query} - Params: {tuple(params)}")
+
+            conn = self._get_connection() # Ottiene una connessione dal pool
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur: # Usa DictCursor per risultati come dizionari
+                cur.execute(query, tuple(params)) # Passa i parametri come tupla
+                results_raw = cur.fetchall()
+                
+                # Log dei risultati grezzi per debug (opzionale, ma utile)
+                # self.logger.debug(f"CatastoDBManager.search_partite - Raw results from DB: {results_raw}")
+                
+                results_list_of_dicts = [dict(row) for row in results_raw] if results_raw else []
+                self.logger.info(f"CatastoDBManager.search_partite - Trovate {len(results_list_of_dicts)} partite.")
+                return results_list_of_dicts
+
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in search_partite: {db_err}", exc_info=True)
+            if conn: conn.rollback() # Importante per errori transazionali
+        except Exception as e:
+            self.logger.error(f"Errore Python generico in search_partite: {e}", exc_info=True)
+            if conn: conn.rollback() # Anche qui, per sicurezza
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia SEMPRE la connessione al pool
+        return [] # Restituisce lista vuota in caso di errore o nessun risultato
 
     def search_immobili(self, partita_id: Optional[int] = None, comune_id: Optional[int] = None, # Usa comune_id
                         localita_id: Optional[int] = None, natura: Optional[str] = None,
@@ -1384,23 +1508,80 @@ class CatastoDBManager:
 
     # --- Metodi per Workflow Complessi (MODIFICATI per comune_id) ---
 
-    def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date, # Usa comune_id
-                                 possessori: List[Dict], immobili: List[Dict]) -> bool:
-        """Chiama la procedura SQL registra_nuova_proprieta (MODIFICATA per comune_id)."""
-        try:
-            possessori_json = json.dumps(possessori)
-            immobili_json = json.dumps(immobili)
-            # Procedura SQL aggiornata per comune_id
-            call_proc = "CALL registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json)"
-            params = (comune_id, numero_partita, data_impianto, possessori_json, immobili_json) # Passa ID
-            if self.execute_query(call_proc, params):
-                self.commit()
-                logger.info(f"Registrata nuova proprietà: Comune ID {comune_id}, Partita N.{numero_partita}")
-                return True
-            return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB registrazione nuova proprietà (Partita {numero_partita}): {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python registrazione nuova proprietà (Partita {numero_partita}): {e}"); self.rollback(); return False
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
 
+    def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
+                                 possessori: List[Dict[str, Any]], # Specificato tipo per chiarezza
+                                 immobili: List[Dict[str, Any]]   # Specificato tipo per chiarezza
+                                ) -> bool:
+        """
+        Chiama la procedura SQL catasto.registra_nuova_proprieta.
+        Utilizza il pool di connessioni e gestisce commit/rollback.
+        Restituisce True in caso di successo, altrimenti solleva un'eccezione.
+        """
+        conn = None  # Inizializza la variabile di connessione
+        try:
+            # Serializza i dati JSON per i possessori e gli immobili
+            try:
+                possessori_json = json.dumps(possessori)
+                immobili_json = json.dumps(immobili)
+            except TypeError as te_json:
+                self.logger.error(f"Errore di serializzazione JSON in registra_nuova_proprieta: {te_json}", exc_info=True)
+                # Solleva un'eccezione che può essere gestita dalla UI
+                raise DBDataError(f"Dati per possessori o immobili non validi per la conversione JSON: {te_json}") from te_json
+
+            # Nome completo della procedura, incluso lo schema
+            call_proc_str = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json)"
+            params = (comune_id, numero_partita, data_impianto, possessori_json, immobili_json)
+
+            conn = self._get_connection() # Ottiene una connessione dal pool
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione CALL {self.schema}.registra_nuova_proprieta - Params: C_ID={comune_id}, Part_N={numero_partita}, DataImp={data_impianto}, N_Poss={len(possessori)}, N_Imm={len(immobili)}")
+                cur.execute(call_proc_str, params)
+                # Per una CALL, il successo è l'assenza di eccezioni.
+                # Il commit è necessario per rendere effettive le modifiche fatte dalla procedura.
+                conn.commit() 
+                self.logger.info(f"Registrata nuova proprietà con successo: Comune ID {comune_id}, Partita N.{numero_partita}")
+                return True # Indica successo
+
+        except psycopg2.Error as db_err: # Cattura errori specifici del database (incl. errori sollevati dalla procedura SQL)
+            if conn: conn.rollback() # Annulla la transazione in caso di errore DB
+            pgcode = getattr(db_err, 'pgcode', None) # Codice errore SQLSTATE
+            pgerror_msg = getattr(db_err, 'pgerror', str(db_err)) # Messaggio di errore da PostgreSQL
+            self.logger.error(f"Errore DB (Codice: {pgcode}) in registra_nuova_proprieta (Partita N.{numero_partita}): {pgerror_msg}", exc_info=True)
+            
+            # Qui potresti voler mappare pgcode a eccezioni più specifiche se la procedura
+            # solleva errori con SQLSTATE definiti (es. per duplicati, dati non validi).
+            # Esempio:
+            # if pgcode == 'P0001': # RAISE EXCEPTION nella procedura SQL
+            #     if "partita duplicata" in pgerror_msg.lower(): # Controlla il messaggio dell'eccezione
+            #         raise DBUniqueConstraintError(f"Errore dalla procedura: Partita N.{numero_partita} duplicata nel comune ID {comune_id}.", details=pgerror_msg) from db_err
+            #     elif "dati possessore non validi" in pgerror_msg.lower():
+            #         raise DBDataError(f"Errore dalla procedura: Dati possessore non validi.", details=pgerror_msg) from db_err
+            #     # ... altri casi specifici dalla procedura ...
+            
+            # Per ora, solleviamo un DBMError generico che include il messaggio del DB
+            raise DBMError(f"Errore database durante la registrazione della nuova proprietà: {pgerror_msg}") from db_err
+        
+        except DBDataError: # Rilancia DBDataError dalla serializzazione JSON
+            # Il rollback non è necessario qui perché la transazione DB potrebbe non essere iniziata
+            raise # Rilancia l'eccezione così com'è
+
+        except Exception as e: # Cattura altri errori Python imprevisti
+            if conn: conn.rollback() # Annulla la transazione per sicurezza
+            self.logger.error(f"Errore Python imprevisto in registra_nuova_proprieta (Partita N.{numero_partita}): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante la registrazione della proprietà: {e}") from e
+            # Non è più necessario `return False` qui perché solleviamo eccezioni
+        
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia SEMPRE la connessione al pool
+        
+        # Questa riga non dovrebbe essere raggiunta se ogni fallimento solleva un'eccezione.
+        # Se per qualche motivo la procedura potesse "fallire" senza sollevare un'eccezione SQL
+        # (altamente improbabile per una CALL che modifica dati), allora un return False qui avrebbe senso.
+        # Ma è meglio affidarsi alle eccezioni per segnalare fallimenti.
+        # return False
     def registra_passaggio_proprieta(self, partita_origine_id: int, comune_id: int, numero_partita: int, # Usa comune_id
                                      tipo_variazione: str, data_variazione: date, tipo_contratto: str,
                                      data_contratto: date, **kwargs) -> bool:
@@ -2871,58 +3052,55 @@ class CatastoDBManager:
     
     # --- Metodi Ricerca Avanzata (MODIFICATI) ---
 
-    # All'interno della classe CatastoDBManager
-    # All'interno della classe CatastoDBManager
     def ricerca_avanzata_possessori(self,
                                     query_text: str,
-                                    # comune_id è stato rimosso come parametro
-                                    similarity_threshold: Optional[float] = 0.2
-                                ) -> List[Dict[str, Any]]:
+                                    similarity_threshold: Optional[float] = 0.2 # Manteniamo il default che aveva
+                                   ) -> List[Dict[str, Any]]:
         """
         Esegue una ricerca avanzata di possessori utilizzando le funzioni di similarità di PostgreSQL.
-        Utilizza una soglia di similarità specificata.
+        Utilizza una soglia di similarità specificata e il pool di connessioni.
+        La funzione SQL sottostante è catasto.ricerca_avanzata_possessori(TEXT, REAL).
         """
         
-        # La funzione SQL ora accetta (TEXT, REAL)
-        query = "SELECT * FROM catasto.ricerca_avanzata_possessori(%s::TEXT, %s::REAL);"
+        # La funzione SQL accetta (TEXT, REAL)
+        query = f"SELECT * FROM {self.schema}.ricerca_avanzata_possessori(%s::TEXT, %s::REAL);"
         params = (query_text, similarity_threshold)
         
+        conn = None  # Inizializza la variabile di connessione
         try:
-            if not self.conn or self.conn.closed:
-                logger.error("Connessione al database non attiva.")
-                return []
+            conn = self._get_connection() # Ottiene una connessione dal pool
             
-            # Assicurati che DictCursor sia importato: from psycopg2.extras import DictCursor
-            with self.conn.cursor(cursor_factory=DictCursor) as cur:
-                if logger.level == logging.DEBUG:
-                    try:
-                        log_query = cur.mogrify(query, params)
-                        logger.debug(f"Esecuzione query (ricerca avanzata possessori): {log_query.decode('utf-8', errors='ignore')}")
-                    except Exception as e_mogrify:
-                        logger.debug(f"Impossibile eseguire mogrify: {e_mogrify}. Query: {query}, Params: {params}")
-                
+            # Usa DictCursor per ottenere risultati come dizionari
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                # Logging della query e dei parametri
+                # self.logger.debug(f"Esecuzione query (ricerca avanzata possessori): Query='{cur.mogrify(query, params).decode('utf-8', 'ignore')}'")
+                # Semplifichiamo il logging per evitare potenziali problemi con mogrify in alcuni contesti:
+                self.logger.debug(f"Esecuzione query (ricerca avanzata possessori): Query='{query}', Params='{params}'")
+
                 cur.execute(query, params)
                 results_raw = cur.fetchall()
             
+            # Trasforma i risultati grezzi in una lista di dizionari Python
             results = [dict(row) for row in results_raw] if results_raw else []
 
             if results:
-                # *** MODIFICA QUI: Rimuovi comune_id dai messaggi di log ***
-                logger.info(f"Ricerca avanzata possessori per '{query_text}' (soglia: {similarity_threshold}) ha prodotto {len(results)} risultati.")
+                self.logger.info(f"Ricerca avanzata possessori per '{query_text}' (soglia: {similarity_threshold}) ha prodotto {len(results)} risultati.")
             else:
-                # *** MODIFICA QUI: Rimuovi comune_id dai messaggi di log ***
-                logger.info(f"Nessun risultato per ricerca avanzata possessori: '{query_text}' (soglia: {similarity_threshold}).")
+                self.logger.info(f"Nessun risultato per ricerca avanzata possessori: '{query_text}' (soglia: {similarity_threshold}).")
             return results
+            
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB durante la ricerca avanzata dei possessori: {db_err}")
-            self.rollback()
-            return []
+            self.logger.error(f"Errore DB durante la ricerca avanzata dei possessori: {db_err}", exc_info=True)
+            if conn: conn.rollback() # Rollback in caso di errore sulla connessione specifica
+            return [] # Restituisce lista vuota in caso di errore DB
         except Exception as e:
-            # Questo è l'errore che stai vedendo ora (NameError)
-            logger.error(f"Errore Python imprevisto durante la ricerca avanzata dei possessori: {e}")
-            # Potresti non voler fare rollback per un NameError, dipende se una transazione è attiva
-            # self.rollback() # Commentato per ora per NameError
-            return []
+            self.logger.error(f"Errore Python imprevisto durante la ricerca avanzata dei possessori: {e}", exc_info=True)
+            if conn: conn.rollback() # Anche qui, per sicurezza
+            return [] # Restituisce lista vuota in caso di errore generico
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia SEMPRE la connessione al pool
+
     def ricerca_avanzata_immobili_gui(self,
                                    comune_id: Optional[int] = None,
                                    localita_id: Optional[int] = None,

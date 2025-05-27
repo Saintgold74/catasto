@@ -1701,7 +1701,18 @@ class CatastoDBManager:
 
             # Assicurati che il nome della procedura e dello schema siano corretti.
             call_proc_str = f"CALL {self.schema}.registra_passaggio_proprieta(" \
-                            f"%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s);" 
+                            f"%s, %s, %s, " \
+                            f"%s::TEXT, %s::DATE, " \
+                            f"%s::TEXT, %s::DATE, " \
+                            f"%s::TEXT, %s::TEXT, " \
+                            f"%s::JSON, %s::INTEGER[], " \
+                            f"%s::TEXT);"
+            #     ^part_orig     ^com_nuova    ^num_nuova
+            #                  ^tipo_var    ^data_var
+            #                               ^tipo_contr  ^data_contr
+            #                                            ^notaio      ^repertorio
+            #                                                         ^nuovi_poss (ORA ::JSON)  ^imm_da_trasf (INTEGER[])
+            #                                                                                     ^note_var
             
             params = (
                 partita_origine_id,
@@ -1713,8 +1724,8 @@ class CatastoDBManager:
                 data_contratto,
                 notaio,
                 repertorio,
-                nuovi_possessori_jsonb,       # Passato come JSONB
-                immobili_da_trasferire_ids, # Passato come lista Python, psycopg2 lo gestirà per ARRAY integer
+                nuovi_possessori_jsonb, # La variabile Python può rimanere chiamata _jsonb, ma il cast SQL è ::JSON
+                immobili_da_trasferire_ids,
                 note_variazione
             )
             

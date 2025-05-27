@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QTableWidgetItem, QDateEdit, QScrollArea,
                             QDialog, QListWidget,QMainWindow,QDateTimeEdit ,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, QMenu,QFormLayout) 
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, QMenu,QFormLayout,QDialogButtonBox) 
 from PyQt5.QtCore import Qt, QDate, QSettings 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
 from PyQt5.QtWidgets import QDoubleSpinBox
@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
 import os # Per gestire percorsi# <--- ASSICURATI CHE QDateTime SIA PRESENTE
 from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime # Assicurati che QDateTime sia qui
+from PyQt5.QtCore import pyqtSignal
 
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
@@ -2345,6 +2346,380 @@ class ModificaPartitaDialog(QDialog):
     #         # Poi self._load_possessori_associati()
 
 # Non dimenticare di importare ModificaPartitaDialog dove serve, ad esempio in PartiteComuneDialog
+class OperazioniPartitaWidget(QWidget):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.selected_partita_id_source: Optional[int] = None
+        self.selected_partita_comune_id_source: Optional[int] = None # Utile per validazioni
+
+        self._initUI()
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10,10,10,10)
+        main_layout.setSpacing(15)
+
+        # --- 1. Selezione Partita Sorgente ---
+        source_partita_group = QGroupBox("Selezione Partita Sorgente")
+        source_partita_layout = QGridLayout(source_partita_group)
+
+        source_partita_layout.addWidget(QLabel("ID Partita Sorgente:"), 0, 0)
+        self.source_partita_id_spinbox = QSpinBox()
+        self.source_partita_id_spinbox.setRange(1, 999999)
+        source_partita_layout.addWidget(self.source_partita_id_spinbox, 0, 1)
+
+        self.btn_cerca_source_partita = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView), " Cerca Partita...")
+        self.btn_cerca_source_partita.clicked.connect(self._cerca_partita_sorgente)
+        source_partita_layout.addWidget(self.btn_cerca_source_partita, 0, 2)
+        
+        self.source_partita_info_label = QLabel("Nessuna partita sorgente selezionata.")
+        self.source_partita_info_label.setWordWrap(True)
+        source_partita_layout.addWidget(self.source_partita_info_label, 1, 0, 1, 3)
+        
+        main_layout.addWidget(source_partita_group)
+
+        # --- Contenitore per le operazioni (magari con sotto-tab in futuro) ---
+        operazioni_scroll = QScrollArea() # Se le operazioni diventano molte
+        operazioni_scroll.setWidgetResizable(True)
+        operazioni_widget_container = QWidget()
+        operazioni_layout = QVBoxLayout(operazioni_widget_container)
+        operazioni_layout.setSpacing(20)
+
+        # --- 2. Operazione: Duplica Partita ---
+        duplica_group = QGroupBox("Duplica Partita Selezionata")
+        duplica_layout = QFormLayout(duplica_group)
+        duplica_layout.setSpacing(10)
+
+        self.nuovo_numero_partita_spinbox = QSpinBox()
+        self.nuovo_numero_partita_spinbox.setRange(1, 999999)
+        duplica_layout.addRow("Nuovo Numero Partita (*):", self.nuovo_numero_partita_spinbox)
+
+        self.duplica_mantieni_poss_check = QCheckBox("Mantieni Possessori Originali")
+        self.duplica_mantieni_poss_check.setChecked(True)
+        duplica_layout.addRow(self.duplica_mantieni_poss_check)
+
+        self.duplica_mantieni_imm_check = QCheckBox("Mantieni Immobili Originali (Copia)")
+        self.duplica_mantieni_imm_check.setChecked(False) # Di solito si duplica senza immobili o si sceglie dopo
+        duplica_layout.addRow(self.duplica_mantieni_imm_check)
+
+        self.btn_esegui_duplicazione = QPushButton("Esegui Duplicazione")
+        self.btn_esegui_duplicazione.clicked.connect(self._esegui_duplicazione_partita)
+        duplica_layout.addRow(self.btn_esegui_duplicazione)
+        operazioni_layout.addWidget(duplica_group)
+
+        # --- 4. Operazione: Passaggio di Proprietà / Voltura ---
+        passaggio_group = QGroupBox("Passaggio di Proprietà (Voltura)")
+        passaggio_main_layout = QVBoxLayout(passaggio_group) # Layout principale per questo gruppo
+
+        # Layout a griglia per i campi
+        passaggio_form_layout = QFormLayout()
+        passaggio_form_layout.setSpacing(10)
+
+        # Dati Nuova Partita
+        self.pp_nuova_partita_numero_spinbox = QSpinBox()
+        self.pp_nuova_partita_numero_spinbox.setRange(1, 999999)
+        passaggio_form_layout.addRow("Numero Nuova Partita (*):", self.pp_nuova_partita_numero_spinbox)
+        
+        self.pp_nuova_partita_comune_label = QLabel("Il comune sarà lo stesso della partita sorgente.")
+        passaggio_form_layout.addRow("Comune Nuova Partita:", self.pp_nuova_partita_comune_label)
+
+        # Dati Variazione
+        self.pp_tipo_variazione_edit = QLineEdit()
+        self.pp_tipo_variazione_edit.setPlaceholderText("Es. Compravendita, Successione, Donazione")
+        passaggio_form_layout.addRow("Tipo Variazione (*):", self.pp_tipo_variazione_edit)
+
+        self.pp_data_variazione_edit = QDateEdit(calendarPopup=True)
+        self.pp_data_variazione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.pp_data_variazione_edit.setDate(QDate.currentDate())
+        passaggio_form_layout.addRow("Data Variazione (*):", self.pp_data_variazione_edit)
+        
+        self.pp_tipo_contratto_edit = QLineEdit()
+        self.pp_tipo_contratto_edit.setPlaceholderText("Es. Atto Notarile, Sentenza, Denuncia di Successione")
+        passaggio_form_layout.addRow("Tipo Atto/Contratto (*):", self.pp_tipo_contratto_edit)
+
+        self.pp_data_contratto_edit = QDateEdit(calendarPopup=True)
+        self.pp_data_contratto_edit.setDisplayFormat("yyyy-MM-dd")
+        self.pp_data_contratto_edit.setDate(QDate.currentDate())
+        passaggio_form_layout.addRow("Data Atto/Contratto (*):", self.pp_data_contratto_edit)
+
+        self.pp_notaio_edit = QLineEdit()
+        passaggio_form_layout.addRow("Notaio/Autorità Emittente:", self.pp_notaio_edit)
+        
+        self.pp_repertorio_edit = QLineEdit()
+        passaggio_form_layout.addRow("N. Repertorio/Protocollo:", self.pp_repertorio_edit)
+
+        self.pp_note_variazione_edit = QTextEdit()
+        self.pp_note_variazione_edit.setFixedHeight(60)
+        passaggio_form_layout.addRow("Note Variazione:", self.pp_note_variazione_edit)
+
+        passaggio_main_layout.addLayout(passaggio_form_layout) # Aggiunge il form al layout del gruppo
+
+        # Gestione Immobili da Trasferire
+        immobili_transfer_group = QGroupBox("Immobili da Trasferire alla Nuova Partita")
+        immobili_transfer_layout = QVBoxLayout(immobili_transfer_group)
+        self.pp_trasferisci_tutti_immobili_check = QCheckBox("Trasferisci TUTTI gli immobili dalla partita sorgente")
+        self.pp_trasferisci_tutti_immobili_check.setChecked(True) # Default a trasferire tutto
+        self.pp_trasferisci_tutti_immobili_check.toggled.connect(self._toggle_selezione_immobili_pp)
+        immobili_transfer_layout.addWidget(self.pp_trasferisci_tutti_immobili_check)
+        
+        # Tabella per selezione specifica immobili (inizialmente nascosta se il check sopra è attivo)
+        self.pp_immobili_da_selezionare_table = QTableWidget()
+        self.pp_immobili_da_selezionare_table.setColumnCount(4) # CheckBox, ID, Natura, Località
+        self.pp_immobili_da_selezionare_table.setHorizontalHeaderLabels(["Sel.", "ID Imm.", "Natura", "Località"])
+        self.pp_immobili_da_selezionare_table.setSelectionMode(QTableWidget.NoSelection) # La selezione avviene tramite checkbox
+        self.pp_immobili_da_selezionare_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.pp_immobili_da_selezionare_table.setFixedHeight(150)
+        self.pp_immobili_da_selezionare_table.setVisible(False) # Nascosta di default
+        immobili_transfer_layout.addWidget(self.pp_immobili_da_selezionare_table)
+        passaggio_main_layout.addWidget(immobili_transfer_group)
+        
+        # Gestione Nuovi Possessori
+        nuovi_poss_group = QGroupBox("Nuovi Possessori per la Nuova Partita")
+        nuovi_poss_layout = QVBoxLayout(nuovi_poss_group)
+        
+        self.pp_nuovi_possessori_table = QTableWidget()
+        self.pp_nuovi_possessori_table.setColumnCount(4) # ID Poss., Nome, Titolo, Quota
+        self.pp_nuovi_possessori_table.setHorizontalHeaderLabels(["ID Poss.", "Nome Completo", "Titolo (*)", "Quota"])
+        self.pp_nuovi_possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.pp_nuovi_possessori_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.pp_nuovi_possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.pp_nuovi_possessori_table.horizontalHeader().setStretchLastSection(True)
+        nuovi_poss_layout.addWidget(self.pp_nuovi_possessori_table)
+
+        nuovi_poss_buttons_layout = QHBoxLayout()
+        self.pp_btn_aggiungi_nuovo_possessore = QPushButton("Aggiungi Possessore...")
+        self.pp_btn_aggiungi_nuovo_possessore.clicked.connect(self._pp_aggiungi_nuovo_possessore)
+        nuovi_poss_buttons_layout.addWidget(self.pp_btn_aggiungi_nuovo_possessore)
+        self.pp_btn_rimuovi_nuovo_possessore = QPushButton("Rimuovi Possessore Selezionato")
+        self.pp_btn_rimuovi_nuovo_possessore.clicked.connect(self._pp_rimuovi_nuovo_possessore_selezionato)
+        nuovi_poss_buttons_layout.addWidget(self.pp_btn_rimuovi_nuovo_possessore)
+        nuovi_poss_buttons_layout.addStretch()
+        nuovi_poss_layout.addLayout(nuovi_poss_buttons_layout)
+        passaggio_main_layout.addWidget(nuovi_poss_group)
+
+        # Pulsante Finale
+        self.pp_btn_esegui_passaggio = QPushButton("Esegui Passaggio Proprietà")
+        self.pp_btn_esegui_passaggio.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton))
+        self.pp_btn_esegui_passaggio.clicked.connect(self._esegui_passaggio_proprieta)
+        passaggio_main_layout.addWidget(self.pp_btn_esegui_passaggio, 0, Qt.AlignRight)
+        
+        operazioni_layout.addWidget(passaggio_group) # Aggiunge il gruppo al layout delle operazioni
+
+        # Tabella per visualizzare gli immobili della partita sorgente (semplificata per ora)
+        transfer_layout.addRow(QLabel("Immobili nella Partita Sorgente:"))
+        self.immobili_partita_sorgente_table = QTableWidget()
+        self.immobili_partita_sorgente_table.setColumnCount(3) # ID, Natura, Località
+        self.immobili_partita_sorgente_table.setHorizontalHeaderLabels(["ID Imm.", "Natura", "Località"])
+        self.immobili_partita_sorgente_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.immobili_partita_sorgente_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.immobili_partita_sorgente_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.immobili_partita_sorgente_table.setFixedHeight(150) # Altezza fissa
+        self.immobili_partita_sorgente_table.itemSelectionChanged.connect(self._immobile_sorgente_selezionato)
+        transfer_layout.addRow(self.immobili_partita_sorgente_table)
+        
+        self.selected_immobile_id_transfer: Optional[int] = None
+        self.immobile_id_transfer_label = QLabel("Nessun immobile selezionato per il trasferimento.")
+        transfer_layout.addRow(self.immobile_id_transfer_label)
+
+        transfer_layout.addRow(QLabel("ID Partita Destinazione (*):"), None) # Etichetta per gruppo
+        dest_partita_layout = QHBoxLayout()
+        self.dest_partita_id_spinbox = QSpinBox()
+        self.dest_partita_id_spinbox.setRange(1, 999999)
+        dest_partita_layout.addWidget(self.dest_partita_id_spinbox)
+        self.btn_cerca_dest_partita = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView), " Cerca...")
+        self.btn_cerca_dest_partita.clicked.connect(self._cerca_partita_destinazione)
+        dest_partita_layout.addWidget(self.btn_cerca_dest_partita)
+        transfer_layout.addRow(dest_partita_layout)
+        self.dest_partita_info_label = QLabel("Nessuna partita destinazione selezionata.")
+        transfer_layout.addRow(self.dest_partita_info_label)
+
+
+        self.transfer_registra_var_check = QCheckBox("Registra Variazione per il Trasferimento")
+        self.transfer_registra_var_check.setChecked(False)
+        transfer_layout.addRow(self.transfer_registra_var_check)
+
+        self.btn_esegui_trasferimento = QPushButton("Esegui Trasferimento Immobile")
+        self.btn_esegui_trasferimento.clicked.connect(self._esegui_trasferimento_immobile)
+        transfer_layout.addRow(self.btn_esegui_trasferimento)
+        operazioni_layout.addWidget(transfer_group)
+        
+        operazioni_layout.addStretch(1)
+        operazioni_widget_container.setLayout(operazioni_layout)
+        operazioni_scroll.setWidget(operazioni_widget_container)
+        main_layout.addWidget(operazioni_scroll, 1) # Il QScrollArea occupa lo spazio rimanente
+
+        self.setLayout(main_layout)
+
+    def _cerca_partita_sorgente(self):
+        dialog = PartitaSearchDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
+            self.selected_partita_id_source = dialog.selected_partita_id
+            self.source_partita_id_spinbox.setValue(self.selected_partita_id_source)
+            self._aggiorna_info_partita_sorgente()
+        else:
+            self.selected_partita_id_source = None
+            self.source_partita_info_label.setText("Nessuna partita sorgente selezionata.")
+            self.selected_partita_comune_id_source = None
+            self.immobili_partita_sorgente_table.setRowCount(0) # Pulisci tabella immobili
+
+    def _aggiorna_info_partita_sorgente(self):
+        if self.selected_partita_id_source:
+            partita_details = self.db_manager.get_partita_details(self.selected_partita_id_source)
+            if partita_details:
+                self.source_partita_info_label.setText(
+                    f"Selezionata: Partita N. {partita_details.get('numero_partita')} "
+                    f"(Comune: {partita_details.get('comune_nome', 'N/D')}, ID: {self.selected_partita_id_source})"
+                )
+                self.selected_partita_comune_id_source = partita_details.get('comune_id')
+                self._carica_immobili_partita_sorgente(partita_details.get('immobili', []))
+            else:
+                self.source_partita_info_label.setText(f"Partita ID {self.selected_partita_id_source} non trovata o errore.")
+                self.selected_partita_id_source = None # Resetta se non trovata
+                self.selected_partita_comune_id_source = None
+                self.immobili_partita_sorgente_table.setRowCount(0)
+        else:
+             self.source_partita_info_label.setText("ID Partita sorgente non valido.")
+             self.selected_partita_comune_id_source = None
+             self.immobili_partita_sorgente_table.setRowCount(0)
+
+    def _carica_immobili_partita_sorgente(self, immobili_data: List[Dict[str,Any]]):
+        self.immobili_partita_sorgente_table.setRowCount(0)
+        self.selected_immobile_id_transfer = None
+        self.immobile_id_transfer_label.setText("Nessun immobile selezionato per il trasferimento.")
+        if immobili_data:
+            self.immobili_partita_sorgente_table.setRowCount(len(immobili_data))
+            for row, immobile in enumerate(immobili_data):
+                self.immobili_partita_sorgente_table.setItem(row, 0, QTableWidgetItem(str(immobile.get('id'))))
+                self.immobili_partita_sorgente_table.setItem(row, 1, QTableWidgetItem(immobile.get('natura')))
+                loc_text = f"{immobile.get('localita_nome', '')} {immobile.get('civico', '')}".strip()
+                self.immobili_partita_sorgente_table.setItem(row, 2, QTableWidgetItem(loc_text))
+            self.immobili_partita_sorgente_table.resizeColumnsToContents()
+        else:
+            self.immobili_partita_sorgente_table.setRowCount(1)
+            self.immobili_partita_sorgente_table.setItem(0,0,QTableWidgetItem("Nessun immobile in questa partita."))
+            self.immobili_partita_sorgente_table.setSpan(0,0,1,self.immobili_partita_sorgente_table.columnCount())
+
+
+    def _immobile_sorgente_selezionato(self):
+        selected_items = self.immobili_partita_sorgente_table.selectedItems()
+        if not selected_items:
+            self.selected_immobile_id_transfer = None
+            self.immobile_id_transfer_label.setText("Nessun immobile selezionato per il trasferimento.")
+            return
+        
+        row = self.immobili_partita_sorgente_table.currentRow()
+        if row < 0: return
+
+        id_item = self.immobili_partita_sorgente_table.item(row, 0)
+        natura_item = self.immobili_partita_sorgente_table.item(row, 1)
+        if id_item and id_item.text().isdigit():
+            self.selected_immobile_id_transfer = int(id_item.text())
+            natura_text = natura_item.text() if natura_item else "N/D"
+            self.immobile_id_transfer_label.setText(f"Immobile da trasferire: ID {self.selected_immobile_id_transfer} ({natura_text})")
+        else:
+            self.selected_immobile_id_transfer = None
+            self.immobile_id_transfer_label.setText("Selezione immobile non valida.")
+
+
+    def _cerca_partita_destinazione(self):
+        dialog = PartitaSearchDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
+            self.dest_partita_id_spinbox.setValue(dialog.selected_partita_id)
+            partita_details = self.db_manager.get_partita_details(dialog.selected_partita_id)
+            if partita_details:
+                self.dest_partita_info_label.setText(
+                    f"Destinazione: N. {partita_details.get('numero_partita')} "
+                    f"(Comune: {partita_details.get('comune_nome', 'N/D')}, ID: {dialog.selected_partita_id})"
+                )
+            else:
+                self.dest_partita_info_label.setText(f"Partita destinazione ID {dialog.selected_partita_id} non trovata.")
+        else:
+             self.dest_partita_info_label.setText("Nessuna partita destinazione selezionata.")
+
+
+    def _esegui_duplicazione_partita(self):
+        if self.selected_partita_id_source is None:
+            QMessageBox.warning(self, "Selezione Mancante", "Selezionare una partita sorgente prima di duplicare.")
+            return
+
+        nuovo_numero = self.nuovo_numero_partita_spinbox.value()
+        if nuovo_numero <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Il nuovo numero di partita deve essere valido.")
+            return
+        
+        # Controllo che il nuovo numero partita non esista già nello stesso comune della sorgente
+        if self.selected_partita_comune_id_source:
+            existing_partita = self.db_manager.search_partite(
+                comune_id=self.selected_partita_comune_id_source,
+                numero_partita=nuovo_numero
+            )
+            if existing_partita:
+                QMessageBox.warning(self, "Errore Duplicazione", 
+                                    f"Esiste già una partita con il numero {nuovo_numero} "
+                                    f"nel comune della partita sorgente.")
+                return
+        else:
+            QMessageBox.warning(self, "Errore Interno", "Comune della partita sorgente non determinato. Impossibile validare il nuovo numero.")
+            return
+
+
+        mant_poss = self.duplica_mantieni_poss_check.isChecked()
+        mant_imm = self.duplica_mantieni_imm_check.isChecked()
+
+        try:
+            success = self.db_manager.duplicate_partita(
+                self.selected_partita_id_source, nuovo_numero, mant_poss, mant_imm
+            )
+            if success:
+                QMessageBox.information(self, "Successo", 
+                                        f"Partita ID {self.selected_partita_id_source} duplicata con successo "
+                                        f"con nuovo numero partita {nuovo_numero}.")
+                # Resetta i campi dell'operazione
+                self.nuovo_numero_partita_spinbox.setValue(1)
+                self.duplica_mantieni_poss_check.setChecked(True)
+                self.duplica_mantieni_imm_check.setChecked(False)
+            # else: gestito da eccezioni
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Duplicazione", f"Errore durante la duplicazione:\n{str(e)}")
+        except Exception as e_gen:
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore imprevisto:\n{type(e_gen).__name__}: {str(e_gen)}")
+
+    def _esegui_trasferimento_immobile(self):
+        if self.selected_immobile_id_transfer is None:
+            QMessageBox.warning(self, "Selezione Mancante", "Selezionare un immobile dalla partita sorgente.")
+            return
+        
+        id_partita_dest = self.dest_partita_id_spinbox.value()
+        if id_partita_dest <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Selezionare o inserire un ID partita di destinazione valido.")
+            return
+            
+        if id_partita_dest == self.selected_partita_id_source:
+            QMessageBox.warning(self, "Operazione Non Valida", "La partita di destinazione non può essere uguale alla partita sorgente.")
+            return
+
+        registra_var = self.transfer_registra_var_check.isChecked()
+
+        try:
+            success = self.db_manager.transfer_immobile(
+                self.selected_immobile_id_transfer, id_partita_dest, registra_var
+            )
+            if success:
+                QMessageBox.information(self, "Successo",
+                                        f"Immobile ID {self.selected_immobile_id_transfer} trasferito "
+                                        f"alla partita ID {id_partita_dest} con successo.")
+                # Ricarica gli immobili della partita sorgente per riflettere il trasferimento
+                self._aggiorna_info_partita_sorgente() 
+                # Resetta campi operazione
+                self.dest_partita_id_spinbox.setValue(1)
+                self.dest_partita_info_label.setText("Nessuna partita destinazione selezionata.")
+                self.transfer_registra_var_check.setChecked(False)
+            # else: gestito da eccezioni
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Trasferimento", f"Errore durante il trasferimento dell'immobile:\n{str(e)}")
+        except Exception as e_gen:
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore imprevisto:\n{type(e_gen).__name__}: {str(e_gen)}")
 
 class ModificaPossessoreDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, possessore_id: int, parent=None):
@@ -4977,6 +5352,132 @@ class PartitaSearchDialog(QDialog):
             self.accept()
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
+class PeriodoStoricoDetailsDialog(QDialog):
+    def __init__(self, db_manager: 'CatastoDBManager', periodo_id: int, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.periodo_id = periodo_id
+        self.periodo_data_originale: Optional[Dict[str, Any]] = None
+
+        self.setWindowTitle(f"Dettagli/Modifica Periodo Storico ID: {self.periodo_id}")
+        self.setMinimumWidth(450)
+        self.setModal(True)
+
+        self._initUI()
+        self._load_data()
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+
+        # Campi Visualizzazione (non editabili)
+        self.id_label = QLabel(str(self.periodo_id))
+        self.data_creazione_label = QLabel()
+        self.data_modifica_label = QLabel()
+
+        form_layout.addRow("ID Periodo:", self.id_label)
+
+        # Campi Editabili
+        self.nome_edit = QLineEdit()
+        form_layout.addRow("Nome Periodo (*):", self.nome_edit)
+
+        self.anno_inizio_spinbox = QSpinBox()
+        self.anno_inizio_spinbox.setRange(0, 3000) # Adatta il range se necessario
+        form_layout.addRow("Anno Inizio (*):", self.anno_inizio_spinbox)
+
+        self.anno_fine_spinbox = QSpinBox()
+        self.anno_fine_spinbox.setRange(0, 3000) 
+        # Permetti "nessun anno fine" usando un valore speciale o gestendo 0 come "non impostato"
+        self.anno_fine_spinbox.setSpecialValueText(" ") # Vuoto se 0 (o il minimo)
+        self.anno_fine_spinbox.setMinimum(0) # 0 potrebbe significare "non specificato"
+        form_layout.addRow("Anno Fine (0 se aperto):", self.anno_fine_spinbox)
+        
+        self.descrizione_edit = QTextEdit()
+        self.descrizione_edit.setFixedHeight(100)
+        form_layout.addRow("Descrizione:", self.descrizione_edit)
+
+        form_layout.addRow("Data Creazione:", self.data_creazione_label)
+        form_layout.addRow("Ultima Modifica:", self.data_modifica_label)
+        
+        main_layout.addLayout(form_layout)
+
+        # Pulsanti
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self._save_changes)
+        self.button_box.rejected.connect(self.reject)
+        main_layout.addWidget(self.button_box)
+
+        self.setLayout(main_layout)
+
+    def _load_data(self):
+        self.periodo_data_originale = self.db_manager.get_periodo_storico_details(self.periodo_id)
+
+        if not self.periodo_data_originale:
+            QMessageBox.critical(self, "Errore Caricamento", 
+                                 f"Impossibile caricare i dettagli per il periodo ID: {self.periodo_id}.")
+            # Chiudi il dialogo se i dati non possono essere caricati
+            # Usiamo QTimer per permettere al messaggio di essere processato prima di chiudere
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self.reject)
+            return
+
+        self.nome_edit.setText(self.periodo_data_originale.get('nome', ''))
+        self.anno_inizio_spinbox.setValue(self.periodo_data_originale.get('anno_inizio', 0))
+        
+        anno_fine_val = self.periodo_data_originale.get('anno_fine')
+        if anno_fine_val is not None:
+            self.anno_fine_spinbox.setValue(anno_fine_val)
+        else: # Se anno_fine è NULL nel DB
+            self.anno_fine_spinbox.setValue(self.anno_fine_spinbox.minimum()) # Mostra testo speciale (" ")
+
+        self.descrizione_edit.setText(self.periodo_data_originale.get('descrizione', ''))
+        
+        dc = self.periodo_data_originale.get('data_creazione')
+        self.data_creazione_label.setText(dc.strftime('%Y-%m-%d %H:%M:%S') if dc else 'N/D')
+        dm = self.periodo_data_originale.get('data_modifica')
+        self.data_modifica_label.setText(dm.strftime('%Y-%m-%d %H:%M:%S') if dm else 'N/D')
+
+    def _save_changes(self):
+        dati_da_salvare = {
+            "nome": self.nome_edit.text().strip(),
+            "anno_inizio": self.anno_inizio_spinbox.value(),
+            "descrizione": self.descrizione_edit.toPlainText().strip()
+        }
+
+        anno_fine_val_ui = self.anno_fine_spinbox.value()
+        if self.anno_fine_spinbox.text() == self.anno_fine_spinbox.specialValueText() or anno_fine_val_ui == self.anno_fine_spinbox.minimum():
+            dati_da_salvare["anno_fine"] = None # Salva NULL se vuoto o valore minimo
+        else:
+            dati_da_salvare["anno_fine"] = anno_fine_val_ui
+
+        # Validazione base
+        if not dati_da_salvare["nome"]:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del periodo è obbligatorio.")
+            self.nome_edit.setFocus()
+            return
+        if dati_da_salvare["anno_inizio"] <= 0: # O altra logica per anno inizio
+            QMessageBox.warning(self, "Dati Non Validi", "L'anno di inizio deve essere valido.")
+            self.anno_inizio_spinbox.setFocus()
+            return
+        if dati_da_salvare["anno_fine"] is not None and dati_da_salvare["anno_fine"] < dati_da_salvare["anno_inizio"]:
+            QMessageBox.warning(self, "Date Non Valide", "L'anno di fine non può essere precedente all'anno di inizio.")
+            self.anno_fine_spinbox.setFocus()
+            return
+
+        try:
+            success = self.db_manager.update_periodo_storico(self.periodo_id, dati_da_salvare)
+            if success:
+                QMessageBox.information(self, "Successo", "Periodo storico aggiornato con successo.")
+                self.accept() # Chiude il dialogo e segnala successo
+            # else: # update_periodo_storico solleva eccezioni per fallimenti
+            # QMessageBox.critical(self, "Errore", "Impossibile aggiornare il periodo storico.")
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
+            gui_logger.error(f"Errore salvataggio periodo storico ID {self.periodo_id}: {str(e)}")
+            QMessageBox.critical(self, "Errore Salvataggio", str(e))
+        except Exception as e_gen:
+            gui_logger.critical(f"Errore imprevisto salvataggio periodo storico ID {self.periodo_id}: {str(e_gen)}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {str(e_gen)}")
 
 
 class UserSelectionDialog(QDialog):
@@ -5252,139 +5753,242 @@ class GestioneUtentiWidget(QWidget):
             # else: l'utente ha premuto annulla su QInputDialog
 
 # Altri Widget per i Tab (da creare)
-class InserimentoComuneWidget(QDialog): # o QWidget
-    def __init__(self, db_manager, utente_attuale, parent=None):
-        super().__init__(parent)
-        self.db = db_manager
-        self.utente_attuale = utente_attuale
+class InserimentoComuneWidget(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None, # parent come primo argomento dopo self
+                 db_manager: Optional['CatastoDBManager'] = None, 
+                 utente_attuale_info: Optional[Dict[str, Any]] = None):
+        super().__init__(parent) # Passa il parent ricevuto
+        
+        # È buona norma verificare se db_manager è stato fornito, se è essenziale
+        if db_manager is None:
+            gui_logger.critical("InserimentoComuneWidget: db_manager non fornito all'inizializzazione!")
+            # Qui potrebbe essere necessario disabilitare il widget o sollevare un errore
+            # per evitare AttributeError più avanti se si tenta di usare self.db_manager.
+            # Per ora, ci affidiamo al fatto che venga sempre passato correttamente.
+        
+        self.db_manager = db_manager 
+        self.utente_attuale_info = utente_attuale_info
+        
+        self._initUI()
+        self._carica_elenco_periodi() # Assumendo che _carica_elenco_periodi esista
 
-        self.setWindowTitle("Inserimento Nuovo Comune")
-        self.setModal(True)
-        self.initUI()
 
-    def initUI(self):
-        layout = QFormLayout(self) # Assicurati che QFormLayout sia importato
-
+    def _initUI(self):
+        # ... (definizione di main_layout, form_group, form_layout_container, form_layout come prima) ...
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+        form_group = QGroupBox("Dati del Nuovo Comune")
+        form_layout_container = QVBoxLayout(form_group)
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self.nome_comune_edit = QLineEdit()
-        self.codice_catastale_edit = QLineEdit()
-        self.codice_catastale_edit.setMaxLength(4)
-        self.provincia_edit = QLineEdit("SV") # Valore predefinito
+        self.provincia_edit = QLineEdit("SV") 
         self.provincia_edit.setMaxLength(2)
+        self.regione_edit = QLineEdit() 
+        self.periodo_id_spinbox = QSpinBox()
+        self.periodo_id_spinbox.setMinimum(1)
+        self.periodo_id_spinbox.setMaximum(99999)
+        form_layout.addRow("Nome Comune (*):", self.nome_comune_edit)
+        form_layout.addRow("Provincia (*):", self.provincia_edit)
+        form_layout.addRow("Regione (*):", self.regione_edit)
+        form_layout.addRow("Periodo ID (*):", self.periodo_id_spinbox)
+        form_layout_container.addLayout(form_layout)
+        main_layout.addWidget(form_group)
 
-        self.data_istituzione_edit = QDateEdit()
-        self.data_istituzione_edit.setCalendarPopup(True)
-        self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
-        # La riga .setNullable(True) è stata rimossa
-        self.data_istituzione_edit.setDate(QDate()) # Imposta una data nulla/invalida inizialmente
-        self.data_istituzione_edit.setSpecialValueText(" ") # Mostra come vuoto se la data non è valida
+        # --- Sezione Riepilogo Periodi Storici ---
+        periodi_riepilogo_group = QGroupBox("Riferimento Periodi Storici")
+        periodi_riepilogo_layout = QVBoxLayout(periodi_riepilogo_group)
+        periodi_riepilogo_layout.setSpacing(5)
 
-        self.data_soppressione_edit = QDateEdit()
-        self.data_soppressione_edit.setCalendarPopup(True)
-        self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
-        # La riga .setNullable(True) è stata rimossa
-        self.data_soppressione_edit.setDate(QDate()) # Imposta una data nulla/invalida inizialmente
-        self.data_soppressione_edit.setSpecialValueText(" ") # Mostra come vuoto se la data non è valida
+        # Layout per pulsanti sopra la tabella dei periodi
+        periodi_table_actions_layout = QHBoxLayout()
+        self.btn_dettaglio_modifica_periodo = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogInfoView) ," Dettagli/Modifica Periodo")
+        self.btn_dettaglio_modifica_periodo.setToolTip("Visualizza o modifica i dettagli del periodo storico selezionato")
+        self.btn_dettaglio_modifica_periodo.clicked.connect(self._apri_dettaglio_modifica_periodo)
+        self.btn_dettaglio_modifica_periodo.setEnabled(False) # Inizialmente disabilitato
+        periodi_table_actions_layout.addWidget(self.btn_dettaglio_modifica_periodo)
+        periodi_table_actions_layout.addStretch()
+        btn_aggiorna_periodi = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna Elenco")
+        btn_aggiorna_periodi.clicked.connect(self._carica_elenco_periodi)
+        periodi_table_actions_layout.addWidget(btn_aggiorna_periodi)
+        periodi_riepilogo_layout.addLayout(periodi_table_actions_layout) # Aggiungi layout azioni sopra la tabella
 
-        self.note_edit = QTextEdit()
+        self.periodi_table = QTableWidget()
+        self.periodi_table.setColumnCount(4) 
+        self.periodi_table.setHorizontalHeaderLabels(["ID", "Nome Periodo", "Anno Inizio", "Anno Fine"])
+        self.periodi_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.periodi_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.periodi_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.periodi_table.setAlternatingRowColors(True)
+        self.periodi_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) 
+        self.periodi_table.setMinimumHeight(120) 
+        self.periodi_table.setMaximumHeight(250)
+        self.periodi_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsante_dettaglio_periodo) # Connetti a nuovo metodo
+        self.periodi_table.itemDoubleClicked.connect(self._apri_dettaglio_modifica_periodo_da_doppio_click) # Connetti doppio click
 
-        layout.addRow("Nome Comune (*):", self.nome_comune_edit)
-        layout.addRow("Codice Catastale:", self.codice_catastale_edit)
-        layout.addRow("Provincia (*):", self.provincia_edit)
-        layout.addRow("Data Istituzione:", self.data_istituzione_edit)
-        layout.addRow("Data Soppressione:", self.data_soppressione_edit)
-        layout.addRow("Note:", self.note_edit)
-
-        self.submit_button = QPushButton("Inserisci Comune")
-        self.submit_button.clicked.connect(self.inserisci_comune)
-        self.clear_button = QPushButton("Pulisci Campi")
-        self.clear_button.clicked.connect(self.pulisci_campi)
-        self.cancel_button = QPushButton("Annulla")
-        self.cancel_button.clicked.connect(self.reject)
-
+        periodi_riepilogo_layout.addWidget(self.periodi_table)
+        main_layout.addWidget(periodi_riepilogo_group)
+        
+        # ... (linea e pulsanti Inserisci/Pulisci come prima) ...
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        main_layout.addWidget(line)
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        self.submit_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), " Inserisci Comune")
+        self.submit_button.clicked.connect(self.inserisci_comune)
+        self.clear_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogDiscardButton), " Pulisci Campi")
+        self.clear_button.clicked.connect(self.pulisci_campi)
+        button_layout.addStretch() 
         button_layout.addWidget(self.submit_button)
         button_layout.addWidget(self.clear_button)
-        button_layout.addWidget(self.cancel_button)
+        main_layout.addLayout(button_layout)
+        main_layout.addStretch(1)
 
-        layout.addRow(button_layout)
-        self.setLayout(layout)
+
+    def _aggiorna_stato_pulsante_dettaglio_periodo(self):
+        """Abilita il pulsante Dettagli/Modifica Periodo se una riga è selezionata."""
+        if hasattr(self, 'btn_dettaglio_modifica_periodo'): # Controllo di sicurezza
+            self.btn_dettaglio_modifica_periodo.setEnabled(bool(self.periodi_table.selectedItems()))
+
+    def _get_selected_periodo_id(self) -> Optional[int]:
+        """Restituisce l'ID del periodo attualmente selezionato nella tabella dei periodi."""
+        selected_items = self.periodi_table.selectedItems()
+        if not selected_items:
+            return None
+        
+        current_row = self.periodi_table.currentRow()
+        if current_row < 0: return None
+            
+        id_item = self.periodi_table.item(current_row, 0) # Colonna ID
+        if id_item and id_item.text().isdigit():
+            return int(id_item.text())
+        return None
+
+    def _apri_dettaglio_modifica_periodo_da_doppio_click(self, item: QTableWidgetItem):
+        """Gestisce il doppio click sulla tabella dei periodi."""
+        # Non serve controllare item se la chiamata proviene da un segnale valido di itemDoubleClicked
+        self._apri_dettaglio_modifica_periodo()
+
+    def _apri_dettaglio_modifica_periodo(self):
+        """Apre il dialogo per visualizzare/modificare il periodo selezionato."""
+        selected_periodo_id = self._get_selected_periodo_id()
+        if selected_periodo_id is None:
+            QMessageBox.information(self, "Nessuna Selezione", 
+                                    "Selezionare un periodo dalla tabella per vederne/modificarne i dettagli.")
+            return
+
+        dialog = PeriodoStoricoDetailsDialog(self.db_manager, selected_periodo_id, self)
+        if dialog.exec_() == QDialog.Accepted:
+            # Se il dialogo è stato accettato (modifiche salvate), ricarica l'elenco dei periodi
+            gui_logger.info(f"Dialogo dettagli/modifica periodo ID {selected_periodo_id} chiuso con successo. Aggiorno elenco periodi.")
+            self._carica_elenco_periodi()
+        else:
+            gui_logger.info(f"Dialogo dettagli/modifica periodo ID {selected_periodo_id} annullato o chiuso.")
+
+    # Mantieni _carica_elenco_periodi, pulisci_campi, inserisci_comune come sono stati definiti correttamente prima.
+    # ...
+    def _carica_elenco_periodi(self):
+        self.periodi_table.setRowCount(0) 
+        self.periodi_table.setSortingEnabled(False)
+        try:
+            gui_logger.info("Chiamata a db_manager.get_historical_periods()...") 
+            periodi = self.db_manager.get_historical_periods()
+            gui_logger.info(f"Elenco periodi ricevuto da DBManager (tipo: {type(periodi)}): {periodi if periodi is not None else 'None'}")
+            if periodi: 
+                gui_logger.info(f"Numero di periodi ricevuti: {len(periodi)}")
+                self.periodi_table.setRowCount(len(periodi))
+                for row_idx, periodo_data in enumerate(periodi):
+                    col = 0
+                    id_item = QTableWidgetItem(str(periodo_data.get('id', 'N/D')))
+                    self.periodi_table.setItem(row_idx, col, id_item); col+=1
+                    nome_item = QTableWidgetItem(periodo_data.get('nome', 'N/D'))
+                    self.periodi_table.setItem(row_idx, col, nome_item); col+=1
+                    anno_i_item = QTableWidgetItem(str(periodo_data.get('anno_inizio', 'N/D')))
+                    self.periodi_table.setItem(row_idx, col, anno_i_item); col+=1
+                    anno_f_item = QTableWidgetItem(str(periodo_data.get('anno_fine', 'N/D')))
+                    self.periodi_table.setItem(row_idx, col, anno_f_item); col+=1
+                self.periodi_table.resizeColumnsToContents()
+            else: 
+                gui_logger.warning("Nessun periodo storico restituito da db_manager.get_historical_periods() o la lista è vuota.")
+                self.periodi_table.setRowCount(1)
+                self.periodi_table.setItem(0,0, QTableWidgetItem("Nessun periodo storico trovato nel database."))
+                self.periodi_table.setSpan(0, 0, 1, self.periodi_table.columnCount())
+        except Exception as e:
+            gui_logger.error(f"Errore imprevisto durante _carica_elenco_periodi: {e}", exc_info=True)
+            QMessageBox.warning(self, "Errore Caricamento Periodi", f"Impossibile caricare l'elenco dei periodi:\n{type(e).__name__}: {e}")
+            self.periodi_table.setRowCount(1)
+            self.periodi_table.setItem(0,0, QTableWidgetItem("Errore nel caricamento dei periodi."))
+            self.periodi_table.setSpan(0, 0, 1, self.periodi_table.columnCount())
+        finally:
+            self.periodi_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsante_dettaglio_periodo() # Aggiorna stato pulsante qui
+
 
     def pulisci_campi(self):
         self.nome_comune_edit.clear()
-        self.codice_catastale_edit.clear()
         self.provincia_edit.setText("SV")
-        self.data_istituzione_edit.setDate(QDate())
-        self.data_istituzione_edit.setSpecialValueText(" ")
-        self.data_soppressione_edit.setDate(QDate())
-        self.data_soppressione_edit.setSpecialValueText(" ")
-        self.note_edit.clear()
+        self.regione_edit.clear() 
+        self.periodo_id_spinbox.setValue(self.periodo_id_spinbox.minimum()) 
+        self.nome_comune_edit.setFocus()
 
     def inserisci_comune(self):
         nome_comune = self.nome_comune_edit.text().strip()
-        codice_catastale = self.codice_catastale_edit.text().strip().upper() # Converti in maiuscolo
-        provincia = self.provincia_edit.text().strip().upper() # Converti in maiuscolo
-
-        data_istituzione = None
-        if self.data_istituzione_edit.date().isValid() and not self.data_istituzione_edit.date().isNull():
-            data_istituzione = self.data_istituzione_edit.date().toPyDate()
-
-        data_soppressione = None
-        if self.data_soppressione_edit.date().isValid() and not self.data_soppressione_edit.date().isNull():
-            data_soppressione = self.data_soppressione_edit.date().toPyDate()
-
-        note = self.note_edit.toPlainText().strip()
-
+        provincia = self.provincia_edit.text().strip()
+        regione = self.regione_edit.text().strip() 
+        periodo_id_val = self.periodo_id_spinbox.value()
         if not nome_comune:
-            QMessageBox.warning(self, "Errore Inserimento", "Il nome del comune è obbligatorio.")
-            return
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del comune è obbligatorio.")
+            self.nome_comune_edit.setFocus(); return
         if not provincia:
-            QMessageBox.warning(self, "Errore Inserimento", "La provincia è obbligatoria.")
-            return
-        if len(provincia) != 2:
-            QMessageBox.warning(self, "Errore Inserimento", "La provincia deve essere di 2 caratteri (es. SV).")
-            return
-        if codice_catastale and len(codice_catastale) != 4:
-            QMessageBox.warning(self, "Errore Inserimento", "Il codice catastale deve essere di 4 caratteri (es. L781).")
-            return
-        # Controllo aggiuntivo per il formato del codice catastale (una lettera seguita da tre numeri)
-        if codice_catastale and not (codice_catastale[0].isalpha() and codice_catastale[1:].isdigit() and len(codice_catastale) == 4) :
-             QMessageBox.warning(self, "Errore Inserimento", "Il codice catastale deve iniziare con una lettera seguita da tre cifre (es. L781).")
-             return
-
+            QMessageBox.warning(self, "Dati Mancanti", "La provincia è obbligatoria (2 caratteri).")
+            self.provincia_edit.setFocus(); return
+        if not regione: 
+            QMessageBox.warning(self, "Dati Mancanti", "La regione è obbligatoria.")
+            self.regione_edit.setFocus(); return
+        if periodo_id_val < self.periodo_id_spinbox.minimum():
+            QMessageBox.warning(self, "Dati Mancanti", "L'ID del periodo è obbligatorio e deve essere un valore valido.")
+            self.periodo_id_spinbox.setFocus(); return
+        username_per_log = "utente_sconosciuto"
+        if self.utente_attuale_info and isinstance(self.utente_attuale_info, dict):
+            username_per_log = self.utente_attuale_info.get('username', 'utente_sconosciuto')
+        elif isinstance(self.utente_attuale_info, str):
+             username_per_log = self.utente_attuale_info
+        gui_logger.debug(f"InserimentoComuneWidget: Invio al DBManager -> nome='{nome_comune}', prov='{provincia}', regione='{regione}', periodo_id='{periodo_id_val}', utente='{username_per_log}'")
         try:
-            # Assicurati che il tuo db_manager sia accessibile come self.db
-            # e che utente_attuale sia disponibile come self.utente_attuale
-            comune_id = self.db.aggiungi_comune(
-                nome_comune=nome_comune,
-                codice_catastale=codice_catastale if codice_catastale else None,
-                provincia=provincia,
-                data_istituzione=data_istituzione,
-                data_soppressione=data_soppressione,
-                note=note if note else None,
-                utente=self.utente_attuale
+            comune_id = self.db_manager.aggiungi_comune(
+                nome_comune=nome_comune, provincia=provincia, regione=regione, 
+                periodo_id=periodo_id_val, utente=username_per_log 
             )
-
-            if comune_id:
+            if comune_id is not None:
                 QMessageBox.information(self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
-                # Eventuale segnale per aggiornare altre viste
-                # self.comune_aggiunto.emit() # Se si implementa un segnale
                 self.pulisci_campi()
-                self.accept() # Chiude il dialogo
-            else:
-                # Questo potrebbe non essere mai raggiunto se aggiungi_comune solleva sempre eccezioni in caso di fallimento
-                QMessageBox.critical(self, "Errore Inserimento", "Impossibile inserire il comune. Il metodo nel DB manager non ha restituito un ID.")
+                self._carica_elenco_periodi()
+                main_window = self.window() 
+                if isinstance(main_window, CatastoMainWindow):
+                    if hasattr(main_window, 'consultazione_sub_tabs'):
+                         for i in range(main_window.consultazione_sub_tabs.count()):
+                            widget_in_tab = main_window.consultazione_sub_tabs.widget(i)
+                            if isinstance(widget_in_tab, ElencoComuniWidget):
+                                widget_in_tab.load_comuni_data()
+                                gui_logger.info("Elenco comuni nel tab consultazione aggiornato.")
+                                break
+        except DBUniqueConstraintError as uve:
+            gui_logger.warning(f"Unicità violata inserendo comune '{nome_comune}': {str(uve)}")
+            QMessageBox.critical(self, "Errore di Unicità", str(uve))
+        except DBDataError as dde:
+            gui_logger.warning(f"Dati non validi per comune '{nome_comune}': {str(dde)}")
+            QMessageBox.warning(self, "Dati Non Validi", str(dde))
+        except DBMError as dbe: 
+            gui_logger.error(f"Errore DB inserendo comune '{nome_comune}': {str(dbe)}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", str(dbe))
+        except Exception as e:
+            gui_logger.critical(f"Errore imprevisto inserendo comune '{nome_comune}': {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico", f"Errore imprevisto: {type(e).__name__}: {e}")
 
-        except ValueError as ve: # Esempio di gestione errore specifico da db_manager
-            QMessageBox.critical(self, "Errore Dati", f"Errore nei dati forniti: {ve}")
-        except Exception as e: # Gestione generica per altri errori (es. DB)
-            # Potresti voler loggare l'errore completo e mostrare un messaggio più generico
-            # logger.error(f"Errore database durante inserimento comune: {e}", exc_info=True)
-            messaggio = f"Errore durante l'inserimento del comune: {e}"
-            if "comuni_nome_comune_key" in str(e).lower():
-                messaggio = f"Errore: Esiste già un comune con il nome '{nome_comune}'."
-            elif "comuni_codice_catastale_key" in str(e).lower():
-                 messaggio = f"Errore: Esiste già un comune con il codice catastale '{codice_catastale}'."
-            QMessageBox.critical(self, "Errore Database", messaggio)
 
 class AuditLogViewerWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -6636,10 +7240,10 @@ class CatastoMainWindow(QMainWindow):
     # All'interno della classe CatastoMainWindow in prova.py
     def setup_tabs(self):
         if not self.db_manager:
-            gui_logger.error("Tentativo di configurare i tab senza un db_manager.") # TODO: gui_logger è definito?
-            QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato. Impossibile caricare i tab.")
+            gui_logger.error("Tentativo di configurare i tab senza un db_manager.")
+            QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato.")
             return
-        self.tabs.clear() # Pulisce i tab esistenti prima di ricrearli
+        self.tabs.clear()# Pulisce i tab esistenti prima di ricrearli
 
         # --- Tab Consultazione (QTabWidget per contenere sotto-tab) ---
         self.consultazione_sub_tabs.clear() # Pulisce i sotto-tab precedenti
@@ -6649,45 +7253,41 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs.addTab(RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs), "Ricerca Immobili Avanzata")
         self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione e Modifica")
 
-        # --- Tab Inserimento e Gestione (MODIFICATO con pulsante "Nuovo Comune") ---
-        # 1. Crea un widget contenitore principale per questo tab
-        inserimento_gestione_contenitore = QWidget()
-        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore) # Layout verticale
+        # --- Tab Inserimento e Gestione ---
+        inserimento_gestione_contenitore = QWidget() # Contenitore principale per questo tab
+        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore)
 
-        # 2. Crea e aggiungi il pulsante "Nuovo Comune" in alto
-        # Questo attributo deve essere accessibile da update_ui_based_on_role
-        self.btn_nuovo_comune_nel_tab = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Aggiungi Nuovo Comune")
-        self.btn_nuovo_comune_nel_tab.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
-        self.btn_nuovo_comune_nel_tab.clicked.connect(self.apri_dialog_inserimento_comune) # Metodo di CatastoMainWindow
-        # L'abilitazione iniziale del pulsante sarà gestita da update_ui_based_on_role
-        self.btn_nuovo_comune_nel_tab.setEnabled(False) # Inizialmente disabilitato
-        layout_contenitore_inserimento.addWidget(self.btn_nuovo_comune_nel_tab)
+        # Rimuoviamo il pulsante che apriva il dialogo, ora è un tab
+        # if hasattr(self, 'btn_nuovo_comune_nel_tab'):
+        #     layout_contenitore_inserimento.removeWidget(self.btn_nuovo_comune_nel_tab)
+        #     self.btn_nuovo_comune_nel_tab.deleteLater() # Pulisce il vecchio pulsante
+        #     del self.btn_nuovo_comune_nel_tab
 
-        # 3. Aggiungi una linea orizzontale per separazione visiva (opzionale)
-        linea_separatrice = QFrame()
-        linea_separatrice.setFrameShape(QFrame.HLine)
-        linea_separatrice.setFrameShadow(QFrame.Sunken)
-        layout_contenitore_inserimento.addWidget(linea_separatrice)
-        layout_contenitore_inserimento.addSpacing(5) # Un po' di spazio prima dei sotto-tab
-
-        # 4. Il QTabWidget per i sotto-tab ("Nuovo Possessore", "Nuova Località", ecc.)
-        #    Assicurati che self.inserimento_sub_tabs sia un QTabWidget inizializzato in __init__
+        # QTabWidget per i sotto-tab di Inserimento
         if not hasattr(self, 'inserimento_sub_tabs') or not isinstance(self.inserimento_sub_tabs, QTabWidget):
-            self.inserimento_sub_tabs = QTabWidget() # Fallback, ma dovrebbe essere in __init__
-            gui_logger.warning("self.inserimento_sub_tabs non inizializzato correttamente in __init__.") # TODO: gui_logger
+            self.inserimento_sub_tabs = QTabWidget()
+        #self.inserimento_sub_tabs.clear() 
 
-        self.inserimento_sub_tabs.clear()
+        # Aggiungi InserimentoComuneWidget come primo sotto-tab
+        # Assicurati che self.logged_in_user_info sia il dizionario corretto
+        utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {} # Passa un dict vuoto se None
+
+        self.inserimento_sub_tabs.addTab(
+            InserimentoComuneWidget(
+                parent=self.inserimento_sub_tabs, 
+                db_manager=self.db_manager, 
+                utente_attuale_info=utente_per_inserimenti
+            ), 
+            "Nuovo Comune"
+                )
+        # Aggiungi gli altri sotto-tab di inserimento come prima
         self.inserimento_sub_tabs.addTab(InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs), "Nuovo Possessore")
         self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località")
         self.inserimento_sub_tabs.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs), "Registra Proprietà")
-        # Nota: InserimentoComuneWidget (il dialogo) è chiamato dal pulsante, non è un tab qui.
-        layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs) # Aggiungi i sotto-tab al layout del contenitore
-
-        # 5. Aggiungi il widget contenitore come tab principale
+        self.inserimento_sub_tabs.addTab(OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs), "Operazioni su Partita")
+       
+        layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
         self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
-
-        # --- Tab Ricerca Avanzata Possessori ---
-        #self.tabs.addTab(RicercaAvanzataWidget(self.db_manager, self), "Ricerca Avanzata Possessori")
 
         # --- Tab Esportazioni ---
         self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni")

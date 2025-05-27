@@ -254,6 +254,91 @@ class CatastoDBManager:
             return None
     
         # --- Metodi CRUD e Ricerca Base (MODIFICATI per comune_id) ---
+ # All'interno della classe CatastoDBManager in catasto_db_manager.py
+# Assicurati che le importazioni e le definizioni delle eccezioni siano presenti.
+# import datetime
+# from typing import Optional, Dict, Any, List 
+# from datetime import date # Già importato se datetime è importato
+
+    def aggiungi_comune(self,
+                        nome_comune: str,
+                        provincia: str,
+                        # note: Optional[str] = None, # RIMOSSO dagli argomenti se non usato
+                        regione: Optional[str] = None, 
+                        periodo_id: Optional[int] = None,
+                        utente: Optional[str] = None
+                       ) -> Optional[int]:
+        if not nome_comune or not nome_comune.strip():
+            self.logger.error("aggiungi_comune: Il nome del comune è obbligatorio.")
+            raise DBDataError("Il nome del comune è obbligatorio.")
+        provincia_norm = provincia.strip().upper() if isinstance(provincia, str) else ""
+        if not provincia_norm or len(provincia_norm) != 2:
+            self.logger.error(f"aggiungi_comune: Provincia non valida: '{provincia}'. Deve essere di 2 caratteri.")
+            raise DBDataError("La provincia è obbligatoria e deve essere di 2 caratteri (es. SV).")
+
+        # actual_note = note.strip() if isinstance(note, str) and note.strip() else None # RIMOSSO
+        actual_regione = regione.strip() if isinstance(regione, str) and regione.strip() else None
+        
+        # Query SQL aggiornata senza 'note'
+        query = f"""
+            INSERT INTO {self.schema}.comune 
+                (nome, provincia, regione, periodo_id, 
+                 data_creazione, data_modifica)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id;
+        """
+        # Parametri aggiornati senza actual_note
+        params = (nome_comune.strip(), provincia_norm, actual_regione, periodo_id)
+        
+        conn = None
+        new_comune_id = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"DBManager: Tentativo di aggiungere comune: Nome='{nome_comune.strip()}', Prov='{provincia_norm}', "
+                                 f"Regione='{actual_regione}', PeriodoID='{periodo_id}', Utente (info): '{utente}'") # Rimosso Note dal log
+                cur.execute(query, params)
+                result = cur.fetchone()
+                if result and result[0] is not None:
+                    new_comune_id = result[0]
+                    conn.commit()
+                    self.logger.info(f"Comune '{nome_comune.strip()}' aggiunto con successo. ID: {new_comune_id}.")
+                else:
+                    conn.rollback()
+                    self.logger.error("aggiungi_comune: Inserimento fallito, nessun ID restituito.")
+                    raise DBMError("Creazione del comune fallita (nessun ID restituito).")
+            return new_comune_id
+
+        # ... (gestione eccezioni come prima, assicurati che non ci siano riferimenti a 'note'
+        #      nei messaggi di errore se non pertinenti) ...
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            error_detail = getattr(uve, 'pgerror', str(uve))
+            self.logger.error(f"Unicità violata (vincolo: {constraint_name}) aggiungendo comune '{nome_comune.strip()}': {error_detail}")
+            msg = f"Impossibile aggiungere il comune: i dati violano un vincolo di unicità (vincolo: {constraint_name}). "
+            if "comuni_nome_key" in str(constraint_name).lower() or "comuni_nome_comune_key" in str(constraint_name).lower():
+                 msg += f"Esiste già un comune con il nome '{nome_comune.strip()}'."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
+        except psycopg2.errors.UndefinedColumn as ude: 
+            if conn: conn.rollback()
+            error_detail = getattr(ude, 'pgerror', str(ude)) 
+            self.logger.error(f"Errore colonna non definita aggiungendo comune '{nome_comune.strip()}': {error_detail}", exc_info=True)
+            msg_user = "Una colonna specificata per l'inserimento del comune non esiste nel database."
+            msg_user += "\nVerificare la struttura della tabella 'comune'."
+            raise DBMError(msg_user) from ude
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            error_detail = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB generico aggiungendo comune '{nome_comune.strip()}': {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante l'aggiunta del comune: {error_detail}") from db_err
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto aggiungendo comune '{nome_comune.strip()}': {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'aggiunta del comune: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
     def registra_comune_nel_db(self, nome: str, provincia: str, regione: str) -> Optional[int]:
         comune_id: Optional[int] = None
         query_insert = """
@@ -1582,31 +1667,81 @@ class CatastoDBManager:
         # (altamente improbabile per una CALL che modifica dati), allora un return False qui avrebbe senso.
         # Ma è meglio affidarsi alle eccezioni per segnalare fallimenti.
         # return False
-    def registra_passaggio_proprieta(self, partita_origine_id: int, comune_id: int, numero_partita: int, # Usa comune_id
-                                     tipo_variazione: str, data_variazione: date, tipo_contratto: str,
-                                     data_contratto: date, **kwargs) -> bool:
-        """Chiama la procedura SQL registra_passaggio_proprieta (MODIFICATA per comune_id)."""
+    def registra_passaggio_proprieta(self, 
+                                     partita_origine_id: int, 
+                                     comune_id_nuova_partita: int, 
+                                     numero_nuova_partita: int,    
+                                     tipo_variazione: str, 
+                                     data_variazione: date, 
+                                     tipo_contratto: str, 
+                                     data_contratto: date,
+                                     notaio: Optional[str] = None, 
+                                     repertorio: Optional[str] = None,
+                                     nuovi_possessori_list: Optional[List[Dict[str, Any]]] = None, 
+                                     immobili_da_trasferire_ids: Optional[List[int]] = None, 
+                                     note_variazione: Optional[str] = None
+                                    ) -> bool: # Restituisce True o solleva eccezione
+        """
+        Chiama la procedura SQL catasto.registra_passaggio_proprieta per registrare un passaggio 
+        di proprietà, che implica la creazione di una nuova partita, il trasferimento di immobili (opzionale)
+        e l'assegnazione di nuovi possessori alla nuova partita.
+        Utilizza il pool di connessioni e gestisce commit/rollback.
+        """
+        conn = None
         try:
-            nuovi_poss_list = kwargs.get('nuovi_possessori')
-            imm_trasf_list = kwargs.get('immobili_da_trasferire')
-            nuovi_poss_json = json.dumps(nuovi_poss_list) if nuovi_poss_list is not None else None
-            imm_trasf_array = imm_trasf_list if imm_trasf_list is not None else None
+            # Serializza i nuovi possessori in JSONB.
+            # Ogni dict in nuovi_possessori_list dovrebbe contenere almeno:
+            # {'possessore_id': int, 'titolo': str, 'quota': Optional[str]}
+            # Adatta le chiavi se la tua procedura SQL si aspetta nomi diversi.
+            nuovi_possessori_jsonb = json.dumps(nuovi_possessori_list) if nuovi_possessori_list else None
+            
+            # immobili_da_trasferire_ids è una lista di ID interi.
+            # psycopg2 può convertirla in un ARRAY PostgreSQL se il tipo del parametro
+            # nella procedura SQL è integer[] (o _int4).
 
-            # Procedura SQL aggiornata per comune_id
-            call_proc = "CALL registra_passaggio_proprieta(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::json, %s, %s)"
+            # Assicurati che il nome della procedura e dello schema siano corretti.
+            call_proc_str = f"CALL {self.schema}.registra_passaggio_proprieta(" \
+                            f"%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s);" 
+            
             params = (
-                partita_origine_id, comune_id, numero_partita, tipo_variazione, data_variazione, # Passa ID
-                tipo_contratto, data_contratto, kwargs.get('notaio'), kwargs.get('repertorio'),
-                nuovi_poss_json, imm_trasf_array, kwargs.get('note')
+                partita_origine_id,
+                comune_id_nuova_partita,
+                numero_nuova_partita,
+                tipo_variazione,
+                data_variazione,
+                tipo_contratto,
+                data_contratto,
+                notaio,
+                repertorio,
+                nuovi_possessori_jsonb,       # Passato come JSONB
+                immobili_da_trasferire_ids, # Passato come lista Python, psycopg2 lo gestirà per ARRAY integer
+                note_variazione
             )
-            if self.execute_query(call_proc, params):
-                self.commit()
-                logger.info(f"Registrato passaggio proprietà: Origine ID {partita_origine_id} -> Nuova Partita N.{numero_partita} (Comune ID {comune_id})")
+            
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"Tentativo di registrare passaggio proprietà da Partita ID {partita_origine_id} "
+                                 f"a Nuova Partita N.{numero_nuova_partita} (Comune ID: {comune_id_nuova_partita}).")
+                # Il logging dei params può essere molto verboso con il JSON, considera di loggare solo alcune parti.
+                # self.logger.debug(f"Parametri per registra_passaggio_proprieta: {params}") 
+                cur.execute(call_proc_str, params)
+                conn.commit()
+                self.logger.info("Passaggio di proprietà registrato con successo tramite procedura.")
                 return True
-            return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB registrazione passaggio proprietà (Origine ID {partita_origine_id}): {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python registrazione passaggio proprietà (Origine ID {partita_origine_id}): {e}"); self.rollback(); return False
-
+        except psycopg2.Error as db_err: # Cattura errori specifici del database
+            if conn: conn.rollback()
+            pgerror_msg = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB durante registrazione passaggio proprietà da Partita ID {partita_origine_id}: {pgerror_msg}", exc_info=True)
+            # Solleva un'eccezione più specifica se la procedura SQL usa RAISE EXCEPTION con codici definiti
+            raise DBMError(f"Errore database durante la registrazione del passaggio di proprietà: {pgerror_msg}") from db_err
+        except Exception as e: # Cattura altri errori Python (es. errore di serializzazione JSON se non gestito prima)
+            if conn: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante registrazione passaggio proprietà da Partita ID {partita_origine_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante la registrazione del passaggio: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        # return False # Non dovrebbe essere raggiunto se le eccezioni sono gestite
     def registra_consultazione(self, data: date, richiedente: str, documento_identita: Optional[str],
                              motivazione: Optional[str], materiale_consultato: Optional[str],
                              funzionario_autorizzante: Optional[str]) -> bool:
@@ -1619,27 +1754,73 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB registrazione consultazione: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python registrazione consultazione: {e}"); self.rollback(); return False
 
-    def duplicate_partita(self, partita_id: int, nuovo_numero_partita: int,
+    def duplicate_partita(self, partita_id_originale: int, nuovo_numero_partita: int,
                           mantenere_possessori: bool = True, mantenere_immobili: bool = False) -> bool:
-        """Chiama la procedura SQL duplica_partita (invariata rispetto a comune_id)."""
-        call_proc = "CALL duplica_partita(%s, %s, %s, %s)"
-        params = (partita_id, nuovo_numero_partita, mantenere_possessori, mantenere_immobili)
+        """
+        Chiama la procedura SQL per duplicare una partita (es. catasto.duplica_partita).
+        Utilizza il pool di connessioni e gestisce commit/rollback.
+        Restituisce True in caso di successo, altrimenti solleva un'eccezione.
+        """
+        call_proc_str = f"CALL {self.schema}.duplica_partita(%s, %s, %s, %s);"
+        params = (partita_id_originale, nuovo_numero_partita, mantenere_possessori, mantenere_immobili)
+        
+        conn = None
         try:
-            if self.execute_query(call_proc, params): self.commit(); logger.info(f"Partita ID {partita_id} duplicata in N.{nuovo_numero_partita}."); return True
-            return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB duplicazione partita ID {partita_id}: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python duplicazione partita ID {partita_id}: {e}"); self.rollback(); return False
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"Tentativo di duplicare partita ID {partita_id_originale} in Nuovo Numero Partita {nuovo_numero_partita}. "
+                                 f"Mantieni Possessori: {mantenere_possessori}, Mantieni Immobili: {mantenere_immobili}")
+                cur.execute(call_proc_str, params)
+                conn.commit()
+                self.logger.info(f"Partita ID {partita_id_originale} duplicata con successo in Nuovo Numero Partita {nuovo_numero_partita}.")
+                return True
+        except psycopg2.Error as db_err: # Cattura errori specifici del database
+            if conn: conn.rollback()
+            pgerror_msg = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB durante duplicazione partita ID {partita_id_originale}: {pgerror_msg}", exc_info=True)
+            # Potrebbe sollevare eccezioni più specifiche basate su db_err.pgcode se la procedura SQL li usa
+            raise DBMError(f"Errore database durante la duplicazione della partita: {pgerror_msg}") from db_err
+        except Exception as e: # Cattura altri errori Python
+            if conn: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante duplicazione partita ID {partita_id_originale}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante la duplicazione: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        # return False # Non dovrebbe essere raggiunto se le eccezioni sono gestite
 
     def transfer_immobile(self, immobile_id: int, nuova_partita_id: int, registra_variazione: bool = False) -> bool:
-        """Chiama la procedura SQL trasferisci_immobile (invariata rispetto a comune_id)."""
-        call_proc = "CALL trasferisci_immobile(%s, %s, %s)"
+        """
+        Chiama la procedura SQL per trasferire un immobile a una nuova partita (es. catasto.trasferisci_immobile).
+        Utilizza il pool di connessioni e gestisce commit/rollback.
+        Restituisce True in caso di successo, altrimenti solleva un'eccezione.
+        """
+        call_proc_str = f"CALL {self.schema}.trasferisci_immobile(%s, %s, %s);"
         params = (immobile_id, nuova_partita_id, registra_variazione)
+        
+        conn = None
         try:
-            if self.execute_query(call_proc, params): self.commit(); logger.info(f"Immobile ID {immobile_id} trasferito a partita ID {nuova_partita_id}."); return True
-            return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB trasferimento immobile ID {immobile_id}: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python trasferimento immobile ID {immobile_id}: {e}"); self.rollback(); return False
-
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"Tentativo di trasferire immobile ID {immobile_id} a partita ID {nuova_partita_id}. "
+                                 f"Registra variazione: {registra_variazione}")
+                cur.execute(call_proc_str, params)
+                conn.commit()
+                self.logger.info(f"Immobile ID {immobile_id} trasferito con successo a partita ID {nuova_partita_id}.")
+                return True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            pgerror_msg = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB durante trasferimento immobile ID {immobile_id}: {pgerror_msg}", exc_info=True)
+            raise DBMError(f"Errore database durante il trasferimento dell'immobile: {pgerror_msg}") from db_err
+        except Exception as e:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante trasferimento immobile ID {immobile_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante il trasferimento dell'immobile: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        # return False # Non dovrebbe essere raggiunto
     # --- Metodi di Reportistica (MODIFICATI dove serve join per nome) ---
 
     def genera_certificato_proprieta(self, partita_id: int) -> Optional[str]:
@@ -3151,15 +3332,43 @@ class CatastoDBManager:
 
     # --- Metodi Funzionalità Storiche Avanzate (MODIFICATI) ---
 
-    def get_historical_periods(self) -> List[Dict]:
-        """Recupera i periodi storici definiti."""
+    def get_historical_periods(self) -> List[Dict[str, Any]]:
+        """
+        Recupera i periodi storici definiti dalla tabella 'periodo_storico',
+        utilizzando il pool di connessioni.
+        Restituisce una lista di dizionari o una lista vuota in caso di errore.
+        """
+        conn = None
+        periodi_list: List[Dict[str, Any]] = [] # Inizializza a lista vuota con tipo esplicito
         try:
-            query = "SELECT id, nome, anno_inizio, anno_fine, descrizione FROM periodo_storico ORDER BY anno_inizio"
-            if self.execute_query(query): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_historical_periods: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python get_historical_periods: {e}"); return []
-        return []
-
+            # Assicurati che self.schema sia corretto e che la tabella si chiami 'periodo_storico'
+            query = f"SELECT id, nome, anno_inizio, anno_fine, descrizione FROM {self.schema}.periodo_storico ORDER BY anno_inizio;"
+            
+            conn = self._get_connection() # Ottiene una connessione dal pool
+            # Usa DictCursor per ottenere risultati come dizionari (o oggetti DictRow simili a dizionari)
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_historical_periods: {query}")
+                cur.execute(query)
+                results = cur.fetchall() # Restituisce una lista di DictRow
+                
+                if results:
+                    # Converti esplicitamente DictRow in dict, anche se spesso non è strettamente necessario
+                    # per l'accesso, garantisce che il tipo restituito sia esattamente List[Dict].
+                    periodi_list = [dict(row) for row in results]
+                
+                self.logger.info(f"Recuperati {len(periodi_list)} periodi storici.")
+        
+        except psycopg2.Error as db_err: # Cattura errori specifici di psycopg2/DB
+            self.logger.error(f"Errore DB in get_historical_periods: {db_err}", exc_info=True)
+            # Non sollevare eccezione, restituisci lista vuota come da comportamento precedente
+            # per non interrompere la UI, che mostrerà "Nessun periodo..."
+        except Exception as e: # Cattura altri errori Python imprevisti
+            self.logger.error(f"Errore Python generico in get_historical_periods: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia SEMPRE la connessione al pool
+        
+        return periodi_list
     def get_historical_name(self, entity_type: str, entity_id: int, year: Optional[int] = None) -> Optional[Dict]:
         """Chiama la funzione SQL get_nome_storico (SQL aggiornata per join)."""
         try:
@@ -3195,7 +3404,153 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB search_historical_documents: {db_err}"); return []
         except Exception as e: logger.error(f"Errore Python search_historical_documents: {e}"); return []
         return []
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
+# Assicurati che le importazioni necessarie siano presenti (datetime, Optional, Dict, Any, List, psycopg2, ecc.)
 
+    def get_periodo_storico_details(self, periodo_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Recupera i dettagli completi di un singolo periodo storico dal database.
+        """
+        if not isinstance(periodo_id, int) or periodo_id <= 0:
+            self.logger.error(f"get_periodo_storico_details: periodo_id non valido: {periodo_id}")
+            return None
+
+        query = f"SELECT * FROM {self.schema}.periodo_storico WHERE id = %s;"
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_periodo_storico_details per ID: {periodo_id}")
+                cur.execute(query, (periodo_id,))
+                result = cur.fetchone()
+                if result:
+                    self.logger.info(f"Dettagli recuperati per periodo storico ID {periodo_id}.")
+                    return dict(result)
+                else:
+                    self.logger.warning(f"Nessun periodo storico trovato con ID {periodo_id}.")
+                    return None
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_periodo_storico_details (ID: {periodo_id}): {db_err}", exc_info=True)
+            return None
+        except Exception as e:
+            self.logger.error(f"Errore Python generico in get_periodo_storico_details (ID: {periodo_id}): {e}", exc_info=True)
+            return None
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    # All'interno della classe CatastoDBManager in catasto_db_manager.py
+
+    def update_periodo_storico(self, periodo_id: int, dati_modificati: Dict[str, Any]) -> bool:
+        """
+        Aggiorna i dati di un periodo storico esistente.
+        I campi aggiornabili sono: nome, anno_inizio, anno_fine, descrizione.
+        La colonna 'data_modifica' è stata rimossa da questa query poiché non presente
+        nello schema DB fornito.
+        Solleva eccezioni specifiche in caso di errore.
+        """
+        if not isinstance(periodo_id, int) or periodo_id <= 0:
+            self.logger.error(f"update_periodo_storico: ID periodo storico non valido: {periodo_id}")
+            raise DBDataError(f"ID periodo storico non valido: {periodo_id}")
+        if not dati_modificati: # Se il dizionario è vuoto
+            self.logger.warning(f"update_periodo_storico: Nessun dato fornito per aggiornare periodo ID {periodo_id}.")
+            # Potrebbe essere considerato un no-op e restituire True se non è un errore.
+            # Per ora, solleviamo un errore se nessun dato modificabile è fornito.
+            raise DBDataError("Nessun dato fornito per l'aggiornamento del periodo storico.")
+
+        set_clauses = []
+        params = []
+
+        campi_permessi = {
+            "nome": "nome", 
+            "anno_inizio": "anno_inizio", 
+            "anno_fine": "anno_fine", 
+            "descrizione": "descrizione"
+        }
+
+        modifica_effettuata = False
+        for key_dict, col_db in campi_permessi.items():
+            if key_dict in dati_modificati:
+                valore_ui = dati_modificati[key_dict]
+                
+                if key_dict == "nome" and (valore_ui is None or not str(valore_ui).strip()):
+                    raise DBDataError("Il nome del periodo storico non può essere vuoto.")
+                
+                # Gestione specifica per anno_fine che può essere None
+                if key_dict == "anno_fine":
+                    if isinstance(valore_ui, str) and valore_ui.strip() == "":
+                        params.append(None) # Stringa vuota dalla UI diventa NULL
+                    elif valore_ui == 0 and self.periodo_id_spinbox.minimum() == 0 and self.periodo_id_spinbox.specialValueText().strip() != "": # Esempio se 0 è "non impostato"
+                        params.append(None)
+                    else:
+                        params.append(valore_ui) # Altrimenti usa il valore (int o None)
+                else:
+                    params.append(valore_ui)
+                
+                set_clauses.append(f"{col_db} = %s")
+                modifica_effettuata = True
+
+        if not modifica_effettuata: # Se nessuna delle chiavi permesse era in dati_modificati
+            self.logger.info(f"Nessun campo aggiornabile fornito per periodo storico ID {periodo_id}. Nessuna operazione eseguita.")
+            return True # Consideriamo un successo (nessuna modifica richiesta)
+
+        # RIMOZIONE DI: set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+        # Se la colonna data_modifica non esiste, non possiamo aggiornarla.
+        # Se volesse tracciare la modifica, dovrebbe prima aggiungere la colonna al DB.
+
+        query = f"UPDATE {self.schema}.periodo_storico SET {', '.join(set_clauses)} WHERE id = %s;"
+        params.append(periodo_id)
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"Tentativo di aggiornare periodo storico ID {periodo_id} con dati: {dati_modificati}")
+                log_query_str = cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore') if params else query
+                self.logger.debug(f"Esecuzione query update_periodo_storico: {log_query_str}")
+                cur.execute(query, tuple(params))
+                
+                if cur.rowcount == 0:
+                    # Verifica se il record esiste per distinguere "non trovato" da "dati identici"
+                    cur.execute(f"SELECT 1 FROM {self.schema}.periodo_storico WHERE id = %s", (periodo_id,))
+                    if not cur.fetchone():
+                        conn.rollback() # Annulla perché il record non è stato trovato
+                        self.logger.warning(f"Tentativo di aggiornare periodo storico ID {periodo_id} che non è stato trovato.")
+                        raise DBNotFoundError(f"Periodo storico con ID {periodo_id} non trovato per l'aggiornamento.")
+                    # Se esiste ma rowcount è 0, significa che i valori forniti erano identici a quelli esistenti.
+                    self.logger.info(f"Nessuna modifica effettiva ai dati per periodo ID {periodo_id} (valori già aggiornati o identici).")
+                
+                conn.commit()
+                self.logger.info(f"Periodo storico ID {periodo_id} aggiornato con successo (o i valori erano identici).")
+                return True
+
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
+            msg = f"Impossibile aggiornare il periodo storico: i dati violano un vincolo di unicità (vincolo: {constraint_name})."
+            if "periodo_storico_nome_key" in str(constraint_name).lower(): # Adatta al nome del tuo vincolo UNIQUE per 'nome'
+                 msg += f" Esiste già un periodo con lo stesso nome."
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=str(uve)) from uve
+        except psycopg2.errors.CheckViolation as cve:
+            if conn: conn.rollback()
+            constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
+            msg = f"I dati forniti per il periodo storico violano una regola di validazione (vincolo: {constraint_name})."
+            if "periodo_storico_check_anni" in str(constraint_name).lower(): # Esempio di nome vincolo
+                 msg += " L'anno di fine non può essere precedente all'anno di inizio."
+            raise DBDataError(msg) from cve
+        except psycopg2.Error as db_err: # Inclusi UndefinedColumn se la query fosse ancora errata
+            if conn: conn.rollback()
+            error_detail = getattr(db_err, 'pgerror', str(db_err))
+            self.logger.error(f"Errore DB aggiornando periodo storico ID {periodo_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database aggiornando periodo storico ID {periodo_id}: {error_detail}") from db_err
+        except Exception as e:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto aggiornando periodo storico ID {periodo_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto aggiornando periodo storico ID {periodo_id}: {str(e)}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        # return False # Non dovrebbe essere raggiunto se le eccezioni sono gestite
     def get_property_genealogy(self, partita_id: int) -> List[Dict]:
         """Chiama la funzione SQL albero_genealogico_proprieta (SQL aggiornata per join)."""
         try:

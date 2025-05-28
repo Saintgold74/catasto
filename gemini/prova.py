@@ -436,7 +436,7 @@ if FPDF_AVAILABLE:
         def footer(self):
             self.set_y(-15)
             self.set_font('Helvetica', 'B', 8) # Cambiato in Bold per coerenza
-            self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
+            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
@@ -496,7 +496,7 @@ if FPDF_AVAILABLE:
         def footer(self):
             self.set_y(-15)
             self.set_font('Helvetica', 'I', 8) # Originale era 'I'
-            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
+            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
@@ -914,7 +914,16 @@ class EsportazioniWidget(QWidget):
     def _cerca_possessore_per_export(self):
         # Assumendo esista un PossessoreSearchDialog, simile a PartitaSearchDialog
         # Altrimenti, si può usare un semplice QInputDialog per l'ID.
-        dialog = PossessoreSearchDialog(self.db_manager, self) # Assumiamo che PossessoreSearchDialog esista
+       # --- MODIFICA QUI ---
+        # dialog = PossessoreSearchDialog(self.db_manager, self) # VECCHIA RIGA
+        dialog = PossessoreSelectionDialog(self.db_manager, 
+                                           comune_id=None, # PossessoreSelectionDialog richiede comune_id
+                                                         # Deve decidere quale comune_id passare o modificare
+                                                         # PossessoreSelectionDialog per renderlo opzionale
+                                                         # o creare un vero PossessoreSearchDialog generico.
+                                           parent=self)
+        # --- FINE MODIFICA ---
+
         if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore_id:
             self.selected_possessore_id_export = dialog.selected_possessore_id
             self.possessore_id_export_edit.setValue(self.selected_possessore_id_export)

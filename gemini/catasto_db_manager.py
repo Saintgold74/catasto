@@ -2324,68 +2324,84 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB export_possessore_json (ID: {possessore_id}): {db_err}")
         except Exception as e: logger.error(f"Errore Python export_possessore_json (ID: {possessore_id}): {e}")
         return None
-    def get_partita_data_for_export(self, partita_id: int) -> Optional[Dict]:
+    def get_partita_data_for_export(self, partita_id: int) -> Optional[Dict[str, Any]]:
         """
-        Recupera i dati completi di una partita come dizionario Python per l'esportazione.
-        Chiama la funzione SQL esporta_partita_json che restituisce JSON.
+        Recupera i dati completi di una partita come dizionario Python per l'esportazione,
+        chiamando la funzione SQL catasto.esporta_partita_json(%s).
+        Utilizza il pool di connessioni.
         """
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            self.logger.error(f"get_partita_data_for_export: ID partita non valido: {partita_id}")
+            return None
+            
+        conn = None
         try:
-            query = "SELECT esporta_partita_json(%s) AS partita_data" # La funzione SQL restituisce JSON
-            if self.execute_query(query, (partita_id,)):
-                result = self.fetchone()
-                if result and result.get('partita_data'):
-                    # psycopg2 dovrebbe aver già convertito il tipo JSON di PostgreSQL in un dict Python
+            # Assumiamo che la funzione SQL restituisca un singolo valore JSON/JSONB
+            # e che il suo schema sia corretto (es. self.schema = 'catasto')
+            query = f"SELECT {self.schema}.esporta_partita_json(%s) AS partita_data;"
+            
+            conn = self._get_connection() # Ottiene connessione dal pool
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_partita_data_for_export per ID partita: {partita_id} con query: {query}")
+                cur.execute(query, (partita_id,))
+                result = cur.fetchone()
+                
+                if result and result['partita_data'] is not None:
+                    self.logger.info(f"Dati per esportazione recuperati per partita ID {partita_id}.")
+                    # psycopg2 converte automaticamente il tipo JSON/JSONB di PostgreSQL 
+                    # in un dizionario Python quando si usa DictCursor o se il tipo è registrato.
                     return result['partita_data'] 
-            logger.warning(f"Nessun dato trovato per partita ID {partita_id} per l'esportazione.")
-            return None
+                else:
+                    self.logger.warning(f"Nessun dato trovato per partita ID {partita_id} da {self.schema}.esporta_partita_json o il risultato era NULL.")
+                    return None
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB get_partita_data_for_export (ID: {partita_id}): {db_err}")
-            return None
-        except Exception as e:
-            logger.error(f"Errore Python get_partita_data_for_export (ID: {partita_id}): {e}")
-            return None
-        
-        # Recupero possessori associati (modificato per includere paternita e cognome_nome)
-        possessori_query = """
-            SELECT 
-                p.id, p.nome_completo, p.cognome_nome, p.paternita,
-                pp.quota, pp.diritti_obblighi, 
-                t.nome as titolo_proprieta, pp.data_inizio_validita, pp.data_fine_validita
-            FROM catasto.possessori p
-            JOIN catasto.partita_possessore pp ON p.id = pp.possessore_id
-            LEFT JOIN catasto.titoli_proprieta t ON pp.titolo_proprieta_id = t.id
-            WHERE pp.partita_id = %s
-            ORDER BY p.nome_completo;
-        """
-        # Assumendo che self._fetch_all_dict esista e funzioni o sia stato sostituito dalla logica con DictCursor
-        # dict_cursor_poss = self.conn.cursor(cursor_factory=DictCursor) # Esempio se fatto direttamente
-        # dict_cursor_poss.execute(possessori_query, (partita_id,))
-        # partita_data['possessori'] = [dict(row) for row in dict_cursor_poss.fetchall()]
-        # dict_cursor_poss.close()
-        
-        # Se usi un metodo helper come self._fetch_all_dict:
-        partita_data['possessori'] = self._fetch_all_dict(possessori_query, (partita_id,))
+            self.logger.error(f"Errore DB in get_partita_data_for_export (ID: {partita_id}): {db_err}", exc_info=True)
+        except Exception as e: # Cattura altri errori, inclusi AttributeError se si chiamasse self.execute_query per errore
+            self.logger.error(f"Errore Python generico in get_partita_data_for_export (ID: {partita_id}): {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia sempre la connessione
+        return None # Restituisce None in caso di qualsiasi errore
 
 
-    def get_possessore_data_for_export(self, possessore_id: int) -> Optional[Dict]:
+    def get_possessore_data_for_export(self, possessore_id: int) -> Optional[Dict[str, Any]]:
         """
-        Recupera i dati completi di un possessore come dizionario Python per l'esportazione.
-        Chiama la funzione SQL esporta_possessore_json che restituisce JSON.
+        Recupera i dati completi di un possessore come dizionario Python per l'esportazione,
+        chiamando la funzione SQL catasto.esporta_possessore_json(%s).
+        Utilizza il pool di connessioni.
         """
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            self.logger.error(f"get_possessore_data_for_export: ID possessore non valido: {possessore_id}")
+            return None
+
+        conn = None
         try:
-            query = "SELECT esporta_possessore_json(%s) AS possessore_data" # La funzione SQL restituisce JSON
-            if self.execute_query(query, (possessore_id,)):
-                result = self.fetchone()
-                if result and result.get('possessore_data'):
+            # Assumiamo che la funzione SQL restituisca un singolo valore JSON/JSONB
+            # e che il suo schema sia corretto (es. self.schema = 'catasto')
+            query = f"SELECT {self.schema}.esporta_possessore_json(%s) AS possessore_data;"
+            
+            conn = self._get_connection() # Ottiene connessione dal pool
+            # Usiamo DictCursor per coerenza
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_possessore_data_for_export per ID possessore: {possessore_id} con query: {query}")
+                cur.execute(query, (possessore_id,))
+                result = cur.fetchone()
+                
+                if result and result['possessore_data'] is not None:
+                    self.logger.info(f"Dati per esportazione recuperati per possessore ID {possessore_id}.")
+                    # psycopg2 converte automaticamente JSON/JSONB in dict Python
                     return result['possessore_data']
-            logger.warning(f"Nessun dato trovato per possessore ID {possessore_id} per l'esportazione.")
-            return None
+                else:
+                    self.logger.warning(f"Nessun dato trovato per possessore ID {possessore_id} da {self.schema}.esporta_possessore_json o il risultato era NULL.")
+                    return None
         except psycopg2.Error as db_err:
-            logger.error(f"Errore DB get_possessore_data_for_export (ID: {possessore_id}): {db_err}")
-            return None
+            self.logger.error(f"Errore DB in get_possessore_data_for_export (ID: {possessore_id}): {db_err}", exc_info=True)
         except Exception as e:
-            logger.error(f"Errore Python get_possessore_data_for_export (ID: {possessore_id}): {e}")
-            return None
+            self.logger.error(f"Errore Python generico in get_possessore_data_for_export (ID: {possessore_id}): {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn) # Rilascia sempre la connessione
+        return None # Restituisce None in caso di qualsiasi errore
 
     # --- Metodi Manutenzione e Ottimizzazione (Invariati rispetto a comune_id) ---
 

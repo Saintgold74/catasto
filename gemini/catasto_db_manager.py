@@ -644,6 +644,43 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
         return localita_list
+    def search_possessori_by_term_globally(self, search_term: str) -> List[Dict[str, Any]]:
+        conn = None; data_list = []
+        if not search_term or not search_term.strip():
+            return data_list
+
+        query = f"""
+            SELECT 
+                p.id, p.nome_completo, p.cognome_nome, p.paternita, p.attivo,
+                c.nome AS comune_riferimento_nome  -- AGGIUNTO NOME COMUNE
+            FROM {self.schema}.possessore p
+            LEFT JOIN {self.schema}.comune c ON p.comune_id = c.id -- AGGIUNTO LEFT JOIN
+            WHERE p.nome_completo ILIKE %s 
+               OR p.cognome_nome ILIKE %s
+               OR p.paternita ILIKE %s 
+            ORDER BY p.nome_completo;
+        """
+        like_term = f"%{search_term.strip()}%"
+        # Assicurati che il numero di %s nella query corrisponda al numero di elementi nella tupla params
+        params = (like_term, like_term, like_term) 
+        
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione search_possessori_by_term_globally: Query='{query}', Params='{params}'")
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                if rows:
+                    data_list = [dict(row) for row in rows]
+                self.logger.info(f"search_possessori_by_term_globally ha trovato {len(data_list)} possessori per '{search_term}'.")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in search_possessori_by_term_globally: {db_err}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Errore Python in search_possessori_by_term_globally: {e}", exc_info=True)
+        finally:
+            if conn:
+                self._release_connection(conn)
+        return data_list
     def get_possessori_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
         """
         Recupera tutti i possessori associati a una data partita, inclusi i dettagli

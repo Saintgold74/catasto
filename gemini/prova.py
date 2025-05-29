@@ -15,6 +15,7 @@ import getpass
 import json
 import bcrypt
 import csv # Aggiunto per esportazione CSV
+import uuid
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -39,6 +40,7 @@ from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
 import os # Per gestire percorsi# <--- ASSICURATI CHE QDateTime SIA PRESENTE
 from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime # Assicurati che QDateTime sia qui
 from PyQt5.QtCore import pyqtSignal
+
 
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
@@ -549,7 +551,37 @@ if FPDF_AVAILABLE:
 else: # FPDF non disponibile
     class PDFPartita: pass # Definizioni vuote per evitare errori di NameError
     class PDFPossessore: pass
+if FPDF_AVAILABLE:
+    class GenericTextReportPDF(FPDF):
+        def __init__(self, orientation='P', unit='mm', format='A4', report_title="Report"):
+            super().__init__(orientation, unit, format)
+            self.report_title = report_title
+            self.set_auto_page_break(auto=True, margin=15)
+            self.set_left_margin(15)
+            self.set_right_margin(15)
+            self.set_font('Helvetica', '', 10) # Font di default per il corpo del report
 
+        def header(self):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 10, self.report_title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.ln(5) # Spazio dopo l'header
+
+        def footer(self):
+            self.set_y(-15) # Posizione a 1.5 cm dal fondo
+            self.set_font('Helvetica', 'I', 8)
+            page_num_text = f'Pagina {self.page_no()} / {{nb}}' # {{nb}} è un alias per il numero totale di pagine
+            self.cell(0, 10, page_num_text, border=0, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+
+        def add_report_text(self, text_content: str):
+            """Aggiunge il contenuto testuale del report al PDF."""
+            self.set_font('Courier', '', 9) # Usiamo un font monospazio per testo preformattato
+                                           # Potrebbe scegliere 'Helvetica' se preferisce
+            # Sostituisci i caratteri di tabulazione con spazi per un rendering migliore in PDF
+            text_content = text_content.replace('\t', '    ') 
+            
+            # multi_cell gestisce automaticamente i ritorni a capo e il wrapping del testo
+            self.multi_cell(0, 5, text_content) # Larghezza 0 = larghezza piena, altezza riga 5mm
+            self.ln()
 
 # --- Funzioni di esportazione adattate per GUI ---
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
@@ -3811,6 +3843,16 @@ class StatisticheWidget(QWidget):
         """Aggiorna la tabella delle statistiche per comune."""
         self.stats_comune_table.setRowCount(0)
         
+        if not self.db_manager or not self.db_manager.pool: # <-- CONTROLLO AGGIUNTO
+            gui_logger.warning("StatisticheWidget: Pool DB non inizializzato. Impossibile caricare statistiche comuni.")
+            # Opzionale: mostra messaggio nella tabella
+            self.stats_comune_table.setRowCount(1)
+            item_msg = QTableWidgetItem("Database non pronto per caricare le statistiche.")
+            item_msg.setTextAlignment(Qt.AlignCenter)
+            self.stats_comune_table.setItem(0,0, item_msg)
+            self.stats_comune_table.setSpan(0,0,1, self.stats_comune_table.columnCount())
+            return
+
         stats = self.db_manager.get_statistiche_comune()
         
         if stats:
@@ -3849,6 +3891,15 @@ class StatisticheWidget(QWidget):
         """Aggiorna la tabella degli immobili per tipologia."""
         self.immobili_table.setRowCount(0)
         
+        if not self.db_manager or not self.db_manager.pool: # <-- CONTROLLO AGGIUNTO
+            gui_logger.warning("StatisticheWidget: Pool DB non inizializzato. Impossibile caricare statistiche immobili.")
+            self.immobili_table.setRowCount(1)
+            item_msg = QTableWidgetItem("Database non pronto per caricare le statistiche immobili.")
+            item_msg.setTextAlignment(Qt.AlignCenter)
+            self.immobili_table.setItem(0,0, item_msg)
+            self.immobili_table.setSpan(0,0,1, self.immobili_table.columnCount())
+            return
+            
         stats = self.db_manager.get_immobili_per_tipologia(self.comune_filter_id)
         
         if stats:
@@ -4217,7 +4268,7 @@ class PossessoreSelectionDialog(QDialog):
         layout = QVBoxLayout()
         
         # Tab per selezione o creazione
-        tabs = QTabWidget()
+        self.tabs = QTabWidget()
         
         # Tab Seleziona
         select_tab = QWidget()
@@ -4247,7 +4298,7 @@ class PossessoreSelectionDialog(QDialog):
         select_layout.addWidget(self.possessori_table)
         
         select_tab.setLayout(select_layout)
-        tabs.addTab(select_tab, "Seleziona Esistente")
+        self.tabs.addTab(select_tab, "Seleziona Esistente")
         
         # Tab Crea
         create_tab = QWidget()
@@ -4286,9 +4337,9 @@ class PossessoreSelectionDialog(QDialog):
         create_layout.addWidget(self.quota_edit, 3, 1)
         
         create_tab.setLayout(create_layout)
-        tabs.addTab(create_tab, "Crea Nuovo")
+        self.tabs.addTab(create_tab, "Crea Nuovo")
         
-        layout.addWidget(tabs)
+        layout.addWidget(self.tabs)
         
         # Pulsanti
         buttons_layout = QHBoxLayout()
@@ -4308,7 +4359,7 @@ class PossessoreSelectionDialog(QDialog):
         
         # Carica i possessori iniziali
         self.current_tab = 0
-        tabs.currentChanged.connect(self.tab_changed)
+        self.tabs.currentChanged.connect(self.tab_changed)
         self.load_possessori()
     
     def tab_changed(self, index):
@@ -4320,76 +4371,64 @@ class PossessoreSelectionDialog(QDialog):
             self.ok_button.setText("Crea e Seleziona")
     
     def load_possessori(self, filter_text: Optional[str] = None):
-        self.possessori_table.setRowCount(0) # Pulisce la tabella
+        self.possessori_table.setRowCount(0)
         self.possessori_table.setSortingEnabled(False)
         
-        possessori_list: List[Dict[str, Any]] = [] # Inizializza a lista vuota
-
+        possessori_list: List[Dict[str, Any]] = []
         try:
-            # Il filter_text viene passato dalla chiamata in filter_possessori, 
-            # che a sua volta lo prende da self.filter_edit.text().strip()
             actual_filter_text = filter_text if filter_text and filter_text.strip() else None
 
             if self.comune_id is not None:
-                # Scenario 1: Comune specificato, filtra per comune e poi per testo
+                # Scenario 1: Comune specificato
                 gui_logger.debug(f"PossessoreSelectionDialog: Caricamento per comune_id={self.comune_id}, filtro='{actual_filter_text}'")
-                gui_logger.debug(f"load_possessori: self.comune_id={self.comune_id}, actual_filter_text='{actual_filter_text}'")
-                temp_list = self.db_manager.get_possessori_by_comune(self.comune_id)
+                temp_list = self.db_manager.get_possessori_by_comune(self.comune_id) # Questo dovrebbe già restituire tutti i campi necessari
                 if actual_filter_text:
                     ft_lower = actual_filter_text.lower()
                     possessori_list = [
                         p for p in temp_list 
                         if ft_lower in p.get('nome_completo', '').lower() or \
-                           (p.get('cognome_nome') and ft_lower in p.get('cognome_nome', '').lower()) # Controlla se cognome_nome esiste
+                           (p.get('cognome_nome') and ft_lower in p.get('cognome_nome', '').lower())
                     ]
                 else:
                     possessori_list = temp_list
-            elif actual_filter_text:
-                # Scenario 2: Nessun comune specificato, ma c'è un testo di filtro -> ricerca globale
-                gui_logger.debug(f"PossessoreSelectionDialog: Caricamento globale con filtro='{actual_filter_text}'")
-                # Necessita di un metodo nel DBManager per cercare possessori globalmente per nome/cf/ecc.
-                # Creeremo search_possessori_globally più avanti.
-                # Per ora, potremmo usare ricerca_avanzata_possessori se è adatto.
-                # ATTENZIONE: ricerca_avanzata_possessori restituisce campi extra (similarity, num_partite)
-                # che questa tabella non si aspetta. È meglio un metodo dedicato.
-                # Chiamiamo un nuovo metodo (da creare in DBManager):
-                gui_logger.debug("load_possessori: Ramo - ricerca globale per testo.")
-                possessori_list = self.db_manager.search_possessori_by_term_globally(actual_filter_text)
-                gui_logger.info(f"load_possessori: Risultato da search_possessori_by_term_globally: {possessori_list}") # LOG IMPORTANTE
-            else:
-                # Scenario 3: Nessun comune e nessun testo di filtro.
-                # Non carichiamo nulla per evitare di mostrare tutti i possessori del database.
-                # L'utente deve inserire un termine di ricerca se non c'è un contesto di comune.
-                gui_logger.debug("PossessoreSelectionDialog: Nessun comune_id e nessun testo di filtro. Tabella non popolata.")
-                gui_logger.debug("load_possessori: Ramo - nessun comune, nessun filtro.")
-                # La tabella rimane vuota, o potresti aggiungere un item "Inserisci un termine per cercare".
-
-            # Popolamento della tabella (assicurati che i nomi delle chiavi siano corretti)
-            if possessori_list: # Se la lista contiene risultati
-                gui_logger.info(f">>> Popolando possessori_table con {len(possessori_list)} righe.") # LOG AGGIUNTO
+            else: # Nessun comune_id specificato -> ricerca globale
+                # Scenario 2: Ricerca globale (con o senza testo di filtro)
+                # Se actual_filter_text è None, search_possessori_by_term_globally restituirà i primi N.
+                gui_logger.debug(f"PossessoreSelectionDialog: Caricamento globale, filtro='{actual_filter_text}'")
+                possessori_list = self.db_manager.search_possessori_by_term_globally(actual_filter_text) # Passa None se nessun filtro
+                gui_logger.info(f"PossessoreSelectionDialog.load_possessori: Risultato da search_possessori_by_term_globally: {len(possessori_list)} elementi.")
+            
+            # Popolamento della tabella
+            if possessori_list:
+                gui_logger.info(f">>> Popolando possessori_table con {len(possessori_list)} righe.")
                 self.possessori_table.setRowCount(len(possessori_list))
                 for i, pos_data in enumerate(possessori_list):
                     col = 0
                     item_id_str = str(pos_data.get('id', 'N/D'))
                     item_nome_str = pos_data.get('nome_completo', 'N/D')
-                    item_pater_str = pos_data.get('paternita', 'N/D')
+                    # Assicurati che 'paternita' e 'attivo' siano presenti nei risultati di entrambe le query
+                    # (get_possessori_by_comune e search_possessori_by_term_globally)
+                    item_pater_str = pos_data.get('paternita', 'N/D') 
                     item_stato_str = "Attivo" if pos_data.get('attivo', False) else "Non Attivo"
                     
-                    # LOG AGGIUNTO PER OGNI RIGA
-                    gui_logger.debug(f"    Riga {i}: ID='{item_id_str}', Nome='{item_nome_str}', Pater='{item_pater_str}', Stato='{item_stato_str}'")
+                    gui_logger.debug(f"    Popolando riga {i}: ID='{item_id_str}', Nome='{item_nome_str}', Pater='{item_pater_str}', Stato='{item_stato_str}'")
 
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_id_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_nome_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_pater_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_stato_str)); col+=1
-                
                 self.possessori_table.resizeColumnsToContents()
-                gui_logger.info(">>> Popolamento possessori_table completato.") # LOG AGGIUNTO
-            elif actual_filter_text or self.comune_id: # Mostra "Nessun risultato" solo se è stata tentata una ricerca attiva
+                gui_logger.info(">>> Popolamento possessori_table completato.")
+            # Mostra "Nessun risultato" solo se è stata tentata una ricerca attiva (con filtro o con comune)
+            # O se la ricerca globale senza filtro non ha prodotto risultati (improbabile se ci sono dati).
+            elif actual_filter_text or self.comune_id: 
                 self.possessori_table.setRowCount(1)
                 self.possessori_table.setItem(0, 0, QTableWidgetItem("Nessun possessore trovato con i criteri specificati."))
                 self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
-            # else: se nessun filtro e nessun comune, la tabella è intenzionalmente vuota.
+            else: # Nessun filtro, nessun comune_id, e search_possessori_by_term_globally(None) ha restituito lista vuota
+                self.possessori_table.setRowCount(1)
+                self.possessori_table.setItem(0, 0, QTableWidgetItem("Nessun possessore presente nel database."))
+                self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
 
         except Exception as e:
             gui_logger.error(f"Errore durante il caricamento dei possessori in PossessoreSelectionDialog: {e}", exc_info=True)
@@ -4430,66 +4469,57 @@ class PossessoreSelectionDialog(QDialog):
     
     def handle_selection(self):
         """Gestisce la selezione o creazione del possessore."""
-        if self.current_tab == 0:  # Tab "Seleziona Esistente"
-            selected_rows = self.possessori_table.selectedIndexes()
+        if self.tabs.currentIndex() == 0:  # Tab "Seleziona Esistente" (o il nome del suo primo tab)
+            selected_rows = self.possessori_table.selectionModel().selectedRows()
             if not selected_rows:
-                QMessageBox.warning(self, "Attenzione", "Seleziona un possessore dalla tabella.")
+                QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella.")
                 return
             
-            row = selected_rows[0].row()
-            possessore_id_text = self.possessori_table.item(row, 0).text()
-            nome_completo_text = self.possessori_table.item(row, 1).text()
-            # Recupera anche gli altri dati se servono per self.selected_possessore
-            cognome_nome_text = self.possessori_table.item(row, 2).text() if self.possessori_table.columnCount() > 2 and self.possessori_table.item(row, 2) else None
-            paternita_text = self.possessori_table.item(row, 3).text() if self.possessori_table.columnCount() > 3 and self.possessori_table.item(row, 3) else None
-            # ... e così via per altri campi se la tabella li mostra e servono ...
-
-            if possessore_id_text.isdigit():
+            current_row = selected_rows[0].row()
+            
+            id_item = self.possessori_table.item(current_row, 0)
+            nome_item = self.possessori_table.item(current_row, 1)
+            # Aggiungi controlli per tutti gli item da cui leggi .text()
+            cognome_nome_item = self.possessori_table.item(current_row, 2) if self.possessori_table.columnCount() > 2 else None
+            paternita_item = self.possessori_table.item(current_row, 3) if self.possessori_table.columnCount() > 3 else None
+            
+            if id_item and id_item.text().isdigit() and nome_item:
                 self.selected_possessore = {
-                    'id': int(possessore_id_text),
-                    'nome_completo': nome_completo_text,
-                    'cognome_nome': cognome_nome_text, # Aggiunto
-                    'paternita': paternita_text,       # Aggiunto
-                    # 'comune_riferimento_id': self.comune_id, # Il comune_id del dialogo, se pertinente
-                    # 'attivo': True # O leggi dalla tabella se presente
-                    # Aggiungi qui altri campi che vuoi passare indietro dal possessore selezionato
+                    'id': int(id_item.text()),
+                    'nome_completo': nome_item.text(),
+                    'cognome_nome': cognome_nome_item.text() if cognome_nome_item else None,
+                    'paternita': paternita_item.text() if paternita_item else None,
+                    # Recupera altri dati rilevanti dalla tabella se necessario
+                    # 'comune_riferimento_id': self.comune_id, # Se il comune_id del dialogo è rilevante
+                    # 'attivo': True # O leggi dalla colonna "Stato" se presente
                 }
-                # Non chiediamo più la quota qui, verrà chiesta separatamente se necessario
-                # dal widget chiamante (es. DettagliLegamePossessoreDialog)
                 self.accept()
             else:
-                QMessageBox.warning(self, "Errore Selezione", "ID possessore non valido nella tabella.")
+                QMessageBox.warning(self, "Errore Selezione", "Dati del possessore selezionato non validi o incompleti nella tabella.")
         
-        elif self.current_tab == 1:  # Tab "Crea Nuovo"
+        elif self.tabs.currentIndex() == 1:  # Tab "Crea Nuovo"
             nome_completo = self.nome_completo_edit.text().strip()
             paternita = self.paternita_edit.text().strip()
-            # Assumiamo che tu abbia anche un campo per cognome_nome nel tab "Crea Nuovo"
-            # Se non c'è, devi aggiungerlo o gestirlo diversamente
+            # Assicurati che cognome_nome_edit esista se lo usi
             cognome_nome = self.cognome_nome_edit.text().strip() if hasattr(self, 'cognome_nome_edit') else None
 
-            # Validazione campi per nuovo possessore
             if not nome_completo:
-                QMessageBox.warning(self, "Dati Mancanti", "Il 'Nome Completo' è obbligatorio per un nuovo possessore.")
-                self.nome_completo_edit.setFocus(); return
-            if not cognome_nome: # Se cognome_nome è NOT NULL nella tabella possessore
-                QMessageBox.warning(self, "Dati Mancanti", "Il 'Cognome Nome' è obbligatorio per un nuovo possessore.")
-                if hasattr(self, 'cognome_nome_edit'): self.cognome_nome_edit.setFocus();
-                return
-            if self.comune_id is None: # comune_id è quello del dialogo, che deve essere il comune di riferimento
-                QMessageBox.warning(self, "Contesto Mancante", "Comune di riferimento non specificato per creare un nuovo possessore.")
+                QMessageBox.warning(self, "Dati Mancanti", "Il 'Nome Completo' è obbligatorio."); return
+            if not cognome_nome: # Assumendo sia NOT NULL nel DB
+                QMessageBox.warning(self, "Dati Mancanti", "Il 'Cognome Nome' è obbligatorio."); return
+            if self.comune_id is None: # Per creare un nuovo possessore, il comune_id del dialogo deve essere valido
+                QMessageBox.warning(self, "Contesto Mancante", "Comune di riferimento non specificato per creare un nuovo possessore (necessario per il dialogo).")
                 return
 
             try:
-                # --- CORREZIONE QUI ---
-                # possessore_id = self.db_manager.create_possessore() # Vecchia chiamata, con erroressore( # VECCHIA CHIAMATA
-                new_possessore_id = self.db_manager.create_possessore( # NUOVA CHIAMATA
+                # --- CORREZIONE NOME METODO QUI ---
+                new_possessore_id = self.db_manager.create_possessore( # Era insert_possessore
                     nome_completo=nome_completo,
                     paternita=paternita if paternita else None,
-                    comune_riferimento_id=self.comune_id, # Usa il comune_id del contesto del dialogo
-                    attivo=True, # Default per un nuovo possessore
-                    cognome_nome=cognome_nome # Passa il cognome_nome
+                    comune_riferimento_id=self.comune_id,
+                    attivo=True,
+                    cognome_nome=cognome_nome
                 )
-                # --- FINE CORREZIONE ---
             
                 if new_possessore_id is not None:
                     self.selected_possessore = {
@@ -4497,22 +4527,16 @@ class PossessoreSelectionDialog(QDialog):
                         'nome_completo': nome_completo,
                         'cognome_nome': cognome_nome,
                         'paternita': paternita,
-                        'comune_riferimento_id': self.comune_id,
+                        'comune_riferimento_id': self.comune_id, # Importante per il chiamante
                         'attivo': True
-                        # Non c'è 'quota' qui, perché è legata al legame partita-possessore, non al possessore stesso
                     }
                     QMessageBox.information(self, "Successo", f"Nuovo possessore '{nome_completo}' creato con ID: {new_possessore_id}.")
-                    self.accept() # Chiude e segnala successo
-                # else: create_possessore solleva eccezioni in caso di fallimento
-            
+                    self.accept()
             except (DBUniqueConstraintError, DBDataError, DBMError) as e:
                 QMessageBox.critical(self, "Errore Creazione Possessore", str(e))
             except Exception as e_gen:
                 gui_logger.critical(f"Errore imprevisto creazione possessore: {e_gen}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
-        else: # Altro tab? (non dovrebbe esserci)
-             QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
-
      # --- Dialog per l'Inserimento degli Immobili ---
 class ImmobileDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):
@@ -5220,176 +5244,106 @@ class ReportisticaWidget(QWidget):
         super(ReportisticaWidget, self).__init__(parent)
         self.db_manager = db_manager
         
-        layout = QVBoxLayout()
-        
-        # Tabs per i diversi tipi di report
+        layout = QVBoxLayout(self)
         tabs = QTabWidget()
-        
-        # Tab Certificato Proprietà
+
+        # --- Tab Certificato Proprietà ---
         certificato_tab = QWidget()
-        certificato_layout = QVBoxLayout()
-        
-        # Input per ID partita
+        certificato_layout = QVBoxLayout(certificato_tab)
+        # ... (input_layout, self.partita_id_edit, self.search_partita_button come prima) ...
         input_layout = QHBoxLayout()
         partita_id_label = QLabel("ID della partita:")
-        self.partita_id_edit = QSpinBox()
-        self.partita_id_edit.setMinimum(1)
-        self.partita_id_edit.setMaximum(999999)
-        self.search_partita_button = QPushButton("Cerca...")
-        self.search_partita_button.clicked.connect(self.search_partita)
-        
-        input_layout.addWidget(partita_id_label)
-        input_layout.addWidget(self.partita_id_edit)
-        input_layout.addWidget(self.search_partita_button)
-        
-        # Pulsante genera report
-        self.generate_cert_button = QPushButton("Genera Certificato")
-        self.generate_cert_button.clicked.connect(self.generate_certificato)
-        
-        # Area di visualizzazione
-        self.certificato_text = QTextEdit()
-        self.certificato_text.setReadOnly(True)
-        
-        # Pulsante esporta
-        self.export_cert_button = QPushButton("Esporta in File")
-        self.export_cert_button.clicked.connect(lambda: self.export_report(self.certificato_text.toPlainText(), "certificato"))
-        
+        self.partita_id_edit = QSpinBox(); self.partita_id_edit.setRange(1, 9999999)
+        self.search_partita_button = QPushButton("Cerca..."); self.search_partita_button.clicked.connect(self.search_partita)
+        input_layout.addWidget(partita_id_label); input_layout.addWidget(self.partita_id_edit); input_layout.addWidget(self.search_partita_button)
         certificato_layout.addLayout(input_layout)
+
+        self.generate_cert_button = QPushButton("Genera Certificato"); self.generate_cert_button.clicked.connect(self.generate_certificato)
         certificato_layout.addWidget(self.generate_cert_button)
+        self.certificato_text = QTextEdit(); self.certificato_text.setReadOnly(True); self.certificato_text.setFontFamily("Courier New")
         certificato_layout.addWidget(self.certificato_text)
-        certificato_layout.addWidget(self.export_cert_button)
         
-        certificato_tab.setLayout(certificato_layout)
+        export_buttons_cert_layout = QHBoxLayout() # Layout per i pulsanti di esportazione
+        self.export_cert_txt_button = QPushButton("Esporta in TXT"); self.export_cert_txt_button.clicked.connect(lambda: self.export_report(self.certificato_text.toPlainText(), "certificato_proprieta", "txt"))
+        self.export_cert_pdf_button = QPushButton("Esporta in PDF"); self.export_cert_pdf_button.clicked.connect(self._export_certificato_pdf) # NUOVO METODO
+        self.export_cert_pdf_button.setEnabled(FPDF_AVAILABLE)
+        export_buttons_cert_layout.addWidget(self.export_cert_txt_button)
+        export_buttons_cert_layout.addWidget(self.export_cert_pdf_button) # AGGIUNTO PULSANTE PDF
+        certificato_layout.addLayout(export_buttons_cert_layout)
         tabs.addTab(certificato_tab, "Certificato Proprietà")
-        
-        # Tab Report Genealogico
+
+        # --- Tab Report Genealogico ---
         genealogico_tab = QWidget()
-        genealogico_layout = QVBoxLayout()
-        
-        # Input per ID partita
+        genealogico_layout = QVBoxLayout(genealogico_tab)
+        # ... (input_gen_layout, self.partita_id_gen_edit, etc. come prima) ...
         input_gen_layout = QHBoxLayout()
         partita_id_gen_label = QLabel("ID della partita:")
-        self.partita_id_gen_edit = QSpinBox()
-        self.partita_id_gen_edit.setMinimum(1)
-        self.partita_id_gen_edit.setMaximum(999999)
-        self.search_partita_gen_button = QPushButton("Cerca...")
-        self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
-        
-        input_gen_layout.addWidget(partita_id_gen_label)
-        input_gen_layout.addWidget(self.partita_id_gen_edit)
-        input_gen_layout.addWidget(self.search_partita_gen_button)
-        
-        # Pulsante genera report
-        self.generate_gen_button = QPushButton("Genera Report Genealogico")
-        self.generate_gen_button.clicked.connect(self.generate_genealogico)
-        
-        # Area di visualizzazione
-        self.genealogico_text = QTextEdit()
-        self.genealogico_text.setReadOnly(True)
-        
-        # Pulsante esporta
-        self.export_gen_button = QPushButton("Esporta in File")
-        self.export_gen_button.clicked.connect(lambda: self.export_report(self.genealogico_text.toPlainText(), "genealogico"))
-        
+        self.partita_id_gen_edit = QSpinBox(); self.partita_id_gen_edit.setRange(1,9999999)
+        self.search_partita_gen_button = QPushButton("Cerca..."); self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
+        input_gen_layout.addWidget(partita_id_gen_label); input_gen_layout.addWidget(self.partita_id_gen_edit); input_gen_layout.addWidget(self.search_partita_gen_button)
         genealogico_layout.addLayout(input_gen_layout)
+        self.generate_gen_button = QPushButton("Genera Report Genealogico"); self.generate_gen_button.clicked.connect(self.generate_genealogico)
         genealogico_layout.addWidget(self.generate_gen_button)
+        self.genealogico_text = QTextEdit(); self.genealogico_text.setReadOnly(True); self.genealogico_text.setFontFamily("Courier New")
         genealogico_layout.addWidget(self.genealogico_text)
-        genealogico_layout.addWidget(self.export_gen_button)
         
-        genealogico_tab.setLayout(genealogico_layout)
+        export_buttons_gen_layout = QHBoxLayout()
+        self.export_gen_txt_button = QPushButton("Esporta in TXT"); self.export_gen_txt_button.clicked.connect(lambda: self.export_report(self.genealogico_text.toPlainText(), "report_genealogico", "txt"))
+        self.export_gen_pdf_button = QPushButton("Esporta in PDF"); self.export_gen_pdf_button.clicked.connect(self._export_genealogico_pdf) # NUOVO METODO
+        self.export_gen_pdf_button.setEnabled(FPDF_AVAILABLE)
+        export_buttons_gen_layout.addWidget(self.export_gen_txt_button)
+        export_buttons_gen_layout.addWidget(self.export_gen_pdf_button) # AGGIUNTO PULSANTE PDF
+        genealogico_layout.addLayout(export_buttons_gen_layout)
         tabs.addTab(genealogico_tab, "Report Genealogico")
-        
-        # Tab Report Possessore
+
+        # --- Tab Report Possessore ---
         possessore_tab = QWidget()
-        possessore_layout = QVBoxLayout()
-        
-        # Input per ID possessore
+        possessore_layout = QVBoxLayout(possessore_tab)
+        # ... (input_pos_layout, self.possessore_id_edit, etc. come prima) ...
         input_pos_layout = QHBoxLayout()
         possessore_id_label = QLabel("ID del possessore:")
-        self.possessore_id_edit = QSpinBox()
-        self.possessore_id_edit.setMinimum(1)
-        self.possessore_id_edit.setMaximum(999999)
-        self.search_possessore_button = QPushButton("Cerca...")
-        self.search_possessore_button.clicked.connect(self.search_possessore)
-        
-        input_pos_layout.addWidget(possessore_id_label)
-        input_pos_layout.addWidget(self.possessore_id_edit)
-        input_pos_layout.addWidget(self.search_possessore_button)
-        
-        # Pulsante genera report
-        self.generate_pos_button = QPushButton("Genera Report Possessore")
-        self.generate_pos_button.clicked.connect(self.generate_possessore)
-        
-        # Area di visualizzazione
-        self.possessore_text = QTextEdit()
-        self.possessore_text.setReadOnly(True)
-        
-        # Pulsante esporta
-        self.export_pos_button = QPushButton("Esporta in File")
-        self.export_pos_button.clicked.connect(lambda: self.export_report(self.possessore_text.toPlainText(), "possessore"))
-        
+        self.possessore_id_edit = QSpinBox(); self.possessore_id_edit.setRange(1,9999999)
+        self.search_possessore_button = QPushButton("Cerca..."); self.search_possessore_button.clicked.connect(self.search_possessore)
+        input_pos_layout.addWidget(possessore_id_label); input_pos_layout.addWidget(self.possessore_id_edit); input_pos_layout.addWidget(self.search_possessore_button)
         possessore_layout.addLayout(input_pos_layout)
+        self.generate_pos_button = QPushButton("Genera Report Possessore"); self.generate_pos_button.clicked.connect(self.generate_possessore)
         possessore_layout.addWidget(self.generate_pos_button)
+        self.possessore_text = QTextEdit(); self.possessore_text.setReadOnly(True); self.possessore_text.setFontFamily("Courier New")
         possessore_layout.addWidget(self.possessore_text)
-        possessore_layout.addWidget(self.export_pos_button)
         
-        possessore_tab.setLayout(possessore_layout)
+        export_buttons_pos_layout = QHBoxLayout()
+        self.export_pos_txt_button = QPushButton("Esporta in TXT"); self.export_pos_txt_button.clicked.connect(lambda: self.export_report(self.possessore_text.toPlainText(), "report_possessore", "txt"))
+        self.export_pos_pdf_button = QPushButton("Esporta in PDF"); self.export_pos_pdf_button.clicked.connect(self._export_possessore_pdf) # NUOVO METODO
+        self.export_pos_pdf_button.setEnabled(FPDF_AVAILABLE)
+        export_buttons_pos_layout.addWidget(self.export_pos_txt_button)
+        export_buttons_pos_layout.addWidget(self.export_pos_pdf_button) # AGGIUNTO PULSANTE PDF
+        possessore_layout.addLayout(export_buttons_pos_layout)
         tabs.addTab(possessore_tab, "Report Possessore")
-        
-        # Tab Report Consultazioni
+
+        # --- Tab Report Consultazioni ---
         consultazioni_tab = QWidget()
-        consultazioni_layout = QVBoxLayout()
-        
-        # Input per filtri
+        consultazioni_layout = QVBoxLayout(consultazioni_tab)
+        # ... (filters_layout, self.data_inizio_edit, etc. come prima) ...
         filters_layout = QGridLayout()
-        
-        data_inizio_label = QLabel("Data inizio:")
-        self.data_inizio_edit = QDateEdit()
-        self.data_inizio_edit.setCalendarPopup(True)
-        self.data_inizio_edit.setDate(QDate.currentDate().addYears(-1))
-        self.data_inizio_check = QCheckBox("Usa filtro")
-        self.data_inizio_check.setChecked(True)
-        
-        data_fine_label = QLabel("Data fine:")
-        self.data_fine_edit = QDateEdit()
-        self.data_fine_edit.setCalendarPopup(True)
-        self.data_fine_edit.setDate(QDate.currentDate())
-        self.data_fine_check = QCheckBox("Usa filtro")
-        self.data_fine_check.setChecked(True)
-        
-        richiedente_label = QLabel("Richiedente:")
-        self.richiedente_edit = QLineEdit()
-        self.richiedente_edit.setPlaceholderText("Qualsiasi richiedente")
-        
-        filters_layout.addWidget(data_inizio_label, 0, 0)
-        filters_layout.addWidget(self.data_inizio_edit, 0, 1)
-        filters_layout.addWidget(self.data_inizio_check, 0, 2)
-        
-        filters_layout.addWidget(data_fine_label, 1, 0)
-        filters_layout.addWidget(self.data_fine_edit, 1, 1)
-        filters_layout.addWidget(self.data_fine_check, 1, 2)
-        
-        filters_layout.addWidget(richiedente_label, 2, 0)
-        filters_layout.addWidget(self.richiedente_edit, 2, 1, 1, 2)
-        
-        # Pulsante genera report
-        self.generate_cons_button = QPushButton("Genera Report Consultazioni")
-        self.generate_cons_button.clicked.connect(self.generate_consultazioni)
-        
-        # Area di visualizzazione
-        self.consultazioni_text = QTextEdit()
-        self.consultazioni_text.setReadOnly(True)
-        
-        # Pulsante esporta
-        self.export_cons_button = QPushButton("Esporta in File")
-        self.export_cons_button.clicked.connect(lambda: self.export_report(self.consultazioni_text.toPlainText(), "consultazioni"))
-        
+        data_inizio_label = QLabel("Data inizio:"); self.data_inizio_edit = QDateEdit(); self.data_inizio_edit.setCalendarPopup(True); self.data_inizio_edit.setDate(QDate.currentDate().addYears(-1)); self.data_inizio_check = QCheckBox("Usa filtro"); self.data_inizio_check.setChecked(True)
+        data_fine_label = QLabel("Data fine:"); self.data_fine_edit = QDateEdit(); self.data_fine_edit.setCalendarPopup(True); self.data_fine_edit.setDate(QDate.currentDate()); self.data_fine_check = QCheckBox("Usa filtro"); self.data_fine_check.setChecked(True)
+        richiedente_label = QLabel("Richiedente:"); self.richiedente_edit = QLineEdit(); self.richiedente_edit.setPlaceholderText("Qualsiasi richiedente")
+        filters_layout.addWidget(data_inizio_label, 0, 0); filters_layout.addWidget(self.data_inizio_edit, 0, 1); filters_layout.addWidget(self.data_inizio_check, 0, 2)
+        filters_layout.addWidget(data_fine_label, 1, 0); filters_layout.addWidget(self.data_fine_edit, 1, 1); filters_layout.addWidget(self.data_fine_check, 1, 2)
+        filters_layout.addWidget(richiedente_label, 2, 0); filters_layout.addWidget(self.richiedente_edit, 2, 1, 1, 2)
         consultazioni_layout.addLayout(filters_layout)
+        self.generate_cons_button = QPushButton("Genera Report Consultazioni"); self.generate_cons_button.clicked.connect(self.generate_consultazioni)
         consultazioni_layout.addWidget(self.generate_cons_button)
+        self.consultazioni_text = QTextEdit(); self.consultazioni_text.setReadOnly(True); self.consultazioni_text.setFontFamily("Courier New")
         consultazioni_layout.addWidget(self.consultazioni_text)
-        consultazioni_layout.addWidget(self.export_cons_button)
         
-        consultazioni_tab.setLayout(consultazioni_layout)
+        export_buttons_cons_layout = QHBoxLayout()
+        self.export_cons_txt_button = QPushButton("Esporta in TXT"); self.export_cons_txt_button.clicked.connect(lambda: self.export_report(self.consultazioni_text.toPlainText(), "report_consultazioni", "txt"))
+        self.export_cons_pdf_button = QPushButton("Esporta in PDF"); self.export_cons_pdf_button.clicked.connect(self._export_consultazioni_pdf) # NUOVO METODO
+        self.export_cons_pdf_button.setEnabled(FPDF_AVAILABLE)
+        export_buttons_cons_layout.addWidget(self.export_cons_txt_button)
+        export_buttons_cons_layout.addWidget(self.export_cons_pdf_button) # AGGIUNTO PULSANTE PDF
+        consultazioni_layout.addLayout(export_buttons_cons_layout)
         tabs.addTab(consultazioni_tab, "Report Consultazioni")
         
         layout.addWidget(tabs)
@@ -5412,12 +5366,32 @@ class ReportisticaWidget(QWidget):
             self.partita_id_gen_edit.setValue(dialog.selected_partita_id)
     
     def search_possessore(self):
-        """Apre un dialogo per cercare un possessore."""
-        dialog = PossessoreSelSctionDialog(self.db_manager, self)
-        result = dialog.exec_()
-        
-        if result == QDialog.Accepted and dialog.selected_possessore_id:
-            self.possessore_id_edit.setValue(dialog.selected_possessore_id)
+        """Apre un dialogo per cercare e selezionare un possessore globalmente."""
+        gui_logger.info("ReportisticaWidget: Apertura dialogo ricerca possessore.")
+        # Assicurati che PossessoreSelectionDialog sia la classe corretta.
+        # Passa comune_id=None per una ricerca globale.
+        dialog = PossessoreSelectionDialog(
+            db_manager=self.db_manager, 
+            comune_id=None,  # Indica una ricerca globale, non filtrata per comune
+            parent=self
+        )
+        dialog.setWindowTitle("Seleziona Possessore per Report") # Titolo specifico
+
+        if dialog.exec_() == QDialog.Accepted:
+            # Assumendo che dialog.selected_possessore sia un dizionario con 'id'
+            if hasattr(dialog, 'selected_possessore') and \
+               dialog.selected_possessore and \
+               isinstance(dialog.selected_possessore, dict) and \
+               dialog.selected_possessore.get('id') is not None:
+                
+                selected_id = dialog.selected_possessore.get('id')
+                self.possessore_id_edit.setValue(selected_id) # Aggiorna lo QSpinBox
+                gui_logger.info(f"ReportisticaWidget: Possessore selezionato ID: {selected_id}")
+                # Opzionale: potresti voler mostrare il nome del possessore vicino allo spinbox
+            else:
+                gui_logger.warning("ReportisticaWidget: Dialogo selezione possessore accettato ma nessun possessore valido selezionato.")
+        else:
+            gui_logger.info("ReportisticaWidget: Selezione possessore annullata.")
     
     def generate_certificato(self):
         """Genera un certificato di proprietà."""
@@ -5477,25 +5451,86 @@ class ReportisticaWidget(QWidget):
         else:
             QMessageBox.warning(self, "Errore", "Impossibile generare il report consultazioni.")
     
-    def export_report(self, text, report_type):
-        """Esporta un report in un file di testo."""
-        if not text:
+    def export_report(self, text_content: str, report_type_name: str, file_extension: str): # Modificato per estensione
+        """Esporta il contenuto testuale di un report in un file."""
+        if not text_content:
             QMessageBox.warning(self, "Attenzione", "Nessun report da esportare.")
             return
         
-        oggi = datetime.now().strftime("%Y%m%d")
+        oggi = date.today().isoformat() # Usa date.today() se datetime non è necessaria qui
+        default_filename = f"report_{report_type_name}_{oggi}.{file_extension}"
+        
+        if file_extension == "txt":
+            filter_str = "File di testo (*.txt);;Tutti i file (*)"
+        elif file_extension == "pdf":
+            filter_str = "File PDF (*.pdf);;Tutti i file (*)"
+        else:
+            filter_str = "Tutti i file (*)"
+
         filename, _ = QFileDialog.getSaveFileName(
-            self, "Salva Report", f"report_{report_type}_{oggi}.txt", "File di testo (*.txt)"
+            self, f"Salva Report {report_type_name.replace('_', ' ').title()}", default_filename, filter_str
         )
         
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(text)
-                QMessageBox.information(self, "Esportazione Completata", f"Report salvato in {filename}")
+                    f.write(text_content)
+                QMessageBox.information(self, "Esportazione Completata", f"Report salvato con successo in:\n{filename}")
             except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Errore durante l'esportazione: {str(e)}")
+                gui_logger.error(f"Errore durante il salvataggio del file {file_extension.upper()} per report {report_type_name}: {e}")
+                QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file:\n{e}")
 
+    def _export_generic_text_to_pdf(self, text_content: str, default_filename_prefix: str, pdf_report_title: str):
+        """Helper generico per esportare testo semplice in PDF."""
+        if not FPDF_AVAILABLE:
+            QMessageBox.critical(self, "Errore Libreria", "La libreria FPDF (fpdf2) non è disponibile per generare PDF.")
+            return
+        if not text_content:
+            QMessageBox.warning(self, "Nessun Contenuto", f"Nessun testo da esportare in PDF per '{pdf_report_title}'.")
+            return
+
+        default_filename = f"{default_filename_prefix}_{date.today().isoformat()}.pdf"
+        filename_pdf, _ = QFileDialog.getSaveFileName(self, f"Salva PDF - {pdf_report_title}", default_filename, "File PDF (*.pdf)")
+
+        if filename_pdf:
+            try:
+                pdf = GenericTextReportPDF(report_title=pdf_report_title) # Usa la nuova classe PDF generica
+                pdf.add_page()
+                pdf.add_report_text(text_content)
+                pdf.output(filename_pdf)
+                QMessageBox.information(self, "Esportazione PDF Completata", f"Report PDF salvato con successo in:\n{filename_pdf}")
+            except Exception as e:
+                gui_logger.error(f"Errore durante la generazione del PDF per '{pdf_report_title}': {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
+
+    # Metodi specifici per pulsanti PDF
+    def _export_certificato_pdf(self):
+        self._export_generic_text_to_pdf(
+            self.certificato_text.toPlainText(), 
+            f"certificato_partita_{self.partita_id_edit.value()}", 
+            f"Certificato Proprietà - Partita ID {self.partita_id_edit.value()}"
+        )
+
+    def _export_genealogico_pdf(self):
+        self._export_generic_text_to_pdf(
+            self.genealogico_text.toPlainText(), 
+            f"report_genealogico_partita_{self.partita_id_gen_edit.value()}", 
+            f"Report Genealogico - Partita ID {self.partita_id_gen_edit.value()}"
+        )
+
+    def _export_possessore_pdf(self):
+        self._export_generic_text_to_pdf(
+            self.possessore_text.toPlainText(), 
+            f"report_possessore_{self.possessore_id_edit.value()}", 
+            f"Report Possessore - ID {self.possessore_id_edit.value()}"
+        )
+
+    def _export_consultazioni_pdf(self):
+        self._export_generic_text_to_pdf(
+            self.consultazioni_text.toPlainText(), 
+            "report_consultazioni", 
+            "Report Consultazioni"
+        )
            # --- Dialog di Ricerca Partite ---
 class PartitaSearchDialog(QDialog):
     def __init__(self, db_manager, parent=None):
@@ -6454,33 +6489,33 @@ class AuditLogViewerWidget(QWidget):
 
 
     def _fetch_and_display_logs(self, page_number: int = 1):
-        # Questo metodo chiamerà db_manager.get_audit_logs(self.current_filters, page=page_number)
-        # e popolerà self.log_table. Per ora, lo lasciamo come placeholder.
-        self.log_table.setRowCount(0) # Pulisce la tabella
+        self.log_table.setRowCount(0) 
         self.details_before_text.clear()
         self.details_after_text.clear()
         
-        # --- Logica di Test (da sostituire con chiamata DB reale) ---
-        if not hasattr(self, 'db_manager') or not self.db_manager:
-            QMessageBox.warning(self, "Errore", "DB Manager non disponibile.")
+        
+        if not self.db_manager or not self.db_manager.pool:
+            gui_logger.warning("AuditLogViewer: _fetch_and_display_logs chiamato ma il pool non è inizializzato. Interruzione.")
+            # Opzionale: aggiorna la tabella con un messaggio
+            self.log_table.setRowCount(1)
+            item_msg = QTableWidgetItem("Database non pronto.")
+            item_msg.setTextAlignment(Qt.AlignCenter)
+            self.log_table.setItem(0,0, item_msg)
+            self.log_table.setSpan(0,0,1, self.log_table.columnCount())
             return
 
-        # Prepara i filtri per il db_manager.get_audit_logs (metodo da creare)
-        filters_for_db = getattr(self, 'current_filters', {}) # Usa filtri correnti o dizionario vuoto
-        if not filters_for_db: # Se filtri resettati, imposta un default ragionevole
-             filters_for_db = {
-                "start_datetime": QDateTime.currentDateTime().addDays(-7).toPyDateTime(),
-                "end_datetime": QDateTime.currentDateTime().toPyDateTime()
-             }
-
-
         try:
-            # Assumiamo che db_manager.get_audit_logs() restituisca (lista_log, totale_record_filtrati)
-            # Per ora, non implementiamo la paginazione completa qui, ma il metodo DB dovrebbe supportarla.
-            logs, total_records = self.db_manager.get_audit_logs(
+            filters_for_db = getattr(self, 'current_filters', {})
+            if not filters_for_db:
+                 filters_for_db = {
+                    "start_datetime": QDateTime.currentDateTime().addDays(-7).toPyDateTime(),
+                    "end_datetime": QDateTime.currentDateTime().toPyDateTime()
+                 }
+
+            logs, total_records = self.db_manager.get_audit_logs( # Questa chiamata può sollevare DBMError
                 filters=filters_for_db,
-                page=page_number, # Da implementare la gestione della paginazione UI
-                page_size=100    # Esempio di dimensione pagina
+                page=page_number,
+                page_size=100 
             )
 
             if logs:
@@ -6519,15 +6554,17 @@ class AuditLogViewerWidget(QWidget):
                 # TODO: Aggiorna self.pagination_label con "Nessun risultato"
                 pass # Nessun log trovato
 
-        except AttributeError as ae: # Se get_audit_logs non esiste in db_manager
-            self.log_table.setRowCount(1)
-            self.log_table.setItem(0,0, QTableWidgetItem(f"Errore: metodo get_audit_logs non trovato in DBManager ({ae})"))
-            gui_logger.error(f"AuditLogViewer: db_manager non ha get_audit_logs: {ae}")
+        except DBMError as e: # Cattura specificamente DBMError se _get_connection fallisce
+            gui_logger.error(f"AuditLogViewer: Errore DBManager in _fetch_and_display_logs: {str(e)}", exc_info=False)
+            if hasattr(self, 'log_table'):
+                self.log_table.setRowCount(1)
+                item_msg = QTableWidgetItem(f"Errore caricamento log: {str(e)}")
+                item_msg.setTextAlignment(Qt.AlignCenter)
+                self.log_table.setItem(0,0, item_msg)
+                self.log_table.setSpan(0,0,1, self.log_table.columnCount())
         except Exception as e:
-            self.log_table.setRowCount(1)
-            self.log_table.setItem(0,0, QTableWidgetItem(f"Errore durante il caricamento dei log: {e}"))
-            gui_logger.error(f"AuditLogViewer: Errore caricamento log: {e}", exc_info=True)
-
+            gui_logger.error(f"AuditLogViewer: Errore generico in _fetch_and_display_logs: {e}", exc_info=True)
+            # ... (gestione errore generico) ...
 
     def _display_log_details(self):
         selected_items = self.log_table.selectedItems()
@@ -6554,13 +6591,24 @@ class AuditLogViewerWidget(QWidget):
 
 
     def _load_initial_data(self):
-        # Carica i log più recenti all'avvio del widget
+        if not self.db_manager or not self.db_manager.pool: # Questo controllo è cruciale
+            gui_logger.warning("AuditLogViewer: Database principale non configurato o pool non inizializzato. Log non caricati.")
+            if hasattr(self, 'log_table'):
+                self.log_table.setRowCount(1)
+                item_msg = QTableWidgetItem("Database non pronto per caricare i log di audit.")
+                item_msg.setTextAlignment(Qt.AlignCenter)
+                self.log_table.setItem(0,0, item_msg)
+                self.log_table.setSpan(0,0,1, self.log_table.columnCount())
+            return # <--- DEVE ESSERE QUI PER FERMARE L'ESECUZIONE
+
+        # Queste righe vengono eseguite SOLO SE il pool è OK
+        gui_logger.info("AuditLogViewer: Pool inizializzato, procedo con il caricamento dei log iniziali.")
         self.current_filters = {
-            "start_datetime": QDateTime.currentDateTime().addDays(-1).toPyDateTime(), # Default: ultime 24 ore
+            "start_datetime": QDateTime.currentDateTime().addDays(-1).toPyDateTime(),
             "end_datetime": QDateTime.currentDateTime().toPyDateTime()
         }
         self.current_page = 1
-        self._fetch_and_display_logs()
+        self._fetch_and_display_logs()  # Ora questo verrà chiamato solo se il pool è attivo
 
 # ... (Fine della classe AuditLogViewerWidget) ...
 
@@ -7386,9 +7434,505 @@ class ElencoComuniWidget(QWidget):
 # ... (altre importazioni e classi definite prima, come LoginDialog, CreateUserDialog, vari Widget dei tab, ecc.)
 # ASSICURARSI CHE TUTTE LE CLASSI WIDGET DEI TAB (ElencoComuniWidget, RicercaPartiteWidget, ecc.)
 # SIANO DEFINITE PRIMA DI CatastoMainWindow
+# In prova.py
 
+# In prova.py
+# Assicurati che tutte le importazioni necessarie siano presenti all'inizio del file, inclusa QProcess
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QMessageBox,
+                             QApplication, QGroupBox, QLabel, QTextEdit, QFileDialog,
+                             QInputDialog, QStyle) # Aggiunte QFileDialog, QInputDialog, QStyle
+from PyQt5.QtCore import Qt, QProcess # Aggiunto QProcess
+from typing import Optional, List, Dict, Any # Aggiunto Any
+import os
+import time # Per la simulazione del popolamento Python
+from datetime import datetime # Per il log
+
+# Assumendo che gui_logger e CatastoDBManager siano definiti e importati
+
+# All'interno della classe AdminDBOperationsWidget in prova.py
+
+class AdminDBOperationsWidget(QWidget):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.current_process: Optional[QProcess] = None
+        self.script_base_path = os.path.join(os.path.dirname(__file__), "sql_scripts")
+
+        self._initUI()
+        self._update_admin_buttons_state() # Nuovo metodo per aggiornare stato pulsanti
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10,10,10,10)
+        main_layout.setSpacing(15)
+
+        # --- 0. Sezione Creazione Database (Solo se il DB non esiste) ---
+        # Questo pulsante sarà abilitato/disabilitato in base allo stato del pool
+        create_db_group = QGroupBox("0. Creazione Database Principale ('catasto_storico')")
+        create_db_layout = QVBoxLayout(create_db_group)
+        self.btn_run_create_database = QPushButton(QApplication.style().standardIcon(QStyle.SP_CommandLink), " Crea Database 'catasto_storico'")
+        self.btn_run_create_database.setToolTip("Esegue lo script '01_creazione-database.sql' per creare il database principale.\nRichiede credenziali utente PostgreSQL con privilegi di creazione database.")
+        self.btn_run_create_database.clicked.connect(self._run_script_crea_database)
+        create_db_layout.addWidget(self.btn_run_create_database)
+        create_db_layout.addWidget(QLabel("<i>Eseguire solo se il database 'catasto_storico' non esiste.</i>"))
+        main_layout.addWidget(create_db_group)
+
+        # --- 1. Sezione Configurazione Iniziale ---
+        config_group = QGroupBox("1. Setup Struttura Database (Tabelle, Funzioni, ecc.)")
+        config_layout = QVBoxLayout(config_group)
+        self.btn_run_initial_setup = QPushButton(QApplication.style().standardIcon(QStyle.SP_MediaPlay), " Esegui Script Configurazione Struttura")
+        self.btn_run_initial_setup.setToolTip("Esegue script SQL per creare tabelle, viste, funzioni, ecc. (dopo creazione DB)")
+        self.btn_run_initial_setup.clicked.connect(self._run_all_config_scripts)
+        config_layout.addWidget(self.btn_run_initial_setup)
+        config_layout.addWidget(QLabel("<i>Eseguire dopo che il database 'catasto_storico' è stato creato e il pool è attivo.</i>"))
+        main_layout.addWidget(config_group)
+
+        # --- 2. Sezione Carico Dati SQL ---
+        load_sql_group = QGroupBox("2. Caricamento Dati di Esempio (Script SQL)")
+        load_sql_layout = QVBoxLayout(load_sql_group)
+        self.btn_run_sql_data_load = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowUp), " Esegui Script Caricamento Dati SQL")
+        self.btn_run_sql_data_load.setToolTip("Esegue lo script SQL ('04_dati_stress_test.sql') per popolare il DB.")
+        self.btn_run_sql_data_load.clicked.connect(self._run_sql_data_load_script)
+        load_sql_layout.addWidget(self.btn_run_sql_data_load)
+        main_layout.addWidget(load_sql_group)
+
+        # --- 3. Sezione Popolamento Dati Python ---
+        populate_py_group = QGroupBox("3. Popolamento Dati Guidato (Python)")
+        populate_py_layout = QVBoxLayout(populate_py_group)
+        self.btn_run_python_populate = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowRight), " Esegui Popolamento Dati Python")
+        self.btn_run_python_populate.setToolTip("Genera e inserisce dati di esempio usando la logica Python dell'applicazione.")
+        self.btn_run_python_populate.clicked.connect(self._run_python_data_population)
+        populate_py_layout.addWidget(self.btn_run_python_populate)
+        main_layout.addWidget(populate_py_group)
+        
+        # --- 4. Sezione Cancellazione DB ---
+        delete_db_group = QGroupBox("Operazioni Distruttive")
+        delete_db_layout = QVBoxLayout(delete_db_group)
+        self.btn_run_db_wipe = QPushButton(QApplication.style().standardIcon(QStyle.SP_TrashIcon), " Esegui Script Cancellazione Database")
+        self.btn_run_db_wipe.setStyleSheet("QPushButton { background-color: #d9534f; border-color: #d43f3a; color: white; } QPushButton:hover { background-color: #c9302c; } QPushButton:pressed { background-color: #ac2925; }")
+        self.btn_run_db_wipe.setToolTip("ATTENZIONE: Esegue lo script 'drop_db.sql' per cancellare il database specificato.")
+        self.btn_run_db_wipe.clicked.connect(self._run_db_deletion_script)
+        delete_db_layout.addWidget(self.btn_run_db_wipe)
+        delete_db_layout.addWidget(QLabel("<font color='red'><b>ATTENZIONE MASSIMA: Operazioni altamente distruttive. Richiederanno multiple conferme.</b></font>"))
+        main_layout.addWidget(delete_db_group)
+
+        self.output_log = QTextEdit() # Definisci l'attributo qui
+        self.output_log.setReadOnly(True)
+        self.output_log.setLineWrapMode(QTextEdit.NoWrap)
+        self.output_log.setFixedHeight(200)
+        main_layout.addWidget(QLabel("Log Operazioni Amministrazione DB:"))
+        main_layout.addWidget(self.output_log, 1)
+        main_layout.addStretch(1)
+        self.setLayout(main_layout)
+    def _log_output(self, message: str, error: bool = False):
+        """Aggiunge un messaggio al QTextEdit self.output_log con timestamp."""
+        if not hasattr(self, 'output_log'): # Controllo di sicurezza
+            print(f"FALLBACK LOG (output_log non trovato): {message}")
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        formatted_message = f"[{timestamp}] {message.strip()}"
+        if error:
+            self.output_log.append(f"<font color='red'>{formatted_message}</font>")
+        else:
+            self.output_log.append(formatted_message)
+        QApplication.processEvents() # Per forzare l'aggiornamento della UI durante operazioni lunghe
+
+    def _disable_all_buttons(self, disable: bool):
+        """Abilita o disabilita tutti i pulsanti principali di operazione del widget."""
+        self.btn_run_create_database.setEnabled(not disable)
+        self.btn_run_initial_setup.setEnabled(not disable)
+        self.btn_run_sql_data_load.setEnabled(not disable)
+        self.btn_run_python_populate.setEnabled(not disable)
+        self.btn_run_db_wipe.setEnabled(not disable)
+        # Se ci sono altri pulsanti da gestire, aggiungili qui.
+        # Lo stato finale dei pulsanti verrà poi ridefinito da _update_admin_buttons_state
+        # quando l'operazione è finita, ma questo serve per il blocco durante l'operazione.
+    def _update_admin_buttons_state(self):
+        """Abilita/disabilita i pulsanti in base allo stato del pool del DB principale."""
+        pool_is_active = self.db_manager and self.db_manager.pool is not None
+        
+        # Il pulsante "Crea Database" è abilitato se il pool NON è attivo (implica che il DB potrebbe non esistere)
+        self.btn_run_create_database.setEnabled(not pool_is_active)
+        
+        # Gli altri pulsanti di configurazione/popolamento sono abilitati SOLO SE il pool è attivo
+        self.btn_run_initial_setup.setEnabled(pool_is_active)
+        self.btn_run_sql_data_load.setEnabled(pool_is_active)
+        self.btn_run_python_populate.setEnabled(pool_is_active)
+        
+        # Il pulsante di cancellazione è sempre abilitato (con le sue conferme),
+        # ma la sua logica gestirà lo stato del pool (lo chiuderà se attivo).
+        self.btn_run_db_wipe.setEnabled(True) 
+
+    def _run_script_crea_database(self):
+        self.output_log.clear()
+        script_name = "01_creazione-database.sql" # Lo script che contiene "CREATE DATABASE catasto_storico;"
+        script_path = os.path.join(self.script_base_path, script_name)
+
+        if not os.path.exists(script_path):
+            QMessageBox.critical(self, "Script Mancante", f"Lo script di creazione database '{script_name}' non è stato trovato in:\n{script_path}")
+            self._log_output(f"ERRORE: Script '{script_name}' non trovato.", error=True)
+            return
+
+        target_dbname = self.db_manager.get_current_dbname() # Dovrebbe essere "catasto_storico"
+        if not target_dbname:
+            QMessageBox.critical(self, "Errore Configurazione", "Nome del database target non definito nel DBManager."); return
+
+        reply = QMessageBox.question(self, "Conferma Creazione Database",
+                                     f"Stai per eseguire lo script '{script_name}' per creare il database '{target_dbname}'.\n"
+                                     "Questa operazione fallirà se il database esiste già (lo script dovrebbe gestire `IF NOT EXISTS` se possibile, o psql lo farà).\n"
+                                     "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.No:
+            self._log_output("Creazione database annullata dall'utente."); return
+        
+        self._disable_all_buttons(True) # Disabilita pulsanti durante l'operazione
+        # Per CREATE DATABASE, ci si connette a 'postgres'
+        self._execute_sql_script_list_via_psql(
+            script_names=[script_name], 
+            operation_name=f"Creazione Database '{target_dbname}'",
+            dbname_override="postgres" 
+        )
+        # _execute_sql_script_list_via_psql ora chiama _handle_script_finished che riabilita i pulsanti
+
+        # Dopo questo, tentare di inizializzare il pool principale
+        self._log_output("Tentativo di inizializzazione del pool per il database principale...")
+        QApplication.processEvents()
+        if self.db_manager.initialize_main_pool():
+            self._log_output("Pool per il database principale ('{target_dbname}') inizializzato con successo!", error=False)
+            QMessageBox.information(self, "Successo", f"Database '{target_dbname}' creato (o già esistente) e pool inizializzato.\nPuoi procedere con la configurazione delle tabelle e delle funzioni.")
+            # Aggiorna la status bar nella finestra principale
+            main_window = self.window().window() # Trova la CatastoMainWindow
+            if isinstance(main_window, QMainWindow) and hasattr(main_window, 'db_status_label'):
+                 main_window.db_status_label.setText(f"Database: Connesso ({target_dbname})")
+            self._update_admin_buttons_state() # Aggiorna stato pulsanti
+        else:
+            self._log_output(f"FALLITO inizializzazione pool per il database '{target_dbname}' dopo tentativo di creazione.", error=True)
+            QMessageBox.critical(self, "Errore Pool", f"Database '{target_dbname}' potrebbe essere stato creato, ma è fallita l'inizializzazione del pool di connessione. Controllare i log.")
+            self._update_admin_buttons_state() # Aggiorna stato pulsanti
+
+    def _run_all_config_scripts(self):
+        if not self.db_manager.pool: # Controllo cruciale
+            QMessageBox.warning(self, "Database Non Pronto", 
+                                "Il database principale non è ancora stato creato/connesso o il pool non è inizializzato.\n"
+                                "Eseguire prima 'Crea Database' se necessario.")
+            return
+        
+        config_scripts = [ # Script da 02 in poi
+            "02_creazione-schema-tabelle.sql", "03_funzioni-procedure.sql", 
+            "07_user-management.sql", "11_advanced-cadastral-features.sql", 
+            "12_procedure_crud.sql", "16_advanced_search.sql", 
+            "17_funzione_ricerca_immobili.sql", "08_advanced-reporting.sql", 
+            "14_report_functions.sql", "13_workflow_integrati.sql", 
+            "10_performance-optimization.sql", "09_backup-system.sql", 
+            "18_funzioni_trigger_audit.sql", "19_creazione_tabella_sessioni.sql",  
+            "15_integration_audit_users.sql"
+        ]
+        reply = QMessageBox.question(self, "Conferma Configurazione Struttura",
+                                     "Stai per eseguire gli script per definire tabelle, funzioni, viste, ecc. nel database.\n"
+                                     "Assicurati che il database sia vuoto o che gli script siano rieseguibili.\n"
+                                     "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            # Questi script verranno eseguiti sul database target (catasto_storico)
+            # quindi dbname_override non è necessario (userà il dbname del pool)
+            self._execute_sql_script_list_via_psql(config_scripts, "Configurazione Struttura Database")
+
+    def _run_sql_data_load_script(self):
+        if not self.db_manager.pool:
+            QMessageBox.warning(self, "Database Non Pronto", "Il pool principale non è attivo. Eseguire prima la creazione/configurazione del DB."); return
+        
+        data_load_scripts = ["04_dati_stress_test.sql"]
+        reply = QMessageBox.question(self, "Conferma Caricamento Dati SQL",
+                                     f"Stai per eseguire lo script '{data_load_scripts[0]}'.\nProcedere?", 
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self._execute_sql_script_list_via_psql(data_load_scripts, "Caricamento Dati da SQL")
+    def _execute_sql_script_list_via_psql(self, script_names: List[str], operation_name: str, dbname_override: Optional[str] = None):
+        """
+        Esegue una lista di script SQL sequenzialmente usando psql.
+        dbname_override: se specificato, psql si connetterà a questo database (es. "postgres" per CREATE/DROP DATABASE).
+                         Altrimenti, usa il database principale configurato nel db_manager.
+        """
+        self._disable_all_buttons(True) # Disabilita i pulsanti durante l'intera sequenza
+        self.output_log.clear()
+        self._log_output(f"Avvio operazione: {operation_name}...")
+        
+        if not self.db_manager: # Non dovrebbe accadere se la UI è ben gestita
+            self._log_output("ERRORE CRITICO: DB Manager non disponibile.", error=True)
+            self._disable_all_buttons(False)
+            self._update_admin_buttons_state()
+            return
+
+        # Recupera dettagli connessione
+        conn_params = self.db_manager.get_connection_parameters() # Chiamata corretta
+        db_user_main = conn_params.get("user", "postgres") # Utente del DB principale
+        db_host = conn_params.get("host", "localhost")
+        db_port = str(conn_params.get("port", "5432"))
+        
+        # Determina il database target e l'utente per l'autenticazione
+        # Per CREATE/DROP DATABASE, ci connettiamo a 'postgres' con le credenziali fornite
+        # Per altri script, ci connettiamo al DB target con le credenziali fornite
+        
+        target_db_for_psql = dbname_override if dbname_override else self.db_manager.get_current_dbname()
+        
+        if not target_db_for_psql:
+            QMessageBox.critical(self, "Errore Configurazione", f"Nome del database di destinazione per {operation_name} non specificato o non recuperabile.")
+            self._log_output(f"ERRORE: Nome database non specificato per {operation_name}.", error=True)
+            self._disable_all_buttons(False)
+            self._update_admin_buttons_state()
+            return
+
+        # Chiedi la password per l'utente che eseguirà lo script (solitamente l'utente del DB principale o un superuser)
+        # Se dbname_override è 'postgres', l'utente è probabilmente 'postgres' o un altro superuser.
+        # Se dbname_override è None, l'utente è quello del DB principale.
+        utente_per_connessione_psql = db_user_main
+        if dbname_override and dbname_override.lower() == "postgres" and db_user_main.lower() != "postgres":
+            # Se si sta creando/droppando un DB e l'utente di default non è 'postgres',
+            # si potrebbe voler chiedere esplicitamente le credenziali di 'postgres' o di un superuser.
+            # Per ora, usiamo l'utente principale, assumendo abbia i privilegi necessari sul DB di manutenzione.
+             risposta = QMessageBox.question(self, "Conferma Utente",
+                                        f"L'operazione '{operation_name}' sarà eseguita sul database '{target_db_for_psql}' "
+                                        f"utilizzando l'utente '{db_user_main}'. Questo utente ha i privilegi necessari?",
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+             if risposta == QMessageBox.No:
+                 self._log_output(f"{operation_name} annullato: utente '{db_user_main}' potrebbe non avere privilegi sufficienti.", error=True)
+                 self._disable_all_buttons(False); self._update_admin_buttons_state(); return
+
+        password, ok = QInputDialog.getText(self, f"Autenticazione DB per {operation_name}",
+                                            f"Inserisci la password per l'utente '{utente_per_connessione_psql}' "
+                                            f"per connettersi al database '{target_db_for_psql}' (su host {db_host}):",
+                                            QLineEdit.Password)
+        if not ok:
+            self._log_output(f"{operation_name} annullato: dialogo password chiuso."); 
+            self._disable_all_buttons(False); self._update_admin_buttons_state(); return
+        # Per alcune operazioni (come DROP DB con psql), PGPASSWORD potrebbe non essere necessario se l'autenticazione è peer/trust
+        # ma è meglio fornirla se richiesta. Se password è vuota, psql potrebbe chiederla interattivamente (non va bene per QProcess).
+        if not password.strip() and operation_name not in ["Cancellazione Database"]: # La cancellazione su 'postgres' potrebbe non aver bisogno di password utente
+             QMessageBox.warning(self, "Password Mancante", "La password non può essere vuota per questa operazione.")
+             self._log_output(f"{operation_name} fallito: password non fornita.", error=True)
+             self._disable_all_buttons(False); self._update_admin_buttons_state(); return
+
+        psql_exe = self.db_manager._resolve_executable_path(user_provided_path="", default_name="psql.exe")
+        if not psql_exe:
+            QMessageBox.critical(self, "Errore Prerequisito", "L'eseguibile 'psql.exe' non è stato trovato. Specificare il percorso nelle impostazioni dell'applicazione (se disponibili) o assicurarsi che sia nel PATH di sistema.")
+            self._log_output("ERRORE: psql.exe non trovato.", error=True)
+            self._disable_all_buttons(False)
+            self._update_admin_buttons_state()
+            return
+
+        all_scripts_successful = True
+        for script_name in script_names:
+            script_path = os.path.join(self.script_base_path, script_name)
+            if not os.path.exists(script_path):
+                self._log_output(f"ERRORE: Script '{script_name}' non trovato in {script_path}", error=True)
+                all_scripts_successful = False; break
+
+            # Nuova istanza di QProcess per ogni script
+            self.current_process = QProcess(self) 
+            # Collega i segnali per catturare output
+            # Usiamo lambda per passare script_name al gestore di output/errore
+            self.current_process.readyReadStandardOutput.connect(
+                lambda sp=script_name: self._log_output(f"[{sp}] STDOUT: {self.current_process.readAllStandardOutput().data().decode(sys.stdout.encoding or 'utf-8', errors='replace')}"))
+            self.current_process.readyReadStandardError.connect(
+                lambda sp=script_name: self._log_output(f"[{sp}] STDERR: {self.current_process.readAllStandardError().data().decode(sys.stderr.encoding or 'utf-8', errors='replace')}", error=True))
+
+            args = ["-U", utente_per_connessione_psql, "-h", db_host, "-p", db_port, "-d", target_db_for_psql, "-f", script_path, "-v", "ON_ERROR_STOP=1"]
+            
+            process_env = self.current_process.processEnvironment()
+            if password.strip(): # Solo se la password è stata fornita
+                process_env.insert("PGPASSWORD", password)
+            self.current_process.setProcessEnvironment(process_env)
+
+            self._log_output(f"Esecuzione script: '{script_name}' sul database '{target_db_for_psql}'...")
+            self._log_output(f"Comando: {psql_exe} {' '.join(args)}") # Mostra il comando
+            QApplication.processEvents()
+
+            self.current_process.start(psql_exe, args)
+            
+            if not self.current_process.waitForFinished(-1): # Attendi indefinitamente
+                err_msg = f"Timeout o errore nell'attesa del completamento dello script '{script_name}'."
+                self._log_output(err_msg, error=True)
+                QMessageBox.critical(self, "Errore Esecuzione Script", err_msg)
+                self.current_process.kill()
+                all_scripts_successful = False; break
+            
+            exit_code = self.current_process.exitCode()
+            exit_status = self.current_process.exitStatus()
+            QApplication.processEvents() # Per assicurare che tutto l'output sia catturato
+
+            if exit_status == QProcess.CrashExit or exit_code != 0:
+                msg = f"FALLITO: Script '{script_name}' terminato con errore (Codice: {exit_code}, Stato Qt: {exit_status}). Operazione '{operation_name}' interrotta."
+                self._log_output(msg, error=True)
+                # Non mostriamo QMessageBox qui, sarà fatto alla fine dal chiamante o da _handle_script_finished_summary
+                all_scripts_successful = False; break
+            else:
+                self._log_output(f"SUCCESSO (comando terminato): Script '{script_name}' completato con codice 0.")
+            
+            self.current_process = None # Rilascia riferimento per il prossimo script
+
+        self._handle_script_finished_summary(all_scripts_successful, operation_name)
+
+
+    def _handle_script_finished_summary(self, all_successful: bool, operation_name: str):
+        """Chiamato dopo che tutti gli script in una lista sono stati processati (o uno è fallito)."""
+        self._log_output(f"<hr>Operazione '{operation_name}' completata.")
+        if all_successful:
+            QMessageBox.information(self, "Operazione Completata", 
+                                    f"L'operazione '{operation_name}' sembra essere stata completata con successo.\n"
+                                    "Controllare il log per dettagli e possibili errori specifici degli script SQL.")
+        else:
+            QMessageBox.warning(self, "Operazione Interrotta o Fallita",
+                                f"L'operazione '{operation_name}' è stata interrotta o uno o più script sono falliti.\n"
+                                "Controllare il log per i dettagli.")
+        
+        self._disable_all_buttons(False)
+        self._update_admin_buttons_state() # Aggiorna lo stato dei pulsanti in base al pool
+
+
+    # ... (resto dei metodi: _run_initial_setup_script, _run_sql_data_load_script,
+    #      _run_python_data_population, _run_db_deletion_script) ...
+    # Assicurati che questi metodi ora chiamino _execute_sql_script_list_via_psql
+    # e che _run_db_deletion_script gestisca correttamente la chiusura del pool PRIMA
+    # di chiamare _execute_sql_script_list_via_psql per lo script drop_db.sql.
+    def _run_python_data_population(self):
+        if not self.db_manager.pool:
+            QMessageBox.warning(self, "Database Non Pronto", "Il pool principale non è attivo. Eseguire prima la creazione/configurazione del DB."); return
+        
+        self.output_log.clear()
+        self._log_output("Avvio popolamento dati di esempio guidato da Python...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self._disable_all_buttons(True)
+        
+        try:
+            num_comuni_creati = 0
+            num_comuni_da_creare, ok = QInputDialog.getInt(self, "Popolamento Python", "Quanti comuni di esempio vuoi creare?", 2, 1, 10, 1)
+            if not ok:
+                self._log_output("Popolamento annullato.", error=True)
+            else:
+                for i in range(num_comuni_da_creare):
+                    nome_comune_esempio = f"Comune Python Demo {i+1}"
+                    prov_esempio = f"P{i%5+1}" 
+                    reg_esempio = "Regione Demo Python"
+                    utente_attuale_per_log = "admin_setup" # O prendilo da self.main_window.logged_in_user_info se disponibile
+                    
+                    try:
+                        # Usa il metodo del DBManager che ora usa il pool
+                        comune_id = self.db_manager.aggiungi_comune(
+                            nome_comune=nome_comune_esempio, provincia=prov_esempio, regione=reg_esempio, 
+                            periodo_id=1, # Assumendo che il periodo ID 1 esista dopo il setup
+                            utente=utente_attuale_per_log 
+                        ) 
+                        if comune_id:
+                            self._log_output(f"Creato Comune: '{nome_comune_esempio}' (ID: {comune_id})")
+                            num_comuni_creati += 1
+                        # else: aggiungi_comune solleverà eccezione in caso di fallimento
+                    except (DBMError, DBUniqueConstraintError, DBDataError) as e_comune:
+                        self._log_output(f"Fallita creazione Comune '{nome_comune_esempio}': {e_comune}", error=True)
+                    QApplication.processEvents()
+                
+                message = f"Popolamento Python completato.\nComuni creati: {num_comuni_creati}"
+                self._log_output(message)
+                QMessageBox.information(self, "Popolamento Completato", message)
+
+        except Exception as e: # Cattura qualsiasi altra eccezione
+            self._log_output(f"ERRORE imprevisto durante il popolamento Python: {e}", error=True)
+            gui_logger.critical("Errore imprevisto popolamento Python", exc_info=True)
+            QMessageBox.critical(self, "Errore Popolamento Imprevisto", f"Errore: {e}")
+        finally:
+            self._disable_all_buttons(False)
+            QApplication.restoreOverrideCursor()
+            self._update_admin_buttons_state() # Ri-abilita i pulsanti in base allo stato del pool
+
+
+    def _run_db_deletion_script(self):
+        # ... (logica di conferma e chiamata a _execute_sql_script_list_via_psql 
+        #      con dbname_override="postgres" e gestione chiusura pool come definito prima) ...
+        script_name = "drop_db.sql"
+        script_path = os.path.join(self.script_base_path, script_name)
+        if not os.path.exists(script_path):
+            QMessageBox.critical(self, "Script Mancante", f"Script '{script_name}' non trovato."); return
+
+        dbname_corrente = self.db_manager.get_current_dbname()
+        if not dbname_corrente:
+             QMessageBox.critical(self, "Errore", "Nome DB target non recuperabile."); return
+
+        reply1 = QMessageBox.critical(self, "ATTENZIONE MASSIMA - CANCELLAZIONE!",
+                                      f"Stai per eseguire '{script_name}' che tenterà di CANCELLARE il database '{dbname_corrente}'.\n"
+                                      "<b>OPERAZIONE IRREVERSIBILE. PERDITA DI TUTTI I DATI.</b>\n"
+                                      "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply1 == QMessageBox.No: self._log_output("Cancellazione DB annullata."); return
+
+        testo_conferma, ok = QInputDialog.getText(self, "Conferma Finale Cancellazione",
+                                                f"Per confermare la cancellazione di '{dbname_corrente}', digita il suo nome ESATTO:")
+        if not ok: self._log_output("Cancellazione DB annullata."); return
+        if testo_conferma.strip() != dbname_corrente:
+            QMessageBox.critical(self, "Conferma Fallita", "Nome DB non corrispondente. Annullato.");
+            self._log_output("Cancellazione DB annullata: nome conferma errato.", error=True); return
+        
+        self._disable_all_buttons(True) # Disabilita pulsanti
+        # Importante: chiudere il pool PRIMA di tentare il drop del database a cui potrebbe essere connesso
+        if self.db_manager.pool:
+            self._log_output(f"Chiusura del pool di connessioni per '{dbname_corrente}' prima della cancellazione...")
+            self.db_manager.close_pool() # Ora db_manager.pool è None
+            self._log_output("Pool principale chiuso.")
+        
+        self._execute_sql_script_list_via_psql(
+            script_names=[script_name], 
+            operation_name=f"Cancellazione Database '{dbname_corrente}'",
+            dbname_override="postgres"
+        )
+        # _execute_sql_script_list_via_psql chiamerà _handle_script_finished che riabiliterà i pulsanti
+        # e aggiornerà lo stato
+        self._log_output(f"ATTENZIONE: Database '{dbname_corrente}' dovrebbe essere stato cancellato. L'applicazione potrebbe necessitare di riavvio.", error=True)
+        self._update_admin_buttons_state() # Aggiorna stato pulsanti (Crea DB dovrebbe essere abilitato ora)
+        # Aggiorna status bar nella finestra principale per riflettere che il DB non esiste più
+        main_window = self.window().window() # Trova la CatastoMainWindow
+        if isinstance(main_window, QMainWindow) and hasattr(main_window, 'db_status_label'):
+                main_window.db_status_label.setText(f"Database: NON ESISTENTE ({dbname_corrente})")
+        if isinstance(main_window, QMainWindow) and hasattr(main_window, 'update_ui_based_on_role'):
+                # Simula uno stato di admin_offline per riflettere la UI
+                main_window.pool_initialized_successfully = False # Fondamentale
+                main_window.logged_in_user_info = {'ruolo': 'admin_offline'} # Forza la modalità limitata
+                main_window.update_ui_based_on_role()
+
+
+
+    # Altri metodi helper come _execute_sql_script_list_via_psql, _handle_script_finished
+    # (adattati da AdminDBOperationsWidget, assicurati che _disable_all_buttons e
+    # _update_admin_buttons_state siano chiamati correttamente)
+
+    # Definisci _execute_sql_script_list_via_psql qui se non è già in una classe base o importato
+    # La sua logica è simile a quella che avevamo in AdminDBOperationsWidget.
+    # Assicurati che chiami self._log_output e self._disable_all_buttons/self._update_admin_buttons_state.
+
+    # Questo è _handle_script_finished che era parte di _execute_sql_script_list_via_psql
+    # È meglio che sia un metodo separato per chiarezza
+    def _handle_script_finished(self, exit_code, exit_status, operation_name: str):
+        self.output_log.append(f"<hr>DEBUG Processo '{operation_name}' terminato. ExitCode: {exit_code}, ExitStatus: {exit_status}<hr>")
+        success_message_box_needed = False
+        if exit_status == QProcess.CrashExit:
+            msg = f"ERRORE CRITICO: Processo {operation_name} terminato inaspettatamente (crash)."
+            self._log_output(msg, error=True); QMessageBox.critical(self, "Errore Processo", msg)
+        elif exit_code != 0:
+            msg = f"FALLITO: Processo {operation_name} terminato con codice d'errore: {exit_code}. Controllare output."
+            self._log_output(msg, error=True); QMessageBox.warning(self, "Operazione Fallita", msg)
+        else:
+            msg = f"SUCCESSO (comando terminato): Processo {operation_name} completato con codice 0. Verificare l'output per errori specifici dello script SQL."
+            self._log_output(msg); success_message_box_needed = True
+        
+        # Se l'operazione era CANCELLAZIONE DB e ha avuto successo (exit_code 0)
+        # il pool principale è già stato chiuso in _run_db_deletion_script PRIMA di chiamare psql.
+        # Se era CREAZIONE DB e ha avuto successo, tentiamo di inizializzare il pool principale.
+        # (Questo è già gestito in _run_script_crea_database dopo la chiamata a _execute_sql_script_list_via_psql)
+
+        if success_message_box_needed and operation_name != f"Creazione Database '{self.db_manager.get_current_dbname()}'" and operation_name != f"Cancellazione Database '{self.db_manager.get_current_dbname()}'":
+            QMessageBox.information(self, "Operazione Completata", msg)
+        
+        self._disable_all_buttons(False) # Riabilita sempre i pulsanti
+        self._update_admin_buttons_state() # Aggiorna lo stato in base al pool
+        self.current_process = None # Resetta riferimento al processo
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
+        
         super(CatastoMainWindow, self).__init__()
         self.db_manager: Optional[CatastoDBManager] = None
         self.logged_in_user_id: Optional[int] = None
@@ -7486,59 +8030,59 @@ class CatastoMainWindow(QMainWindow):
         status_layout.addWidget(self.logout_button)
         self.main_layout.addWidget(status_frame)
 
-    def perform_initial_setup(self, db_manager: CatastoDBManager, user_id: int, user_info: Dict, session_id: str):
+    def perform_initial_setup(self, db_manager: CatastoDBManager, 
+                              user_id: Optional[int], 
+                              user_info: Optional[Dict], 
+                              session_id: Optional[str]):
         gui_logger.info(">>> CatastoMainWindow: Inizio perform_initial_setup")
-        self.db_manager = db_manager
+        self.db_manager = db_manager # Assicurati che questo sia l'unico posto dove viene impostato
         self.logged_in_user_id = user_id
         self.logged_in_user_info = user_info
         self.current_session_id = session_id
 
         # --- Aggiornamento etichetta stato DB ---
-        db_name_to_display = "ERRORE_NOME_DB" # Default se qualcosa va storto nel recupero
-        connection_seems_ok = False
+        db_name_configured = "N/Config" # Default
+        if self.db_manager:
+            # Recupera sempre il nome del DB configurato, indipendentemente dallo stato del pool
+            db_name_configured = self.db_manager.get_current_dbname() or "N/Config(None)"
 
-        if self.db_manager and self.db_manager.pool: # Il pool è il nostro indicatore principale ora
-            gui_logger.info("DEBUG perform_initial_setup: db_manager e pool esistono.")
-            if hasattr(self.db_manager, '_conn_params_dict') and self.db_manager._conn_params_dict:
-                db_name_to_display = self.db_manager._conn_params_dict.get('dbname', 'N/D')
-                gui_logger.info(f"DEBUG perform_initial_setup: db_name recuperato: {db_name_to_display}")
-            else:
-                gui_logger.warning("DEBUG perform_initial_setup: db_manager non ha _conn_params_dict o è vuoto.")
-            
-            # Dato che run_gui_app ha già testato la connessione al pool con successo,
-            # possiamo considerare la connessione "attiva" a questo punto.
-            connection_seems_ok = True 
+        # Lo stato del pool determina se è "Connesso", "Errore Pool", o "Non Esistente/Pronto"
+        connection_status_text = ""
+        if hasattr(self, 'pool_initialized_successfully'): # Attributo impostato da run_gui_app
+            if self.pool_initialized_successfully:
+                connection_status_text = f"Database: Connesso ({db_name_configured})"
+            else: # Pool non inizializzato (DB non esiste o errore pool)
+                # Qui potremmo distinguere ulteriormente se db_exists era True ma il pool è fallito.
+                # Per ora, un messaggio generico che il DB non è pronto per le operazioni normali.
+                connection_status_text = f"Database: Non Pronto/Inesistente ({db_name_configured})"
         else:
-            gui_logger.error("DEBUG perform_initial_setup: db_manager o db_manager.pool NON esistono!")
-            db_name_to_display = "Gestore DB non inizializzato"
+            # Fallback se pool_initialized_successfully non è stato impostato (non dovrebbe accadere)
+            connection_status_text = f"Database: Stato Sconosciuto ({db_name_configured})"
+            gui_logger.warning("Attributo 'pool_initialized_successfully' non trovato in CatastoMainWindow.")
 
-        if connection_seems_ok:
-            new_label_text = f"Database: Connesso ({db_name_to_display})"
-            self.db_status_label.setText(new_label_text)
-            gui_logger.info(f"DEBUG perform_initial_setup: db_status_label IMPOSTATO A: '{new_label_text}'")
-        else:
-            new_label_text = f"Database: NON CONNESSO ({db_name_to_display})"
-            self.db_status_label.setText(new_label_text)
-            gui_logger.warning(f"DEBUG perform_initial_setup: db_status_label IMPOSTATO A: '{new_label_text}'")
-        # --- Fine aggiornamento etichetta stato DB ---
+        self.db_status_label.setText(connection_status_text)
+        gui_logger.info(f"DEBUG perform_initial_setup: db_status_label IMPOSTATO A: '{connection_status_text}'")
 
-        # Aggiornamento etichetta utente (come prima)
-        user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
-        ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
-        self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
-        self.logout_button.setEnabled(True)
-
-        self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+        # --- Aggiornamento etichetta utente ---
+        if self.logged_in_user_info: # Controlla se l'utente è effettivamente loggato
+            user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+            ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
+            self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display})")
+            self.logout_button.setEnabled(True) # Abilita logout se c'è un utente loggato
+            self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
+        else: # Caso di avvio senza login (es. DB non esiste)
+            self.user_status_label.setText("Utente: Non Autenticato (Modalità Setup)")
+            self.logout_button.setEnabled(False)
+            self.statusBar().showMessage("Modalità configurazione database.")
         
         gui_logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
-        self.setup_tabs()
+        self.setup_tabs() # setup_tabs DEVE essere in grado di gestire db_manager.pool == None
         gui_logger.info(">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()
 
         gui_logger.info(">>> CatastoMainWindow: Chiamata a self.show()")
         self.show()
         gui_logger.info(">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
-
     # All'interno della classe CatastoMainWindow in prova.py
     def setup_tabs(self):
         if not self.db_manager:
@@ -7625,53 +8169,165 @@ class CatastoMainWindow(QMainWindow):
             sistema_sub_tabs.addTab(error_widget_backup, "Backup/Ripristino")
 
 
-        # Qui potresti aggiungere altri widget per Manutenzione ecc. come altri sotto-tab
-        # Esempio:
-        # manutenzione_widget = ManutenzioneWidget(self.db_manager, sistema_sub_tabs) # Dovrai creare ManutenzioneWidget
-        # sistema_sub_tabs.addTab(manutenzione_widget, "Manutenzione DB")
+        # --- Tab Sistema ---
+        sistema_sub_tabs = QTabWidget() 
+        if self.db_manager:
+            self.audit_viewer_widget = AuditLogViewerWidget(self.db_manager, sistema_sub_tabs)
+            sistema_sub_tabs.addTab(self.audit_viewer_widget, "Log di Audit")
+
+            self.backup_restore_widget = BackupRestoreWidget(self.db_manager, sistema_sub_tabs)
+            sistema_sub_tabs.addTab(self.backup_restore_widget, "Backup/Ripristino DB")
+            
+            # --- NUOVO TAB AMMINISTRAZIONE DB ---
+            self.admin_db_ops_widget = AdminDBOperationsWidget(self.db_manager, sistema_sub_tabs)
+            sistema_sub_tabs.addTab(self.admin_db_ops_widget, "Amministrazione DB")
+            # --- FINE NUOVO TAB ---
+        else:
+            # ... (fallback come prima) ...
+            error_widget_audit = QLabel("Errore: DB Manager non inizializzato per il Log di Audit.")
+            sistema_sub_tabs.addTab(error_widget_audit, "Log di Audit")
+            error_widget_backup = QLabel("Errore: DB Manager non inizializzato per Backup/Ripristino.")
+            sistema_sub_tabs.addTab(error_widget_backup, "Backup/Ripristino DB")
+            error_widget_admin_ops = QLabel("Errore: DB Manager non inizializzato per Amministrazione DB.")
+            sistema_sub_tabs.addTab(error_widget_admin_ops, "Amministrazione DB")
+
 
         self.tabs.addTab(sistema_sub_tabs, "Sistema")
 
         # La chiamata a self.update_ui_based_on_role() avverrà dopo in perform_initial_setup,
         # quindi il pulsante self.btn_nuovo_comune_nel_tab e i tab verranno abilitati/disabilitati correttamente.
 
-    def update_ui_based_on_role(self):
-        if not self.logged_in_user_info:
-            for i in range(self.tabs.count()):
-                self.tabs.setTabEnabled(i, False)
-            # if hasattr(self, 'nuovo_comune_action'): # Rimuovi se non usi più il menu
-            #     self.nuovo_comune_action.setEnabled(False)
-            if hasattr(self, 'btn_nuovo_comune_nel_tab'): # Nuovo pulsante
-                self.btn_nuovo_comune_nel_tab.setEnabled(False)
-            return
+    # ... (definizione di is_admin, is_archivista, is_admin_offline come prima) ...
+        ruolo = None
+        if self.logged_in_user_info: # Verifica se logged_in_user_info è stato impostato
+            ruolo = self.logged_in_user_info.get('ruolo')
+        
+        is_admin = ruolo == 'admin'
+        is_archivista = ruolo == 'archivista'
+        is_admin_offline = ruolo == 'admin_offline'
 
-        is_admin = self.logged_in_user_info.get('ruolo') == 'admin'
-        is_archivista = self.logged_in_user_info.get('ruolo') == 'archivista'
-
-        # Rimuovi o commenta la gestione di self.nuovo_comune_action
-        # if hasattr(self, 'nuovo_comune_action'):
-        #     self.nuovo_comune_action.setEnabled(is_admin or is_archivista)
-
-        # Abilita/disabilita il nuovo pulsante nel tab
-        if hasattr(self, 'btn_nuovo_comune_nel_tab'):
+        # Abilita/disabilita il pulsante nel tab Inserimento e Gestione
+        if hasattr(self, 'btn_nuovo_comune_nel_tab'): # Controllo per sicurezza
             self.btn_nuovo_comune_nel_tab.setEnabled(is_admin or is_archivista)
-
+        
         tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
 
-        if "Consultazione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Consultazione"], True)
-        if "Ricerca Avanzata Possessori" in tab_indices: self.tabs.setTabEnabled(tab_indices["Ricerca Avanzata Possessori"], True)
-        if "Esportazioni" in tab_indices: self.tabs.setTabEnabled(tab_indices["Esportazioni"], True)
-        if "Reportistica" in tab_indices: self.tabs.setTabEnabled(tab_indices["Reportistica"], True)
+        # Abilitazione standard dei tab se l'utente è loggato e non è admin_offline
+        consultazione_enabled = bool(self.logged_in_user_info and not is_admin_offline)
+        inserimento_enabled = (is_admin or is_archivista) and not is_admin_offline
+        statistiche_enabled = (is_admin or is_archivista) and not is_admin_offline # Anche archivisti vedono statistiche
+        gestione_utenti_enabled = is_admin and not is_admin_offline
+        sistema_enabled = is_admin # Solo admin normali per il tab Sistema, l'admin_offline lo gestiamo dopo
 
-        if "Inserimento e Gestione" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], is_admin or is_archivista)
-        if "Statistiche e Viste" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], is_admin or is_archivista)
-        if "Gestione Utenti" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], is_admin)
+        if "Consultazione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Consultazione"], consultazione_enabled)
+        if "Inserimento e Gestione" in tab_indices: self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], inserimento_enabled)
+        if "Esportazioni" in tab_indices: self.tabs.setTabEnabled(tab_indices["Esportazioni"], consultazione_enabled) # Anche consultatori esportano
+        if "Reportistica" in tab_indices: self.tabs.setTabEnabled(tab_indices["Reportistica"], consultazione_enabled) # Anche consultatori vedono report
+        if "Statistiche e Viste" in tab_indices: self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], statistiche_enabled)
+        if "Gestione Utenti" in tab_indices: self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], gestione_utenti_enabled)
+        
+        # Gestione specifica per il tab "Sistema"
         if "Sistema" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin)
+            if is_admin_offline: # Se siamo in modalità setup DB
+                self.tabs.setTabEnabled(tab_indices["Sistema"], True) # Abilita solo il tab Sistema
+                # Seleziona automaticamente il tab Sistema e il sotto-tab Amministrazione DB
+                self.tabs.setCurrentIndex(tab_indices["Sistema"])
+                if hasattr(self, 'sistema_sub_tabs'):
+                    admin_db_ops_tab_index = -1
+                    for i in range(self.sistema_sub_tabs.count()):
+                        if self.sistema_sub_tabs.tabText(i) == "Amministrazione DB":
+                            admin_db_ops_tab_index = i
+                            break
+                    if admin_db_ops_tab_index != -1:
+                        self.sistema_sub_tabs.setCurrentIndex(admin_db_ops_tab_index)
+            else: # Utente admin normale loggato
+                self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin)
+        
+        # Disabilita tutti gli altri tab se siamo in modalità admin_offline e il pool non è inizializzato
+        if is_admin_offline and hasattr(self, 'pool_initialized_successfully') and not self.pool_initialized_successfully:
+            for i in range(self.tabs.count()):
+                if self.tabs.tabText(i) != "Sistema":
+                    self.tabs.setTabEnabled(i, False)
+        
+        # Logout button
+        if hasattr(self, 'logout_button'):
+            self.logout_button.setEnabled(not is_admin_offline and bool(self.logged_in_user_id))
+    def update_ui_based_on_role(self):
+        gui_logger.info(">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
+        ruolo = None
+        is_admin_offline_mode = False 
+        
+        # Determina se siamo in modalità offline o se un utente è loggato
+        if hasattr(self, 'pool_initialized_successfully') and not self.pool_initialized_successfully:
+            if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin_offline':
+                is_admin_offline_mode = True
+                ruolo = 'admin_offline' # Usa il ruolo fittizio
+        
+        if not is_admin_offline_mode and self.logged_in_user_info:
+            ruolo = self.logged_in_user_info.get('ruolo')
 
+        is_admin = ruolo == 'admin'
+        is_archivista = ruolo == 'archivista'
+        
+        gui_logger.debug(f"update_ui_based_on_role: Ruolo effettivo considerato: {ruolo}, is_admin_offline: {is_admin_offline_mode}")
+
+        # Abilitazione pulsante Nuovo Comune nel tab Inserimento (se esiste)
+        if hasattr(self, 'btn_nuovo_comune_nel_tab'):
+            can_add_comune = (is_admin or is_archivista) and not is_admin_offline_mode
+            self.btn_nuovo_comune_nel_tab.setEnabled(can_add_comune)
+            gui_logger.debug(f"Pulsante Nuovo Comune abilitato: {can_add_comune}")
+        
+        tab_indices = {self.tabs.tabText(i): i for i in range(self.tabs.count())}
+        gui_logger.debug(f"Tab disponibili: {tab_indices}")
+
+        # Logica di abilitazione dei tab
+        # Se il pool non è inizializzato o siamo in admin_offline, la maggior parte dei tab è disabilitata
+        # a meno che non sia il tab "Sistema".
+        db_ready_for_normal_ops = hasattr(self, 'pool_initialized_successfully') and self.pool_initialized_successfully and not is_admin_offline_mode
+
+        consultazione_enabled = db_ready_for_normal_ops # Tutti gli utenti loggati (non offline)
+        inserimento_enabled = (is_admin or is_archivista) and db_ready_for_normal_ops
+        statistiche_enabled = (is_admin or is_archivista) and db_ready_for_normal_ops
+        gestione_utenti_enabled = is_admin and db_ready_for_normal_ops
+        
+        # Tab Sistema è accessibile per admin normali, o per admin_offline (per setup DB)
+        sistema_enabled = is_admin or is_admin_offline_mode
+
+        if "Consultazione" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Consultazione"], consultazione_enabled)
+            gui_logger.debug(f"Tab Consultazione abilitato: {consultazione_enabled}")
+        if "Inserimento e Gestione" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Inserimento e Gestione"], inserimento_enabled)
+            gui_logger.debug(f"Tab Inserimento e Gestione abilitato: {inserimento_enabled}")
+        if "Esportazioni" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Esportazioni"], consultazione_enabled) # Anche consultatori
+            gui_logger.debug(f"Tab Esportazioni abilitato: {consultazione_enabled}")
+        if "Reportistica" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Reportistica"], consultazione_enabled) # Anche consultatori
+            gui_logger.debug(f"Tab Reportistica abilitato: {consultazione_enabled}")
+        if "Statistiche e Viste" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Statistiche e Viste"], statistiche_enabled)
+            gui_logger.debug(f"Tab Statistiche e Viste abilitato: {statistiche_enabled}")
+        if "Gestione Utenti" in tab_indices: 
+            self.tabs.setTabEnabled(tab_indices["Gestione Utenti"], gestione_utenti_enabled)
+            gui_logger.debug(f"Tab Gestione Utenti abilitato: {gestione_utenti_enabled}")
+        
+        if "Sistema" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["Sistema"], sistema_enabled)
+            gui_logger.debug(f"Tab Sistema abilitato: {sistema_enabled}")
+            if sistema_enabled and is_admin_offline_mode:
+                self.tabs.setCurrentIndex(tab_indices["Sistema"])
+                if hasattr(self, 'sistema_sub_tabs'):
+                    admin_db_ops_tab_index = -1
+                    for i in range(self.sistema_sub_tabs.count()):
+                        if self.sistema_sub_tabs.tabText(i) == "Amministrazione DB":
+                            admin_db_ops_tab_index = i; break
+                    if admin_db_ops_tab_index != -1:
+                        self.sistema_sub_tabs.setCurrentIndex(admin_db_ops_tab_index)
+                        gui_logger.debug("Tab Sistema -> Amministrazione DB selezionato per modalità offline.")
+        
+        if hasattr(self, 'logout_button'):
+            self.logout_button.setEnabled(not is_admin_offline_mode and bool(self.logged_in_user_id))
     def apri_dialog_inserimento_comune(self): # Metodo integrato nella classe
         if not self.db_manager:
             QMessageBox.critical(self, "Errore", "Manager Database non inizializzato.")
@@ -8080,116 +8736,114 @@ def run_gui_app():
                              "Puoi installarla con: pip install fpdf2")
 
     db_config_gui = {
-    "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
-    "host": "localhost", "port": 5432, "schema": "catasto"
+        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
+        "host": "localhost", "port": 5432, "schema": "catasto"
     }
-    # Non è necessario specificare log_file o log_level qui se i default nel costruttore vanno bene
-    db_manager_gui = CatastoDBManager(**db_config_gui) 
-
-    # Se volessi sovrascrivere i default, potresti fare:
-    # db_manager_gui = CatastoDBManager(
-    #     **db_config_gui,
-    #     log_file="mio_log_personale.log",
-    #     log_level=logging.WARNING
-    # )
-
     db_manager_gui = CatastoDBManager(
         dbname=db_config_gui["dbname"], 
         user=db_config_gui["user"], 
-        password=db_config_gui["password"],
+        password=db_config_gui["password"], # Password per catasto_storico
         host=db_config_gui["host"], 
         port=db_config_gui["port"],
-        schema=db_config_gui.get("schema", "catasto"), # Usa .get() per schema opzionale
-        # Assicurati di passare anche min_conn, max_conn, application_name, log_file, log_level
-        # se li hai resi parametri obbligatori del __init__ o se vuoi sovrascrivere i default.
-        # Esempio basato sulla firma __init__ che abbiamo discusso:
-        application_name="CatastoAppGUI_Main", # Nome specifico per l'istanza principale
+        schema=db_config_gui.get("schema", "catasto"),
+        application_name="CatastoAppGUI_Main",
         log_file="catasto_main_db.log",
-        log_level=logging.DEBUG, # O il livello che preferisci per la produzione
+        log_level=logging.DEBUG,
         min_conn=1,
-        max_conn=5 # O i valori che preferisci per il pool principale
+        max_conn=5
     )
 
-    # Verifica se il pool è stato inizializzato con successo nel costruttore
-    if db_manager_gui.pool is None: # <--- NUOVO CONTROLLO
-        QMessageBox.critical(None, "Errore Inizializzazione Database",
-                             "Impossibile inizializzare il pool di connessioni al database.\n"
-                             "Verifica i parametri di connessione, che il server PostgreSQL sia in esecuzione e i log dell'applicazione.\n"
-                             "L'applicazione verrà chiusa.")
-        # db_manager_gui.close_pool() # Non necessario se il pool è None, ma per sicurezza
-        sys.exit(1)
-    else:
-        # Opzionale: potresti voler "testare" il pool ottenendo e rilasciando una connessione
-        # per essere sicuro che sia veramente funzionante, ma __init__ dovrebbe già loggare errori.
-        try:
-            conn_test = db_manager_gui._get_connection()
-            db_manager_gui._release_connection(conn_test)
-            gui_logger.info("Test di connessione iniziale al pool riuscito.")
-        except Exception as test_conn_err:
+    main_window_instance = CatastoMainWindow()
+    main_window_instance.db_manager = db_manager_gui # Passa il db_manager (senza pool ancora)
+
+    # Ottieni le credenziali dell'admin di PostgreSQL per verificare/creare il DB
+    # Questo andrebbe fatto in modo più sicuro, es. da file di config o chiedendo una volta
+    # Per ora, le hardcodiamo per il test, ma NON è una buona pratica per produzione.
+    # In un'app reale, queste credenziali sarebbero chieste all'utente se il DB non esiste.
+    db_admin_user_for_setup = db_config_gui["user"] # L'utente 'postgres' può creare DB
+    db_admin_password_for_setup = db_config_gui["password"] 
+
+    target_dbname = db_manager_gui.get_current_dbname() # Nome del DB target ("catasto_storico")
+
+    db_exists = db_manager_gui.check_database_exists(target_dbname, db_admin_user_for_setup, db_admin_password_for_setup)
+    main_window_instance.pool_initialized_successfully = False 
+
+    if db_exists:
+        gui_logger.info(f"Database '{target_dbname}' trovato. Tentativo di inizializzazione pool...")
+        if db_manager_gui.initialize_main_pool():
+            main_window_instance.pool_initialized_successfully = True # Imposta l'attributo
+            gui_logger.info(f"Pool per '{target_dbname}' inizializzato.")
+            if hasattr(main_window_instance, 'db_status_label'): # Verifica esistenza attributo
+                 main_window_instance.db_status_label.setText(f"Database: Connesso ({target_dbname})")
+        else:
+            # pool_initialized_successfully rimane False (già impostato)
+            gui_logger.error(f"Database '{target_dbname}' esiste, ma fallita inizializzazione del pool.")
             QMessageBox.critical(None, "Errore Connessione Pool",
-                                 f"Il pool sembra inizializzato, ma non è possibile ottenere una connessione:\n{test_conn_err}\n"
-                                 "L'applicazione verrà chiusa.")
-            db_manager_gui.close_pool()
-            sys.exit(1)
+                                 f"Il database '{target_dbname}' esiste ma non è stato possibile connettersi tramite il pool.\n"
+                                 "Verificare i log e la configurazione del server PostgreSQL.")
+            if hasattr(main_window_instance, 'db_status_label'):
+                 main_window_instance.db_status_label.setText(f"Database: Errore Pool ({target_dbname})")
+    else:
+        # pool_initialized_successfully rimane False
+        gui_logger.warning(f"Database '{target_dbname}' NON trovato. Avvio in modalità configurazione.")
+        QMessageBox.information(None, "Database Non Trovato",
+                             f"Il database '{target_dbname}' non esiste o non è accessibile.\n"
+                             "L'applicazione si avvierà in modalità limitata.\n"
+                             "Utilizzare il tab 'Sistema' -> 'Amministrazione DB' per creare e configurare il database.")
+        if hasattr(main_window_instance, 'db_status_label'):
+             main_window_instance.db_status_label.setText(f"Database: Non Esistente ({target_dbname})")
 
-    main_window_instance = None # Riferimento alla finestra principale
+    # Gestione Login
     login_success = False
-
-    while not login_success: # Continua a mostrare il login finché non ha successo o l'utente esce
-        login_dialog = LoginDialog(db_manager_gui)
-        if login_dialog.exec_() == QDialog.Accepted:
-            if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
-                main_window_instance = CatastoMainWindow() 
-                main_window_instance.perform_initial_setup(
-                    db_manager_gui,
-                    login_dialog.logged_in_user_id,
-                    login_dialog.logged_in_user_info,
-                    login_dialog.current_session_id
-                )
-                login_success = True
+    if main_window_instance.pool_initialized_successfully:
+        # ... (ciclo while login_dialog.exec_() come prima) ...
+        while not login_success:
+            login_dialog = LoginDialog(db_manager_gui)
+            if login_dialog.exec_() == QDialog.Accepted:
+                if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
+                    main_window_instance.perform_initial_setup(
+                        db_manager_gui, # Già impostato, ma lo passiamo
+                        login_dialog.logged_in_user_id,
+                        login_dialog.logged_in_user_info,
+                        login_dialog.current_session_id
+                    )
+                    login_success = True
+                else:
+                    QMessageBox.critical(None, "Errore Login Critico", "Dati di login interni non validi dopo accettazione dialogo."); sys.exit(1)
             else:
-                # Questo caso non dovrebbe accadere se LoginDialog.accept() è chiamato solo su login valido
-                QMessageBox.critical(None, "Errore Login", "Dati di login non validi ricevuti dal dialogo.")
-                # Potrebbe essere meglio chiudere l'app qui o loggare e ritentare
-                db_manager_gui.close_pool() # <--- USA QUESTO
-                sys.exit(1) # Uscita critica
-        else: # LoginDialog è stato chiuso o cancellato
-            gui_logger.info("Login annullato o fallito. Uscita dall'applicazione GUI.")
-            if db_manager_gui: db_manager_gui.close_pool() # <--- USA QUESTO
-            sys.exit(0) # Uscita pulita
-            
-    if main_window_instance and login_success:
-        gui_logger.info(">>> run_gui_app: Login successo, preparazione per app.exec_()")
-
-        # Se vuoi usare una QPalette in aggiunta o al posto di alcune parti del QSS:
-        # palette = QPalette()
-        # # Esempio di configurazione aggiuntiva o di base se il QSS non è completo
-        # palette.setColor(QPalette.Window, QColor(53, 53, 53)) # Sfondo scuro per la finestra
-        # palette.setColor(QPalette.WindowText, Qt.white)       # Testo bianco sulla finestra
-        # palette.setColor(QPalette.Base, QColor(25, 25, 25))    # Sfondo per input widgets
-        # palette.setColor(QPalette.AlternateBase, QColor(45, 45, 45)) # Colore alternato righe
-        # palette.setColor(QPalette.ToolTipBase, Qt.white)
-        # palette.setColor(QPalette.ToolTipText, Qt.black)
-        # palette.setColor(QPalette.Text, Qt.white)            # Colore testo generico
-        # palette.setColor(QPalette.Button, QColor(60, 60, 60))  # Sfondo pulsanti (se non da QSS)
-        # palette.setColor(QPalette.ButtonText, Qt.white)      # Testo pulsanti (se non da QSS)
-        # palette.setColor(QPalette.BrightText, Qt.red)
-        # palette.setColor(QPalette.Link, QColor(42, 130, 218))
-        # palette.setColor(QPalette.Highlight, QColor(42, 130, 218)) # Colore selezione
-        # palette.setColor(QPalette.HighlightedText, Qt.white) # Testo selezionato
-        # app.setPalette(palette)
-
-        gui_logger.info(">>> run_gui_app: STA PER ESSERE CHIAMATO app.exec_()")
+                gui_logger.info("Login annullato o dialogo chiuso. Uscita dall'applicazione."); 
+                if db_manager_gui: db_manager_gui.close_pool(); 
+                sys.exit(0)
+    else:
+        # ... (logica per modalità limitata come prima, che chiama main_window_instance.update_ui_based_on_role()) ...
+        main_window_instance.logged_in_user_info = {
+            'id': 0, 
+            'username': 'setup_admin', 
+            'nome_completo': 'Amministratore Setup',
+            'ruolo': 'admin_offline'
+        }
+        main_window_instance.logged_in_user_id = 0
+        main_window_instance.current_session_id = str(uuid.uuid4())
+        
+        main_window_instance.setup_tabs() 
+        main_window_instance.update_ui_based_on_role() # Ora può accedere a self.pool_initialized_successfully
+        if hasattr(main_window_instance, 'user_status_label'):
+            main_window_instance.user_status_label.setText("Utente: Setup Mode (DB non pronto)")
+        if hasattr(main_window_instance, 'logout_button'):
+            main_window_instance.logout_button.setEnabled(False)
+        main_window_instance.show()
+        # Non impostare login_success = True
+    
+    # L'applicazione continua solo se main_window_instance è stata creata
+    if main_window_instance:
+        gui_logger.info(">>> run_gui_app: Avvio loop eventi applicazione...")
         exit_code = app.exec_()
         gui_logger.info(f">>> run_gui_app: app.exec_() TERMINATO con codice: {exit_code}")
+        if db_manager_gui: db_manager_gui.close_pool()
         sys.exit(exit_code)
-    else:
-        # Questo blocco viene raggiunto se main_window_instance non è stata creata
-        # o login_success è False, il che indicherebbe un problema nel ciclo di login
-        # che non ha portato a un'uscita anticipata.
-        gui_logger.error("Avvio dell'applicazione fallito: main_window_instance non inizializzata o login non riuscito prima di app.exec_().")
-        if db_manager_gui: # Assicurati che db_manager_gui sia definito
-            db_manager_gui.close_pool() # <--- USA QUESTO
+    else: # Non dovrebbe accadere se il flusso di login è corretto
+        gui_logger.critical("Impossibile avviare la finestra principale.")
+        if db_manager_gui: db_manager_gui.close_pool()
         sys.exit(1)
 
     

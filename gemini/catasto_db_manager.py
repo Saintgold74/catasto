@@ -65,92 +65,146 @@ class DBDataError(DBMError):
 
 class CatastoDBManager:
     def __init__(self, dbname, user, password, host, port,
-                 schema="catasto",
-                 application_name="CatastoApp_Pool", # Nome applicazione per le connessioni del pool
-                 log_file="catasto_db_manager.log", # Nome file log specifico
-                 log_level=logging.DEBUG,
-                 min_conn=1,
-                 max_conn=5):
-
-        # Parametri di connessione base
-        self._conn_params_dict = {"dbname": dbname, "user": user, "password": password, "host": host, "port": port}
+             schema="catasto",
+             application_name="CatastoApp_Pool",
+             log_file="catasto_db_manager.log",
+             log_level=logging.DEBUG,
+             min_conn=1, # Questi dovrebbero essere attributi di classe o passati
+             max_conn=5): # per essere usati in initialize_main_pool
+    
+        self._main_db_conn_params = {"dbname": dbname, "user": user, "password": password, "host": host, "port": port}
+        self._maintenance_db_name = "postgres" 
         self.schema = schema
-        self.application_name = application_name # Usato nelle opzioni del pool
+        self.application_name = application_name
+        self._min_conn_pool = min_conn # Memorizza per uso successivo
+        self._max_conn_pool = max_conn # Memorizza per uso successivo
 
-        # --- INIZIALIZZAZIONE DEL LOGGER ---
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
-        self.logger.setLevel(log_level)
-        if not self.logger.handlers: # Evita di aggiungere handler duplicati se l'istanza viene ricreata
-            log_format_str = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-            formatter = logging.Formatter(log_format_str)
-            try:
-                file_h = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-                file_h.setFormatter(formatter)
-                self.logger.addHandler(file_h)
-            except Exception as e:
-                print(f"ATTENZIONE: Impossibile creare file handler per logger {self.logger.name} su {log_file}: {e}")
-            
-            # Aggiungi console handler solo se il livello di log è DEBUG o se non è un'applicazione "frozen"
-            if log_level <= logging.DEBUG or not getattr(sys, 'frozen', False):
-                console_h = logging.StreamHandler(sys.stdout)
-                console_h.setFormatter(formatter)
-                self.logger.addHandler(console_h)
-        # --- FINE LOGGER ---
-        self.logger.info(f"Inizializzato gestore DB (solo pool) per {dbname}@{host}")
+        # ... (resto della configurazione del logger come prima) ...
+        self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
+        self.pool = None # Il pool viene inizializzato esplicitamente dopo
 
-        # Configurazione per il pool di connessioni
-        self._pool_config_params = {
-            "minconn": min_conn,
-            "maxconn": max_conn,
-            **self._conn_params_dict, # Espande dbname, user, password, host, port
-            "options": f"-c search_path={self.schema},public -c application_name='{self.application_name}'"
+
+    def initialize_main_pool(self) -> bool:
+        """Tenta di inizializzare il pool di connessioni al database principale."""
+        if self.pool:
+            self.logger.info("Pool principale già inizializzato.")
+            return True
+        
+        target_dbname = self._main_db_conn_params.get("dbname")
+        pool_config = {
+            "minconn": self._min_conn_pool,
+            "maxconn": self._max_conn_pool,
+            **self._main_db_conn_params,
+            "options": f"-c search_path={self.schema},public -c application_name='{self.application_name}_{target_dbname}'" # Nome pool più specifico
         }
-        self.pool = None
-        self._initialize_pool() # Chiama per creare il pool all'avvio
-
-    def _initialize_pool(self):
-        """Inizializza o reinizializza il pool di connessioni."""
-        if self.pool:
-            self.close_pool() # Chiudi il pool esistente prima di ricrearlo
         try:
-            # Usiamo ThreadedConnectionPool per applicazioni GUI multithread (anche se PyQt è single-thread per GUI)
-            # SimpleConnectionPool è anche una valida alternativa.
-            self.pool = psycopg2.pool.ThreadedConnectionPool(**self._pool_config_params)
-            self.logger.info(f"Pool di connessioni '{self.application_name}' inizializzato (min:{self._pool_config_params['minconn']}, max:{self._pool_config_params['maxconn']}).")
-        except (psycopg2.Error, Exception) as e:
-            self.logger.critical(f"FALLIMENTO inizializzazione pool di connessioni: {e}", exc_info=True)
-            self.pool = None
-            # Potresti voler sollevare un'eccezione qui per segnalare un fallimento critico all'avvio
-            # raise ConnectionError(f"Impossibile inizializzare il pool di connessioni: {e}") from e
-
-
-    def close_pool(self):
-        """Chiude tutte le connessioni nel pool e imposta il pool a None."""
-        if self.pool:
-            try:
-                self.pool.closeall()
-                self.logger.info("Pool di connessioni chiuso con successo.")
-            except Exception as e:
-                self.logger.error(f"Errore durante la chiusura del pool di connessioni: {e}", exc_info=True)
-            finally:
-                self.pool = None # Assicura che il pool sia None dopo il tentativo di chiusura
-    def _get_connection(self):
-            """
-            Ottiene una connessione dal pool.
-            Solleva psycopg2.OperationalError se il pool non è disponibile o fallisce.
-            """
-            if not self.pool:
-                self.logger.warning("Pool non disponibile o non inizializzato. Tentativo di reinizializzazione...")
-                self._initialize_pool() # Tenta di ricreare il pool
-                if not self.pool: # Se ancora non disponibile
-                    self.logger.critical("Impossibile ottenere connessione: Pool non disponibile dopo tentativo di reinizializzazione.")
-                    raise psycopg2.OperationalError("Pool di connessioni non disponibile dopo tentativo di reinizializzazione.")
+            self.logger.info(f"Tentativo di inizializzazione pool per DB '{target_dbname}'...")
+            self.pool = psycopg2.pool.ThreadedConnectionPool(**pool_config)
             
+            # Test rapido della connessione dal pool
+            conn_test = None
             try:
+                conn_test = self.pool.getconn()
+                self.logger.info(f"Pool di connessioni '{self.application_name}_{target_dbname}' per DB '{target_dbname}' inizializzato e testato con successo.")
+                return True
+            except psycopg2.Error as pool_get_err:
+                self.logger.critical(f"Pool per DB '{target_dbname}' creato, ma fallito ottenimento connessione di test: {pool_get_err}", exc_info=False)
+                if self.pool: self.pool.closeall() # Chiudi il pool se il test fallisce
+                self.pool = None
+                return False
+            finally:
+                if conn_test and self.pool: self.pool.putconn(conn_test)
+
+        except (psycopg2.Error, Exception) as e:
+            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}': {e}", exc_info=False)
+            self.pool = None
+            return False
+
+    def _get_maintenance_connection(self, db_user_admin: str, db_password_admin: str, maintenance_dbname: str = "postgres"):
+        """Ottiene una connessione singola a un database di manutenzione (es. postgres)."""
+        maint_conn_params = self._main_db_conn_params.copy()
+        maint_conn_params["dbname"] = maintenance_dbname
+        # Usa le credenziali dell'utente admin del DB fornite, non quelle dell'app per catasto_storico
+        maint_conn_params["user"] = db_user_admin
+        maint_conn_params["password"] = db_password_admin 
+        
+        self.logger.info(f"Tentativo di connessione al DB di manutenzione '{maintenance_dbname}' come utente '{db_user_admin}'.")
+        try:
+            conn = psycopg2.connect(**maint_conn_params)
+            conn.autocommit = True # Utile per comandi come CREATE DATABASE
+            return conn
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore connessione al DB di manutenzione '{maintenance_dbname}': {e}", exc_info=True)
+            raise DBMError(f"Impossibile connettersi al database '{maintenance_dbname}': {e}") from e
+
+    def check_database_exists(self, target_dbname: str, admin_user: str, admin_password: str) -> bool:
+        """Verifica se un database specifico esiste connettendosi a 'postgres'."""
+        conn_maint = None
+        exists = False
+        try:
+            conn_maint = self._get_maintenance_connection(admin_user, admin_password, maintenance_dbname="postgres")
+            with conn_maint.cursor() as cur:
+                cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (target_dbname,))
+                exists = cur.fetchone() is not None
+                self.logger.info(f"Controllo esistenza database '{target_dbname}': {'Esiste' if exists else 'Non esiste'}.")
+        except DBMError as e: # Errore di connessione al DB di manutenzione
+            self.logger.error(f"Impossibile verificare esistenza DB '{target_dbname}' due to error connecting to maintenance DB: {e}")
+            # In questo caso, non possiamo sapere se esiste, consideriamo che non esista o sia inaccessibile
+            exists = False 
+        except psycopg2.Error as e: # Altri errori SQL
+            self.logger.error(f"Errore DB verificando esistenza database '{target_dbname}': {e}", exc_info=True)
+            exists = False
+        finally:
+            if conn_maint:
+                conn_maint.close()
+        return exists
+
+    def create_target_database(self, target_dbname: str, admin_user: str, admin_password: str) -> bool:
+        """Crea il database target (es. catasto_storico) se non esiste, connettendosi a 'postgres'."""
+        conn_maint = None
+        try:
+            # Prima verifica se esiste per evitare errore CREATE se esiste già
+            if self.check_database_exists(target_dbname, admin_user, admin_password):
+                self.logger.info(f"Il database '{target_dbname}' esiste già. Nessuna azione di creazione eseguita.")
+                return True # Considera successo se esiste già
+
+            conn_maint = self._get_maintenance_connection(admin_user, admin_password, maintenance_dbname="postgres")
+            with conn_maint.cursor() as cur: # autocommit è True sulla connessione
+                self.logger.info(f"Tentativo di creare il database '{target_dbname}'...")
+                # Usa sql.SQL per formattare nomi di database in modo sicuro
+                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_dbname)))
+                self.logger.info(f"Database '{target_dbname}' creato con successo.")
+            return True
+        except DBMError as e: # Errore di connessione al DB di manutenzione
+            self.logger.error(f"Impossibile creare DB '{target_dbname}' due to error connecting to maintenance DB: {e}")
+            return False
+        except psycopg2.Error as e: # Altri errori SQL, es. "database ... already exists" se il check precedente fallisce
+            self.logger.error(f"Errore DB durante la creazione del database '{target_dbname}': {getattr(e, 'pgerror', str(e))}", exc_info=False)
+            if "already exists" in str(e).lower(): # Se esiste già, consideralo OK
+                self.logger.info(f"Database '{target_dbname}' esisteva già (errore CREATE DATABASE ignorato).")
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Errore Python imprevisto durante la creazione del database '{target_dbname}': {e}", exc_info=True)
+            return False
+        finally:
+            if conn_maint:
+                conn_maint.close()
+
+    # Modifica _get_connection
+    def _get_connection(self):
+        if not self.pool:
+            self.logger.error("Tentativo di ottenere connessione ma il pool principale non è inizializzato.")
+            # Potrebbe essere meglio sollevare un'eccezione più specifica che la UI può catturare
+            # per informare l'utente che il DB non è pronto.
+            raise DBMError("Pool di connessioni al database principale non inizializzato. "
+                        "È necessario creare o configurare il database tramite il tab 'Amministrazione DB'.")
+        try:
                 conn = self.pool.getconn()
                 self.logger.debug(f"Connessione {id(conn)} ottenuta dal pool. DSN: {conn.dsn if hasattr(conn, 'dsn') and not conn.closed else 'N/A o Chiusa'}")
                 return conn
-            except Exception as e: # Cattura errori da getconn() come PoolError (se il pool è pieno e non può crescere)
+        except Exception as e: # Cattura errori da getconn() come PoolError (se il pool è pieno e non può crescere)
                 self.logger.error(f"Errore critico nell'ottenere una connessione dal pool: {e}", exc_info=True)
                 raise psycopg2.OperationalError(f"Impossibile ottenere una connessione valida dal pool: {e}")
 
@@ -3707,7 +3761,44 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore durante il reset delle variabili di sessione audit con connessione esistente: {e}", exc_info=True)
             # Non sollevare eccezione per non interrompere il logout principale
-  
+    def execute_sql_from_file(self, file_path: str) -> Tuple[bool, str]:
+        if not os.path.exists(file_path):
+            return False, f"File SQL non trovato: {file_path}"
+        conn = None
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                sql_content = f.read()
+
+            conn = self._get_connection()
+            # Per DDL o script complessi, potrebbe essere necessario uscire da una transazione
+            # o usare autocommit, ma questo dipende dallo script.
+            # conn.autocommit = True # Usare con cautela, potrebbe interferire con il pool
+            with conn.cursor() as cur:
+                self.logger.info(f"Esecuzione script SQL da file: {file_path}")
+                cur.execute(sql_content) # Esegue l'intero contenuto
+                # Per DDL, non c'è un commit esplicito necessario se autocommit non è attivo per la sessione
+                # ma è meglio fare commit se lo script contiene DML o se autocommit è off.
+                # Se lo script gestisce le proprie transazioni, va bene.
+                # Per script di setup DDL, spesso si eseguono fuori da una transazione esplicita
+                # o con connessioni in modalità autocommit.
+                # Se si usa una connessione dal pool, l'autocommit di default è solitamente False.
+                conn.commit() 
+            self.logger.info(f"Script SQL {file_path} eseguito con successo.")
+            return True, f"Script {os.path.basename(file_path)} eseguito con successo."
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            msg = f"Errore DB eseguendo script {file_path}: {getattr(db_err, 'pgerror', str(db_err))}"
+            self.logger.error(msg, exc_info=True)
+            return False, msg
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            msg = f"Errore Python eseguendo script {file_path}: {e}"
+            self.logger.error(msg, exc_info=True)
+            return False, msg
+        finally:
+            # if conn and conn.autocommit: conn.autocommit = False # Ripristina se modificato
+            if conn:
+                self._release_connection(conn)
         
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

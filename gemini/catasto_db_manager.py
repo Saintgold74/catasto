@@ -1718,79 +1718,159 @@ class CatastoDBManager:
     # --- Metodi per Workflow Complessi (MODIFICATI per comune_id) ---
 
     # All'interno della classe CatastoDBManager in catasto_db_manager.py
+    def registra_nuova_consultazione(self,
+                                     data_consultazione: date,      # Corrisponde a 'data'
+                                     richiedente: str,
+                                     materiale_consultato: str,     # Obbligatorio nella UI
+                                     funzionario_autorizzante: Optional[str], # Testo per la colonna VARCHAR
+                                     documento_identita: Optional[str] = None,
+                                     motivazione: Optional[str] = None
+                                     ) -> Optional[int]: # Restituisce l'ID della consultazione o None
+        """
+        Registra una nuova consultazione nel database.
+        Utilizza il pool di connessioni. Adattato alla struttura tabella fornita.
+        """
+        if not all([data_consultazione, richiedente, materiale_consultato]): # Materiale reso obbligatorio dalla UI
+            self.logger.error("registra_nuova_consultazione: Campi obbligatori (data, richiedente, materiale) mancanti.")
+            # Solleva eccezione che la UI può intercettare
+            raise DBDataError("Data, Richiedente e Materiale Consultato sono campi obbligatori.")
 
-    def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
-                                 possessori: List[Dict[str, Any]], # Specificato tipo per chiarezza
-                                 immobili: List[Dict[str, Any]]   # Specificato tipo per chiarezza
-                                ) -> bool:
+        # Le colonne data_creazione e data_modifica hanno default CURRENT_TIMESTAMP
+        query = f"""
+            INSERT INTO {self.schema}.consultazione
+                (data, richiedente, documento_identita,
+                 motivazione, materiale_consultato, funzionario_autorizzante)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id;
         """
-        Chiama la procedura SQL catasto.registra_nuova_proprieta.
-        Utilizza il pool di connessioni e gestisce commit/rollback.
-        Restituisce True in caso di successo, altrimenti solleva un'eccezione.
-        """
-        conn = None  # Inizializza la variabile di connessione
+        params = (
+            data_consultazione,
+            richiedente.strip(),
+            documento_identita.strip() if documento_identita else None,
+            motivazione.strip() if motivazione else None,
+            materiale_consultato.strip(),
+            funzionario_autorizzante.strip() if funzionario_autorizzante else None
+        )
+        
+        conn = None
+        new_consultazione_id = None
         try:
-            # Serializza i dati JSON per i possessori e gli immobili
-            try:
-                possessori_json = json.dumps(possessori)
-                immobili_json = json.dumps(immobili)
-            except TypeError as te_json:
-                self.logger.error(f"Errore di serializzazione JSON in registra_nuova_proprieta: {te_json}", exc_info=True)
-                # Solleva un'eccezione che può essere gestita dalla UI
-                raise DBDataError(f"Dati per possessori o immobili non validi per la conversione JSON: {te_json}") from te_json
-
-            # Nome completo della procedura, incluso lo schema
-            call_proc_str = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json)"
-            params = (comune_id, numero_partita, data_impianto, possessori_json, immobili_json)
-
-            conn = self._get_connection() # Ottiene una connessione dal pool
+            conn = self._get_connection()
             with conn.cursor() as cur:
-                self.logger.debug(f"Esecuzione CALL {self.schema}.registra_nuova_proprieta - Params: C_ID={comune_id}, Part_N={numero_partita}, DataImp={data_impianto}, N_Poss={len(possessori)}, N_Imm={len(immobili)}")
-                cur.execute(call_proc_str, params)
-                # Per una CALL, il successo è l'assenza di eccezioni.
-                # Il commit è necessario per rendere effettive le modifiche fatte dalla procedura.
-                conn.commit() 
-                self.logger.info(f"Registrata nuova proprietà con successo: Comune ID {comune_id}, Partita N.{numero_partita}")
-                return True # Indica successo
-
-        except psycopg2.Error as db_err: # Cattura errori specifici del database (incl. errori sollevati dalla procedura SQL)
-            if conn: conn.rollback() # Annulla la transazione in caso di errore DB
-            pgcode = getattr(db_err, 'pgcode', None) # Codice errore SQLSTATE
-            pgerror_msg = getattr(db_err, 'pgerror', str(db_err)) # Messaggio di errore da PostgreSQL
-            self.logger.error(f"Errore DB (Codice: {pgcode}) in registra_nuova_proprieta (Partita N.{numero_partita}): {pgerror_msg}", exc_info=True)
-            
-            # Qui potresti voler mappare pgcode a eccezioni più specifiche se la procedura
-            # solleva errori con SQLSTATE definiti (es. per duplicati, dati non validi).
-            # Esempio:
-            # if pgcode == 'P0001': # RAISE EXCEPTION nella procedura SQL
-            #     if "partita duplicata" in pgerror_msg.lower(): # Controlla il messaggio dell'eccezione
-            #         raise DBUniqueConstraintError(f"Errore dalla procedura: Partita N.{numero_partita} duplicata nel comune ID {comune_id}.", details=pgerror_msg) from db_err
-            #     elif "dati possessore non validi" in pgerror_msg.lower():
-            #         raise DBDataError(f"Errore dalla procedura: Dati possessore non validi.", details=pgerror_msg) from db_err
-            #     # ... altri casi specifici dalla procedura ...
-            
-            # Per ora, solleviamo un DBMError generico che include il messaggio del DB
-            raise DBMError(f"Errore database durante la registrazione della nuova proprietà: {pgerror_msg}") from db_err
-        
-        except DBDataError: # Rilancia DBDataError dalla serializzazione JSON
-            # Il rollback non è necessario qui perché la transazione DB potrebbe non essere iniziata
-            raise # Rilancia l'eccezione così com'è
-
-        except Exception as e: # Cattura altri errori Python imprevisti
-            if conn: conn.rollback() # Annulla la transazione per sicurezza
-            self.logger.error(f"Errore Python imprevisto in registra_nuova_proprieta (Partita N.{numero_partita}): {e}", exc_info=True)
-            raise DBMError(f"Errore di sistema imprevisto durante la registrazione della proprietà: {e}") from e
-            # Non è più necessario `return False` qui perché solleviamo eccezioni
-        
+                self.logger.debug(f"Esecuzione registra_nuova_consultazione per richiedente: {richiedente}")
+                cur.execute(query, params)
+                result = cur.fetchone()
+                if result and result[0] is not None:
+                    new_consultazione_id = result[0]
+                    conn.commit()
+                    self.logger.info(f"Nuova consultazione registrata con successo. ID: {new_consultazione_id}")
+                else:
+                    conn.rollback()
+                    self.logger.error("Registrazione consultazione fallita: nessun ID restituito dopo INSERT.")
+                    raise DBMError("Fallimento registrazione consultazione: nessun ID restituito.")
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB in registra_nuova_consultazione: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python in registra_nuova_consultazione: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema: {e}") from e
         finally:
             if conn:
-                self._release_connection(conn) # Rilascia SEMPRE la connessione al pool
+                self._release_connection(conn)
         
-        # Questa riga non dovrebbe essere raggiunta se ogni fallimento solleva un'eccezione.
-        # Se per qualche motivo la procedura potesse "fallire" senza sollevare un'eccezione SQL
-        # (altamente improbabile per una CALL che modifica dati), allora un return False qui avrebbe senso.
-        # Ma è meglio affidarsi alle eccezioni per segnalare fallimenti.
-        # return False
+        return new_consultazione_id
+    def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
+                                 possessori_json_str: str, # Stringa JSON
+                                 immobili_json_str: str    # Stringa JSON
+                                ) -> Optional[int]: # Restituisce l'ID della nuova partita o None
+        """
+        Chiama la procedura SQL catasto.registra_nuova_proprieta 
+        (che accetta 5 parametri: comune_id, numero_partita, data_impianto, possessori_json, immobili_json)
+        e restituisce l'ID della nuova partita.
+        """
+        # Validazioni input base
+        if not all([isinstance(comune_id, int) and comune_id > 0,
+                    isinstance(numero_partita, int) and numero_partita > 0,
+                    isinstance(data_impianto, date)]):
+            msg = "Parametri comune_id, numero_partita o data_impianto non validi."
+            self.logger.error(f"registra_nuova_proprieta: {msg}")
+            raise DBDataError(msg)
+        try:
+            json.loads(possessori_json_str) # Testa se è JSON valido
+            json.loads(immobili_json_str)   # Testa se è JSON valido
+        except json.JSONDecodeError as je:
+            msg = f"Dati possessori o immobili non sono in formato JSON valido: {je}"
+            self.logger.error(f"registra_nuova_proprieta: {msg}")
+            raise DBDataError(msg) from je
+
+        conn = None
+        new_partita_id: Optional[int] = None
+        
+        # --- CORREZIONE NOME PROCEDURA E PARAMETRI ---
+        # Chiama la procedura esistente nel DB 'catasto.registra_nuova_proprieta' con 5 argomenti
+        # I cast a ::json assicurano che PostgreSQL interpreti correttamente le stringhe come JSON.
+        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json);"
+        params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str)
+        # --- FINE CORREZIONE ---
+        
+        # Query per recuperare l'ID della partita dopo che la procedura l'ha creata.
+        # La procedura SQL DEVE inserire un valore per la colonna 'tipo' (es. 'principale')
+        # perché è NOT NULL e non ha default. Assumiamo qui che inserisca 'principale'.
+        query_select_id = f"""
+            SELECT id FROM {self.schema}.partita 
+            WHERE comune_id = %s AND numero_partita = %s AND tipo = 'principale' 
+            ORDER BY data_creazione DESC, id DESC LIMIT 1; 
+        """
+        # Se la sua procedura SQL imposta un 'tipo' diverso o lo lascia variabile, 
+        # questa query SELECT potrebbe necessitare di aggiustamenti.
+
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Chiamata procedura {self.schema}.registra_nuova_proprieta per C:{comune_id}, N:{numero_partita}")
+                self.logger.debug(f"SQL CALL: {cur.mogrify(call_proc, params).decode('utf-8','ignore')}")
+                cur.execute(call_proc, params)
+                
+                # Poiché CALL non restituisce un valore, dobbiamo selezionare l'ID.
+                self.logger.debug(f"Esecuzione SELECT per ID nuova partita: C:{comune_id}, N:{numero_partita}, Tipo:'principale'")
+                cur.execute(query_select_id, (comune_id, numero_partita)) # Aggiungere 'principale' se la procedura lo imposta
+                result = cur.fetchone()
+
+                if result and result['id']:
+                    new_partita_id = result['id']
+                    conn.commit() 
+                    self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id} (Comune: {comune_id}, Numero: {numero_partita}).")
+                else:
+                    conn.rollback()
+                    self.logger.error(f"Fallimento nel recuperare l'ID della nuova partita dopo registrazione (C:{comune_id}, N:{numero_partita}). La procedura SQL potrebbe non aver inserito la partita, non ha impostato il tipo a 'principale', o la query SELECT non è corretta.")
+                    raise DBMError("Registrazione partita completata, ma impossibile recuperare l'ID della nuova partita.")
+        
+        except psycopg2.errors.UndefinedFunction as udf_err: # Se il nome o la firma non corrispondono ANCORA
+            if conn: conn.rollback()
+            self.logger.error(f"La procedura SQL '{self.schema}.registra_nuova_proprieta' con i parametri forniti non esiste: {getattr(udf_err, 'pgerror', str(udf_err))}", exc_info=True)
+            raise DBMError(f"Procedura SQL '{self.schema}.registra_nuova_proprieta' non trovata o firma errata. Dettagli: {getattr(udf_err, 'pgerror', str(udf_err))}") from udf_err
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', 'N/D')
+            msg = f"Una partita con numero {numero_partita} esiste già nel comune selezionato (vincolo: {constraint_name})."
+            self.logger.warning(f"registra_nuova_proprieta: {msg} Dettagli: {getattr(uve, 'pgerror', str(uve))}")
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=getattr(uve, 'pgerror', str(uve))) from uve
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}): {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        
+        return new_partita_id
+    
     def registra_passaggio_proprieta(self, 
                                      partita_origine_id: int, 
                                      comune_id_nuova_partita: int, 
@@ -2671,22 +2751,58 @@ class CatastoDBManager:
         return problemi_trovati, output_msg.strip()
 
     def refresh_materialized_views(self) -> bool:
-        """Aggiorna tutte le viste materializzate definite nel database."""
-        logger.info("Avvio aggiornamento viste materializzate...")
+        """Aggiorna tutte le viste materializzate definite nel database, usando il pool."""
+        self.logger.info("Avvio aggiornamento viste materializzate...")
+        conn = None
         try:
-            if self.execute_query("CALL aggiorna_tutte_statistiche()"): self.commit(); logger.info("Aggiornamento viste completato."); return True
-            else: logger.error("Fallita chiamata a 'aggiorna_tutte_statistiche'."); return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB aggiornamento viste: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python aggiornamento viste: {e}"); self.rollback(); return False
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                # Assumendo che la procedura sia nello schema corretto (es. self.schema)
+                # Se la procedura non accetta argomenti, la chiamata è semplice.
+                self.logger.debug(f"Chiamata procedura {self.schema}.aggiorna_tutte_statistiche()")
+                cur.execute(f"CALL {self.schema}.aggiorna_tutte_statistiche();")
+                conn.commit()
+            self.logger.info("Aggiornamento viste materializzate completato con successo.")
+            return True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB durante l'aggiornamento delle viste materializzate: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            return False
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante l'aggiornamento delle viste materializzate: {e}", exc_info=True)
+            return False
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def run_database_maintenance(self) -> bool:
-        """Esegue ANALYZE e aggiorna le viste materializzate."""
-        logger.info("Avvio manutenzione database (ANALYZE, REFRESH MV)...")
+        """Esegue manutenzione generale del database (es. ANALYZE e aggiorna viste), usando il pool."""
+        self.logger.info("Avvio manutenzione database (es. ANALYZE, REFRESH MV)...")
+        conn = None
         try:
-            if self.execute_query("CALL manutenzione_database()"): self.commit(); logger.info("Manutenzione (ANALYZE, REFRESH MV) completata."); return True
-            else: logger.error("Fallita chiamata a 'manutenzione_database'."); return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB manutenzione: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python manutenzione: {e}"); self.rollback(); return False
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                # Assumendo che la procedura esista e sia nello schema corretto.
+                # Potrebbe anche essere una serie di comandi SQL invece di una singola procedura.
+                # Esempio se chiama una procedura specifica:
+                self.logger.debug(f"Chiamata procedura {self.schema}.manutenzione_database()")
+                cur.execute(f"CALL {self.schema}.manutenzione_database();")
+                # Se manutenzione_database() non fa commit internamente, è necessario qui.
+                conn.commit() 
+            self.logger.info("Manutenzione database completata con successo.")
+            return True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback() # Esegui rollback sulla connessione specifica
+            self.logger.error(f"Errore DB durante la manutenzione del database: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            return False
+        except Exception as e: # Per altri errori Python
+            if conn and not conn.closed: conn.rollback() # Esegui rollback sulla connessione specifica
+            self.logger.error(f"Errore Python imprevisto durante la manutenzione del database: {e}", exc_info=True)
+            return False
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def analyze_slow_queries(self, min_duration_ms: int = 1000) -> List[Dict]:
         """Chiama la funzione SQL analizza_query_lente (se esiste)."""

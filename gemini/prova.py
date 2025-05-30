@@ -3185,7 +3185,11 @@ class OperazioniPartitaWidget(QWidget):
         except Exception as e_gen:
             gui_logger.critical(f"Errore imprevisto passaggio proprietà: {e_gen}", exc_info=True)
             QMessageBox.critical(self, "Errore Critico Imprevisto", f"Errore imprevisto:\n{type(e_gen).__name__}: {str(e_gen)}")
-
+    def seleziona_e_carica_partita_sorgente(self, partita_id: int):
+        """Imposta l'ID della partita sorgente e carica i suoi dettagli."""
+        gui_logger.info(f"OperazioniPartitaWidget: Impostazione partita sorgente ID: {partita_id} da chiamata esterna.")
+        self.source_partita_id_spinbox.setValue(partita_id)
+        self._load_partita_sorgente_from_spinbox() # Usa il metodo esistente per caricare i dati
 class ModificaPossessoreDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, possessore_id: int, parent=None):
         super().__init__(parent)
@@ -3978,6 +3982,11 @@ class StatisticheWidget(QWidget):
         
         self.maintenance_button = QPushButton("Esegui Manutenzione Database (ANALYZE)")
         self.maintenance_button.clicked.connect(self.run_maintenance)
+        # --- NUOVO PULSANTE ---
+        self.btn_verifica_integrita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton), # Scegli un'icona adatta
+                                                 " Verifica Integrità Database")
+        self.btn_verifica_integrita.setToolTip("Esegue controlli di integrità sul database e riporta i risultati.")
+        self.btn_verifica_integrita.clicked.connect(self._esegui_verifica_integrita)
         
         self.status_text = QTextEdit()
         self.status_text.setReadOnly(True)
@@ -4115,112 +4124,90 @@ class StatisticheWidget(QWidget):
         """Aggiunge un messaggio al log."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.status_text.append(f"[{timestamp}] {message}")
-
-
-
-
 # --- Scheda per Registrazione Nuova Proprietà ---
 class RegistrazioneProprietaWidget(QWidget):
-    def __init__(self, db_manager, parent=None):
-        super(RegistrazioneProprietaWidget, self).__init__(parent)
+    partita_creata_per_operazioni_collegate = pyqtSignal(int, int)
+
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
         self.db_manager = db_manager
-        
-        layout = QVBoxLayout()
-        
-        # Form di inserimento
-        form_group = QGroupBox("Registrazione Nuova Proprietà")
-        form_layout = QGridLayout()
-        
+        self.comune_id: Optional[int] = None
+        self.comune_display_name: Optional[str] = None # Salva anche il nome per la UI
+        self.possessori_data: List[Dict[str, Any]] = []
+        self.immobili_data: List[Dict[str, Any]] = []
+
+        self._initUI() # Ora questo chiamerà il metodo definito sotto
+
+    def _initUI(self):
+        # TUTTA LA LOGICA PER CREARE I WIDGET DI QUESTO TAB VA QUI:
+        layout = QVBoxLayout(self) # Imposta il layout principale per questo widget
+
+        # Esempio (basato sulla struttura precedente del suo widget):
+        form_group = QGroupBox("Dati Nuova Proprietà")
+        form_layout = QGridLayout() # O QFormLayout
+
         # Comune
-        comune_label = QLabel("Comune:")
+        comune_label = QLabel("Comune (*):")
+        self.comune_display = QLabel("Nessun comune selezionato.")
         self.comune_button = QPushButton("Seleziona Comune...")
-        self.comune_button.clicked.connect(self.select_comune)
-        self.comune_id = None
-        self.comune_display = QLabel("Nessun comune selezionato")
-        
+        self.comune_button.clicked.connect(self.select_comune) # Assumendo che select_comune esista
         form_layout.addWidget(comune_label, 0, 0)
-        form_layout.addWidget(self.comune_button, 0, 1)
-        form_layout.addWidget(self.comune_display, 0, 2)
-        
+        form_layout.addWidget(self.comune_display, 0, 1)
+        form_layout.addWidget(self.comune_button, 0, 2)
+
         # Numero partita
-        num_partita_label = QLabel("Numero Partita:")
+        num_partita_label = QLabel("Numero Partita (*):")
         self.num_partita_edit = QSpinBox()
-        self.num_partita_edit.setMinimum(1)
-        self.num_partita_edit.setMaximum(9999)
-        
+        self.num_partita_edit.setMinimum(1); self.num_partita_edit.setMaximum(9999999)
         form_layout.addWidget(num_partita_label, 1, 0)
-        form_layout.addWidget(self.num_partita_edit, 1, 1)
-        
+        form_layout.addWidget(self.num_partita_edit, 1, 1, 1, 2) # Span
+
         # Data impianto
-        data_label = QLabel("Data Impianto:")
-        self.data_edit = QDateEdit()
-        self.data_edit.setCalendarPopup(True)
+        data_label = QLabel("Data Impianto (*):")
+        self.data_edit = QDateEdit(calendarPopup=True)
         self.data_edit.setDate(QDate.currentDate())
-        
+        self.data_edit.setDisplayFormat("yyyy-MM-dd")
         form_layout.addWidget(data_label, 2, 0)
-        form_layout.addWidget(self.data_edit, 2, 1)
-        
+        form_layout.addWidget(self.data_edit, 2, 1, 1, 2) # Span
+
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
-        
-        # Possessori
-        possessori_group = QGroupBox("Possessori")
-        possessori_layout = QVBoxLayout()
-        
+
+        # Sezione Possessori
+        possessori_group = QGroupBox("Possessori Associati")
+        possessori_layout = QVBoxLayout(possessori_group)
         self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels(["Nome Completo", "Cognome e Nome", "Paternità", "Quota"])
-        self.possessori_table.horizontalHeader().setStretchLastSection(True)
-        
-        self.add_possessore_button = QPushButton("Aggiungi Possessore")
-        self.add_possessore_button.clicked.connect(self.add_possessore)
-        self.remove_possessore_button = QPushButton("Rimuovi Possessore Selezionato")
-        self.remove_possessore_button.clicked.connect(self.remove_possessore)
-        
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.add_possessore_button)
-        button_layout.addWidget(self.remove_possessore_button)
-        
+        # ... (configurazione possessori_table) ...
+        self.possessori_table.setColumnCount(4) # Esempio: ID, Nome, Titolo, Quota
+        self.possessori_table.setHorizontalHeaderLabels(["ID Poss.", "Nome Completo", "Titolo", "Quota"])
         possessori_layout.addWidget(self.possessori_table)
-        possessori_layout.addLayout(button_layout)
-        
-        possessori_group.setLayout(possessori_layout)
+        btn_add_poss = QPushButton("Aggiungi Possessore"); btn_add_poss.clicked.connect(self.add_possessore)
+        btn_rem_poss = QPushButton("Rimuovi Possessore"); btn_rem_poss.clicked.connect(self.remove_possessore)
+        h_layout_poss = QHBoxLayout(); h_layout_poss.addWidget(btn_add_poss); h_layout_poss.addWidget(btn_rem_poss); h_layout_poss.addStretch()
+        possessori_layout.addLayout(h_layout_poss)
         layout.addWidget(possessori_group)
-        
-        # Immobili
-        immobili_group = QGroupBox("Immobili")
-        immobili_layout = QVBoxLayout()
-        
+
+        # Sezione Immobili
+        immobili_group = QGroupBox("Immobili Associati")
+        immobili_layout = QVBoxLayout(immobili_group)
         self.immobili_table = QTableWidget()
-        self.immobili_table.setColumnCount(5)
-        self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
-        self.immobili_table.horizontalHeader().setStretchLastSection(True)
-        
-        self.add_immobile_button = QPushButton("Aggiungi Immobile")
-        self.add_immobile_button.clicked.connect(self.add_immobile)
-        self.remove_immobile_button = QPushButton("Rimuovi Immobile Selezionato")
-        self.remove_immobile_button.clicked.connect(self.remove_immobile)
-        
-        button_immobili_layout = QHBoxLayout()
-        button_immobili_layout.addWidget(self.add_immobile_button)
-        button_immobili_layout.addWidget(self.remove_immobile_button)
-        
+        # ... (configurazione immobili_table) ...
+        self.immobili_table.setColumnCount(5) # Esempio
+        self.immobili_table.setHorizontalHeaderLabels(["ID", "Natura", "Località", "Class.", "Consist."])
         immobili_layout.addWidget(self.immobili_table)
-        immobili_layout.addLayout(button_immobili_layout)
-        
-        immobili_group.setLayout(immobili_layout)
+        btn_add_imm = QPushButton("Aggiungi Immobile"); btn_add_imm.clicked.connect(self.add_immobile)
+        btn_rem_imm = QPushButton("Rimuovi Immobile"); btn_rem_imm.clicked.connect(self.remove_immobile)
+        h_layout_imm = QHBoxLayout(); h_layout_imm.addWidget(btn_add_imm); h_layout_imm.addWidget(btn_rem_imm); h_layout_imm.addStretch()
+        immobili_layout.addLayout(h_layout_imm)
         layout.addWidget(immobili_group)
-        
-        # Pulsante registrazione
-        self.register_button = QPushButton("Registra Nuova Proprietà")
-        self.register_button.clicked.connect(self.register_property)
-        layout.addWidget(self.register_button)
-        
-        self.setLayout(layout)
-        
-        # Array per memorizzare i dati
-        self.possessori_data = []
-        self.immobili_data = []
+
+        # Pulsante Registra Proprietà
+        self.btn_registra_proprieta = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), " Registra Nuova Proprietà")
+        self.btn_registra_proprieta.clicked.connect(self._salva_proprieta) # Collegato al metodo corretto
+        layout.addWidget(self.btn_registra_proprieta)
+
+        layout.addStretch(1)
+        # Non serve self.setLayout(layout) qui se il layout è già stato passato a QWidget nel costruttore del layout
     
     def select_comune(self):
         """Apre il selettore di comuni."""
@@ -4350,67 +4337,108 @@ class RegistrazioneProprietaWidget(QWidget):
     
     # All'interno della classe RegistrazioneProprietaWidget in prova.py
 
-    def register_property(self):
-        """Registra la nuova proprietà nel database."""
-        # Validazione input (come da suo codice esistente)
+    def _salva_proprieta(self):
+        gui_logger.info("Avvio registrazione nuova proprietà...")
         if not self.comune_id:
-            QMessageBox.warning(self, "Errore", "Seleziona un comune.")
-            return
-        if not self.possessori_data: # Assicurati che self.possessori_data sia una lista di dizionari corretta
-            QMessageBox.warning(self, "Errore", "Aggiungi almeno un possessore.")
-            return
-        if not self.immobili_data: # Assicurati che self.immobili_data sia una lista di dizionari corretta
-            QMessageBox.warning(self, "Errore", "Aggiungi almeno un immobile.")
-            return
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune."); return
+        if not self.possessori_data:
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un possessore."); return
+        if not self.immobili_data:
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un immobile."); return
         
         numero_partita = self.num_partita_edit.value()
-        data_impianto = self.data_edit.date().toPyDate()
+        data_impianto_dt = self.data_edit.date().toPyDate() # Converte QDate in datetime.date
         
-        try:
-            # Il metodo db_manager.registra_nuova_proprieta ora restituisce True
-            # o solleva un'eccezione specifica (DBUniqueConstraintError, DBDataError, DBMError).
-            success = self.db_manager.registra_nuova_proprieta(
-                self.comune_id,
-                numero_partita,
-                data_impianto,
-                self.possessori_data, 
-                self.immobili_data
-            )
-            
-            if success: # Se non ci sono state eccezioni e il metodo db_manager ha restituito True
-                QMessageBox.information(self, "Successo", "Nuova proprietà registrata con successo.")
-                # Pulisce i campi dell'interfaccia
-                self.comune_id = None
-                self.comune_display.setText("Nessun comune selezionato")
-                self.num_partita_edit.setValue(1) # O il suo valore di default
-                self.data_edit.setDate(QDate.currentDate())
-                self.possessori_data = [] # Resetta le liste interne
-                self.immobili_data = []
-                self.update_possessori_table() # Aggiorna le tabelle nella UI
-                self.update_immobili_table()
-            # else: Questo blocco non è più necessario se il fallimento è segnalato solo da eccezioni.
-            # QMessageBox.critical(self, "Errore", "Registrazione della proprietà fallita (DB manager ha restituito False).")
+        # Prepara i dati JSON per possessori e immobili
+        # La procedura SQL si aspetta JSONB, quindi serializziamo qui.
+        # Assicurati che json_serial gestisca le date se presenti nei dati
+        def json_serial(obj):
+            if isinstance(obj, (datetime, date)): return obj.isoformat()
+            raise TypeError(f"Tipo {type(obj)} non serializzabile JSON")
 
-        # Gestione delle eccezioni specifiche che registra_nuova_proprieta potrebbe sollevare
-        except DBUniqueConstraintError as uve:
-            gui_logger.error(f"Errore di unicità registrando la proprietà: {uve.message}", exc_info=True)
-            QMessageBox.critical(self, "Errore di Unicità", 
-                                 f"Impossibile registrare la proprietà:\n{uve.message}\n"
-                                 "Una partita con lo stesso numero potrebbe già esistere per questo comune, o altri dati sono duplicati.")
-        except DBDataError as dde: # Per errori nei dati JSON o altri dati non validi passati alla procedura
-            gui_logger.error(f"Errore nei dati forniti per la registrazione della proprietà: {dde.message}", exc_info=True)
-            QMessageBox.warning(self, "Dati Non Validi", 
-                                f"Impossibile registrare la proprietà:\n{dde.message}")
-        except DBMError as dbe: # Per altri errori generici provenienti dal DBManager o dal database
-            gui_logger.error(f"Errore database durante la registrazione della proprietà: {dbe.message}", exc_info=True)
-            QMessageBox.critical(self, "Errore Database", 
-                                 f"Si è verificato un errore durante la registrazione nel database:\n{dbe.message}")
-        except Exception as e: # Catch-all per altri errori Python imprevisti
-            gui_logger.critical(f"Errore critico e imprevisto durante la registrazione della proprietà: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico Imprevisto", 
-                                 f"Si è verificato un errore di sistema imprevisto durante la registrazione:\n"
-                                 f"{type(e).__name__}: {e}\n"
-                                 "Controllare i log dell'applicazione per il traceback completo.")
+        try:
+            possessori_json_str = json.dumps(self.possessori_data, default=json_serial)
+            immobili_json_str = json.dumps(self.immobili_data, default=json_serial)
+        except TypeError as te:
+            gui_logger.error(f"Errore serializzazione JSON per nuova proprietà: {te}")
+            QMessageBox.critical(self, "Errore Dati", f"Errore nella preparazione dei dati per il database: {te}")
+            return
+
+        # Assumendo che il suo metodo in DBManager sia stato aggiornato e si chiami,
+        # ad esempio, registra_nuova_proprieta_completa e accetti JSON.
+        # E che restituisca l'ID della nuova partita o sollevi eccezione.
+        try:
+            # Chiamata aggiornata con i 5 argomenti che la procedura SQL catasto.registra_nuova_proprieta si aspetta
+            nuova_partita_id = self.db_manager.registra_nuova_proprieta(
+                comune_id=self.comune_id,
+                numero_partita=numero_partita,
+                data_impianto=data_impianto_dt,
+                possessori_json_str=possessori_json_str,
+                immobili_json_str=immobili_json_str
+            )
+
+            if nuova_partita_id is not None and self.comune_id is not None: # Controlla anche comune_id
+                msg_success = f"Nuova proprietà (Partita N.{numero_partita}, ID: {nuova_partita_id}) registrata con successo per il comune ID {self.comune_id}."
+                gui_logger.info(msg_success)
+                
+                reply = QMessageBox.question(self, "Registrazione Completata", 
+                                             f"{msg_success}\n\nVuoi procedere con operazioni collegate (es. Duplicazione, Trasferimento Immobili) su questa o un'altra partita?",
+                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                
+                if reply == QMessageBox.Yes:
+                    # Emetti il segnale con l'ID della nuova partita e il suo comune_id
+                    self.partita_creata_per_operazioni_collegate.emit(nuova_partita_id, self.comune_id) # Assicurati che self.comune_id sia corretto
+                
+                self._pulisci_form_registrazione()
+            # else: Se nuova_partita_id è None, il DBManager dovrebbe aver sollevato un'eccezione
+            # che viene catturata sotto.
+
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e_db:
+            gui_logger.error(f"Errore DB registrazione proprietà: {e_db}")
+            QMessageBox.critical(self, "Errore Database", str(e_db))
+        except Exception as e_gen:
+            gui_logger.critical(f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
+    def _pulisci_form_registrazione(self):
+        """Pulisce tutti i campi del form di registrazione proprietà."""
+        gui_logger.info("Pulizia campi del form Registrazione Proprietà.")
+        
+        # Reset Comune selezionato
+        self.comune_id = None
+        self.comune_display_name = None # Se usa una variabile per il nome del comune
+        if hasattr(self, 'comune_display') and isinstance(self.comune_display, QLabel):
+            self.comune_display.setText("Nessun comune selezionato")
+        
+        # Reset Numero Partita
+        if hasattr(self, 'num_partita_edit') and isinstance(self.num_partita_edit, QSpinBox):
+            self.num_partita_edit.setValue(self.num_partita_edit.minimum()) # O un valore di default sensato come 1
+
+        # Reset Data Impianto
+        if hasattr(self, 'data_edit') and isinstance(self.data_edit, QDateEdit):
+            self.data_edit.setDate(QDate.currentDate())
+
+        # Reset liste dati interni
+        self.possessori_data = []
+        self.immobili_data = []
+
+        # Aggiorna/Pulisci le tabelle UI dei possessori e immobili (se le ha)
+        if hasattr(self, 'update_possessori_table'): # Metodo che popola/pulisce la QTableWidget dei possessori
+            self.update_possessori_table() 
+        elif hasattr(self, 'possessori_table') and isinstance(self.possessori_table, QTableWidget): # Alternativa se non c'è update_xxx
+            self.possessori_table.setRowCount(0)
+
+        if hasattr(self, 'update_immobili_table'): # Metodo che popola/pulisce la QTableWidget degli immobili
+            self.update_immobili_table()
+        elif hasattr(self, 'immobili_table') and isinstance(self.immobili_table, QTableWidget):
+            self.immobili_table.setRowCount(0)
+            
+        # Imposta il focus su un campo iniziale, ad esempio il pulsante per selezionare il comune
+        if hasattr(self, 'comune_button') and isinstance(self.comune_button, QPushButton):
+            self.comune_button.setFocus()
+        elif hasattr(self, 'num_partita_edit'): # O il campo numero partita
+            self.num_partita_edit.setFocus()
+        
+        gui_logger.info("Campi form Registrazione Proprietà puliti.")
 
 # --- Dialog per la Selezione dei Possessori ---
 class PossessoreSelectionDialog(QDialog):
@@ -8237,7 +8265,135 @@ class DBConfigDialog(QDialog): # Definizione del Dialogo (come fornito precedent
             "schema": self.schema_edit.text().strip() or "catasto",
             # "type" è implicito da host localhost vs altro
         }
+# In prova.py, dentro la classe RegistraConsultazioneWidget
 
+class RegistraConsultazioneWidget(QWidget):
+    def __init__(self, db_manager: 'CatastoDBManager',
+                 current_user_info: Optional[Dict[str, Any]],
+                 parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.current_user_info = current_user_info
+
+        self._initUI()
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        form_group = QGroupBox("Registra Nuova Consultazione")
+        form_layout = QFormLayout(form_group)
+        form_layout.setSpacing(10)
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        self.data_consultazione_edit = QDateEdit(calendarPopup=True) # Nome UI: data_consultazione_edit
+        self.data_consultazione_edit.setDate(QDate.currentDate())
+        self.data_consultazione_edit.setDisplayFormat("yyyy-MM-dd")
+        form_layout.addRow("Data Consultazione (*):", self.data_consultazione_edit) # Colonna DB: data
+
+        self.richiedente_edit = QLineEdit()
+        self.richiedente_edit.setPlaceholderText("Nome e Cognome del richiedente")
+        form_layout.addRow("Richiedente (*):", self.richiedente_edit) # Colonna DB: richiedente
+
+        self.doc_id_edit = QLineEdit()
+        self.doc_id_edit.setPlaceholderText("Es. CI N. XXXXXX, Patente N. YYYYYY")
+        form_layout.addRow("Documento Identità (opz.):", self.doc_id_edit) # Colonna DB: documento_identita
+
+        self.motivazione_edit = QTextEdit()
+        self.motivazione_edit.setPlaceholderText("Motivazione della richiesta di consultazione")
+        self.motivazione_edit.setFixedHeight(80)
+        form_layout.addRow("Motivazione (opz.):", self.motivazione_edit) # Colonna DB: motivazione
+
+        self.materiale_edit = QTextEdit()
+        self.materiale_edit.setPlaceholderText("Descrizione dettagliata del materiale consultato (es. Partita N. 123 Comune X, Mappa Foglio Y)")
+        self.materiale_edit.setFixedHeight(120)
+        form_layout.addRow("Materiale Consultato (*):", self.materiale_edit) # Colonna DB: materiale_consultato
+
+        self.funzionario_edit = QLineEdit() # Modificato da QLabel a QLineEdit per permettere modifica
+        if self.current_user_info and self.current_user_info.get('nome_completo'):
+            self.funzionario_edit.setText(self.current_user_info.get('nome_completo'))
+        else:
+            self.funzionario_edit.setPlaceholderText("Nome del funzionario")
+        form_layout.addRow("Funzionario Autorizzante (opz.):", self.funzionario_edit) # Colonna DB: funzionario_autorizzante
+
+        # Rimuoviamo note_interne dato che non c'è nella tabella
+        # self.note_interne_edit = QTextEdit() ...
+        # form_layout.addRow("Note Interne (opz.):", self.note_interne_edit)
+
+        main_layout.addWidget(form_group)
+
+        button_layout = QHBoxLayout()
+        self.btn_registra_consultazione = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), " Registra Consultazione")
+        self.btn_registra_consultazione.clicked.connect(self._salva_consultazione)
+        self.btn_pulisci_campi = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogDiscardButton), " Pulisci Campi")
+        self.btn_pulisci_campi.clicked.connect(self._pulisci_campi)
+        button_layout.addStretch()
+        button_layout.addWidget(self.btn_registra_consultazione)
+        button_layout.addWidget(self.btn_pulisci_campi)
+        main_layout.addLayout(button_layout)
+
+        main_layout.addStretch(1)
+        self.setLayout(main_layout)
+        self._pulisci_campi() # Pulisce e imposta focus iniziale
+    def _pulisci_form_registrazione(self):
+        """Pulisce tutti i campi del form di registrazione proprietà."""
+        self.comune_id = None
+        self.comune_display.setText("Nessun comune selezionato")
+        self.num_partita_edit.setValue(1) # O il suo valore di default
+        self.data_edit.setDate(QDate.currentDate())
+        self.possessori_data = []
+        self.immobili_data = []
+        self.update_possessori_table() # Assumendo che questi metodi aggiornino le tabelle UI
+        self.update_immobili_table()
+        self.num_partita_edit.setFocus() # Focus sul primo campo utile
+    def _pulisci_campi(self):
+        self.data_consultazione_edit.setDate(QDate.currentDate())
+        self.richiedente_edit.clear()
+        self.doc_id_edit.clear()
+        self.motivazione_edit.clear()
+        self.materiale_edit.clear()
+        
+        # Precompila o pulisci funzionario_edit
+        if self.current_user_info and self.current_user_info.get('nome_completo'):
+            self.funzionario_edit.setText(self.current_user_info.get('nome_completo'))
+        else:
+            self.funzionario_edit.clear()
+        
+        self.richiedente_edit.setFocus()
+
+    def _salva_consultazione(self):
+        data_cons = self.data_consultazione_edit.date().toPyDate() # Nome colonna DB: 'data'
+        richiedente = self.richiedente_edit.text().strip()
+        materiale = self.materiale_edit.toPlainText().strip()
+        
+        doc_id = self.doc_id_edit.text().strip() or None
+        motivazione = self.motivazione_edit.toPlainText().strip() or None
+        funzionario_testo = self.funzionario_edit.text().strip() or None # Testo libero
+
+        # Validazione UI
+        if not richiedente:
+            QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Richiedente' è obbligatorio."); self.richiedente_edit.setFocus(); return
+        if not materiale: # Anche se nullabile nel DB, lo rendiamo obbligatorio nella UI
+            QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Materiale Consultato' è obbligatorio."); self.materiale_edit.setFocus(); return
+
+        try:
+            consultazione_id = self.db_manager.registra_nuova_consultazione(
+                data_consultazione=data_cons,
+                richiedente=richiedente,
+                materiale_consultato=materiale,
+                funzionario_autorizzante=funzionario_testo, # Passa il testo
+                documento_identita=doc_id,
+                motivazione=motivazione
+                # note_interne non c'è più
+            )
+            if consultazione_id is not None:
+                QMessageBox.information(self, "Successo", f"Consultazione registrata con successo (ID: {consultazione_id}).")
+                self._pulisci_campi()
+            # else: errore gestito da eccezioni
+        except (DBDataError, DBMError) as e:
+            gui_logger.error(f"Errore durante la registrazione della consultazione: {str(e)}", exc_info=False)
+            QMessageBox.critical(self, "Errore Registrazione", str(e))
+        except Exception as e_gen:
+            gui_logger.critical(f"Errore imprevisto registrazione consultazione: {e_gen}", exc_info=True)
+            # # # QMessageBox.critical(self, "Errore Imprevisto", f"Errore di sistema: {e_gen}")
 
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
@@ -8444,9 +8600,34 @@ class CatastoMainWindow(QMainWindow):
         # Aggiungi gli altri sotto-tab di inserimento come prima
         self.inserimento_sub_tabs.addTab(InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs), "Nuovo Possessore")
         self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località")
-        self.inserimento_sub_tabs.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs), "Registra Proprietà")
-        self.inserimento_sub_tabs.addTab(OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs), "Operazioni su Partita")
-       
+        self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località")
+        self.inserimento_sub_tabs.addTab(RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs), "Registrazione Proprietà")
+        self.inserimento_sub_tabs.addTab(OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs), "Operazioni Partita")
+        registrazione_widget_instance = None
+        operazioni_widget_instance = None
+
+        # Se i widget sono già aggiunti a inserimento_sub_tabs
+        for i in range(self.inserimento_sub_tabs.count()):
+            widget = self.inserimento_sub_tabs.widget(i)
+            if isinstance(widget, RegistrazioneProprietaWidget):
+                registrazione_widget_instance = widget
+            elif isinstance(widget, OperazioniPartitaWidget):
+                operazioni_widget_instance = widget
+        
+        if registrazione_widget_instance and operazioni_widget_instance:
+            registrazione_widget_instance.partita_creata_per_operazioni_collegate.connect(
+                # Usa una lambda per passare l'istanza corretta di OperazioniPartitaWidget
+                lambda partita_id, comune_id: self._handle_partita_creata_per_operazioni(
+                    partita_id, comune_id, operazioni_widget_instance 
+                )
+            )
+            gui_logger.info("Segnale 'partita_creata_per_operazioni_collegate' connesso.")
+        else:
+            gui_logger.error("Impossibile connettere il segnale: RegistrazioneProprietaWidget o OperazioniPartitaWidget non trovati nei sotto-tab di inserimento.")
+        self.inserimento_sub_tabs.addTab(
+            RegistraConsultazioneWidget(self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs), 
+            "Registra Consultazione"
+        )
         layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
         self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
 
@@ -8567,6 +8748,46 @@ class CatastoMainWindow(QMainWindow):
         # Logout button
         if hasattr(self, 'logout_button'):
             self.logout_button.setEnabled(not is_admin_offline and bool(self.logged_in_user_id))
+    def _handle_partita_creata_per_operazioni(self, nuova_partita_id: int, comune_id_partita: int, 
+                                             target_operazioni_widget: OperazioniPartitaWidget):
+        """
+        Slot per gestire la creazione di una nuova partita e il passaggio al tab
+        delle operazioni collegate, pre-compilando l'ID.
+        """
+        gui_logger.info(f"Nuova Partita ID {nuova_partita_id} (Comune ID {comune_id_partita}) creata. Passaggio al tab Operazioni.")
+        
+        # Trova l'indice del tab principale "Inserimento e Gestione"
+        idx_tab_inserimento = -1
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == "Inserimento e Gestione":
+                idx_tab_inserimento = i
+                break
+        
+        if idx_tab_inserimento != -1:
+            self.tabs.setCurrentIndex(idx_tab_inserimento) # Vai al tab principale "Inserimento e Gestione"
+            
+            # Ora, all'interno di questo tab, trova il sotto-tab "Operazioni su Partita"
+            # e imposta il suo indice corrente.
+            # Assumiamo che self.inserimento_sub_tabs sia l'attributo corretto che contiene OperazioniPartitaWidget.
+            if hasattr(self, 'inserimento_sub_tabs'):
+                idx_sotto_tab_operazioni = -1
+                for i in range(self.inserimento_sub_tabs.count()):
+                    # Controlla se il widget del sotto-tab è l'istanza che ci interessa
+                    if self.inserimento_sub_tabs.widget(i) == target_operazioni_widget:
+                        idx_sotto_tab_operazioni = i
+                        break
+                
+                if idx_sotto_tab_operazioni != -1:
+                    self.inserimento_sub_tabs.setCurrentIndex(idx_sotto_tab_operazioni)
+                    # Chiama il metodo su OperazioniPartitaWidget per impostare l'ID
+                    target_operazioni_widget.seleziona_e_carica_partita_sorgente(nuova_partita_id)
+                else:
+                    gui_logger.error("Impossibile trovare il sotto-tab 'Operazioni su Partita' per il cambio automatico.")
+            else:
+                gui_logger.error("'self.inserimento_sub_tabs' non trovato in CatastoMainWindow.")
+        else:
+            gui_logger.error("Impossibile trovare il tab principale 'Inserimento e Gestione'.")
+
     def update_ui_based_on_role(self):
         gui_logger.info(">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         ruolo = None
@@ -8755,142 +8976,208 @@ class CatastoMainWindow(QMainWindow):
 
 # --- Fine Classe CatastoMainWindow ---
 
+# All'inizio del file prova.py, assicurati che queste importazioni ci siano:
+# import sys, os, logging, uuid
+# from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog, QLineEdit, QMainWindow
+# from PyQt5.QtCore import QSettings, Qt, QDateTime # Aggiunto Qt, QDateTime se non già presenti
+# (DBConfigDialog, CatastoMainWindow, CatastoDBManager, MODERN_STYLESHEET, SETTINGS_... costanti devono essere definite)
+
 def run_gui_app():
     app = QApplication(sys.argv)
     QApplication.setOrganizationName("ArchivioDiStatoSavona")
     QApplication.setApplicationName("CatastoStoricoApp")
-    
-    app.setStyleSheet(MODERN_STYLESHEET) # Applica lo stylesheet globale
+    app.setStyleSheet(MODERN_STYLESHEET)
 
     if not FPDF_AVAILABLE:
         QMessageBox.warning(None, "Avviso Dipendenza Mancante",
-                             "La libreria FPDF non è installata.\n"
-                             "L'esportazione dei report in formato PDF non sarà disponibile.\n"
-                             "Puoi installarla con: pip install fpdf2")
+                             "La libreria FPDF non è installata.\nL'esportazione PDF non sarà disponibile.")
 
     settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 
                          "ArchivioDiStatoSavona", "CatastoStoricoApp")
     
-    active_db_config: Optional[Dict[str, Any]] = None
+    db_manager_gui = None # Sarà istanziato dopo aver ottenuto config e password
+    main_window_instance = CatastoMainWindow() # Crea la finestra principale subito
+                                             # per usarla come parent dei dialoghi se necessario.
 
-    # Prova a caricare la configurazione esistente
-    if settings.contains(SETTINGS_DB_NAME) and settings.value(SETTINGS_DB_NAME, type=str).strip(): # Controlla che il nome DB sia valido
-        gui_logger.info(f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
-        active_db_config = {
-            "type": settings.value(SETTINGS_DB_TYPE, "Locale (localhost)"), 
-            "host": settings.value(SETTINGS_DB_HOST, "localhost"),
-            "port": settings.value(SETTINGS_DB_PORT, 5432, type=int), 
-            "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico"),
-            "user": settings.value(SETTINGS_DB_USER, "postgres"),
-            "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto")
-        }
-    
-    if active_db_config is None: 
-        gui_logger.info("Nessuna configurazione DB valida trovata. Apertura dialogo di configurazione iniziale.")
-        config_dialog = DBConfigDialog(initial_config=None)
-        if config_dialog.exec_() == QDialog.Accepted:
-            active_db_config = config_dialog.get_config_values()
-            if not active_db_config or not active_db_config.get("dbname"):
-                QMessageBox.critical(None, "Errore Critico", "Configurazione DB non valida. L'app si chiuderà.")
-                sys.exit(1)
+    retry_setup = True
+    active_db_config = None
+
+    while retry_setup:
+        retry_setup = False # Assume che questa iterazione sia l'ultima a meno di errori specifici
+        active_db_config = None # Resetta per ogni tentativo
+
+        # 1. Carica o chiedi la configurazione del database (host, porta, dbname, user, schema)
+        if settings.contains(SETTINGS_DB_NAME) and settings.value(SETTINGS_DB_NAME, type=str).strip():
+            gui_logger.info(f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
+            active_db_config = {
+                "type": settings.value(SETTINGS_DB_TYPE, "Locale (localhost)"),
+                "host": settings.value(SETTINGS_DB_HOST, "localhost"),
+                "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
+                "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico"),
+                "user": settings.value(SETTINGS_DB_USER, "postgres"),
+                "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto")
+            }
         else:
-            gui_logger.info("Configurazione database iniziale annullata. Uscita.")
-            sys.exit(0)
-    
-    gui_logger.info(f"Configurazione DB attiva: Host={active_db_config['host']}, Port={active_db_config['port']}, DBName={active_db_config['dbname']}, User={active_db_config['user']}")
-
-    db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
-                                           f"Password per utente '{active_db_config['user']}'\nDatabase: '{active_db_config['dbname']}'\nHost: '{active_db_config['host']}:{active_db_config['port']}'",
-                                           QLineEdit.Password)
-    if not ok: 
-        gui_logger.warning("Autenticazione database annullata. Uscita."); sys.exit(0)
-    # Non è un errore se la password è vuota, il DB potrebbe permetterlo (ma non consigliato)
-
-    db_manager_gui = CatastoDBManager(
-        dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
-        host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
-        application_name="CatastoAppGUI_Main", log_file="catasto_main_db.log", log_level=logging.DEBUG
-    )
-
-    main_window_instance = CatastoMainWindow()
-    main_window_instance.db_manager = db_manager_gui
-    
-    # Credenziali per check_database_exists e create_target_database.
-    # L'utente fornito per l'app DEVE avere privilegi di connessione a 'postgres' e di creazione DB.
-    # Se non li ha, queste operazioni specifiche falliranno nel tab Amministrazione.
-    db_admin_user_for_check = active_db_config["user"] 
-    db_admin_password_for_check = db_password 
-    target_dbname_to_check = active_db_config["dbname"]
-
-    # Controlla se il database target esiste
-    db_exists = db_manager_gui.check_database_exists(
-        target_dbname_to_check, db_admin_user_for_check, db_admin_password_for_check
-    )
-    main_window_instance.pool_initialized_successfully = False
-
-    if db_exists:
-        gui_logger.info(f"Database '{target_dbname_to_check}' rilevato. Tentativo di inizializzazione pool...")
-        if db_manager_gui.initialize_main_pool(): # Tenta di inizializzare il pool per il DB target
-            main_window_instance.pool_initialized_successfully = True
-            if hasattr(main_window_instance, 'db_status_label'):
-                 main_window_instance.db_status_label.setText(f"Database: Connesso ({target_dbname_to_check})")
-        else: # Pool fallito nonostante il DB esista
-            QMessageBox.warning(None, "Errore Connessione Pool",
-                                 f"Il DB '{target_dbname_to_check}' esiste ma il pool non è stato inizializzato.\n"
-                                 "Verificare i log e la configurazione del server PostgreSQL.\n"
-                                 "L'applicazione si avvierà in modalità limitata.")
-            if hasattr(main_window_instance, 'db_status_label'):
-                 main_window_instance.db_status_label.setText(f"Database: Errore Pool ({target_dbname_to_check})")
-    else: # DB non esiste
-        QMessageBox.information(None, "Database Non Esistente",
-                             f"Il DB '{target_dbname_to_check}' non esiste.\nAvvio in modalità configurazione limitata.\n"
-                             "Usare 'Sistema' -> 'Amministrazione DB' -> 'Crea Database'.")
-        if hasattr(main_window_instance, 'db_status_label'):
-             main_window_instance.db_status_label.setText(f"Database: Non Esistente ({target_dbname_to_check})")
-
-    # --- Gestione Login o Modalità Limitata ---
-    login_success = False
-    if main_window_instance.pool_initialized_successfully:
-        while not login_success: 
-            login_dialog = LoginDialog(db_manager_gui)
-            if login_dialog.exec_() == QDialog.Accepted:
-                if login_dialog.logged_in_user_id is not None and login_dialog.logged_in_user_info and login_dialog.current_session_id:
-                    main_window_instance.perform_initial_setup(
-                        db_manager_gui, login_dialog.logged_in_user_id,
-                        login_dialog.logged_in_user_info, login_dialog.current_session_id
-                    )
-                    login_success = True
-                else:
-                    QMessageBox.critical(None, "Errore Login Critico", "Dati di login non validi."); sys.exit(1)
-            else: 
-                gui_logger.info("Login annullato. Uscita."); 
-                if db_manager_gui: db_manager_gui.close_pool(); 
+            gui_logger.info("Nessuna configurazione DB valida. Apertura dialogo di configurazione iniziale.")
+            config_dialog = DBConfigDialog(parent=None, initial_config=None) # Passa None come parent
+            if config_dialog.exec_() == QDialog.Accepted:
+                active_db_config = config_dialog.get_config_values()
+                if not active_db_config or not active_db_config.get("dbname"):
+                    QMessageBox.critical(None, "Errore Critico", "Configurazione DB non valida. L'app si chiuderà.")
+                    sys.exit(1)
+            else:
+                gui_logger.info("Configurazione DB iniziale annullata. Uscita.")
                 sys.exit(0)
-    else: # Modalità limitata
-        gui_logger.info("Avvio in modalità limitata (setup database).")
-        main_window_instance.logged_in_user_info = {
-            'id': 0, 'username': 'admin_setup', 
-            'nome_completo': 'Amministratore Setup DB', 'ruolo': 'admin_offline'
-        }
-        main_window_instance.logged_in_user_id = 0
-        main_window_instance.current_session_id = str(uuid.uuid4())
         
-        main_window_instance.perform_initial_setup(
-             db_manager_gui, main_window_instance.logged_in_user_id,
-             main_window_instance.logged_in_user_info, main_window_instance.current_session_id
+        gui_logger.info(f"Configurazione DB corrente: {active_db_config}")
+
+        # 2. Chiedi la password del database
+        db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
+                                               f"Password per utente '{active_db_config['user']}'\nDB: '{active_db_config['dbname']}'\nHost: '{active_db_config['host']}:{active_db_config['port']}'",
+                                               QLineEdit.Password)
+        if not ok: # Utente ha premuto Annulla o chiuso il dialogo password
+            gui_logger.info("Inserimento password annullato. Uscita.")
+            sys.exit(0)
+        # La password vuota è permessa, il DB deciderà se è valida.
+
+        # 3. Istanzia DBManager
+        if db_manager_gui and db_manager_gui.pool: # Chiudi il pool precedente se stiamo ritentando
+            db_manager_gui.close_pool()
+            
+        db_manager_gui = CatastoDBManager(
+            dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
+            host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
+            application_name=f"CatastoAppGUI_{active_db_config['dbname']}", # Nome pool più specifico
+            log_file="catasto_main_db.log", log_level=logging.DEBUG
         )
-        # update_ui_based_on_role è chiamato dentro perform_initial_setup
-    
-    if main_window_instance:
+        main_window_instance.db_manager = db_manager_gui
+        main_window_instance.pool_initialized_successfully = False # Resetta per ogni tentativo
+
+        # 4. Tentativo di inizializzare il pool principale e gestire errori
+        if db_manager_gui.initialize_main_pool(): # Tenta di connettersi al DB target
+            main_window_instance.pool_initialized_successfully = True
+            gui_logger.info(f"Pool per DB '{active_db_config['dbname']}' inizializzato con successo.")
+            if hasattr(main_window_instance, 'db_status_label'):
+                 main_window_instance.db_status_label.setText(f"Database: Connesso ({active_db_config['dbname']})")
+            # Procedi al login utente normale
+            login_success = False
+            while not login_success:
+                login_dialog = LoginDialog(db_manager_gui)
+                if login_dialog.exec_() == QDialog.Accepted:
+                    if login_dialog.logged_in_user_id is not None: # Controllo più robusto
+                        main_window_instance.perform_initial_setup(
+                            db_manager_gui, login_dialog.logged_in_user_id,
+                            login_dialog.logged_in_user_info, login_dialog.current_session_id
+                        )
+                        login_success = True
+                        retry_setup = False # Successo, esci dal loop di setup
+                    else:
+                        QMessageBox.critical(None, "Errore Login", "Dati di login interni non validi."); sys.exit(1) # Uscita critica
+                else: # Login annullato
+                    gui_logger.info("Login annullato. Uscita."); 
+                    if db_manager_gui: db_manager_gui.close_pool(); 
+                    sys.exit(0)
+        else: # Fallimento inizializzazione pool principale
+            db_target_name = active_db_config.get("dbname", "sconosciuto")
+            # Controlla se il DB *target* esiste sul server (se il server è raggiungibile)
+            # Le credenziali db_admin_... servono per connettersi a 'postgres' e controllare
+            # Qui usiamo le credenziali fornite per l'app; potrebbero non bastare se l'utente non è superuser.
+            # Il tab Amministrazione DB chiederà credenziali admin dedicate per creare il DB.
+            server_host = active_db_config.get("host")
+            db_exists_on_server = db_manager_gui.check_database_exists(db_target_name, active_db_config.get("user"), db_password)
+            
+            if not db_exists_on_server and server_host in ["localhost", "127.0.0.1"]: # E il server è locale o sembra raggiungibile
+                gui_logger.warning(f"DB '{db_target_name}' non trovato su server '{server_host}'. Avvio in modalità setup.")
+                QMessageBox.information(None, "Database Non Esistente",
+                                     f"Il DB '{db_target_name}' non esiste sul server.\n"
+                                     "Avvio in modalità configurazione limitata per permettere la creazione del database.")
+                
+                main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup'}
+                main_window_instance.logged_in_user_id = 0
+                main_window_instance.current_session_id = str(uuid.uuid4())
+                main_window_instance.perform_initial_setup(db_manager_gui, 0, main_window_instance.logged_in_user_info, main_window_instance.current_session_id)
+                retry_setup = False # Esci dal loop di setup, l'utente userà l'admin tab
+            else: # Altro errore di connessione (server remoto non raggiungibile, credenziali errate per DB target, ecc.)
+                gui_logger.error(f"Fallita inizializzazione pool per DB '{db_target_name}' su host '{server_host}'.")
+                reply = QMessageBox.warning(None, "Errore Connessione Database",
+                                     f"Impossibile connettersi al database configurato:\n"
+                                     f"DB: {db_target_name}\nHost: {server_host}\nUtente: {active_db_config['user']}\n\n"
+                                     "Possibili cause: server non raggiungibile, credenziali errate, database non accessibile.\n\n"
+                                     "Vuoi modificare la configurazione di connessione?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                if reply == QMessageBox.Yes:
+                    retry_setup = True # Riprova il ciclo di configurazione
+                    # Riapri DBConfigDialog pre-popolato con active_db_config
+                    config_dialog_retry = DBConfigDialog(parent=None, initial_config=active_db_config)
+                    if config_dialog_retry.exec_() == QDialog.Accepted:
+                        # Le nuove impostazioni sono già state salvate da DBConfigDialog in QSettings
+                        # Il loop while(retry_setup) rileggerà le impostazioni da QSettings
+                        pass
+                    else: # L'utente ha annullato la riconfigurazione
+                        gui_logger.info("Riconfigurazione database annullata. Uscita.")
+                        sys.exit(0)
+                else: # L'utente ha scelto di non riconfigurare -> esci
+                    gui_logger.info("L'utente ha scelto di non modificare la configurazione dopo errore. Uscita.")
+                    sys.exit(0)
+            
+            # Se siamo arrivati qui in modalità limitata o dopo un errore gestito senza retry
+            if not retry_setup and not main_window_instance.pool_initialized_successfully:
+                 if hasattr(main_window_instance, 'db_status_label'):
+                      main_window_instance.db_status_label.setText(f"Database: Non Connesso/Errore ({db_target_name})")
+                 if hasattr(main_window_instance, 'user_status_label'):
+                      if main_window_instance.logged_in_user_info and main_window_instance.logged_in_user_info.get('ruolo') == 'admin_offline':
+                          main_window_instance.user_status_label.setText("Utente: Modalità Setup (DB non pronto)")
+                      else: # Dovrebbe essere coperto dall'uscita precedente
+                          main_window_instance.user_status_label.setText("Utente: Non Autenticato")
+                 if hasattr(main_window_instance, 'logout_button'):
+                      main_window_instance.logout_button.setEnabled(False)
+
+    # --- Fine Loop while retry_setup ---
+
+    if main_window_instance and (main_window_instance.pool_initialized_successfully or \
+       (main_window_instance.logged_in_user_info and main_window_instance.logged_in_user_info.get('ruolo') == 'admin_offline')):
         gui_logger.info(">>> run_gui_app: Avvio loop eventi applicazione...")
         exit_code = app.exec_()
         gui_logger.info(f">>> run_gui_app: app.exec_() TERMINATO con codice: {exit_code}")
-        if db_manager_gui: db_manager_gui.close_pool()
-        sys.exit(exit_code)
     else:
-        gui_logger.critical("Fallimento creazione istanza finestra principale.")
-        if db_manager_gui: db_manager_gui.close_pool()
-        sys.exit(1)
+        gui_logger.critical("Avvio applicazione fallito: configurazione DB o login non completati.")
+        # Non chiudere il pool qui perché potrebbe essere già stato chiuso o mai aperto.
+        # Il db_manager_gui.close_pool() alla fine di run_gui_app gestirà la chiusura se il pool esiste.
+
+    if db_manager_gui: db_manager_gui.close_pool() # Assicura la chiusura se è stato istanziato
+    sys.exit(getattr(app, 'returnCode', 0) if 'app' in locals() and hasattr(app, 'returnCode') else 0)
+
+
+# Aggiungere un metodo per modificare la configurazione in CatastoMainWindow
+# Nel metodo create_menu_bar(self) di CatastoMainWindow:
+# ...
+# settings_menu = menu_bar.addMenu("&Impostazioni")
+# config_db_action = QAction("Configurazione &Database...", self)
+# config_db_action.triggered.connect(self._apri_dialogo_modifica_configurazione_db) # Nuovo slot
+# settings_menu.addAction(config_db_action)
+# ...
+
+# Nuovo slot in CatastoMainWindow:
+# def _apri_dialogo_modifica_configurazione_db(self):
+#     gui_logger.info("Apertura dialogo modifica configurazione DB da menu.")
+#     current_config_from_qsettings = {}
+#     settings = QSettings("ArchivioDiStatoSavona", "CatastoStoricoApp")
+#     if settings.contains(SETTINGS_DB_NAME):
+#         current_config_from_qsettings = {
+#             SETTINGS_DB_TYPE: settings.value(SETTINGS_DB_TYPE),
+#             SETTINGS_DB_HOST: settings.value(SETTINGS_DB_HOST),
+#             SETTINGS_DB_PORT: settings.value(SETTINGS_DB_PORT, type=int),
+#             SETTINGS_DB_NAME: settings.value(SETTINGS_DB_NAME),
+#             SETTINGS_DB_USER: settings.value(SETTINGS_DB_USER),
+#             SETTINGS_DB_SCHEMA: settings.value(SETTINGS_DB_SCHEMA)
+#         }
+#
+#     config_dialog = DBConfigDialog(self, initial_config=current_config_from_qsettings)
+#     if config_dialog.exec_() == QDialog.Accepted:
+#         # Le impostazioni sono state salvate in QSettings da DBConfigDialog
+#         QMessageBox.information(self, "Configurazione Salvata",
+#                                 "Le impostazioni del database sono state aggiornate.\n"
+#                                 "È necessario RIAVVIARE l'applicazione per applicare le modifiche.")
 
     
 if __name__ == "__main__":

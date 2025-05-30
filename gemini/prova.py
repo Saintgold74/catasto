@@ -37,9 +37,10 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QFileDialog, QTextEdit, QProgressBar, QMessageBox, QComboBox,
                              QLineEdit) # Aggiunte QComboBox e QLineEdit per opzioni
 from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
-import os # Per gestire percorsi# <--- ASSICURATI CHE QDateTime SIA PRESENTE
-from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime # Assicurati che QDateTime sia qui
+
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime,QStandardPaths # Assicurati che QDateTime sia qui
 from PyQt5.QtCore import pyqtSignal
+
 
 
 
@@ -55,8 +56,165 @@ COLONNE_INSERIMENTO_POSSESSORI_NUM = 4 # Esempio: ID, Nome Completo, Paternità,
 COLONNE_INSERIMENTO_POSSESSORI_LABELS = ["ID", "Nome Completo", "Paternità", "Comune Riferimento"]
 
 NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome", "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
+# Nomi per le chiavi di QSettings (globali o definite prima di run_gui_app)
+# --- Nomi per le chiavi di QSettings (definisci globalmente o prima di run_gui_app) ---
+SETTINGS_DB_TYPE = "Database/Type"
+SETTINGS_DB_HOST = "Database/Host"
+SETTINGS_DB_PORT = "Database/Port"
+SETTINGS_DB_NAME = "Database/DBName"
+SETTINGS_DB_USER = "Database/User"
+SETTINGS_DB_SCHEMA = "Database/Schema"
+# Non salviamo la password in QSettings
 
-# Importazione FPDF per esportazione PDF
+# --- Stylesheet Moderno (senza icone custom sui pulsanti principali) ---
+MODERN_STYLESHEET = """
+    * {
+        font-family: Segoe UI, Arial, sans-serif; /* Font più moderno, fallback a sans-serif */
+        font-size: 10pt;
+        color: #333333; /* Testo scuro di default */
+    }
+    QMainWindow {
+        background-color: #F4F4F4; /* Sfondo principale grigio molto chiaro */
+    }
+    QWidget {
+        background-color: #F4F4F4;
+    }
+    QLabel {
+        color: #202020;
+        background-color: transparent;
+        padding: 2px;
+    }
+    QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QDateTimeEdit, QComboBox {
+        background-color: #FFFFFF;
+        color: #333333;
+        border: 1px solid #CCCCCC;
+        border-radius: 4px;
+        padding: 5px;
+        selection-background-color: #0078D4; /* Blu per selezione testo */
+        selection-color: white;
+    }
+    QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, 
+    QDoubleSpinBox:focus, QDateEdit:focus, QDateTimeEdit:focus, QComboBox:focus {
+        border: 1px solid #0078D4; /* Bordo blu quando in focus */
+        /* box-shadow: 0 0 3px #0078D4; /* Leggera ombra esterna (potrebbe non funzionare su tutte le piattaforme Qt) */
+    }
+    QLineEdit[readOnly="true"], QTextEdit[readOnly="true"] {
+        background-color: #E9E9E9;
+        color: #505050;
+    }
+    QPushButton {
+        background-color: #0078D4; /* Blu Microsoft come colore primario */
+        color: white;
+        border: none; /* No bordo per un look più flat */
+        border-radius: 4px;
+        padding: 8px 15px;
+        font-weight: bold;
+        min-width: 80px;
+    }
+    QPushButton:hover {
+        background-color: #005A9E; /* Blu più scuro per hover */
+    }
+    QPushButton:pressed {
+        background-color: #004C8A; /* Ancora più scuro per pressed */
+    }
+    QPushButton:disabled {
+        background-color: #BDBDBD;
+        color: #757575;
+    }
+    QTabWidget::pane {
+        border-top: 1px solid #D0D0D0;
+        background-color: #FFFFFF; /* Sfondo bianco per il contenuto dei tab */
+        padding: 5px;
+    }
+    QTabBar::tab {
+        background: #E0E0E0;
+        color: #424242;
+        border: 1px solid #D0D0D0;
+        border-bottom: none; /* Il bordo inferiore è gestito dal pane o dal tab selezionato */
+        border-top-left-radius: 4px;
+        border-top-right-radius: 4px;
+        padding: 7px 12px;
+        margin-right: 2px;
+    }
+    QTabBar::tab:hover {
+        background: #D0D0D0;
+    }
+    QTabBar::tab:selected {
+        background: #FFFFFF; /* Stesso colore del pane */
+        color: #0078D4;     /* Colore d'accento per il testo del tab selezionato */
+        font-weight: bold;
+        border-color: #D0D0D0;
+        /* Rimuovi il bordo inferiore del tab selezionato per farlo fondere con il pane */
+        border-bottom-color: #FFFFFF; 
+    }
+    QTableWidget {
+        gridline-color: #E0E0E0;
+        background-color: #FFFFFF;
+        alternate-background-color: #F9F9F9;
+        selection-background-color: #60AFFF; /* Blu più chiaro per selezione tabella */
+        selection-color: #FFFFFF;
+        border: 1px solid #D0D0D0;
+    }
+    QHeaderView::section {
+        background-color: #F0F0F0;
+        color: #333333;
+        padding: 5px;
+        border: 1px solid #D0D0D0;
+        border-bottom-width: 1px; 
+        font-weight: bold;
+    }
+    QComboBox::drop-down {
+        border: none;
+        background: transparent;
+        width: 20px;
+    }
+    QComboBox::down-arrow {
+        image: url(:/qt-project.org/styles/commonstyle/images/standardbutton-arrow-down-16.png); /* Freccia standard di Qt */
+    }
+    QComboBox QAbstractItemView { /* Lista a discesa */
+        border: 1px solid #D0D0D0;
+        selection-background-color: #0078D4;
+        selection-color: white;
+        background-color: white;
+        padding: 2px;
+    }
+    QGroupBox {
+        background-color: #FFFFFF;
+        border: 1px solid #D0D0D0;
+        border-radius: 4px;
+        margin-top: 1.5ex; /* Spazio per il titolo */
+        padding: 10px;
+        font-weight: bold;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        padding: 0 5px 0 5px;
+        left: 10px;
+        color: #0078D4; /* Titolo del GroupBox con colore d'accento */
+    }
+    QCheckBox {
+        spacing: 5px;
+    }
+    QCheckBox::indicator {
+        width: 16px; height: 16px;
+        border: 1px solid #B0B0B0; border-radius: 3px;
+        background-color: white;
+    }
+    QCheckBox::indicator:checked {
+        background-color: #0078D4; border-color: #005A9E;
+        /* Per un checkmark SVG (richiede Qt 5.15+ o gestione via QIcon) */
+        /* image: url(path/to/checkmark.svg) */
+    }
+    QStatusBar {
+        background-color: #E0E0E0;
+        color: #333333;
+    }
+    QMenuBar { background-color: #E0E0E0; color: #333333; }
+    QMenuBar::item:selected { background: #C0C0C0; }
+    QMenu { background-color: #FFFFFF; border: 1px solid #B0B0B0; color: #333333;}
+    QMenu::item:selected { background-color: #0078D4; color: white; }
+"""
 try:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
@@ -7930,6 +8088,157 @@ class AdminDBOperationsWidget(QWidget):
         self._disable_all_buttons(False) # Riabilita sempre i pulsanti
         self._update_admin_buttons_state() # Aggiorna lo stato in base al pool
         self.current_process = None # Resetta riferimento al processo
+
+class DBConfigDialog(QDialog): # Definizione del Dialogo (come fornito precedentemente)
+    def __init__(self, parent=None, initial_config: Optional[Dict[str, Any]] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Configurazione Connessione Database")
+        self.setModal(True)
+        self.setMinimumWidth(450) # Leggermente più largo
+
+        self.settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 
+                                  "ArchivioDiStatoSavona", "CatastoStoricoApp")
+        gui_logger.debug(f"DBConfigDialog usa QSettings file: {self.settings.fileName()}")
+
+        layout = QFormLayout(self)
+        layout.setSpacing(10)
+        layout.setLabelAlignment(Qt.AlignRight) # Allinea etichette a destra
+
+        self.db_type_combo = QComboBox()
+        self.db_type_combo.addItems(["Locale (localhost)", "Remoto (Server Specifico)"])
+        self.db_type_combo.currentIndexChanged.connect(self._db_type_changed)
+        layout.addRow("Tipo di Server Database:", self.db_type_combo)
+
+        self.host_label = QLabel("Indirizzo Server Host (*):") # Aggiunto (*)
+        self.host_edit = QLineEdit()
+        self.host_edit.setPlaceholderText("Es. 192.168.1.100 o nomeserver.locale")
+        layout.addRow(self.host_label, self.host_edit)
+
+        self.port_spinbox = QSpinBox()
+        self.port_spinbox.setRange(1, 65535)
+        self.port_spinbox.setValue(5432)
+        layout.addRow("Porta Server (*):", self.port_spinbox)
+
+        self.dbname_edit = QLineEdit()
+        layout.addRow("Nome Database (*):", self.dbname_edit)
+
+        self.user_edit = QLineEdit()
+        layout.addRow("Utente Database (*):", self.user_edit)
+        
+        self.schema_edit = QLineEdit()
+        layout.addRow("Schema Database (es. catasto):", self.schema_edit)
+        
+        self.button_box = QDialogButtonBox()
+        btn_save = self.button_box.addButton("Salva e Procedi", QDialogButtonBox.AcceptRole)
+        btn_cancel = self.button_box.addButton(QDialogButtonBox.Cancel) # Qt si occuperà del testo
+        
+        self.button_box.accepted.connect(self.accept) 
+        self.button_box.rejected.connect(self.reject)
+        layout.addRow(self.button_box)
+
+        # Popola i campi e imposta visibilità iniziale
+        if initial_config:
+            self._populate_from_config(initial_config)
+        else:
+            self._load_settings() 
+        self._db_type_changed(self.db_type_combo.currentIndex())
+
+    def _db_type_changed(self, index):
+        is_remoto = (index == 1) 
+        self.host_label.setVisible(is_remoto)
+        self.host_edit.setVisible(is_remoto)
+        if not is_remoto: # Se selezionato "Locale"
+            self.host_edit.setText("localhost") # Imposta default e rendilo non visibile ma il valore è lì
+            self.host_edit.setReadOnly(True) # Rendi localhost non modificabile per "Locale"
+        else: # Se selezionato "Remoto"
+            self.host_edit.setReadOnly(False)
+            if self.host_edit.text() == "localhost": # Se prima era locale, pulisci per input utente
+                self.host_edit.clear()
+
+    def _populate_from_config(self, config: Dict[str, Any]):
+        db_type_str = config.get(SETTINGS_DB_TYPE, "Locale (localhost)")
+        # Imposta l'indice della combobox in base al testo, con fallback
+        type_index = self.db_type_combo.findText(db_type_str, Qt.MatchFixedString)
+        if type_index >= 0:
+            self.db_type_combo.setCurrentIndex(type_index)
+        elif "Remoto" in db_type_str: # Fallback se il testo non matcha esattamente
+            self.db_type_combo.setCurrentIndex(1)
+        else:
+            self.db_type_combo.setCurrentIndex(0)
+        
+        self.host_edit.setText(config.get(SETTINGS_DB_HOST, "localhost"))
+        
+        # --- CORREZIONE PER LA PORTA ---
+        port_value_from_config = config.get(SETTINGS_DB_PORT) # Potrebbe essere None, stringa, o int
+        default_port = 5432
+        
+        current_port_value = default_port # Inizia con il default
+        if port_value_from_config is not None:
+            try:
+                current_port_value = int(port_value_from_config)
+            except (ValueError, TypeError):
+                # Se gui_logger non è definito qui, usa print o logging standard
+                # gui_logger.warning(f"Valore porta non valido '{port_value_from_config}' dalla configurazione, usando default {default_port}.")
+                print(f"ATTENZIONE: Valore porta non valido '{port_value_from_config}' dalla configurazione, usando default {default_port}.")
+                current_port_value = default_port # Ripristina il default in caso di errore di conversione
+        
+        self.port_spinbox.setValue(current_port_value)
+        # --- FINE CORREZIONE ---
+            
+        self.dbname_edit.setText(config.get(SETTINGS_DB_NAME, "catasto_storico"))
+        self.user_edit.setText(config.get(SETTINGS_DB_USER, "postgres"))
+        self.schema_edit.setText(config.get(SETTINGS_DB_SCHEMA, "catasto"))
+
+        self._db_type_changed(self.db_type_combo.currentIndex()) # Assicura che la visibilità di host_edit sia corretta
+
+    def _load_settings(self):
+        """Carica le impostazioni da QSettings e popola i campi."""
+        config = {}
+        config[SETTINGS_DB_TYPE] = self.settings.value(SETTINGS_DB_TYPE, "Locale (localhost)")
+        config[SETTINGS_DB_HOST] = self.settings.value(SETTINGS_DB_HOST, "localhost")
+        config[SETTINGS_DB_PORT] = self.settings.value(SETTINGS_DB_PORT, 5432, type=int)
+        config[SETTINGS_DB_NAME] = self.settings.value(SETTINGS_DB_NAME, "catasto_storico")
+        config[SETTINGS_DB_USER] = self.settings.value(SETTINGS_DB_USER, "postgres")
+        config[SETTINGS_DB_SCHEMA] = self.settings.value(SETTINGS_DB_SCHEMA, "catasto")
+        self._populate_from_config(config)
+
+    def accept(self):
+        if not self.dbname_edit.text().strip():
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del database è obbligatorio."); return
+        if not self.user_edit.text().strip():
+            QMessageBox.warning(self, "Dati Mancanti", "L'utente del database è obbligatorio."); return
+        
+        is_remoto = (self.db_type_combo.currentIndex() == 1)
+        host_val = self.host_edit.text().strip()
+        if is_remoto and not host_val:
+            QMessageBox.warning(self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto."); return
+        
+        self._save_settings()
+        super().accept()
+
+    def _save_settings(self):
+        self.settings.setValue(SETTINGS_DB_TYPE, self.db_type_combo.currentText())
+        host_to_save = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
+        self.settings.setValue(SETTINGS_DB_HOST, host_to_save)
+        self.settings.setValue(SETTINGS_DB_PORT, self.port_spinbox.value())
+        self.settings.setValue(SETTINGS_DB_NAME, self.dbname_edit.text().strip())
+        self.settings.setValue(SETTINGS_DB_USER, self.user_edit.text().strip())
+        self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
+        self.settings.sync()
+        gui_logger.info(f"Impostazioni di connessione al database salvate in: {self.settings.fileName()}")
+
+    def get_config_values(self) -> Dict[str, Any]:
+        host_val = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
+        return {
+            "host": host_val,
+            "port": self.port_spinbox.value(),
+            "dbname": self.dbname_edit.text().strip(),
+            "user": self.user_edit.text().strip(),
+            "schema": self.schema_edit.text().strip() or "catasto",
+            # "type" è implicito da host localhost vs altro
+        }
+
+
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
         
@@ -7968,6 +8277,12 @@ class CatastoMainWindow(QMainWindow):
     def create_menu_bar(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
+        settings_menu = menu_bar.addMenu("&Impostazioni")
+        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon), # Esempio icona
+                               "Configurazione &Database...", self)
+        config_db_action.setStatusTip("Modifica i parametri di connessione al database")
+        config_db_action.triggered.connect(self._apri_dialogo_configurazione_db)
+        settings_menu.addAction(config_db_action)
 
         # --- INIZIO SEZIONE DA RIMUOVERE O COMMENTARE ---
         # Se "Nuovo Comune" è solo nel tab, queste righe non servono più qui.
@@ -8360,7 +8675,34 @@ class CatastoMainWindow(QMainWindow):
         else:
             gui_logger.info(f"Dialogo inserimento comune annullato da utente '{utente_login_username}'.")
 
+    def _apri_dialogo_configurazione_db(self):
+        gui_logger.info("Apertura dialogo configurazione DB da menu.")
+        current_config_for_dialog = {}
+        settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 
+                             "ArchivioDiStatoSavona", "CatastoStoricoApp")
+        
+        current_config_for_dialog[SETTINGS_DB_TYPE] = settings.value(SETTINGS_DB_TYPE, "Locale (localhost)")
+        current_config_for_dialog[SETTINGS_DB_HOST] = settings.value(SETTINGS_DB_HOST, "localhost")
+        # Fornisci un default stringa e converti qui per assicurare che il tipo sia corretto per int()
+        port_str_val = settings.value(SETTINGS_DB_PORT, "5432") # Leggi come stringa, default a stringa "5432"
+        try:
+            current_config_for_dialog[SETTINGS_DB_PORT] = int(port_str_val)
+        except (ValueError, TypeError):
+            current_config_for_dialog[SETTINGS_DB_PORT] = 5432 # Fallback se la stringa non è un intero valido
+            gui_logger.warning(f"Valore porta non valido '{port_str_val}' letto da QSettings, usando default 5432.")
 
+        current_config_for_dialog[SETTINGS_DB_NAME] = settings.value(SETTINGS_DB_NAME, "catasto_storico")
+        current_config_for_dialog[SETTINGS_DB_USER] = settings.value(SETTINGS_DB_USER, "postgres")
+        current_config_for_dialog[SETTINGS_DB_SCHEMA] = settings.value(SETTINGS_DB_SCHEMA, "catasto")
+
+        config_dialog = DBConfigDialog(self, initial_config=current_config_for_dialog)
+        if config_dialog.exec_() == QDialog.Accepted:
+            # Le impostazioni sono state salvate dal dialogo stesso
+            QMessageBox.information(self, "Configurazione Salvata", 
+                                    "Le impostazioni del database sono state aggiornate.\n"
+                                    "È necessario riavviare l'applicazione per applicare le modifiche.")
+            # Qui, il riavvio è la strada più semplice. Modificare un DBManager attivo
+            # con un nuovo pool e nuovi parametri è complesso e soggetto a errori.
     def handle_logout(self):
         if self.logged_in_user_id and self.current_session_id and self.db_manager:
             if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui): #
@@ -8415,331 +8757,10 @@ class CatastoMainWindow(QMainWindow):
 
 def run_gui_app():
     app = QApplication(sys.argv)
-    global main_window_instance
-    main_window_instance = None
-    # Applica UN SOLO stylesheet principale all'avvio
-    app.setStyleSheet("""
-        * {
-            font-size: 10pt;
-            color: #202020; /* Testo scuro di default per tutti i widget */
-        }
-        QMainWindow {
-            background-color: #F0F0F0; /* Sfondo principale grigio molto chiaro */
-        }
-        QWidget { /* Sfondo di base per i widget figli, se non specificato diversamente */
-            background-color: #F0F0F0;
-        }
-
-        /* ----- Etichette ----- */
-        QLabel {
-            color: #101010; /* Testo leggermente più scuro per le etichette */
-            background-color: transparent; /* Assicura che non abbiano sfondo proprio se non voluto */
-        }
-
-        /* ----- Campi di Input ----- */
-        QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
-            background-color: #FFFFFF; /* Sfondo bianco per input */
-            color: #202020;
-            border: 1px solid #B0B0B0; /* Bordo grigio medio */
-            border-radius: 3px;
-            padding: 4px; /* Aumentato leggermente il padding */
-        }
-        QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-            border: 1px solid #0078D7; /* Bordo blu quando l'input ha il focus */
-        }
-
-        /* ----- Pulsanti ----- */
-        QPushButton {
-            background-color: #4CAF50; /* Pulsanti di azione principali verdi */
-            color: white;
-            border: 1px solid #3E8E41; /* Bordo leggermente più scuro del bg */
-            border-radius: 5px;
-            padding: 6px 12px; /* Padding per dare respiro */
-            font-weight: bold;
-            min-width: 70px; /* Larghezza minima per coerenza */
-        }
-        QPushButton:hover {
-            background-color: #45a049;
-        }
-        QPushButton:pressed {
-            background-color: #3e8e41;
-        }
-        QPushButton:disabled { /* Stile per pulsanti disabilitati */
-            background-color: #D0D0D0;
-            color: #808080;
-            border-color: #B0B0B0;
-        }
-        /* Pulsanti secondari o meno impattanti (se necessario, si possono usare classi oggetto)
-        QPushButton#secondaryButton {
-            background-color: #E0E0E0;
-            color: #202020;
-            border: 1px solid #B0B0B0;
-        }
-        QPushButton#secondaryButton:hover { background-color: #D0D0D0; }
-        QPushButton#secondaryButton:pressed { background-color: #C0C0C0; }
-        */
-
-        /* ----- Tabs ----- */
-        QTabWidget::pane {
-            border: 1px solid #C0C0C0;       /* Bordo del contenuto del tab */
-            border-top: none;                /* Rimuoviamo il bordo superiore del pane, sarà gestito dai tab */
-            background-color: #F8F8F8;       /* Sfondo del pane */
-        }
-
-        QTabBar {
-            /* Opzionale: se vuoi un bordo sotto l'intera barra dei tab che li separi dal pane */
-            /* border-bottom: 1px solid #C0C0C0; */
-            /* Se si usa il bordo sopra, i tab potrebbero necessitare di aggiustamenti per sovrapporsi */
-        }
-
-        QTabBar::tab {
-            background: #E0E0E0;             /* Sfondo tab non selezionato */
-            color: #303030;                  /* Testo tab non selezionato */
-            border-top: 1px solid #C0C0C0;
-            border-left: 1px solid #C0C0C0;
-            border-right: 1px solid #C0C0C0;
-            border-bottom: 1px solid #C0C0C0; /* Tutti i tab hanno un bordo inferiore */
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-            min-width: 8ex;
-            padding: 6px 9px;                /* Padding consistente */
-            margin-right: 1px;               /* Piccola spaziatura tra i tab */
-            /* Assicurati che non ci sia un margin-bottom residuo qui che possa causare problemi */
-        }
-
-        QTabBar::tab:hover {
-            background: #D5D5D5;
-            color: #101010;
-        }
-
-        QTabBar::tab:selected {
-            background: #F8F8F8;             /* Sfondo tab selezionato (uguale al pane per effetto "fuso") */
-            color: #000000;                  /* Testo tab selezionato più scuro/nero */
-            font-weight: bold;
-            border-top: 1px solid #C0C0C0;
-            border-left: 1px solid #C0C0C0;
-            border-right: 1px solid #C0C0C0;
-            border-bottom: 1px solid #F8F8F8; /* TRUCCO: Bordo inferiore dello stesso colore dello sfondo del tab/pane */
-                                              /* Questo fa "scomparire" il bordo inferiore, facendolo sembrare connesso al pane. */
-            /* Nessun margin-bottom negativo necessario con questo approccio se il pane non ha bordo superiore */
-            /* padding: 5px 8px; // Assicurarsi che il padding sia lo stesso dello stato non selezionato */
-        }
-
-        /* ----- Tabelle ----- */
-        QTableWidget {
-            gridline-color: #D0D0D0; /* Griglia chiara */
-            background-color: #FFFFFF; /* Sfondo tabella bianco */
-            color: #202020;
-            alternate-background-color: #F5F5F5; /* Alternanza righe grigio molto chiaro */
-            selection-background-color: #0078D7; /* Blu per selezione */
-            selection-color: white;              /* Testo bianco su selezione */
-            border: 1px solid #C0C0C0;
-        }
-        QHeaderView::section {
-            background-color: #E8E8E8; /* Sfondo header tabella */
-            color: #202020;
-            padding: 5px;
-            border: 1px solid #C0C0C0;
-            border-bottom-width: 2px; /* Bordo inferiore più marcato per separare dall'area dati */
-            font-weight: bold;
-        }
-
-        /* ----- QComboBox ----- */
-        QComboBox {
-            background-color: white;
-            color: #202020;
-            border: 1px solid #B0B0B0;
-            border-radius: 3px;
-            padding: 4px;
-            min-width: 6em;
-        }
-        QComboBox:hover {
-            border-color: #808080;
-        }
-        QComboBox::drop-down { /* Pulsante per la tendina */
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 20px;
-            border-left-width: 1px;
-            border-left-color: #C0C0C0;
-            border-left-style: solid;
-            border-top-right-radius: 3px;
-            border-bottom-right-radius: 3px;
-            background: #E8E8E8;
-        }
-        QComboBox::down-arrow {
-            /* Se usi icone custom, qui va l'icona per la freccia scura.
-               Altrimenti, Qt dovrebbe usare una freccia di sistema che si adatta.
-               image: url(path/to/your/dark_arrow_icon.png);
-            */
-            width: 10px;
-            height: 10px;
-        }
-        QComboBox QAbstractItemView { /* La lista a discesa */
-            background-color: #FFFFFF;
-            color: #202020;
-            border: 1px solid #B0B0B0;
-            selection-background-color: #0078D7; /* Blu per selezione item */
-            selection-color: white;
-            outline: 0px;
-            padding: 2px;
-        }
-
-        /* ----- ToolTips ----- */
-        QToolTip {
-            background-color: #FFFFE0; /* Giallo chiaro classico per tooltip */
-            color: black;
-            border: 1px solid #B0B0B0;
-            padding: 3px;
-        }
-
-        /* ----- QMessageBox (Dialoghi di Messaggio) ----- */
-        QMessageBox {
-            background-color: #F0F0F0; /* Sfondo del dialogo */
-        }
-        QMessageBox QLabel { /* Etichette di testo dentro QMessageBox */
-            color: #202020; /* Testo scuro */
-            background-color: transparent;
-            /*min-width: 150px; // Assicura che il testo abbia spazio */
-        }
-        /* I QPushButton in QMessageBox erediteranno lo stile globale dei QPushButton */
-
-        /* ----- QMenuBar e QMenu (Menu a Tendina) ----- */
-        QMenuBar {
-            background-color: #E8E8E8; /* Sfondo barra menu */
-            color: #202020;
-            spacing: 2px;
-        }
-        QMenuBar::item {
-            background: transparent;
-            padding: 4px 10px;
-            border-radius: 3px;
-        }
-        QMenuBar::item:selected {
-            background: #D0D0D0;
-            color: black;
-        }
-        QMenuBar::item:pressed {
-            background: #C0C0C0; /* Un po' più scuro quando premuto */
-        }
-        QMenu {
-            background-color: #FFFFFF; /* Sfondo menu a tendina bianco */
-            color: #202020;
-            border: 1px solid #B0B0B0;
-            padding: 4px;
-        }
-        QMenu::item {
-            padding: 5px 25px 5px 25px;
-            border-radius: 3px;
-        }
-        QMenu::item:selected {
-            background-color: #0078D7; /* Blu per highlight selezione azione */
-            color: white;
-        }
-        QMenu::separator {
-            height: 1px;
-            background: #D0D0D0; /* Separatore chiaro */
-            margin: 4px 0px 4px 0px;
-        }
-        QMenu::icon {
-            padding-left: 5px;
-        }
-
-        /* ----- ScrollArea e ScrollBar (se necessario uno stile specifico) ----- */
-        QScrollArea {
-            border: 1px solid #C0C0C0;
-            background: white;
-        }
-        QScrollBar:horizontal {
-            border: none;
-            background: #E0E0E0;
-            height: 12px;
-            margin: 0px 15px 0 15px;
-        }
-        QScrollBar::handle:horizontal {
-            background: #B0B0B0;
-            min-width: 20px;
-            border-radius: 6px;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            border: none;
-            background: #C0C0C0;
-            width: 14px;
-            subcontrol-origin: margin;
-        }
-        QScrollBar::add-line:horizontal { subcontrol-position: right; }
-        QScrollBar::sub-line:horizontal { subcontrol-position: left; }
-
-        QScrollBar:vertical {
-            border: none;
-            background: #E0E0E0;
-            width: 12px;
-            margin: 15px 0 15px 0;
-        }
-        QScrollBar::handle:vertical {
-            background: #B0B0B0;
-            min-height: 20px;
-            border-radius: 6px;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            border: none;
-            background: #C0C0C0;
-            height: 14px;
-            subcontrol-origin: margin;
-        }
-        QScrollBar::add-line:vertical { subcontrol-position: bottom; }
-        QScrollBar::sub-line:vertical { subcontrol-position: top; }
-
-        /* ----- Altri Widget Comuni ----- */
-        QGroupBox {
-            background-color: #F5F5F5; /* Sfondo leggermente diverso per i group box */
-            border: 1px solid #C0C0C0;
-            border-radius: 4px;
-            margin-top: 2ex; /* Spazio per il titolo */
-            font-weight: bold;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left; /* Posizione titolo */
-            padding: 0 5px 0 5px;
-            left: 10px; /* Spostamento del titolo */
-            color: #101010;
-        }
-        QCheckBox {
-            spacing: 5px; /* Spazio tra checkbox e testo */
-        }
-        QCheckBox::indicator { /* Il quadratino della checkbox */
-            width: 16px;
-            height: 16px;
-            border: 1px solid #B0B0B0;
-            border-radius: 3px;
-            background-color: white;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50; /* Verde quando checkato */
-            border-color: #3E8E41;
-            image: url(path/to/your/checkmark_white_icon.png); /* Icona di spunta bianca, opzionale */
-        }
-        QCheckBox::indicator:disabled {
-            background-color: #E0E0E0;
-            border-color: #C0C0C0;
-        }
-        QFrame#status_frame { /* Se hai un QFrame con objectName='status_frame' per la status bar */
-            background-color: #E0E0E0;
-            border-top: 1px solid #B0B0B0;
-        }
-    """)
-    app = QApplication.instance() # Ottieni l'istanza esistente se creata prima
-    if app is None: # Altrimenti creala
-        app = QApplication(sys.argv)
-    app.setApplicationName("Catasto Storico GUI")
-    app.setOrganizationName("Catasto Storico")
-    app.setOrganizationDomain("catasto-storico.org")
-    app.setWindowIcon(QIcon("path/to/your/icon.png"))
+    QApplication.setOrganizationName("ArchivioDiStatoSavona")
+    QApplication.setApplicationName("CatastoStoricoApp")
     
-    
-    # Imposta l'icona dell'applicazione
-    
+    app.setStyleSheet(MODERN_STYLESHEET) # Applica lo stylesheet globale
 
     if not FPDF_AVAILABLE:
         QMessageBox.warning(None, "Avviso Dipendenza Mancante",
@@ -8747,114 +8768,127 @@ def run_gui_app():
                              "L'esportazione dei report in formato PDF non sarà disponibile.\n"
                              "Puoi installarla con: pip install fpdf2")
 
-    db_config_gui = {
-        "dbname": "catasto_storico", "user": "postgres", "password": "Markus74",
-        "host": "localhost", "port": 5432, "schema": "catasto"
-    }
+    settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 
+                         "ArchivioDiStatoSavona", "CatastoStoricoApp")
+    
+    active_db_config: Optional[Dict[str, Any]] = None
+
+    # Prova a caricare la configurazione esistente
+    if settings.contains(SETTINGS_DB_NAME) and settings.value(SETTINGS_DB_NAME, type=str).strip(): # Controlla che il nome DB sia valido
+        gui_logger.info(f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
+        active_db_config = {
+            "type": settings.value(SETTINGS_DB_TYPE, "Locale (localhost)"), 
+            "host": settings.value(SETTINGS_DB_HOST, "localhost"),
+            "port": settings.value(SETTINGS_DB_PORT, 5432, type=int), 
+            "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico"),
+            "user": settings.value(SETTINGS_DB_USER, "postgres"),
+            "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto")
+        }
+    
+    if active_db_config is None: 
+        gui_logger.info("Nessuna configurazione DB valida trovata. Apertura dialogo di configurazione iniziale.")
+        config_dialog = DBConfigDialog(initial_config=None)
+        if config_dialog.exec_() == QDialog.Accepted:
+            active_db_config = config_dialog.get_config_values()
+            if not active_db_config or not active_db_config.get("dbname"):
+                QMessageBox.critical(None, "Errore Critico", "Configurazione DB non valida. L'app si chiuderà.")
+                sys.exit(1)
+        else:
+            gui_logger.info("Configurazione database iniziale annullata. Uscita.")
+            sys.exit(0)
+    
+    gui_logger.info(f"Configurazione DB attiva: Host={active_db_config['host']}, Port={active_db_config['port']}, DBName={active_db_config['dbname']}, User={active_db_config['user']}")
+
+    db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
+                                           f"Password per utente '{active_db_config['user']}'\nDatabase: '{active_db_config['dbname']}'\nHost: '{active_db_config['host']}:{active_db_config['port']}'",
+                                           QLineEdit.Password)
+    if not ok: 
+        gui_logger.warning("Autenticazione database annullata. Uscita."); sys.exit(0)
+    # Non è un errore se la password è vuota, il DB potrebbe permetterlo (ma non consigliato)
+
     db_manager_gui = CatastoDBManager(
-        dbname=db_config_gui["dbname"], 
-        user=db_config_gui["user"], 
-        password=db_config_gui["password"], # Password per catasto_storico
-        host=db_config_gui["host"], 
-        port=db_config_gui["port"],
-        schema=db_config_gui.get("schema", "catasto"),
-        application_name="CatastoAppGUI_Main",
-        log_file="catasto_main_db.log",
-        log_level=logging.DEBUG,
-        min_conn=1,
-        max_conn=5
+        dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
+        host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
+        application_name="CatastoAppGUI_Main", log_file="catasto_main_db.log", log_level=logging.DEBUG
     )
 
     main_window_instance = CatastoMainWindow()
-    main_window_instance.db_manager = db_manager_gui # Passa il db_manager (senza pool ancora)
+    main_window_instance.db_manager = db_manager_gui
+    
+    # Credenziali per check_database_exists e create_target_database.
+    # L'utente fornito per l'app DEVE avere privilegi di connessione a 'postgres' e di creazione DB.
+    # Se non li ha, queste operazioni specifiche falliranno nel tab Amministrazione.
+    db_admin_user_for_check = active_db_config["user"] 
+    db_admin_password_for_check = db_password 
+    target_dbname_to_check = active_db_config["dbname"]
 
-    # Ottieni le credenziali dell'admin di PostgreSQL per verificare/creare il DB
-    # Questo andrebbe fatto in modo più sicuro, es. da file di config o chiedendo una volta
-    # Per ora, le hardcodiamo per il test, ma NON è una buona pratica per produzione.
-    # In un'app reale, queste credenziali sarebbero chieste all'utente se il DB non esiste.
-    db_admin_user_for_setup = db_config_gui["user"] # L'utente 'postgres' può creare DB
-    db_admin_password_for_setup = db_config_gui["password"] 
-
-    target_dbname = db_manager_gui.get_current_dbname() # Nome del DB target ("catasto_storico")
-
-    db_exists = db_manager_gui.check_database_exists(target_dbname, db_admin_user_for_setup, db_admin_password_for_setup)
-    main_window_instance.pool_initialized_successfully = False 
+    # Controlla se il database target esiste
+    db_exists = db_manager_gui.check_database_exists(
+        target_dbname_to_check, db_admin_user_for_check, db_admin_password_for_check
+    )
+    main_window_instance.pool_initialized_successfully = False
 
     if db_exists:
-        gui_logger.info(f"Database '{target_dbname}' trovato. Tentativo di inizializzazione pool...")
-        if db_manager_gui.initialize_main_pool():
-            main_window_instance.pool_initialized_successfully = True # Imposta l'attributo
-            gui_logger.info(f"Pool per '{target_dbname}' inizializzato.")
-            if hasattr(main_window_instance, 'db_status_label'): # Verifica esistenza attributo
-                 main_window_instance.db_status_label.setText(f"Database: Connesso ({target_dbname})")
-        else:
-            # pool_initialized_successfully rimane False (già impostato)
-            gui_logger.error(f"Database '{target_dbname}' esiste, ma fallita inizializzazione del pool.")
-            QMessageBox.critical(None, "Errore Connessione Pool",
-                                 f"Il database '{target_dbname}' esiste ma non è stato possibile connettersi tramite il pool.\n"
-                                 "Verificare i log e la configurazione del server PostgreSQL.")
+        gui_logger.info(f"Database '{target_dbname_to_check}' rilevato. Tentativo di inizializzazione pool...")
+        if db_manager_gui.initialize_main_pool(): # Tenta di inizializzare il pool per il DB target
+            main_window_instance.pool_initialized_successfully = True
             if hasattr(main_window_instance, 'db_status_label'):
-                 main_window_instance.db_status_label.setText(f"Database: Errore Pool ({target_dbname})")
-    else:
-        # pool_initialized_successfully rimane False
-        gui_logger.warning(f"Database '{target_dbname}' NON trovato. Avvio in modalità configurazione.")
-        QMessageBox.information(None, "Database Non Trovato",
-                             f"Il database '{target_dbname}' non esiste o non è accessibile.\n"
-                             "L'applicazione si avvierà in modalità limitata.\n"
-                             "Utilizzare il tab 'Sistema' -> 'Amministrazione DB' per creare e configurare il database.")
+                 main_window_instance.db_status_label.setText(f"Database: Connesso ({target_dbname_to_check})")
+        else: # Pool fallito nonostante il DB esista
+            QMessageBox.warning(None, "Errore Connessione Pool",
+                                 f"Il DB '{target_dbname_to_check}' esiste ma il pool non è stato inizializzato.\n"
+                                 "Verificare i log e la configurazione del server PostgreSQL.\n"
+                                 "L'applicazione si avvierà in modalità limitata.")
+            if hasattr(main_window_instance, 'db_status_label'):
+                 main_window_instance.db_status_label.setText(f"Database: Errore Pool ({target_dbname_to_check})")
+    else: # DB non esiste
+        QMessageBox.information(None, "Database Non Esistente",
+                             f"Il DB '{target_dbname_to_check}' non esiste.\nAvvio in modalità configurazione limitata.\n"
+                             "Usare 'Sistema' -> 'Amministrazione DB' -> 'Crea Database'.")
         if hasattr(main_window_instance, 'db_status_label'):
-             main_window_instance.db_status_label.setText(f"Database: Non Esistente ({target_dbname})")
+             main_window_instance.db_status_label.setText(f"Database: Non Esistente ({target_dbname_to_check})")
 
-    # Gestione Login
+    # --- Gestione Login o Modalità Limitata ---
     login_success = False
     if main_window_instance.pool_initialized_successfully:
-        # ... (ciclo while login_dialog.exec_() come prima) ...
-        while not login_success:
+        while not login_success: 
             login_dialog = LoginDialog(db_manager_gui)
             if login_dialog.exec_() == QDialog.Accepted:
-                if login_dialog.logged_in_user_id and login_dialog.logged_in_user_info and login_dialog.current_session_id:
+                if login_dialog.logged_in_user_id is not None and login_dialog.logged_in_user_info and login_dialog.current_session_id:
                     main_window_instance.perform_initial_setup(
-                        db_manager_gui, # Già impostato, ma lo passiamo
-                        login_dialog.logged_in_user_id,
-                        login_dialog.logged_in_user_info,
-                        login_dialog.current_session_id
+                        db_manager_gui, login_dialog.logged_in_user_id,
+                        login_dialog.logged_in_user_info, login_dialog.current_session_id
                     )
                     login_success = True
                 else:
-                    QMessageBox.critical(None, "Errore Login Critico", "Dati di login interni non validi dopo accettazione dialogo."); sys.exit(1)
-            else:
-                gui_logger.info("Login annullato o dialogo chiuso. Uscita dall'applicazione."); 
+                    QMessageBox.critical(None, "Errore Login Critico", "Dati di login non validi."); sys.exit(1)
+            else: 
+                gui_logger.info("Login annullato. Uscita."); 
                 if db_manager_gui: db_manager_gui.close_pool(); 
                 sys.exit(0)
-    else:
-        # ... (logica per modalità limitata come prima, che chiama main_window_instance.update_ui_based_on_role()) ...
+    else: # Modalità limitata
+        gui_logger.info("Avvio in modalità limitata (setup database).")
         main_window_instance.logged_in_user_info = {
-            'id': 0, 
-            'username': 'setup_admin', 
-            'nome_completo': 'Amministratore Setup',
-            'ruolo': 'admin_offline'
+            'id': 0, 'username': 'admin_setup', 
+            'nome_completo': 'Amministratore Setup DB', 'ruolo': 'admin_offline'
         }
         main_window_instance.logged_in_user_id = 0
         main_window_instance.current_session_id = str(uuid.uuid4())
         
-        main_window_instance.setup_tabs() 
-        main_window_instance.update_ui_based_on_role() # Ora può accedere a self.pool_initialized_successfully
-        if hasattr(main_window_instance, 'user_status_label'):
-            main_window_instance.user_status_label.setText("Utente: Setup Mode (DB non pronto)")
-        if hasattr(main_window_instance, 'logout_button'):
-            main_window_instance.logout_button.setEnabled(False)
-        main_window_instance.show()
-        # Non impostare login_success = True
+        main_window_instance.perform_initial_setup(
+             db_manager_gui, main_window_instance.logged_in_user_id,
+             main_window_instance.logged_in_user_info, main_window_instance.current_session_id
+        )
+        # update_ui_based_on_role è chiamato dentro perform_initial_setup
     
-    # L'applicazione continua solo se main_window_instance è stata creata
     if main_window_instance:
         gui_logger.info(">>> run_gui_app: Avvio loop eventi applicazione...")
         exit_code = app.exec_()
         gui_logger.info(f">>> run_gui_app: app.exec_() TERMINATO con codice: {exit_code}")
         if db_manager_gui: db_manager_gui.close_pool()
         sys.exit(exit_code)
-    else: # Non dovrebbe accadere se il flusso di login è corretto
-        gui_logger.critical("Impossibile avviare la finestra principale.")
+    else:
+        gui_logger.critical("Fallimento creazione istanza finestra principale.")
         if db_manager_gui: db_manager_gui.close_pool()
         sys.exit(1)
 

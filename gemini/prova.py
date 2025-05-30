@@ -2620,7 +2620,7 @@ class OperazioniPartitaWidget(QWidget):
 
         self.source_partita_info_label = QLabel("Nessuna partita sorgente selezionata.")
         self.source_partita_info_label.setWordWrap(True)
-        self.source_partita_info_label.setStyleSheet("QLabel { padding: 5px; background-color: #e8f0fe; border: 1px solid #d_3c_cf; border-radius: 3px; min-height: 2em; }")
+        self.source_partita_info_label.setStyleSheet("QLabel { padding: 5px; background-color: #e8f0fe; border: 1px solid #d0e0ff; border-radius: 3px; min-height: 2em; }")
         source_partita_layout.addWidget(self.source_partita_info_label, 1, 0, 1, 4) # Span su 4 colonne
         main_layout.addWidget(source_partita_group)
 

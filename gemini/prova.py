@@ -3973,15 +3973,36 @@ class StatisticheWidget(QWidget):
         immobili_tab.setLayout(immobili_layout)
         tabs.addTab(immobili_tab, "Immobili per Tipologia")
         
-        # Tab Manutenzione Viste
+        # Tab Manutenzione Viste (o rinominalo "Manutenzione Database")
         manutenzione_tab = QWidget()
-        manutenzione_layout = QVBoxLayout()
+        manutenzione_layout = QVBoxLayout(manutenzione_tab) # Layout verticale per questo tab
         
+        self.btn_verifica_integrita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton),
+                                                 " Verifica Integrità Database")
+        self.btn_verifica_integrita.setToolTip("Esegue controlli di integrità sul database.")
+        self.btn_verifica_integrita.clicked.connect(self._esegui_verifica_integrita)
+        manutenzione_layout.addWidget(self.btn_verifica_integrita) # AGGIUNTO NUOVO PULSANTE
+
         self.update_views_button = QPushButton("Aggiorna Tutte le Viste Materializzate")
         self.update_views_button.clicked.connect(self.update_all_views)
+        manutenzione_layout.addWidget(self.update_views_button)
         
-        self.maintenance_button = QPushButton("Esegui Manutenzione Database (ANALYZE)")
+        self.maintenance_button = QPushButton("Esegui Manutenzione DB (ANALYZE)")
         self.maintenance_button.clicked.connect(self.run_maintenance)
+        manutenzione_layout.addWidget(self.maintenance_button)
+        
+        manutenzione_layout.addSpacing(15) # Un po' di spazio
+
+        manutenzione_layout.addWidget(QLabel("Log Operazioni di Manutenzione:"))
+        self.status_text = QTextEdit()
+        self.status_text.setReadOnly(True)
+        self.status_text.setFixedHeight(150) # O più se necessario
+        manutenzione_layout.addWidget(self.status_text)
+        
+        manutenzione_layout.addStretch(1) # Spinge tutto in alto
+        # manutenzione_tab.setLayout(manutenzione_layout) # Non serve se passato al costruttore QVBoxLayout
+        
+        tabs.addTab(manutenzione_tab, "Manutenzione Database") # Rinominato il tab per chiarezza
         # --- NUOVO PULSANTE ---
         self.btn_verifica_integrita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton), # Scegli un'icona adatta
                                                  " Verifica Integrità Database")
@@ -4120,10 +4141,51 @@ class StatisticheWidget(QWidget):
         else:
             self.log_status("ERRORE: Manutenzione database non riuscita. Controlla i log.")
     
-    def log_status(self, message):
-        """Aggiunge un messaggio al log."""
+        
+    def _esegui_verifica_integrita(self):
+        if not self.db_manager or not self.db_manager.pool:
+            QMessageBox.warning(self, "Database Non Pronto", 
+                                "Il database principale non è configurato o il pool non è attivo.")
+            self.log_status("Tentativo di verifica integrità fallito: pool DB non attivo.")
+            return
+
+        self.log_status("Avvio verifica integrità database...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            problemi_trovati, messaggi = self.db_manager.verifica_integrita_database_gui()
+            
+            # Logga tutti i messaggi ricevuti
+            if messaggi:
+                self.log_status("--- Risultato Verifica Integrità ---")
+                for linea in messaggi.splitlines():
+                    self.log_status(linea) # Usa il metodo esistente per loggare nel QTextEdit
+                self.log_status("--- Fine Risultato Verifica Integrità ---")
+
+            if problemi_trovati:
+                QMessageBox.warning(self, "Verifica Integrità", 
+                                    "La verifica di integrità ha rilevato potenziali problemi o errori.\n"
+                                    "Consultare il log operazioni per i dettagli.")
+            else:
+                QMessageBox.information(self, "Verifica Integrità", 
+                                        "Verifica di integrità completata.\n"
+                                        "Consultare il log operazioni per eventuali messaggi dalla procedura.")
+        except DBMError as e: # Se verifica_integrita_database_gui solleva DBMError per errori DB
+            self.log_status(f"ERRORE CRITICO durante la verifica integrità: {e}", error=True) # Assumendo che log_status possa prendere 'error'
+            QMessageBox.critical(self, "Errore Verifica Integrità", f"Errore database: {e}")
+        except Exception as e:
+            self.log_status(f"ERRORE IMPREVISTO durante la verifica integrità: {e}", error=True)
+            gui_logger.error("Errore imprevisto in _esegui_verifica_integrita", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore di sistema: {e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    # Modifica log_status per accettare un flag di errore (opzionale)
+    def log_status(self, message: str, error: bool = False): # Aggiunto parametro error
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.status_text.append(f"[{timestamp}] {message}")
+        if error:
+            self.status_text.append(f"<font color='red'>[{timestamp}] {message}</font>")
+        else:
+            self.status_text.append(f"[{timestamp}] {message}")
 # --- Scheda per Registrazione Nuova Proprietà ---
 class RegistrazioneProprietaWidget(QWidget):
     partita_creata_per_operazioni_collegate = pyqtSignal(int, int)
@@ -8955,24 +9017,31 @@ class CatastoMainWindow(QMainWindow):
             gui_logger.warning("Tentativo di logout senza una sessione utente o db_manager validi.")
 
 
-    def closeEvent(self, event: QCloseEvent): # QCloseEvent deve essere importato in prova.py
+    def closeEvent(self, event: QCloseEvent):
         gui_logger.info("Evento closeEvent intercettato in CatastoMainWindow.")
 
-        # Esegui il logout dell'utente applicativo se loggato
-        if hasattr(self, 'logged_in_user_id') and self.logged_in_user_id and \
-           hasattr(self, 'current_session_id') and self.current_session_id and \
-           hasattr(self, 'db_manager') and self.db_manager:
-            gui_logger.info(f"Chiusura applicazione: esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id}...")
-            self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui) # Assicurati che client_ip_address_gui sia definito
-            self.db_manager.clear_audit_session_variables() 
-
-        # Chiudi il pool di connessioni del database
         if hasattr(self, 'db_manager') and self.db_manager:
+            pool_era_attivo_prima_di_closeevent = self.db_manager.pool is not None
+
+            if pool_era_attivo_prima_di_closeevent:
+                if hasattr(self, 'logged_in_user_id') and self.logged_in_user_id and \
+                   hasattr(self, 'current_session_id') and self.current_session_id:
+                    gui_logger.info(f"Chiusura applicazione: esecuzione logout di sicurezza per utente ID: {self.logged_in_user_id}...")
+                    self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
+                else:
+                    gui_logger.info("Nessun utente loggato o sessione attiva, pulizia variabili audit generica.")
+                    self.db_manager.clear_audit_session_variables() # Tenta di pulire se il pool è attivo
+            else:
+                gui_logger.info("Pool del DB principale non attivo durante closeEvent, operazioni di logout/pulizia audit su DB saltate.")
+
+            # Chiudi il pool (close_pool() gestisce il caso in cui self.pool sia già None)
             self.db_manager.close_pool() 
-            gui_logger.info("Pool di connessioni al database chiuso.")
+            gui_logger.info("Tentativo di chiusura del pool di connessioni al database completato.")
+        else:
+            gui_logger.warning("DB Manager non disponibile durante closeEvent.")
 
         gui_logger.info("Applicazione GUI Catasto Storico terminata.")
-        event.accept() # Conferma la chiusura della finestra
+        event.accept()
 
 # --- Fine Classe CatastoMainWindow ---
 

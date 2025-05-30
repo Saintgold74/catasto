@@ -26,3 +26,21 @@ BEGIN
         RAISE NOTICE 'Utente amministratore di default "%" già esistente.', admin_username;
     END IF;
 END $$;
+CREATE OR REPLACE PROCEDURE catasto.verifica_integrita_database()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    rec record;
+BEGIN
+    RAISE NOTICE 'Inizio verifica integrità database...';
+    RAISE NOTICE 'Esecuzione ANALYZE su tutte le tabelle dello schema catasto...';
+
+    FOR rec IN SELECT tablename FROM pg_tables WHERE schemaname = 'catasto'
+    LOOP
+        RAISE NOTICE 'Analisi tabella: %', rec.tablename;
+        EXECUTE 'ANALYZE catasto.' || quote_ident(rec.tablename);
+    END LOOP;
+    RAISE NOTICE 'Completato ANALYZE tabelle.';
+    RAISE NOTICE 'Verifica integrità database completata.';
+END;
+$$;

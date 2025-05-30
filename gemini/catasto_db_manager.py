@@ -2749,7 +2749,73 @@ class CatastoDBManager:
                 self._release_connection(conn)
         
         return problemi_trovati, output_msg.strip()
+    def verifica_integrita_database_gui(self) -> Tuple[bool, str]:
+        """
+        Esegue la procedura SQL di verifica integrità e cattura i messaggi NOTICE.
+        Restituisce una tupla: (problemi_rilevati_boolean, stringa_messaggi_output).
+        """
+        self.logger.info("Avvio verifica integrità database...")
+        conn = None
+        captured_notices: List[str] = []
+        problemi_rilevati_flag = False # Flag per indicare se un notice suggerisce un problema
 
+        # Funzione handler per i messaggi NOTICE dalla connessione
+        def notice_handler_gui(notice):
+            msg_line = str(notice).strip()
+            # Rimuovi il prefisso "NOTICE: " che psycopg2 potrebbe aggiungere
+            if msg_line.upper().startswith("NOTICE:"):
+                msg_line = msg_line[len("NOTICE:"):].strip()
+            
+            captured_notices.append(msg_line)
+            # Semplice controllo per parole chiave indicative di problemi
+            # Può essere reso più sofisticato se la procedura SQL usa formati specifici
+            if any(keyword in msg_line.upper() for keyword in ["ERROR", "FAIL", "CORRUPT", "WARNING", "PROBLEMA"]):
+                nonlocal problemi_rilevati_flag # Necessario per modificare variabile nello scope esterno
+                problemi_rilevati_flag = True
+                self.logger.warning(f"Potenziale problema di integrità rilevato nel notice: {msg_line}")
+
+        try:
+            conn = self._get_connection()
+            
+            # Salva e pulisci gli handler di notice esistenti per questa connessione
+            # conn.notices è una lista in psycopg2
+            original_notices_handlers = conn.notices[:] 
+            conn.notices.clear()
+            conn.notices.append(notice_handler_gui)
+
+            with conn.cursor() as cur:
+                self.logger.debug(f"Chiamata a procedura {self.schema}.verifica_integrita_database()")
+                cur.execute(f"CALL {self.schema}.verifica_integrita_database();") # SENZA (NULL)
+                conn.commit()
+            
+            self.logger.info("Procedura di verifica integrità database eseguita.")
+
+        except psycopg2.errors.UndefinedFunction:
+            self.logger.error(f"La procedura SQL '{self.schema}.verifica_integrita_database' non è stata trovata.", exc_info=True)
+            captured_notices.append(f"ERRORE: La procedura SQL '{self.schema}.verifica_integrita_database' non esiste nel database.")
+            problemi_rilevati_flag = True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback() # Rollback in caso di errore DB
+            self.logger.error(f"Errore DB durante la verifica integrità: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            captured_notices.append(f"ERRORE DATABASE: {getattr(db_err, 'pgerror', str(db_err))}")
+            problemi_rilevati_flag = True
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante la verifica integrità: {e}", exc_info=True)
+            captured_notices.append(f"ERRORE DI SISTEMA: {e}")
+            problemi_rilevati_flag = True
+        finally:
+            if conn:
+                # Ripristina gli handler di notice originali
+                if 'original_notices_handlers' in locals():
+                    conn.notices[:] = original_notices_handlers
+                self._release_connection(conn)
+            
+        output_string = "\n".join(captured_notices).strip()
+        if not output_string and not problemi_rilevati_flag:
+            output_string = "Verifica completata. Nessun messaggio specifico o problema riportato dalla procedura."
+            
+        return problemi_rilevati_flag, output_string
     def refresh_materialized_views(self) -> bool:
         """Aggiorna tutte le viste materializzate definite nel database, usando il pool."""
         self.logger.info("Avvio aggiornamento viste materializzate...")
@@ -4060,6 +4126,65 @@ class CatastoDBManager:
             # if conn and conn.autocommit: conn.autocommit = False # Ripristina se modificato
             if conn:
                 self._release_connection(conn)
+    def clear_audit_session_variables(self) -> bool:
+        """
+        Resetta le variabili di sessione PostgreSQL 'catasto.app_user_id' e 
+        'catasto.session_id' a NULL per la connessione corrente.
+        Usa il pool di connessioni.
+        """
+        self.logger.info("Reset variabili di sessione per audit (catasto.app_user_id, catasto.session_id).")
+        conn = None
+        try:
+            conn = self._get_connection() # Se il pool è None, solleverà DBMError qui
+            with conn.cursor() as cur:
+                # Usare RESET è più pulito se le variabili sono state impostate con SET LOCAL o SET SESSION
+                # Se sono state impostate con set_config(..., ..., false), il loro scope è la sessione.
+                # Resettarle esplicitamente a NULL con set_config è un'alternativa.
+                # SELECT set_config('catasto.app_user_id', NULL, false);
+                # SELECT set_config('catasto.session_id', NULL, false);
+                # Oppure, se sono definite con un DEFAULT nel db, RESET le riporterà al default.
+                # Per GUC custom senza un DEFAULT esplicito, impostarle a NULL è più sicuro.
+                
+                # Tentativo 1: RESET (preferibile se hanno un default o per pulizia generale)
+                # cur.execute(f"RESET {self.schema}.app_user_id;")
+                # cur.execute(f"RESET {self.schema}.session_id;")
+                
+                # Tentativo 2: SET a NULL (più esplicito se non si è sicuri del default)
+                cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
+                cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
+                
+                conn.commit() # Necessario per set_config con is_local = false
+                self.logger.info("Variabili di sessione per audit resettate con successo.")
+                return True
+        except DBMError as e: # Cattura DBMError da _get_connection se il pool non è inizializzato
+            self.logger.warning(f"Impossibile resettare variabili audit: {e}")
+            return False # Non sollevare eccezione, semplicemente non ha potuto farlo
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB resettando variabili audit: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            return False
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python resettando variabili audit: {e}", exc_info=True)
+            return False
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    def _clear_audit_session_variables_with_conn(self, conn_target): # Questo è per il logout
+        """Helper per pulire le variabili di sessione audit usando una connessione esistente."""
+        if not conn_target or conn_target.closed:
+            self.logger.warning("_clear_audit_session_variables_with_conn chiamata con connessione non valida.")
+            return
+        try:
+            with conn_target.cursor() as cur:
+                cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
+                cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
+                # Il commit è gestito dal chiamante (logout_user)
+            self.logger.debug("Variabili di sessione audit resettate (connessione esistente).")
+        except Exception as e:
+            self.logger.error(f"Errore resettando variabili audit con connessione esistente: {e}", exc_info=True)
+
         
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

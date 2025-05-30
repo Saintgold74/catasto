@@ -8415,7 +8415,8 @@ class CatastoMainWindow(QMainWindow):
 
 def run_gui_app():
     app = QApplication(sys.argv)
-    
+    global main_window_instance
+    main_window_instance = None
     # Applica UN SOLO stylesheet principale all'avvio
     app.setStyleSheet("""
         * {
@@ -8728,6 +8729,17 @@ def run_gui_app():
             border-top: 1px solid #B0B0B0;
         }
     """)
+    app = QApplication.instance() # Ottieni l'istanza esistente se creata prima
+    if app is None: # Altrimenti creala
+        app = QApplication(sys.argv)
+    app.setApplicationName("Catasto Storico GUI")
+    app.setOrganizationName("Catasto Storico")
+    app.setOrganizationDomain("catasto-storico.org")
+    app.setWindowIcon(QIcon("path/to/your/icon.png"))
+    
+    
+    # Imposta l'icona dell'applicazione
+    
 
     if not FPDF_AVAILABLE:
         QMessageBox.warning(None, "Avviso Dipendenza Mancante",

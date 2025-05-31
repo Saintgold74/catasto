@@ -2574,20 +2574,16 @@ class ModificaPartitaDialog(QDialog):
 
 # Non dimenticare di importare ModificaPartitaDialog dove serve, ad esempio in PartiteComuneDialog
 class OperazioniPartitaWidget(QWidget):
-    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+    def __init__(self, db_manager: CatastoDBManager, parent=None): # Aggiungi questo __init__ se non c'è
         super().__init__(parent)
         self.db_manager = db_manager
-        
-        # Attributi per la partita sorgente
         self.selected_partita_id_source: Optional[int] = None
         self.selected_partita_comune_id_source: Optional[int] = None 
         self.selected_partita_comune_nome_source: Optional[str] = None
-        
-        # Attributo per l'immobile selezionato nel tab "Trasferisci Immobile"
         self.selected_immobile_id_transfer: Optional[int] = None
-        
-        # Lista temporanea per i nuovi possessori nel tab "Passaggio Proprietà"
         self._pp_temp_nuovi_possessori: List[Dict[str, Any]] = [] 
+        
+        self.partita_destinazione_valida: bool = False # NUOVO FLAG
 
         self._initUI()
 
@@ -2612,10 +2608,10 @@ class OperazioniPartitaWidget(QWidget):
         source_partita_layout.addWidget(self.btn_cerca_source_partita, 0, 2)
         
         # Pulsante per caricare la partita dall'ID inserito nello SpinBox
-        self.btn_load_source_partita_from_id = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowRight), " Carica da ID")
-        self.btn_load_source_partita_from_id.setToolTip("Carica i dettagli della partita usando l'ID inserito")
-        self.btn_load_source_partita_from_id.clicked.connect(self._load_partita_sorgente_from_spinbox)
-        source_partita_layout.addWidget(self.btn_load_source_partita_from_id, 0, 3)
+        #self.btn_load_source_partita_from_id = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowRight), " Carica da ID")
+        #self.btn_load_source_partita_from_id.setToolTip("Carica i dettagli della partita usando l'ID inserito")
+        #self.btn_load_source_partita_from_id.clicked.connect(self._load_partita_sorgente_from_spinbox)
+        #source_partita_layout.addWidget(self.btn_load_source_partita_from_id, 0, 3)
 
 
         self.source_partita_info_label = QLabel("Nessuna partita sorgente selezionata.")
@@ -2666,46 +2662,68 @@ class OperazioniPartitaWidget(QWidget):
         transfer_form_layout = QFormLayout(transfer_group) 
         transfer_form_layout.setSpacing(10)
 
+        # ... (Tabella self.immobili_partita_sorgente_table e self.immobile_id_transfer_label come prima) ...
         transfer_form_layout.addRow(QLabel("Immobili nella Partita Sorgente (selezionarne uno):"))
         self.immobili_partita_sorgente_table = QTableWidget()
-        self.immobili_partita_sorgente_table.setColumnCount(3)
-        self.immobili_partita_sorgente_table.setHorizontalHeaderLabels(["ID Imm.", "Natura", "Località"])
+        # Rimuovere setColumnCount e setHorizontalHeaderLabels da qui se _carica_immobili_partita_sorgente lo fa dinamicamente
         self.immobili_partita_sorgente_table.setSelectionMode(QTableWidget.SingleSelection)
         self.immobili_partita_sorgente_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.immobili_partita_sorgente_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.immobili_partita_sorgente_table.setFixedHeight(150)
+        self.immobili_partita_sorgente_table.setFixedHeight(180) 
         self.immobili_partita_sorgente_table.itemSelectionChanged.connect(self._immobile_sorgente_selezionato)
         transfer_form_layout.addRow(self.immobili_partita_sorgente_table)
         
-        self.immobile_id_transfer_label = QLabel("Nessun immobile selezionato.")
+        self.immobile_id_transfer_label = QLabel("Nessun immobile selezionato dalla lista sottostante.")
         self.immobile_id_transfer_label.setStyleSheet("font-style: italic; color: #555;")
         transfer_form_layout.addRow(self.immobile_id_transfer_label)
 
-        dest_partita_container_widget = QWidget()
-        dest_partita_h_layout = QHBoxLayout(dest_partita_container_widget)
-        dest_partita_h_layout.setContentsMargins(0,0,0,0)
+
+        # --- Modifiche per Partita Destinazione ---
+        dest_partita_id_container = QWidget() # Contenitore per spinbox e nuovo pulsante
+        dest_partita_id_layout = QHBoxLayout(dest_partita_id_container)
+        dest_partita_id_layout.setContentsMargins(0,0,0,0)
+        dest_partita_id_layout.setSpacing(5)
+
         self.dest_partita_id_spinbox = QSpinBox()
         self.dest_partita_id_spinbox.setRange(1, 9999999)
-        dest_partita_h_layout.addWidget(self.dest_partita_id_spinbox)
-        self.btn_cerca_dest_partita = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView), " Cerca...")
+        self.dest_partita_id_spinbox.setToolTip("Inserisci l'ID della partita di destinazione o usa 'Cerca'")
+        dest_partita_id_layout.addWidget(self.dest_partita_id_spinbox, 1) # Il '1' dà più stretch allo spinbox
+
+        # NUOVO PULSANTE "Carica ID"
+        self.btn_carica_dest_partita_da_id = QPushButton("Carica ID") # Testo breve, o icona SP_ArrowRight
+        self.btn_carica_dest_partita_da_id.setToolTip("Verifica e carica i dettagli della partita con l'ID inserito")
+        self.btn_carica_dest_partita_da_id.clicked.connect(self._load_partita_destinazione_from_spinbox)
+        dest_partita_id_layout.addWidget(self.btn_carica_dest_partita_da_id)
+
+        self.btn_cerca_dest_partita = QPushButton("Cerca...") # Testo più breve
+        self.btn_cerca_dest_partita.setToolTip("Cerca una partita esistente da usare come destinazione")
         self.btn_cerca_dest_partita.clicked.connect(self._cerca_partita_destinazione)
-        dest_partita_h_layout.addWidget(self.btn_cerca_dest_partita)
-        transfer_form_layout.addRow("ID Partita Destinazione (*):", dest_partita_container_widget)
+        dest_partita_id_layout.addWidget(self.btn_cerca_dest_partita)
         
-        self.dest_partita_info_label = QLabel("Nessuna partita destinazione selezionata.")
-        self.dest_partita_info_label.setStyleSheet("font-style: italic; color: #555;")
+        transfer_form_layout.addRow("ID Partita Destinazione (*):", dest_partita_id_container)
+        # --- Fine Modifiche per Partita Destinazione ---
+        
+        self.dest_partita_info_label = QLabel("Nessuna partita destinazione selezionata o verificata.") # Testo iniziale modificato
+        self.dest_partita_info_label.setStyleSheet("font-style: italic; color: #555; padding: 3px; background-color: #E8F0FE; border: 1px solid #B0C4DE; border-radius: 3px;")
+        self.dest_partita_info_label.setWordWrap(True)
         transfer_form_layout.addRow(self.dest_partita_info_label)
 
         self.transfer_registra_var_check = QCheckBox("Registra Variazione Catastale per questo Trasferimento")
+        self.transfer_registra_var_check.setChecked(True) # Default a True potrebbe essere sensato
         transfer_form_layout.addRow(self.transfer_registra_var_check)
 
         self.btn_esegui_trasferimento = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton), " Esegui Trasferimento Immobile")
         self.btn_esegui_trasferimento.clicked.connect(self._esegui_trasferimento_immobile)
+        self.btn_esegui_trasferimento.setEnabled(False) # Inizia disabilitato
         transfer_form_layout.addRow(self.btn_esegui_trasferimento)
         
         transfer_main_layout.addWidget(transfer_group)
         transfer_main_layout.addStretch(1)
         self.operazioni_tabs.addTab(transfer_widget, "Trasferisci Immobile")
+        
+        # Connetti i segnali per aggiornare lo stato del pulsante "Esegui Trasferimento"
+        self.dest_partita_id_spinbox.valueChanged.connect(self._update_transfer_button_state_conditionally)
+        self.immobili_partita_sorgente_table.itemSelectionChanged.connect(self._update_transfer_button_state_conditionally)
 
     def _crea_tab_passaggio_proprieta(self):
         passaggio_widget_main_container = QWidget()
@@ -2805,23 +2823,140 @@ class OperazioniPartitaWidget(QWidget):
 
 
     # --- Metodi Helper e Handler ---
-    def _load_partita_sorgente_from_spinbox(self):
-        partita_id_val = self.source_partita_id_spinbox.value()
-        if partita_id_val > 0:
-            self.selected_partita_id_source = partita_id_val
-            self._aggiorna_info_partita_sorgente()
-        else:
-            QMessageBox.warning(self, "ID Non Valido", "Inserire un ID partita sorgente valido.")
-            self.selected_partita_id_source = None
-            self._aggiorna_info_partita_sorgente() # Per resettare le label e tabelle
+    def _load_partita_destinazione_from_spinbox(self):
+        partita_id_dest = self.dest_partita_id_spinbox.value()
+        
+        # Resetta l'etichetta info e lo stato di validità prima di ogni caricamento
+        self.dest_partita_info_label.setText("Verifica ID partita destinazione...") 
+        self.partita_destinazione_valida = False # Aggiungiamo un flag per lo stato di validità
 
-    def _cerca_partita_sorgente(self):
+        if partita_id_dest <= 0:
+            QMessageBox.warning(self, "ID Non Valido", "Inserire un ID Partita Destinazione valido (maggiore di zero).")
+            self.dest_partita_info_label.setText("<font color='red'>ID partita destinazione non valido.</font>")
+            self._update_transfer_button_state_conditionally()
+            return
+
+        if self.db_manager is None: # Controllo di sicurezza
+            QMessageBox.critical(self, "Errore", "DB Manager non disponibile.")
+            self.dest_partita_info_label.setText("<font color='red'>Errore interno: DB Manager non disponibile.</font>")
+            self._update_transfer_button_state_conditionally()
+            return
+
+        partita_details = self.db_manager.get_partita_details(partita_id_dest)
+
+        if partita_details:
+            stato_partita_dest = partita_details.get('stato')
+            nome_comune_dest = partita_details.get('comune_nome', 'N/D')
+            num_partita_dest_val = partita_details.get('numero_partita', 'N/D')
+
+            # 1. Controllo se è la stessa della partita sorgente
+            if self.selected_partita_id_source is not None and partita_id_dest == self.selected_partita_id_source:
+                self.dest_partita_info_label.setText(
+                    f"<font color='red'>Errore: La partita destinazione N.{num_partita_dest_val} (ID {partita_id_dest}, Comune: {nome_comune_dest}) "
+                    f"non può essere uguale alla partita sorgente.</font>"
+                )
+                self.partita_destinazione_valida = False
+            # 2. Controllo se la partita destinazione è attiva
+            elif stato_partita_dest != 'attiva':
+                self.dest_partita_info_label.setText(
+                    f"<font color='red'>Errore: La partita destinazione N.{num_partita_dest_val} (ID {partita_id_dest}, Comune: {nome_comune_dest}) "
+                    f"non è attiva (stato: {stato_partita_dest}). Impossibile trasferire immobili.</font>"
+                )
+                self.partita_destinazione_valida = False
+            else:
+                # Partita destinazione valida e attiva
+                self.dest_partita_info_label.setText(
+                    f"Destinazione: N. {num_partita_dest_val} "
+                    f"(Comune: {nome_comune_dest}, Partita ID: {partita_id_dest}, Stato: {stato_partita_dest})"
+                )
+                self.partita_destinazione_valida = True
+        else:
+            self.dest_partita_info_label.setText(
+                f"<font color='red'>Partita destinazione con ID {partita_id_dest} non trovata o errore nel recupero dettagli.</font>"
+            )
+            self.partita_destinazione_valida = False
+        
+        self._update_transfer_button_state_conditionally()
+    # Modifichiamo _cerca_partita_destinazione per usare la stessa logica di aggiornamento label
+    def _cerca_partita_destinazione(self):
         dialog = PartitaSearchDialog(self.db_manager, self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
-            self.selected_partita_id_source = dialog.selected_partita_id
-            self.source_partita_id_spinbox.setValue(self.selected_partita_id_source)
-            self._aggiorna_info_partita_sorgente()
+            selected_id = dialog.selected_partita_id
+            self.dest_partita_id_spinbox.setValue(selected_id) # Imposta lo spinbox
+            self._load_partita_destinazione_from_spinbox() # Chiama la logica di caricamento e validazione
+        # else: Non fare nulla se l'utente annulla, la label non cambia o è già impostata
+        # self._update_transfer_button_state_conditionally() # _load_partita_destinazione_from_spinbox lo fa già
+
+    def _update_transfer_button_state_conditionally(self):
+        """Abilita il pulsante 'Esegui Trasferimento' solo se tutte le condizioni sono soddisfatte."""
+        is_enabled = False
+        immobile_selezionato = self.selected_immobile_id_transfer is not None
+        id_partita_dest_inserito = self.dest_partita_id_spinbox.value() > 0 # Verifica solo che un ID sia nello spinbox
+        
+        # Il controllo sulla validità della partita destinazione è ora nel flag self.partita_destinazione_valida
+        # che viene impostato da _load_partita_destinazione_from_spinbox
+        
+        partita_dest_diversa_da_sorgente = True
+        if self.selected_partita_id_source is not None and id_partita_dest_inserito:
+            partita_dest_diversa_da_sorgente = (self.dest_partita_id_spinbox.value() != self.selected_partita_id_source)
+
+        if immobile_selezionato and id_partita_dest_inserito and \
+           self.partita_destinazione_valida and partita_dest_diversa_da_sorgente:
+            is_enabled = True
+        
+        self.btn_esegui_trasferimento.setEnabled(is_enabled)
+
+        # Aggiorna tooltip per guidare l'utente
+        if not is_enabled:
+            reasons = []
+            if not immobile_selezionato: reasons.append("selezionare un immobile dalla tabella sorgente")
+            if not id_partita_dest_inserito: 
+                reasons.append("inserire un ID per la partita destinazione e caricarne i dettagli")
+            elif not self.partita_destinazione_valida: 
+                reasons.append("la partita destinazione non è valida o non è attiva (controllare messaggio sopra)")
+            if not partita_dest_diversa_da_sorgente and id_partita_dest_inserito: 
+                reasons.append("la partita destinazione deve essere diversa dalla sorgente")
+            
+            if reasons:
+                self.btn_esegui_trasferimento.setToolTip("Per abilitare: " + " e ".join(reasons) + ".")
+            else: # Caso in cui tutti i singoli check passano ma la combinazione logica di is_enabled è False (improbabile con la logica sopra)
+                 self.btn_esegui_trasferimento.setToolTip("Verificare tutti i campi per il trasferimento.")
         else:
+            self.btn_esegui_trasferimento.setToolTip("Esegue il trasferimento dell'immobile selezionato alla partita destinazione.")
+
+
+    # Modifichi anche _immobile_sorgente_selezionato per chiamare l'aggiornamento del pulsante
+    def _immobile_sorgente_selezionato(self):
+        # ... (logica esistente per impostare self.selected_immobile_id_transfer e self.immobile_id_transfer_label)
+        selected_rows = self.immobili_partita_sorgente_table.selectionModel().selectedRows()
+        if not selected_rows:
+            self.selected_immobile_id_transfer = None
+            self.immobile_id_transfer_label.setText("Nessun immobile selezionato dalla lista.")
+        else:
+            row = selected_rows[0].row()
+            id_item = self.immobili_partita_sorgente_table.item(row, 0) # ID Imm.
+            natura_item = self.immobili_partita_sorgente_table.item(row, 1) # Natura
+
+            if id_item and id_item.text().isdigit():
+                self.selected_immobile_id_transfer = int(id_item.text())
+                natura_text = natura_item.text() if natura_item else "N/D"
+                self.immobile_id_transfer_label.setText(f"Immobile da trasferire: ID {self.selected_immobile_id_transfer} (Natura: {natura_text})")
+            else:
+                self.selected_immobile_id_transfer = None
+                self.immobile_id_transfer_label.setText("Selezione immobile non valida.")
+        
+        self._update_transfer_button_state_conditionally()
+
+    def _cerca_partita_sorgente(self):
+        """Apre il dialogo per cercare una partita sorgente."""
+        # ... (suo codice esistente)
+        dialog = PartitaSearchDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
+            self.source_partita_id_spinbox.setValue(dialog.selected_partita_id) # Imposta lo spinbox
+            self.selected_partita_id_source = dialog.selected_partita_id   # Imposta l'ID
+            self._aggiorna_info_partita_sorgente() # Carica i dettagli
+        # else: non fare nulla se l'utente annulla, per mantenere una selezione precedente se c'era
+        
             # Non resettare selected_partita_id_source se l'utente annulla, 
             # potrebbe voler mantenere la selezione precedente se c'era
             if not self.selected_partita_id_source: # Resetta solo se non c'era già una selezione
@@ -2833,34 +2968,63 @@ class OperazioniPartitaWidget(QWidget):
                 if hasattr(self, 'pp_nuova_partita_comune_label'): self.pp_nuova_partita_comune_label.setText("Il comune sarà lo stesso della partita sorgente.")
 
     def _aggiorna_info_partita_sorgente(self):
-        if self.selected_partita_id_source:
+        """
+        Recupera e visualizza i dettagli della partita sorgente (selected_partita_id_source)
+        e popola le UI dipendenti (es. tabella immobili per trasferimento).
+        """
+        # Pulisci le UI dipendenti prima di caricarne di nuove o se non c'è sorgente
+        if hasattr(self, 'immobili_partita_sorgente_table'):
+            self.immobili_partita_sorgente_table.setRowCount(0)
+            if hasattr(self, 'selected_immobile_id_transfer'): self.selected_immobile_id_transfer = None
+            if hasattr(self, 'immobile_id_transfer_label'): self.immobile_id_transfer_label.setText("Nessun immobile selezionato.")
+        
+        if hasattr(self, 'pp_immobili_da_selezionare_table'): # Per il tab Passaggio Proprietà
+            self.pp_immobili_da_selezionare_table.setRowCount(0)
+        
+        if hasattr(self, 'pp_nuova_partita_comune_label'):
+            self.pp_nuova_partita_comune_label.setText("Il comune sarà lo stesso della partita sorgente.")
+
+
+        if self.selected_partita_id_source and self.selected_partita_id_source > 0:
             partita_details = self.db_manager.get_partita_details(self.selected_partita_id_source)
             if partita_details:
-                self.selected_partita_comune_id_source = partita_details.get('comune_id')
+                self.selected_partita_comune_id_source = partita_details.get('comune_id') # Salva per uso futuro
                 self.selected_partita_comune_nome_source = partita_details.get('comune_nome', 'N/D')
+
                 self.source_partita_info_label.setText(
                     f"Partita Sorgente: N. {partita_details.get('numero_partita')} "
                     f"(Comune: {self.selected_partita_comune_nome_source} [ID: {self.selected_partita_comune_id_source}], Partita ID: {self.selected_partita_id_source})"
                 )
                 immobili = partita_details.get('immobili', [])
-                if hasattr(self, '_carica_immobili_partita_sorgente'): self._carica_immobili_partita_sorgente(immobili)
-                if hasattr(self, '_pp_carica_immobili_per_selezione'): self._pp_carica_immobili_per_selezione(immobili)
-                if hasattr(self, 'pp_nuova_partita_comune_label'):
+                
+                # Popola la tabella immobili nel tab "Trasferisci Immobile"
+                if hasattr(self, '_carica_immobili_partita_sorgente'):
+                    self._carica_immobili_partita_sorgente(immobili)
+                
+                # Popola la tabella immobili nel tab "Passaggio Proprietà"
+                if hasattr(self, '_pp_carica_immobili_per_selezione'):
+                     self._pp_carica_immobili_per_selezione(immobili)
+                
+                # Aggiorna etichetta comune nel tab "Passaggio Proprietà"
+                if hasattr(self, 'pp_nuova_partita_comune_label') and self.selected_partita_comune_nome_source and self.selected_partita_comune_id_source:
                     self.pp_nuova_partita_comune_label.setText(
                         f"{self.selected_partita_comune_nome_source} (ID: {self.selected_partita_comune_id_source})"
                     )
             else: # Partita non trovata
-                self.source_partita_info_label.setText(f"Partita ID {self.selected_partita_id_source} non trovata.")
-                self.selected_partita_id_source = None; self.selected_partita_comune_id_source = None; self.selected_partita_comune_nome_source = None
-                if hasattr(self, 'immobili_partita_sorgente_table'): self.immobili_partita_sorgente_table.setRowCount(0)
-                if hasattr(self, 'pp_immobili_da_selezionare_table'): self.pp_immobili_da_selezionare_table.setRowCount(0)
-                if hasattr(self, 'pp_nuova_partita_comune_label'): self.pp_nuova_partita_comune_label.setText("Selezionare una partita sorgente valida.")
+                self.source_partita_info_label.setText(f"Partita sorgente con ID {self.selected_partita_id_source} non trovata o errore nel recupero dettagli.")
+                self.selected_partita_id_source = None # Resetta se non trovata
+                self.selected_partita_comune_id_source = None
+                self.selected_partita_comune_nome_source = None
         else: # Nessun ID sorgente valido
              self.source_partita_info_label.setText("Nessuna partita sorgente selezionata o ID non valido.")
-             self.selected_partita_comune_id_source = None; self.selected_partita_comune_nome_source = None
-             if hasattr(self, 'immobili_partita_sorgente_table'): self.immobili_partita_sorgente_table.setRowCount(0)
-             if hasattr(self, 'pp_immobili_da_selezionare_table'): self.pp_immobili_da_selezionare_table.setRowCount(0)
-             if hasattr(self, 'pp_nuova_partita_comune_label'): self.pp_nuova_partita_comune_label.setText("Selezionare una partita sorgente.")
+             self.selected_partita_id_source = None
+             self.selected_partita_comune_id_source = None
+             self.selected_partita_comune_nome_source = None
+        
+        # Aggiorna lo stato dei pulsanti che dipendono dalla selezione della partita sorgente/destinazione
+        if hasattr(self, '_update_transfer_button_state_conditionally'):
+            self._update_transfer_button_state_conditionally()
+        # Aggiungere chiamate simili per aggiornare lo stato dei pulsanti negli altri sotto-tab se necessario
 
     def _esegui_duplicazione_partita(self):
         if self.selected_partita_id_source is None:
@@ -2910,59 +3074,55 @@ class OperazioniPartitaWidget(QWidget):
 
     def _carica_immobili_partita_sorgente(self, immobili_data: List[Dict[str,Any]]):
         table = self.immobili_partita_sorgente_table
+        
+        # --- NUOVE INTESTAZIONI ---
+        nuove_colonne = ["ID Imm.", "Natura", "Classificazione", "Consistenza", "Località Completa"]
+        table.setColumnCount(len(nuove_colonne))
+        table.setHorizontalHeaderLabels(nuove_colonne)
+        # --- FINE NUOVE INTESTAZIONI ---
+
         table.setRowCount(0)
         table.setSortingEnabled(False)
         self.selected_immobile_id_transfer = None 
-        self.immobile_id_transfer_label.setText("Nessun immobile selezionato.")
+        self.immobile_id_transfer_label.setText("Nessun immobile selezionato dalla lista sottostante.")
+
         if immobili_data:
             table.setRowCount(len(immobili_data))
             for row, immobile in enumerate(immobili_data):
-                table.setItem(row, 0, QTableWidgetItem(str(immobile.get('id'))))
-                table.setItem(row, 1, QTableWidgetItem(immobile.get('natura')))
-                loc_text = f"{immobile.get('localita_nome', '')} {immobile.get('civico', '')}".strip()
-                table.setItem(row, 2, QTableWidgetItem(loc_text))
-            table.resizeColumnsToContents()
+                col = 0
+                table.setItem(row, col, QTableWidgetItem(str(immobile.get('id', 'N/D')))); col+=1
+                table.setItem(row, col, QTableWidgetItem(immobile.get('natura', 'N/D'))); col+=1
+                
+                # --- NUOVE COLONNE ---
+                table.setItem(row, col, QTableWidgetItem(immobile.get('classificazione', 'N/D'))); col+=1
+                table.setItem(row, col, QTableWidgetItem(immobile.get('consistenza', 'N/D'))); col+=1
+                # --- FINE NUOVE COLONNE ---
+
+                loc_nome = immobile.get('localita_nome', '')
+                loc_tipo = immobile.get('localita_tipo', '')
+                loc_civico = immobile.get('civico', '')
+                loc_text = loc_nome
+                if loc_tipo:
+                    loc_text += f" ({loc_tipo})"
+                if loc_civico: # Civico potrebbe essere 0 o stringa vuota se non presente
+                    loc_text += f", civ. {loc_civico}"
+                table.setItem(row, col, QTableWidgetItem(loc_text.strip())); col+=1
+            
+            table.resizeColumnsToContents() # Adatta dopo aver popolato
+            # O imposta larghezze specifiche per una migliore leggibilità
+            # table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents) # ID
+            # table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive) # Natura
+            # table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch) # Località
         else:
             table.setRowCount(1)
-            no_imm_item = QTableWidgetItem("Nessun immobile associato a questa partita.")
+            no_imm_item = QTableWidgetItem("Nessun immobile associato a questa partita sorgente.")
             no_imm_item.setTextAlignment(Qt.AlignCenter)
             table.setItem(0,0,no_imm_item)
-            table.setSpan(0,0,1,table.columnCount())
+            table.setSpan(0,0,1,table.columnCount()) # Occupa tutte le colonne
+        
         table.setSortingEnabled(True)
 
-    def _immobile_sorgente_selezionato(self):
-        selected_rows = self.immobili_partita_sorgente_table.selectionModel().selectedRows()
-        if not selected_rows:
-            self.selected_immobile_id_transfer = None
-            self.immobile_id_transfer_label.setText("Nessun immobile selezionato.")
-            return
-        
-        row = selected_rows[0].row()
-        id_item = self.immobili_partita_sorgente_table.item(row, 0)
-        natura_item = self.immobili_partita_sorgente_table.item(row, 1)
-        if id_item and id_item.text().isdigit():
-            self.selected_immobile_id_transfer = int(id_item.text())
-            natura_text = natura_item.text() if natura_item else "N/D"
-            self.immobile_id_transfer_label.setText(f"Immobile da trasferire: ID {self.selected_immobile_id_transfer} ({natura_text})")
-        else:
-            self.selected_immobile_id_transfer = None
-            self.immobile_id_transfer_label.setText("Selezione immobile non valida (ID mancante o non numerico).")
-
-    def _cerca_partita_destinazione(self):
-        dialog = PartitaSearchDialog(self.db_manager, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
-            self.dest_partita_id_spinbox.setValue(dialog.selected_partita_id)
-            partita_details = self.db_manager.get_partita_details(dialog.selected_partita_id)
-            if partita_details:
-                self.dest_partita_info_label.setText(
-                    f"Destinazione: N. {partita_details.get('numero_partita')} "
-                    f"(Comune: {partita_details.get('comune_nome', 'N/D')} [ID: {partita_details.get('comune_id')}], Partita ID: {dialog.selected_partita_id})"
-                )
-            else:
-                self.dest_partita_info_label.setText(f"Partita destinazione ID {dialog.selected_partita_id} non trovata.")
-        else:
-             self.dest_partita_info_label.setText("Nessuna partita destinazione selezionata.")
-
+    
     def _esegui_trasferimento_immobile(self):
         if self.selected_immobile_id_transfer is None:
             QMessageBox.warning(self, "Selezione Mancante", "Selezionare un immobile dalla partita sorgente da trasferire.")
@@ -3094,6 +3254,22 @@ class OperazioniPartitaWidget(QWidget):
             table.resizeColumnsToContents()
         table.setSortingEnabled(True)
 
+    def _load_partita_sorgente_from_spinbox(self):
+        """
+        Carica i dettagli della partita sorgente usando l'ID
+        inserito nello QSpinBox self.source_partita_id_spinbox.
+        """
+        partita_id_val = self.source_partita_id_spinbox.value()
+        if partita_id_val > 0:
+            self.selected_partita_id_source = partita_id_val # Imposta l'ID della sorgente
+            # Chiamata al metodo esistente che carica e visualizza i dettagli della partita sorgente
+            # e popola anche la tabella degli immobili nel tab "Trasferisci Immobile"
+            self._aggiorna_info_partita_sorgente() 
+        else:
+            QMessageBox.warning(self, "ID Non Valido", "Inserire un ID partita sorgente valido (maggiore di zero).")
+            # Potrebbe voler resettare le info se l'ID non è valido
+            self.selected_partita_id_source = None
+            self._aggiorna_info_partita_sorgente() # Chiamata per pulire le label e le tabelle
     def _esegui_passaggio_proprieta(self):
         gui_logger.info("Avvio _esegui_passaggio_proprieta.")
         if self.selected_partita_id_source is None or self.selected_partita_comune_id_source is None:

@@ -4893,7 +4893,9 @@ class PossessoreSelectionDialog(QDialog):
     
     def handle_selection(self):
         """Gestisce la selezione o creazione del possessore."""
-        if self.tabs.currentIndex() == 0:  # Tab "Seleziona Esistente" (o il nome del suo primo tab)
+        current_tab_index = self.tabs.currentIndex() # Assumendo che self.tabs sia il suo QTabWidget
+
+        if current_tab_index == 0:  # Tab "Seleziona Esistente"
             selected_rows = self.possessori_table.selectionModel().selectedRows()
             if not selected_rows:
                 QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella.")
@@ -4904,63 +4906,77 @@ class PossessoreSelectionDialog(QDialog):
             id_item = self.possessori_table.item(current_row, 0)
             nome_item = self.possessori_table.item(current_row, 1)
             # Aggiungi controlli per tutti gli item da cui leggi .text()
-            cognome_nome_item = self.possessori_table.item(current_row, 2) if self.possessori_table.columnCount() > 2 else None
-            paternita_item = self.possessori_table.item(current_row, 3) if self.possessori_table.columnCount() > 3 else None
+            paternita_item = self.possessori_table.item(current_row, 2) if self.possessori_table.columnCount() > 2 else None 
+            # Nota: la tabella di selezione ha "Paternità" come colonna 2 (indice), non "Cognome Nome"
             
             if id_item and id_item.text().isdigit() and nome_item:
                 self.selected_possessore = {
                     'id': int(id_item.text()),
                     'nome_completo': nome_item.text(),
-                    'cognome_nome': cognome_nome_item.text() if cognome_nome_item else None,
                     'paternita': paternita_item.text() if paternita_item else None,
-                    # Recupera altri dati rilevanti dalla tabella se necessario
-                    # 'comune_riferimento_id': self.comune_id, # Se il comune_id del dialogo è rilevante
-                    # 'attivo': True # O leggi dalla colonna "Stato" se presente
+                    # 'cognome_nome' non è direttamente nella tabella di selezione, ma può essere nel dict del possessore
+                    # Se il chiamante necessita di 'cognome_nome', andrebbe recuperato in altro modo o aggiunto ai dati
                 }
                 self.accept()
             else:
                 QMessageBox.warning(self, "Errore Selezione", "Dati del possessore selezionato non validi o incompleti nella tabella.")
         
-        elif self.tabs.currentIndex() == 1:  # Tab "Crea Nuovo"
+        elif current_tab_index == 1:  # Tab "Crea Nuovo"
+            # --- USA I NOMI CORRETTI DEI WIDGET DEFINITI NELL'__INIT__ ---
             nome_completo = self.nome_completo_edit.text().strip()
             paternita = self.paternita_edit.text().strip()
-            # Assicurati che cognome_nome_edit esista se lo usi
-            cognome_nome = self.cognome_nome_edit.text().strip() if hasattr(self, 'cognome_nome_edit') else None
+            cognome_nome = self.cognome_edit.text().strip() # Questo è self.cognome_edit per il cognome/nome nel tab "Crea"
+            # quota = self.quota_edit.text().strip() # La quota non è usata per creare il possessore, ma per il legame
+
+            # --- Log di Debug per Verificare i Valori ---
+            gui_logger.debug(f"DEBUG - Tab Crea Nuovo - Valori letti: nome_completo='{nome_completo}', cognome_nome='{cognome_nome}', paternita='{paternita}'")
 
             if not nome_completo:
-                QMessageBox.warning(self, "Dati Mancanti", "Il 'Nome Completo' è obbligatorio."); return
-            if not cognome_nome: # Assumendo sia NOT NULL nel DB
-                QMessageBox.warning(self, "Dati Mancanti", "Il 'Cognome Nome' è obbligatorio."); return
-            if self.comune_id is None: # Per creare un nuovo possessore, il comune_id del dialogo deve essere valido
-                QMessageBox.warning(self, "Contesto Mancante", "Comune di riferimento non specificato per creare un nuovo possessore (necessario per il dialogo).")
+                QMessageBox.warning(self, "Dati Mancanti", "Il 'Nome Completo' è obbligatorio.")
+                self.nome_completo_edit.setFocus()
+                return
+            
+            if not cognome_nome: # Questo è il controllo che le dà problemi
+                QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Cognome e nome' è obbligatorio.")
+                self.cognome_edit.setFocus() # Focus sul widget corretto
+                return
+            
+            if self.comune_id is None: 
+                QMessageBox.warning(self, "Contesto Mancante", 
+                                    "Comune di riferimento non specificato per creare un nuovo possessore.\n"
+                                    "Questo dialogo dovrebbe essere aperto con un comune_id valido per la creazione.")
                 return
 
             try:
-                # --- CORREZIONE NOME METODO QUI ---
-                new_possessore_id = self.db_manager.create_possessore( # Era insert_possessore
+                # Chiamata corretta a create_possessore
+                new_possessore_id = self.db_manager.create_possessore(
                     nome_completo=nome_completo,
                     paternita=paternita if paternita else None,
-                    comune_riferimento_id=self.comune_id,
-                    attivo=True,
-                    cognome_nome=cognome_nome
+                    comune_riferimento_id=self.comune_id, 
+                    attivo=True, # Default per un nuovo possessore
+                    cognome_nome=cognome_nome # Passa il cognome_nome
                 )
             
                 if new_possessore_id is not None:
                     self.selected_possessore = {
                         'id': new_possessore_id,
                         'nome_completo': nome_completo,
-                        'cognome_nome': cognome_nome,
-                        'paternita': paternita,
-                        'comune_riferimento_id': self.comune_id, # Importante per il chiamante
+                        'cognome_nome': cognome_nome, # Aggiunto per coerenza
+                        'paternita': paternita,       # Aggiunto per coerenza
+                        'comune_riferimento_id': self.comune_id, # Importante
                         'attivo': True
+                        # quota non fa parte dei dati del possessore, ma del legame partita-possessore
                     }
                     QMessageBox.information(self, "Successo", f"Nuovo possessore '{nome_completo}' creato con ID: {new_possessore_id}.")
-                    self.accept()
+                    self.accept() 
             except (DBUniqueConstraintError, DBDataError, DBMError) as e:
                 QMessageBox.critical(self, "Errore Creazione Possessore", str(e))
             except Exception as e_gen:
                 gui_logger.critical(f"Errore imprevisto creazione possessore: {e_gen}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
+        else: 
+             QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
+
      # --- Dialog per l'Inserimento degli Immobili ---
 class ImmobileDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):

@@ -27,19 +27,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QTableWidgetItem, QDateEdit, QScrollArea,
                             QDialog, QListWidget,QMainWindow,QDateTimeEdit ,
                             QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
-                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, QMenu,QFormLayout,QDialogButtonBox) 
-from PyQt5.QtCore import Qt, QDate, QSettings 
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, 
+                            QMenu,QFormLayout,QDialogButtonBox,QProgressBar,QDoubleSpinBox) 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
-from PyQt5.QtWidgets import QDoubleSpinBox
-from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QPushButton, QGroupBox, QFormLayout, QApplication, QStyle,
-                             QFileDialog, QTextEdit, QProgressBar, QMessageBox, QComboBox,
-                             QLineEdit) # Aggiunte QComboBox e QLineEdit per opzioni
-from PyQt5.QtCore import QProcess # Per eseguire comandi esterni
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime,QProcess, QStandardPaths,QpyqtSignal
 
-from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime,QStandardPaths # Assicurati che QDateTime sia qui
-from PyQt5.QtCore import pyqtSignal
 
 
 

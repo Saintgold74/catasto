@@ -6,11 +6,18 @@ import json
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
 
-from PyQt5.QtWidgets import (QDialog, QLineEdit, QComboBox, QPushButton, QLabel, QVBoxLayout,
-                             QHBoxLayout, QListWidget, QListWidgetItem, QTableWidget,
-                             QSpinBox, QDateEdit, QDateTimeEdit, QDoubleSpinBox,QTableWidgetItem , # Aggiunte per dialoghi
-                             QApplication, QStyle, QFileDialog, QMessageBox, QCheckBox, QFormLayout, QDialogButtonBox) # E altre necessarie per i dialoghi
-from PyQt5.QtCore import Qt, QDate, QDateTime # Aggiunto QDateTime
+# Importazioni PyQt5
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                            QHBoxLayout, QPushButton, QLabel, QLineEdit,
+                            QComboBox, QTabWidget, QTextEdit, QMessageBox,
+                            QCheckBox, QGroupBox, QGridLayout, QTableWidget,
+                            QTableWidgetItem, QDateEdit, QScrollArea,
+                            QDialog, QListWidget,QMainWindow,QDateTimeEdit ,
+                            QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
+                            QInputDialog, QHeaderView,QFrame,QAbstractItemView,QSizePolicy,QAction, 
+                            QMenu,QFormLayout,QDialogButtonBox,QProgressBar,QDoubleSpinBox) 
+from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent # Aggiunto QCloseEvent
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime,QProcess, QStandardPaths,pyqtSignal 
 # In app_utils.py, dopo le importazioni PyQt e standard:
 # Nessuna dipendenza ciclica dagli altri due moduli GUI (gui_main, gui_widgets) dovrebbe essere necessaria qui.
 # Questo modulo fornisce utility AGLI ALTRI.
@@ -73,6 +80,9 @@ SETTINGS_DB_USER = "Database/User"
 SETTINGS_DB_SCHEMA = "Database/Schema"
 # Non salviamo la password in QSettings
 SETTINGS_DB_PASSWORD = "Database/Password"  # Non usato, ma definito per completezza
+
+logging.getLogger("CatastoGUI").info("Messaggio da gui_widgets.py")
+logging.getLogger("CatastoGUI").error("Errore da app_utils.py")
 # --- Funzioni Helper per Password ---
 def _hash_password(password: str) -> str:
     password_bytes = password.encode('utf-8')
@@ -86,10 +96,10 @@ def _verify_password(stored_hash: str, provided_password: str) -> bool:
         provided_password_bytes = provided_password.encode('utf-8')
         return bcrypt.checkpw(provided_password_bytes, stored_hash_bytes)
     except ValueError:
-        gui_logger.error(f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
+        logging.getLogger("CatastoGUI").error(f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
         return False
     except Exception as e:
-        gui_logger.error(f"Errore imprevisto durante la verifica bcrypt: {e}")
+        logging.getLogger("CatastoGUI").error(f"Errore imprevisto durante la verifica bcrypt: {e}")
         return False
 def qdate_to_datetime(q_date: QDate) -> Optional[date]:
     if q_date.isNull() or not q_date.isValid(): # Controlla anche isValid
@@ -133,7 +143,7 @@ if FPDF_AVAILABLE:
                     self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 except Exception as e: # FPDFException non è definita se FPDF non è importato
                     if "Not enough horizontal space" in str(e):
-                        gui_logger.warning(f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
+                        logging.getLogger("CatastoGUI").warning(f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
                         self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [ERRORE DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     else:
                         raise e
@@ -193,7 +203,7 @@ if FPDF_AVAILABLE:
                     self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
                 except Exception as e: # FPDFException
                     if "Not enough horizontal space" in str(e):
-                        gui_logger.warning(f"FPDFException (chapter_body possessore): {e} per testo: {text_to_write[:100]}...")
+                        logging.getLogger("CatastoGUI").warning(f"FPDFException (chapter_body possessore): {e} per testo: {text_to_write[:100]}...")
                         self.multi_cell(page_width, 5, f"{key.replace('_', ' ').title()}: [DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
                     else: raise e
             self.ln(2)
@@ -284,7 +294,7 @@ def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partit
         try:
             json_data_str = json.dumps(dict_data, indent=4, ensure_ascii=False, default=json_serial)
         except TypeError as te:
-            gui_logger.error(f"Errore di serializzazione JSON per partita ID {partita_id}: {te} - Dati: {dict_data}")
+            logging.getLogger("CatastoGUI").error(f"Errore di serializzazione JSON per partita ID {partita_id}: {te} - Dati: {dict_data}")
             QMessageBox.critical(parent_widget, "Errore di Serializzazione", 
                                  f"Errore durante la conversione dei dati della partita in JSON: {te}\n"
                                  "Controllare i log per i dettagli.")
@@ -300,7 +310,7 @@ def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partit
                     f.write(json_data_str)
                 QMessageBox.information(parent_widget, "Esportazione JSON", f"Partita esportata con successo in:\n{filename}")
             except Exception as e:
-                gui_logger.error(f"Errore durante il salvataggio del file JSON per partita ID {partita_id}: {e}")
+                logging.getLogger("CatastoGUI").error(f"Errore durante il salvataggio del file JSON per partita ID {partita_id}: {e}")
                 QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
     else:
         QMessageBox.warning(parent_widget, "Errore Dati", f"Partita con ID {partita_id} non trovata o errore nel recupero dei dati per l'esportazione.")
@@ -396,7 +406,7 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
         pdf.output(filename)
         QMessageBox.information(parent_widget, "Esportazione PDF", f"Partita esportata con successo in:\n{filename}")
     except Exception as e:
-        gui_logger.exception("Errore esportazione PDF partita (GUI)")
+        logging.getLogger("CatastoGUI").exception("Errore esportazione PDF partita (GUI)")
         QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione PDF:\n{e}")
 
 
@@ -506,7 +516,7 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
         pdf.output(filename)
         QMessageBox.information(parent_widget, "Esportazione PDF", f"Possessore esportato con successo in:\n{filename}")
     except Exception as e:
-        gui_logger.exception("Errore esportazione PDF possessore (GUI)")
+        logging.getLogger("CatastoGUI").exception("Errore esportazione PDF possessore (GUI)")
         QMessageBox.critical(parent_widget, "Errore Esportazione", f"Errore durante l'esportazione PDF:\n{e}")
 
 class ComuneSelectionDialog(QDialog): # ASSICURATI CHE SIA QUI O PRIMA DI DOVE SERVE
@@ -566,7 +576,7 @@ class ComuneSelectionDialog(QDialog): # ASSICURATI CHE SIA QUI O PRIMA DI DOVE S
             else:
                 self.comuni_list.addItem("Nessun comune trovato.")
         except Exception as e:
-            gui_logger.error(f"Errore caricamento comuni nel dialogo: {e}")
+            logging.getLogger("CatastoGUI").error(f"Errore caricamento comuni nel dialogo: {e}")
             self.comuni_list.addItem("Errore caricamento comuni.")
 
     def filter_comuni(self):
@@ -864,7 +874,7 @@ class PossessoreSelectionDialog(QDialog):
 
             if self.comune_id is not None:
                 # Scenario 1: Comune specificato
-                gui_logger.debug(f"PossessoreSelectionDialog: Caricamento per comune_id={self.comune_id}, filtro='{actual_filter_text}'")
+                logging.getLogger("CatastoGUI").debug(f"PossessoreSelectionDialog: Caricamento per comune_id={self.comune_id}, filtro='{actual_filter_text}'")
                 temp_list = self.db_manager.get_possessori_by_comune(self.comune_id) # Questo dovrebbe già restituire tutti i campi necessari
                 if actual_filter_text:
                     ft_lower = actual_filter_text.lower()
@@ -878,13 +888,13 @@ class PossessoreSelectionDialog(QDialog):
             else: # Nessun comune_id specificato -> ricerca globale
                 # Scenario 2: Ricerca globale (con o senza testo di filtro)
                 # Se actual_filter_text è None, search_possessori_by_term_globally restituirà i primi N.
-                gui_logger.debug(f"PossessoreSelectionDialog: Caricamento globale, filtro='{actual_filter_text}'")
+                logging.getLogger("CatastoGUI").debug(f"PossessoreSelectionDialog: Caricamento globale, filtro='{actual_filter_text}'")
                 possessori_list = self.db_manager.search_possessori_by_term_globally(actual_filter_text) # Passa None se nessun filtro
-                gui_logger.info(f"PossessoreSelectionDialog.load_possessori: Risultato da search_possessori_by_term_globally: {len(possessori_list)} elementi.")
+                logging.getLogger("CatastoGUI").info(f"PossessoreSelectionDialog.load_possessori: Risultato da search_possessori_by_term_globally: {len(possessori_list)} elementi.")
             
             # Popolamento della tabella
             if possessori_list:
-                gui_logger.info(f">>> Popolando possessori_table con {len(possessori_list)} righe.")
+                logging.getLogger("CatastoGUI").info(f">>> Popolando possessori_table con {len(possessori_list)} righe.")
                 self.possessori_table.setRowCount(len(possessori_list))
                 for i, pos_data in enumerate(possessori_list):
                     col = 0
@@ -895,14 +905,14 @@ class PossessoreSelectionDialog(QDialog):
                     item_pater_str = pos_data.get('paternita', 'N/D') 
                     item_stato_str = "Attivo" if pos_data.get('attivo', False) else "Non Attivo"
                     
-                    gui_logger.debug(f"    Popolando riga {i}: ID='{item_id_str}', Nome='{item_nome_str}', Pater='{item_pater_str}', Stato='{item_stato_str}'")
+                    logging.getLogger("CatastoGUI").debug(f"    Popolando riga {i}: ID='{item_id_str}', Nome='{item_nome_str}', Pater='{item_pater_str}', Stato='{item_stato_str}'")
 
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_id_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_nome_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_pater_str)); col+=1
                     self.possessori_table.setItem(i, col, QTableWidgetItem(item_stato_str)); col+=1
                 self.possessori_table.resizeColumnsToContents()
-                gui_logger.info(">>> Popolamento possessori_table completato.")
+                logging.getLogger("CatastoGUI").info(">>> Popolamento possessori_table completato.")
             # Mostra "Nessun risultato" solo se è stata tentata una ricerca attiva (con filtro o con comune)
             # O se la ricerca globale senza filtro non ha prodotto risultati (improbabile se ci sono dati).
             elif actual_filter_text or self.comune_id: 
@@ -915,7 +925,7 @@ class PossessoreSelectionDialog(QDialog):
                 self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
 
         except Exception as e:
-            gui_logger.error(f"Errore durante il caricamento dei possessori in PossessoreSelectionDialog: {e}", exc_info=True)
+            logging.getLogger("CatastoGUI").error(f"Errore durante il caricamento dei possessori in PossessoreSelectionDialog: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare i possessori: {e}")
             # Mostra errore anche nella tabella
             self.possessori_table.setRowCount(1)
@@ -927,7 +937,7 @@ class PossessoreSelectionDialog(QDialog):
     # Il metodo filter_possessori dovrebbe rimanere com'è, chiamando load_possessori con il testo.
     def filter_possessori(self): # Questo metodo è collegato a self.filter_edit.textChanged
         filter_text = self.filter_edit.text().strip()
-        gui_logger.info(f">>> PossessoreSelectionDialog.filter_possessori: Testo filtro='{filter_text}'")
+        logging.getLogger("CatastoGUI").info(f">>> PossessoreSelectionDialog.filter_possessori: Testo filtro='{filter_text}'")
     
         # Chiama load_possessori; il testo del filtro verrà usato se comune_id è None
         self.load_possessori(filter_text if filter_text else None)
@@ -989,7 +999,7 @@ class PossessoreSelectionDialog(QDialog):
             # quota = self.quota_edit.text().strip() # La quota non è usata per creare il possessore, ma per il legame
 
             # --- Log di Debug per Verificare i Valori ---
-            gui_logger.debug(f"DEBUG - Tab Crea Nuovo - Valori letti: nome_completo='{nome_completo}', cognome_nome='{cognome_nome}', paternita='{paternita}'")
+            logging.getLogger("CatastoGUI").debug(f"DEBUG - Tab Crea Nuovo - Valori letti: nome_completo='{nome_completo}', cognome_nome='{cognome_nome}', paternita='{paternita}'")
 
             if not nome_completo:
                 QMessageBox.warning(self, "Dati Mancanti", "Il 'Nome Completo' è obbligatorio.")
@@ -1032,7 +1042,7 @@ class PossessoreSelectionDialog(QDialog):
             except (DBUniqueConstraintError, DBDataError, DBMError) as e:
                 QMessageBox.critical(self, "Errore Creazione Possessore", str(e))
             except Exception as e_gen:
-                gui_logger.critical(f"Errore imprevisto creazione possessore: {e_gen}", exc_info=True)
+                logging.getLogger("CatastoGUI").critical(f"Errore imprevisto creazione possessore: {e_gen}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
         else: 
              QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
@@ -1142,10 +1152,10 @@ class ImmobileDialog(QDialog):
             if dialog.selected_localita_id is not None and dialog.selected_localita_name is not None:
                 self.localita_id = dialog.selected_localita_id
                 self.localita_display.setText(dialog.selected_localita_name)
-                gui_logger.info(f"ImmobileDialog: Località selezionata ID: {self.localita_id}, Nome: '{self.localita_display.text()}'")
+                logging.getLogger("CatastoGUI").info(f"ImmobileDialog: Località selezionata ID: {self.localita_id}, Nome: '{self.localita_display.text()}'")
             else:
                 # Questo caso dovrebbe essere raro se _conferma_selezione in LocalitaSelectionDialog funziona correttamente
-                gui_logger.warning("ImmobileDialog: LocalitaSelectionDialog accettato ma ID/nome località non validi.")
+                logging.getLogger("CatastoGUI").warning("ImmobileDialog: LocalitaSelectionDialog accettato ma ID/nome località non validi.")
         # else: L'utente ha premuto "Annulla" o chiuso il dialogo LocalitaSelectionDialog,
         # quindi non aggiorniamo nulla e la selezione precedente (o nessuna selezione) rimane.
 
@@ -1318,12 +1328,12 @@ class LocalitaSelectionDialog(QDialog):
                     self.selected_localita_name += f", {civico_item_text}"
                 self.selected_localita_name += f" ({tipo})"
                 
-                gui_logger.info(f"LocalitaSelectionDialog: Località selezionata ID: {self.selected_localita_id}, Nome: '{self.selected_localita_name}'")
+                logging.getLogger("CatastoGUI").info(f"LocalitaSelectionDialog: Località selezionata ID: {self.selected_localita_id}, Nome: '{self.selected_localita_name}'")
                 self.accept() # Chiude il dialogo e QDialog.Accepted viene restituito a exec_()
             except ValueError:
                 QMessageBox.critical(self, "Errore Dati", "ID località non valido nella tabella.")
             except Exception as e:
-                gui_logger.error(f"Errore in _conferma_selezione: {e}", exc_info=True)
+                logging.getLogger("CatastoGUI").error(f"Errore in _conferma_selezione: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Errore durante la conferma della selezione: {e}")
         # else: se siamo nel tab "Crea Nuova", il pulsante "Seleziona" non dovrebbe essere attivo o visibile
 
@@ -1362,7 +1372,7 @@ class LocalitaSelectionDialog(QDialog):
                         self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
             except Exception as e:
-                gui_logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
+                logging.getLogger("CatastoGUI").error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare le località: {e}")
         
         self.localita_table.setSortingEnabled(True)
@@ -1374,15 +1384,18 @@ class LocalitaSelectionDialog(QDialog):
     # ... (copia qui i metodi _salva_nuova_localita_da_tab, apri_modifica_localita_selezionata, 
     #  e _get_selected_localita_id_from_table dalla tua versione precedente del codice)
     def _salva_nuova_localita_da_tab(self):
+        # Usi i nomi corretti dei widget del tab "Crea Nuova"
         nome = self.nome_edit_nuova.text().strip()
         tipo = self.tipo_combo_nuova.currentText()
         civico_val = self.civico_spinbox_nuova.value()
+        # La logica per determinare 'civico' dal valore dello spinbox e dallo specialValueText
         civico = civico_val if self.civico_spinbox_nuova.text() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0 else None
+
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
-            self.nome_edit_nuova.setFocus()
+            self.nome_edit_nuova.setFocus() # Focus sul widget corretto
             return
-        if not self.comune_id:
+        if not self.comune_id: # Questo controllo è corretto
             QMessageBox.critical(self, "Errore Interno", "ID Comune non specificato. Impossibile creare località.")
             return
         try:
@@ -1393,12 +1406,12 @@ class LocalitaSelectionDialog(QDialog):
                 self.tabs.setCurrentIndex(0) 
                 self.nome_edit_nuova.clear()
                 self.tipo_combo_nuova.setCurrentIndex(0) 
-                self.civico_spinbox_nuova.setValue(0) 
+                self.civico_spinbox_nuova.setValue(0) # O il suo valore minimo se diverso da 0
         except (DBDataError, DBMError) as dbe:
-            gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+            logging.getLogger("CatastoGUI").error(f"Errore inserimento località: {dbe}", exc_info=True)
             QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{getattr(dbe, 'message', str(dbe))}")
         except Exception as e:
-            gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+            logging.getLogger("CatastoGUI").error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
 
     def apri_modifica_localita_selezionata(self):
@@ -1448,10 +1461,10 @@ class LocalitaSelectionDialog(QDialog):
                 self.civico_edit.setValue(self.civico_edit.minimum()) # o 0 e special value text
             # else: gestito da eccezioni in insert_localita
         except (DBDataError, DBMError) as dbe:
-            gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+            logging.getLogger("CatastoGUI").error(f"Errore inserimento località: {dbe}", exc_info=True)
             QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{dbe.message if hasattr(dbe, 'message') else str(dbe)}")
         except Exception as e:
-            gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+            logging.getLogger("CatastoGUI").error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
     
     # Rimuovi il vecchio `handle_selection_or_creation` se non più usato dal pulsante OK generale.
@@ -1562,10 +1575,10 @@ class LocalitaSelectionDialog(QDialog):
                     self.accept() 
                 # else: gestito da eccezioni
             except (DBDataError, DBMError) as dbe:
-                gui_logger.error(f"Errore inserimento località: {dbe}", exc_info=True)
+                logging.getLogger("CatastoGUI").error(f"Errore inserimento località: {dbe}", exc_info=True)
                 QMessageBox.critical(self, "Errore Database", f"Impossibile inserire località:\n{dbe.message if hasattr(dbe, 'message') else str(dbe)}")
             except Exception as e:
-                gui_logger.error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
+                logging.getLogger("CatastoGUI").error(f"Errore imprevisto inserimento località: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {e}")
 
     # ... (load_localita, filter_localita come prima, assicurati che _aggiorna_stato_pulsanti_azione_localita sia chiamato in load_localita)
@@ -1586,7 +1599,7 @@ class LocalitaSelectionDialog(QDialog):
                         self.localita_table.setItem(i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
             except Exception as e:
-                gui_logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
+                logging.getLogger("CatastoGUI").error(f"Errore caricamento località per comune {self.comune_id}: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare le località: {e}")
         else:
             self.localita_table.setRowCount(1)

@@ -258,21 +258,23 @@ MODERN_STYLESHEET = """
 """
 
 
-# --- Configurazione Logging per GUI ---
-logging.getLogger("CatastoGUI") = logging.getLogger("CatastoGUI")
-if not logging.getLogger("CatastoGUI").hasHandlers():
+# Configurazione del logger (SOLO IN gui_main.py)
+gui_logger = logging.getLogger("CatastoGUI") # Assegna l'oggetto logger a una variabile
+gui_logger.setLevel(logging.INFO) # o logging.DEBUG
+
+# Se non ha già handler, li aggiunge:
+if not gui_logger.hasHandlers():
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    gui_log_handler = logging.FileHandler("catasto_gui.log")
+    # Esempio di File Handler
+    gui_log_handler = logging.FileHandler("catasto_gui.log") # Nome del file di log
     gui_log_handler.setFormatter(logging.Formatter(log_format))
-    
-    if not getattr(sys, 'frozen', False): 
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(logging.Formatter(log_format))
-        logging.getLogger("CatastoGUI").addHandler(console_handler)
+    gui_logger.addHandler(gui_log_handler)
 
-    logging.getLogger("CatastoGUI").addHandler(gui_log_handler)
-    logging.getLogger("CatastoGUI").setLevel(logging.INFO)
-
+    # Esempio di Console Handler (per debug durante lo sviluppo)
+    # if not getattr(sys, 'frozen', False): # Per non mostrare in console se è un eseguibile frozen
+    #    console_handler = logging.StreamHandler(sys.stdout)
+    #    console_handler.setFormatter(logging.Formatter(log_format))
+    #    gui_logger.addHandler(console_handler)
 client_ip_address_gui: str = "127.0.0.1"
 
 class DBConfigDialog(QDialog): # Definizione del Dialogo (come fornito precedentemente)

@@ -53,6 +53,9 @@ except ImportError:
 # from app_utils import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ...)
 # from app_utils import (qdate_to_datetime, datetime_to_qdate, ...)
 # from app_utils import (FPDF_AVAILABLE, gui_esporta_partita_pdf, ...) # Per EsportazioniWidget
+logging.getLogger("CatastoGUI").info("Messaggio da gui_widgets.py")
+logging.getLogger("CatastoGUI").error("Errore da app_utils.py")
+
 
 class ElencoComuniWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):

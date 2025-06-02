@@ -1,5 +1,0 @@
-- in esportazioni ci vorrebbe un'anteprima
-- spostare ricerca avanzata possessori come sotto tab di consultazione
-- in consultazione "modifica partite " bisogna gestire i controlli di per partite esistenti
-- verificare backup e restore
-- aggiungere passaggio da registra proprieta a trasf e simili

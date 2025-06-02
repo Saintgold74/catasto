@@ -18,6 +18,10 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 # Aggiunto QCloseEvent
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent
 from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime, QProcess, QStandardPaths, pyqtSignal
+from app_utils import PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF # Assumendo che GenericTextReportPDF sia in app_utils
+from PyQt5.QtWidgets import QFileDialog, QMessageBox # Già presenti, ma per chiarezza
+from datetime import date # Già presente
+import logging # Già presente
 # In gui_main.py, dopo le importazioni PyQt e standard:
 # E le sue eccezioni se servono qui
 from catasto_db_manager import CatastoDBManager
@@ -3302,9 +3306,9 @@ class ReportisticaWidget(QWidget):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
 
-        # --- Tab Certificato Proprietà ---
-        certificato_tab = QWidget()
-        certificato_layout = QVBoxLayout(certificato_tab)
+        # --- Tab Report Proprietà ---
+        report_tab = QWidget()
+        report_layout = QVBoxLayout(report_tab)
         # ... (input_layout, self.partita_id_edit, self.search_partita_button come prima) ...
         input_layout = QHBoxLayout()
         partita_id_label = QLabel("ID della partita:")
@@ -3315,30 +3319,30 @@ class ReportisticaWidget(QWidget):
         input_layout.addWidget(partita_id_label)
         input_layout.addWidget(self.partita_id_edit)
         input_layout.addWidget(self.search_partita_button)
-        certificato_layout.addLayout(input_layout)
+        report_layout.addLayout(input_layout)
 
-        self.generate_cert_button = QPushButton("Genera Certificato")
-        self.generate_cert_button.clicked.connect(self.generate_certificato)
-        certificato_layout.addWidget(self.generate_cert_button)
-        self.certificato_text = QTextEdit()
-        self.certificato_text.setReadOnly(True)
-        self.certificato_text.setFontFamily("Courier New")
-        certificato_layout.addWidget(self.certificato_text)
+        self.generate_cert_button = QPushButton("Genera Report")
+        self.generate_cert_button.clicked.connect(self.generate_report)
+        report_layout.addWidget(self.generate_cert_button)
+        self.report_text = QTextEdit()
+        self.report_text.setReadOnly(True)
+        self.report_text.setFontFamily("Courier New")
+        report_layout.addWidget(self.report_text)
 
         # Layout per i pulsanti di esportazione
         export_buttons_cert_layout = QHBoxLayout()
         self.export_cert_txt_button = QPushButton("Esporta in TXT")
         self.export_cert_txt_button.clicked.connect(lambda: self.export_report(
-            self.certificato_text.toPlainText(), "certificato_proprieta", "txt"))
+            self.report_text.toPlainText(), "report_proprieta", "txt"))
         self.export_cert_pdf_button = QPushButton("Esporta in PDF")
         self.export_cert_pdf_button.clicked.connect(
-            self._export_certificato_pdf)  # NUOVO METODO
+            self._export_report_pdf)  # NUOVO METODO
         self.export_cert_pdf_button.setEnabled(FPDF_AVAILABLE)
         export_buttons_cert_layout.addWidget(self.export_cert_txt_button)
         export_buttons_cert_layout.addWidget(
             self.export_cert_pdf_button)  # AGGIUNTO PULSANTE PDF
-        certificato_layout.addLayout(export_buttons_cert_layout)
-        tabs.addTab(certificato_tab, "Certificato Proprietà")
+        report_layout.addLayout(export_buttons_cert_layout)
+        tabs.addTab(report_tab, "Report Proprietà")
 
         # --- Tab Report Genealogico ---
         genealogico_tab = QWidget()
@@ -3516,8 +3520,8 @@ class ReportisticaWidget(QWidget):
             logging.getLogger("CatastoGUI").info(
                 "ReportisticaWidget: Selezione possessore annullata.")
 
-    def generate_certificato(self):
-        """Genera un certificato di proprietà."""
+    def generate_report(self):
+        """Genera un report di proprietà."""
         partita_id = self.partita_id_edit.value()
 
         if partita_id <= 0:
@@ -3525,13 +3529,13 @@ class ReportisticaWidget(QWidget):
                 self, "Errore", "Inserisci un ID partita valido.")
             return
 
-        certificato = self.db_manager.genera_certificato_proprieta(partita_id)
+        report = self.db_manager.genera_report_proprieta(partita_id)
 
-        if certificato:
-            self.certificato_text.setText(certificato)
+        if report:
+            self.report_text.setText(report)
         else:
             QMessageBox.warning(
-                self, "Errore", f"Impossibile generare il certificato per la partita ID {partita_id}.")
+                self, "Errore", f"Impossibile generare il report per la partita ID {partita_id}.")
 
     def generate_genealogico(self):
         """Genera un report genealogico."""
@@ -3618,27 +3622,41 @@ class ReportisticaWidget(QWidget):
                 QMessageBox.critical(
                     self, "Errore Esportazione", f"Errore durante il salvataggio del file:\n{e}")
 
+  
+
     def _export_generic_text_to_pdf(self, text_content: str, default_filename_prefix: str, pdf_report_title: str):
-        """Helper generico per esportare testo semplice in PDF."""
+        """Helper generico per esportare testo semplice in PDF, con anteprima."""
+
         if not FPDF_AVAILABLE:
             QMessageBox.critical(
                 self, "Errore Libreria", "La libreria FPDF (fpdf2) non è disponibile per generare PDF.")
             return
-        if not text_content:
+        if not text_content.strip(): # Aggiunto .strip() per considerare stringhe di soli spazi come vuote
             QMessageBox.warning(
                 self, "Nessun Contenuto", f"Nessun testo da esportare in PDF per '{pdf_report_title}'.")
             return
 
+        # --- INIZIO LOGICA ANTEPRIMA ---
+        # Istanzia e mostra il dialogo di anteprima testuale
+        preview_dialog = PDFApreviewDialog(text_content, self, title=f"Anteprima: {pdf_report_title}")
+        
+        if preview_dialog.exec_() != QDialog.Accepted:
+            logging.getLogger("CatastoGUI").info(f"Esportazione PDF per '{pdf_report_title}' annullata dall'utente dopo anteprima.")
+            return # L'utente ha premuto "Annulla" nel dialogo di anteprima
+        # --- FINE LOGICA ANTEPRIMA ---
+
+        # Se l'utente ha confermato l'anteprima ("Procedi con Esportazione PDF"),
+        # allora procedi con il salvataggio del file.
         default_filename = f"{default_filename_prefix}_{date.today().isoformat()}.pdf"
         filename_pdf, _ = QFileDialog.getSaveFileName(
             self, f"Salva PDF - {pdf_report_title}", default_filename, "File PDF (*.pdf)")
 
-        if filename_pdf:
+        if filename_pdf: # L'utente ha selezionato un percorso e un nome file
             try:
-                # Usa la nuova classe PDF generica
-                pdf = GenericTextReportPDF(report_title=pdf_report_title)
+                # Usa la classe PDF generica
+                pdf = GenericTextReportPDF(report_title=pdf_report_title) # Da app_utils.py
                 pdf.add_page()
-                pdf.add_report_text(text_content)
+                pdf.add_report_text(text_content) # text_content è già disponibile
                 pdf.output(filename_pdf)
                 QMessageBox.information(self, "Esportazione PDF Completata",
                                         f"Report PDF salvato con successo in:\n{filename_pdf}")
@@ -3647,35 +3665,50 @@ class ReportisticaWidget(QWidget):
                     f"Errore durante la generazione del PDF per '{pdf_report_title}': {e}", exc_info=True)
                 QMessageBox.critical(
                     self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
+        # else: L'utente ha annullato il QFileDialog.getSaveFileName, quindi non fare nulla.
 
-    # Metodi specifici per pulsanti PDF
-    def _export_certificato_pdf(self):
+    # I metodi specifici come _export_report_pdf ora chiameranno _export_generic_text_to_pdf
+    # che include già la logica di anteprima. Quindi, _export_report_pdf non necessita modifiche dirette
+    # per l'anteprima, a meno che tu non voglia passare dati diversi o un titolo diverso al dialogo di anteprima.
+
+    def _export_report_pdf(self):
+        # Il testo viene preso da self.report_text
+        text_to_export = self.report_text.toPlainText()
+        
+        # Il titolo per il PDF e per il dialogo di anteprima
+        report_title = f"Report Proprietà - Partita ID {self.partita_id_edit.value()}"
+        
+        # Il prefisso per il nome file di default
+        filename_prefix = f"report_partita_{self.partita_id_edit.value()}"
+        
         self._export_generic_text_to_pdf(
-            self.certificato_text.toPlainText(),
-            f"certificato_partita_{self.partita_id_edit.value()}",
-            f"Certificato Proprietà - Partita ID {self.partita_id_edit.value()}"
+            text_content=text_to_export,
+            default_filename_prefix=filename_prefix,
+            pdf_report_title=report_title
         )
+
+    # Dovrai applicare una logica simile anche agli altri metodi di esportazione PDF in ReportisticaWidget:
+    # _export_genealogico_pdf, _export_possessore_pdf, _export_consultazioni_pdf.
+    # Essi chiameranno _export_generic_text_to_pdf che ora gestisce l'anteprima.
 
     def _export_genealogico_pdf(self):
-        self._export_generic_text_to_pdf(
-            self.genealogico_text.toPlainText(),
-            f"report_genealogico_partita_{self.partita_id_gen_edit.value()}",
-            f"Report Genealogico - Partita ID {self.partita_id_gen_edit.value()}"
-        )
+        text_to_export = self.genealogico_text.toPlainText()
+        report_title = f"Report Genealogico - Partita ID {self.partita_id_gen_edit.value()}" # Assumendo che partita_id_gen_edit esista
+        filename_prefix = f"report_genealogico_partita_{self.partita_id_gen_edit.value()}"
+        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
 
     def _export_possessore_pdf(self):
-        self._export_generic_text_to_pdf(
-            self.possessore_text.toPlainText(),
-            f"report_possessore_{self.possessore_id_edit.value()}",
-            f"Report Possessore - ID {self.possessore_id_edit.value()}"
-        )
+        text_to_export = self.possessore_text.toPlainText()
+        report_title = f"Report Possessore - ID {self.possessore_id_edit.value()}" # Assumendo possessore_id_edit
+        filename_prefix = f"report_possessore_{self.possessore_id_edit.value()}"
+        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
 
     def _export_consultazioni_pdf(self):
-        self._export_generic_text_to_pdf(
-            self.consultazioni_text.toPlainText(),
-            "report_consultazioni",
-            "Report Consultazioni"
-        )
+        text_to_export = self.consultazioni_text.toPlainText()
+        report_title = "Report Consultazioni"
+        filename_prefix = "report_consultazioni"
+        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
+
 
 
 class StatisticheWidget(QWidget):

@@ -114,14 +114,14 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ========================================================================
--- Funzione: genera_certificato_proprieta
+-- Funzione: genera_report_proprieta
 -- ========================================================================
-CREATE OR REPLACE FUNCTION genera_certificato_proprieta(p_partita_id INTEGER)
+CREATE OR REPLACE FUNCTION genera_report_proprieta(p_partita_id INTEGER)
 RETURNS TEXT AS $$
 DECLARE
     v_partita partita%ROWTYPE;
     v_comune_nome comune.nome%TYPE;
-    v_certificato TEXT := '';
+    v_report TEXT := '';
     v_immobile RECORD;
     v_record RECORD;
 BEGIN
@@ -132,67 +132,67 @@ BEGIN
     SELECT nome INTO v_comune_nome FROM comune WHERE id = v_partita.comune_id;
 
     -- Intestazione (invariata)
-    v_certificato := '============================================================' || E'\n';
-    v_certificato := v_certificato || '                CERTIFICATO DI PROPRIETA IMMOBILIARE' || E'\n';
-    v_certificato := v_certificato || '                     CATASTO STORICO ANNI ''50' || E'\n';
-    v_certificato := v_certificato || '============================================================' || E'\n\n';
+    v_report := '============================================================' || E'\n';
+    v_report := v_report || '                REPORT PROPRIETA IMMOBILIARE' || E'\n';
+    v_report := v_report || '                     CATASTO STORICO ANNI ''50' || E'\n';
+    v_report := v_report || '============================================================' || E'\n\n';
 
     -- Dati generali (usa v_comune_nome)
-    v_certificato := v_certificato || 'COMUNE: ' || v_comune_nome || E'\n';
-    v_certificato := v_certificato || 'PARTITA N.: ' || v_partita.numero_partita || E'\n';
-    v_certificato := v_certificato || 'TIPO: ' || v_partita.tipo || E'\n';
-    v_certificato := v_certificato || 'DATA IMPIANTO: ' || COALESCE(v_partita.data_impianto::TEXT, 'N/D') || E'\n';
-    v_certificato := v_certificato || 'STATO: ' || v_partita.stato || E'\n';
-    IF v_partita.data_chiusura IS NOT NULL THEN v_certificato := v_certificato || 'DATA CHIUSURA: ' || v_partita.data_chiusura::TEXT || E'\n'; END IF;
-    IF v_partita.numero_provenienza IS NOT NULL THEN v_certificato := v_certificato || 'PROVENIENZA: Partita n. ' || v_partita.numero_provenienza || E'\n'; END IF;
-    v_certificato := v_certificato || E'\n';
+    v_report := v_report || 'COMUNE: ' || v_comune_nome || E'\n';
+    v_report := v_report || 'PARTITA N.: ' || v_partita.numero_partita || E'\n';
+    v_report := v_report || 'TIPO: ' || v_partita.tipo || E'\n';
+    v_report := v_report || 'DATA IMPIANTO: ' || COALESCE(v_partita.data_impianto::TEXT, 'N/D') || E'\n';
+    v_report := v_report || 'STATO: ' || v_partita.stato || E'\n';
+    IF v_partita.data_chiusura IS NOT NULL THEN v_report := v_report || 'DATA CHIUSURA: ' || v_partita.data_chiusura::TEXT || E'\n'; END IF;
+    IF v_partita.numero_provenienza IS NOT NULL THEN v_report := v_report || 'PROVENIENZA: Partita n. ' || v_partita.numero_provenienza || E'\n'; END IF;
+    v_report := v_report || E'\n';
 
     -- Possessori (invariato)
-    v_certificato := v_certificato || '-------------------- INTESTATARI --------------------' || E'\n';
+    v_report := v_report || '-------------------- INTESTATARI --------------------' || E'\n';
     FOR v_record IN SELECT pos.nome_completo, pp.titolo, pp.quota FROM partita_possessore pp JOIN possessore pos ON pp.possessore_id = pos.id WHERE pp.partita_id = p_partita_id ORDER BY pos.nome_completo LOOP
-        v_certificato := v_certificato || '- ' || v_record.nome_completo;
-        IF v_record.titolo = 'comproprieta' AND v_record.quota IS NOT NULL THEN v_certificato := v_certificato || ' (quota: ' || v_record.quota || ')'; END IF;
-        v_certificato := v_certificato || E'\n';
+        v_report := v_report || '- ' || v_record.nome_completo;
+        IF v_record.titolo = 'comproprieta' AND v_record.quota IS NOT NULL THEN v_report := v_report || ' (quota: ' || v_record.quota || ')'; END IF;
+        v_report := v_report || E'\n';
     END LOOP;
-    v_certificato := v_certificato || E'\n';
+    v_report := v_report || E'\n';
 
     -- Immobili (invariato)
-    v_certificato := v_certificato || '-------------------- IMMOBILI --------------------' || E'\n';
+    v_report := v_report || '-------------------- IMMOBILI --------------------' || E'\n';
     FOR v_immobile IN SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, i.classificazione, l.tipo AS tipo_localita, l.nome AS nome_localita, l.civico FROM immobile i JOIN localita l ON i.localita_id = l.id WHERE i.partita_id = p_partita_id ORDER BY l.nome, i.natura LOOP
-        v_certificato := v_certificato || 'Immobile ID: ' || v_immobile.id || E'\n';
-        v_certificato := v_certificato || '  Natura: ' || COALESCE(v_immobile.natura, 'N/D') || E'\n';
-        v_certificato := v_certificato || '  Localita: ' || COALESCE(v_immobile.nome_localita, 'N/D');
-        IF v_immobile.civico IS NOT NULL THEN v_certificato := v_certificato || ', ' || v_immobile.civico; END IF;
-        v_certificato := v_certificato || ' (' || COALESCE(v_immobile.tipo_localita, 'N/D') || ')' || E'\n';
-        IF v_immobile.numero_piani IS NOT NULL THEN v_certificato := v_certificato || '  Piani: ' || v_immobile.numero_piani || E'\n'; END IF;
-        IF v_immobile.numero_vani IS NOT NULL THEN v_certificato := v_certificato || '  Vani: ' || v_immobile.numero_vani || E'\n'; END IF;
-        IF v_immobile.consistenza IS NOT NULL THEN v_certificato := v_certificato || '  Consistenza: ' || v_immobile.consistenza || E'\n'; END IF;
-        IF v_immobile.classificazione IS NOT NULL THEN v_certificato := v_certificato || '  Classificazione: ' || v_immobile.classificazione || E'\n'; END IF;
-        v_certificato := v_certificato || E'\n';
+        v_report := v_report || 'Immobile ID: ' || v_immobile.id || E'\n';
+        v_report := v_report || '  Natura: ' || COALESCE(v_immobile.natura, 'N/D') || E'\n';
+        v_report := v_report || '  Localita: ' || COALESCE(v_immobile.nome_localita, 'N/D');
+        IF v_immobile.civico IS NOT NULL THEN v_report := v_report || ', ' || v_immobile.civico; END IF;
+        v_report := v_report || ' (' || COALESCE(v_immobile.tipo_localita, 'N/D') || ')' || E'\n';
+        IF v_immobile.numero_piani IS NOT NULL THEN v_report := v_report || '  Piani: ' || v_immobile.numero_piani || E'\n'; END IF;
+        IF v_immobile.numero_vani IS NOT NULL THEN v_report := v_report || '  Vani: ' || v_immobile.numero_vani || E'\n'; END IF;
+        IF v_immobile.consistenza IS NOT NULL THEN v_report := v_report || '  Consistenza: ' || v_immobile.consistenza || E'\n'; END IF;
+        IF v_immobile.classificazione IS NOT NULL THEN v_report := v_report || '  Classificazione: ' || v_immobile.classificazione || E'\n'; END IF;
+        v_report := v_report || E'\n';
     END LOOP;
 
     -- Variazioni (invariato nella logica del loop)
-    v_certificato := v_certificato || '-------------------- VARIAZIONI --------------------' || E'\n';
+    v_report := v_report || '-------------------- VARIAZIONI --------------------' || E'\n';
     FOR v_record IN SELECT v.tipo, v.data_variazione, v.numero_riferimento, p2.numero_partita AS partita_destinazione_numero, c2.nome AS partita_destinazione_comune, con.tipo AS tipo_contratto, con.data_contratto, con.notaio, con.repertorio FROM variazione v LEFT JOIN partita p2 ON v.partita_destinazione_id = p2.id LEFT JOIN comune c2 ON p2.comune_id = c2.id LEFT JOIN contratto con ON v.id = con.variazione_id WHERE v.partita_origine_id = p_partita_id ORDER BY v.data_variazione DESC LOOP
-        v_certificato := v_certificato || 'Variazione: ' || COALESCE(v_record.tipo, 'N/D') || ' del ' || COALESCE(v_record.data_variazione::TEXT, 'N/D') || E'\n';
+        v_report := v_report || 'Variazione: ' || COALESCE(v_record.tipo, 'N/D') || ' del ' || COALESCE(v_record.data_variazione::TEXT, 'N/D') || E'\n';
         IF v_record.partita_destinazione_numero IS NOT NULL THEN
-            v_certificato := v_certificato || '  Nuova partita: ' || v_record.partita_destinazione_numero;
-            v_certificato := v_certificato || ' (Comune: ' || COALESCE(v_record.partita_destinazione_comune, 'N/D') || ')';
-            v_certificato := v_certificato || E'\n'; END IF;
+            v_report := v_report || '  Nuova partita: ' || v_record.partita_destinazione_numero;
+            v_report := v_report || ' (Comune: ' || COALESCE(v_record.partita_destinazione_comune, 'N/D') || ')';
+            v_report := v_report || E'\n'; END IF;
         IF v_record.tipo_contratto IS NOT NULL THEN
-            v_certificato := v_certificato || '  Contratto: ' || v_record.tipo_contratto || ' del ' || COALESCE(v_record.data_contratto::TEXT, 'N/D') || E'\n';
-            IF v_record.notaio IS NOT NULL THEN v_certificato := v_certificato || '  Notaio: ' || v_record.notaio || E'\n'; END IF;
-            IF v_record.repertorio IS NOT NULL THEN v_certificato := v_certificato || '  Repertorio: ' || v_record.repertorio || E'\n'; END IF;
+            v_report := v_report || '  Contratto: ' || v_record.tipo_contratto || ' del ' || COALESCE(v_record.data_contratto::TEXT, 'N/D') || E'\n';
+            IF v_record.notaio IS NOT NULL THEN v_report := v_report || '  Notaio: ' || v_record.notaio || E'\n'; END IF;
+            IF v_record.repertorio IS NOT NULL THEN v_report := v_report || '  Repertorio: ' || v_record.repertorio || E'\n'; END IF;
         END IF;
-        v_certificato := v_certificato || E'\n';
+        v_report := v_report || E'\n';
     END LOOP;
 
     -- Piè di pagina (invariato)
-    v_certificato := v_certificato || '============================================================' || E'\n';
-    v_certificato := v_certificato || 'Certificato generato il: ' || CURRENT_DATE || E'\n';
-    v_certificato := v_certificato || 'Il presente certificato ha valore puramente storico e documentale.' || E'\n';
-    v_certificato := v_certificato || '============================================================' || E'\n';
-    RETURN v_certificato;
+    v_report := v_report || '============================================================' || E'\n';
+    v_report := v_report || 'Certificato generato il: ' || CURRENT_DATE || E'\n';
+    v_report := v_report || 'Il presente report ha valore puramente storico e documentale.' || E'\n';
+    v_report := v_report || '============================================================' || E'\n';
+    RETURN v_report;
 END;
 $$ LANGUAGE plpgsql;
 

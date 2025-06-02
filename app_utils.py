@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout,
                              QListWidgetItem, QFileDialog, QStyle, QSpinBox,
                              QHeaderView, QFormLayout,)
 from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTextEdit
 # In app_utils.py, dopo le importazioni PyQt e standard:
 # Nessuna dipendenza ciclica dagli altri due moduli GUI (gui_main, gui_widgets) dovrebbe essere necessaria qui.
 # Questo modulo fornisce utility AGLI ALTRI.
@@ -395,7 +396,35 @@ def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita
         QMessageBox.warning(parent_widget, "Errore Dati",
                             "Dati partita non validi per l'esportazione CSV.")
         return
+    # --- LOGICA ANTEPRIMA CSV ---
+    preview_headers = ["Sezione", "Campo", "Valore"]
+    preview_data_rows = []
+    MAX_ROWS_PREVIEW_SECTION = 3 # Mostra solo le prime N righe per sezione nella preview
 
+    # Dettagli Partita
+    p_details = partita_data.get('partita', {})
+    for k, v in p_details.items():
+        preview_data_rows.append(["Partita", k.replace('_', ' ').title(), v])
+
+    # Possessori (prime N)
+    if partita_data.get('possessori'):
+        preview_data_rows.append(["---", "--- Possessori ---", "---"])
+        poss_headers = list(partita_data['possessori'][0].keys()) if partita_data['possessori'] else []
+        preview_data_rows.append(["Possessori", "Intestazioni", ", ".join([h.replace('_', ' ').title() for h in poss_headers])])
+        for i, pos in enumerate(partita_data['possessori']):
+            if i >= MAX_ROWS_PREVIEW_SECTION:
+                preview_data_rows.append(["Possessori", f"...e altri {len(partita_data['possessori']) - MAX_ROWS_PREVIEW_SECTION}...", ""])
+                break
+            preview_data_rows.append(["Possessori", f"Possessore {i+1}", ", ".join([str(pos.get(h, '')) for h in poss_headers])])
+    
+    # Aggiungere logica simile per Immobili e Variazioni...
+
+    preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
+                                       title=f"Anteprima CSV - Partita ID {partita_id}")
+    if preview_dialog.exec_() != QDialog.Accepted:
+        logging.getLogger("CatastoGUI").info(f"Esportazione CSV per partita ID {partita_id} annullata dall'utente dopo anteprima.")
+        return
+    # --- FINE LOGICA ANTEPRIMA CSV ---
     default_filename = f"partita_{partita_id}_{date.today()}.csv"
     filename, _ = QFileDialog.getSaveFileName(
         parent_widget, "Salva CSV Partita", default_filename, "CSV Files (*.csv)")
@@ -460,7 +489,37 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
         QMessageBox.warning(parent_widget, "Errore Dati",
                             "Dati partita non validi per l'esportazione PDF.")
         return
+    # --- LOGICA ANTEPRIMA TESTUALE PDF ---
+    # Genera una stringa di anteprima (puoi riutilizzare la logica dei report testuali)
+    # o creare una versione semplificata della struttura PDF.
+    # Qui, per esempio, potremmo usare il report testuale del report di proprietà.
+    # ATTENZIONE: genera_report_proprieta è un metodo di db_manager che restituisce una stringa SQL,
+    # non il testo del report. Dobbiamo simulare il contenuto testuale che andrà nel PDF.
+    
+    preview_text_content = f"ANTEPRIMA PDF - Partita ID: {partita_id}\n"
+    preview_text_content += "======================================\n\n"
+    p_details = partita_data.get('partita', {})
+    preview_text_content += "Dettagli Partita:\n"
+    for key, value in p_details.items():
+        preview_text_content += f"  {key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}\n"
+    preview_text_content += "\n"
 
+    if partita_data.get('possessori'):
+        preview_text_content += "Possessori (primi 2):\n"
+        for i, pos in enumerate(partita_data['possessori'][:2]):
+            preview_text_content += f"  - ID: {pos.get('id')}, Nome: {pos.get('nome_completo')}, Titolo: {pos.get('titolo')}, Quota: {pos.get('quota', 'N/D')}\n"
+        if len(partita_data['possessori']) > 2:
+            preview_text_content += "  ...e altri.\n"
+    preview_text_content += "\n"
+    
+    # Aggiungere sezioni simili per Immobili e Variazioni (prime N righe)
+
+    preview_dialog = PDFApreviewDialog(preview_text_content, parent_widget,
+                                       title=f"Anteprima PDF - Partita ID {partita_id}")
+    if preview_dialog.exec_() != QDialog.Accepted:
+        logging.getLogger("CatastoGUI").info(f"Esportazione PDF per partita ID {partita_id} annullata dall'utente dopo anteprima.")
+        return
+    # --- FINE LOGICA ANTEPRIMA TESTUALE PDF ---
     default_filename = f"partita_{partita_id}_{date.today()}.pdf"
     filename, _ = QFileDialog.getSaveFileName(
         parent_widget, "Salva PDF Partita", default_filename, "PDF Files (*.pdf)")
@@ -2044,3 +2103,57 @@ class UserSelectionDialog(QDialog):
         else:
             QMessageBox.warning(self, "Selezione",
                                 "Per favore, seleziona un utente dalla lista.")
+
+
+class CSVApreviewDialog(QDialog):
+    def __init__(self, headers: List[str], data_rows: List[List[Any]], parent=None, title="Anteprima Esportazione CSV"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(600, 400) # Dimensioni indicative
+
+        layout = QVBoxLayout(self)
+
+        self.table_preview = QTableWidget()
+        self.table_preview.setColumnCount(len(headers))
+        self.table_preview.setHorizontalHeaderLabels(headers)
+        self.table_preview.setAlternatingRowColors(True)
+        self.table_preview.setEditTriggers(QAbstractItemView.NoEditTriggers) # Sola lettura
+        self.table_preview.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+        self.table_preview.setRowCount(len(data_rows))
+        for row_idx, row_data in enumerate(data_rows):
+            for col_idx, cell_data in enumerate(row_data):
+                self.table_preview.setItem(row_idx, col_idx, QTableWidgetItem(str(cell_data)))
+
+        self.table_preview.resizeColumnsToContents()
+        layout.addWidget(self.table_preview)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione")
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self.setLayout(layout)
+        
+class PDFApreviewDialog(QDialog):
+    def __init__(self, text_content: str, parent=None, title="Anteprima Esportazione PDF"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(700, 500) # Dimensioni indicative
+
+        layout = QVBoxLayout(self)
+
+        self.text_preview = QTextEdit()
+        self.text_preview.setReadOnly(True)
+        self.text_preview.setFontFamily("Courier New") # Per testo preformattato
+        self.text_preview.setPlainText(text_content) # Imposta il testo
+        layout.addWidget(self.text_preview)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione PDF")
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self.setLayout(layout)

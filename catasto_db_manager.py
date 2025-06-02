@@ -2040,30 +2040,30 @@ class CatastoDBManager:
 
     # All'interno della classe CatastoDBManager in catasto_db_manager.py
 
-    def genera_certificato_proprieta(self, partita_id: int) -> Optional[str]:
-        """Chiama la funzione SQL catasto.genera_certificato_proprieta(%s), usando il pool."""
+    def genera_report_proprieta(self, partita_id: int) -> Optional[str]:
+        """Chiama la funzione SQL catasto.genera_report_proprieta(%s), usando il pool."""
         if not isinstance(partita_id, int) or partita_id <= 0:
-            self.logger.error(f"genera_certificato_proprieta: ID partita non valido: {partita_id}")
+            self.logger.error(f"genera_report_proprieta: ID partita non valido: {partita_id}")
             return None
         
         conn = None
         try:
-            query = f"SELECT {self.schema}.genera_certificato_proprieta(%s) AS certificato_text;" # Assicurati che la funzione SQL esista
+            query = f"SELECT {self.schema}.genera_report_proprieta(%s) AS report_text;" # Assicurati che la funzione SQL esista
             conn = self._get_connection()
             with conn.cursor() as cur: # Non serve DictCursor se la funzione restituisce un singolo valore testuale
-                self.logger.debug(f"Esecuzione genera_certificato_proprieta per ID partita: {partita_id}")
+                self.logger.debug(f"Esecuzione genera_report_proprieta per ID partita: {partita_id}")
                 cur.execute(query, (partita_id,))
                 result = cur.fetchone()
                 if result and result[0] is not None:
-                    self.logger.info(f"Certificato di proprietà generato per partita ID {partita_id}.")
+                    self.logger.info(f"Report di proprietà generato per partita ID {partita_id}.")
                     return str(result[0]) # La funzione SQL restituisce testo
                 else:
-                    self.logger.warning(f"Nessun certificato generato per partita ID {partita_id} o risultato NULL.")
+                    self.logger.warning(f"Nessun report generato per partita ID {partita_id} o risultato NULL.")
                     return None
         except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB in genera_certificato_proprieta (ID: {partita_id}): {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            self.logger.error(f"Errore DB in genera_report_proprieta (ID: {partita_id}): {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
         except Exception as e:
-            self.logger.error(f"Errore Python in genera_certificato_proprieta (ID: {partita_id}): {e}", exc_info=True)
+            self.logger.error(f"Errore Python in genera_report_proprieta (ID: {partita_id}): {e}", exc_info=True)
         finally:
             if conn:
                 self._release_connection(conn)

@@ -64,7 +64,7 @@ BEGIN
         WHILE v_localita_counter <= p_possessori_per_comune / 5 LOOP -- Meno località dei possessori
              v_nome_localita := 'Via Stress ' || v_comune_counter || '-' || v_localita_counter;
              INSERT INTO localita (comune_id, nome, tipo, civico)
-             VALUES (v_comune_id, v_nome_localita, 'via', floor(random()*100 + 1)::int)
+             VALUES (v_comune_id, v_nome_localita, 'Via', floor(random()*100 + 1)::int)
              RETURNING id INTO v_localita_id;
              v_localita_ids := array_append(v_localita_ids, v_localita_id);
              v_localita_counter := v_localita_counter + 1;

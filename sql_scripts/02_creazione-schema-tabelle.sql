@@ -99,7 +99,7 @@ CREATE TABLE localita (
     id SERIAL PRIMARY KEY,
     comune_id INTEGER NOT NULL REFERENCES comune(id) ON UPDATE CASCADE ON DELETE RESTRICT, -- FK su ID
     nome VARCHAR(255) NOT NULL,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('regione', 'via', 'borgata')),
+    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Regione', 'Via', 'Borgata', 'Altro')),
     civico INTEGER,
     data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

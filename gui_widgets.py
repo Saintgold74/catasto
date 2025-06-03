@@ -6,6 +6,13 @@ from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 
 # Importazioni PyQt5
+# Importazioni necessarie (QSvgWidget già dovrebbe esserci dalla risposta precedente)
+from PyQt5.QtSvgWidgets import QSvgWidget
+# QByteArray non è più necessario se carichi da file
+# from PyQt5.QtCore import QByteArray
+from PyQt5.QtWidgets import QHBoxLayout, QLabel # Aggiungi QLabel per un eventuale fallback
+from PyQt5.QtCore import Qt # Per Qt.AlignCenter nel fallback
+import os # Importa il modulo 'os' per la gestione dei percorsi
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QComboBox, QTabWidget, QTextEdit, QMessageBox,
@@ -8006,7 +8013,59 @@ class LandingPageWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setAlignment(Qt.AlignTop) # Allinea il contenuto in alto
         main_layout.setSpacing(20) # Spazio tra le sezioni
+         # --- INIZIO INTEGRAZIONE LOGO DA FILE ESTERNO ---
 
+        # 1. Determina il percorso del file SVG.
+        #    Assumiamo che gui_widgets.py sia nella cartella principale del progetto
+        #    e il logo sia in una sottocartella 'resources'.
+
+        try:
+            # Percorso base della directory contenente questo script (gui_widgets.py)
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # Percorso al file del logo (modifica "resources" e "logo_meridiana.svg" se necessario)
+            logo_path = os.path.join(base_dir, "resources", "logo_meridiana.svg")
+
+            # Se il logo fosse nella stessa cartella di gui_widgets.py:
+            # logo_path = os.path.join(base_dir, "logo_meridiana.svg")
+
+            self.logo_widget = QSvgWidget() # Crea l'istanza
+
+            if os.path.exists(logo_path):
+                self.logo_widget.load(logo_path) # Carica l'SVG dal file specificato
+            else:
+                messaggio_errore = f"ERRORE: File logo SVG non trovato in:\n{logo_path}\nAssicurati che il file esista e il percorso sia corretto."
+                print(messaggio_errore) # Logga l'errore sulla console
+                # Crea un QLabel come fallback per indicare che il logo non è stato trovato
+                self.logo_widget = QLabel("Logo non caricato") # Sovrascrive QSvgWidget con un QLabel
+                self.logo_widget.setAlignment(Qt.AlignCenter)
+                self.logo_widget.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                # Potresti voler anche impostare una dimensione fissa per il messaggio di errore
+                # self.logo_widget.setFixedSize(150, 50)
+
+
+        except Exception as e:
+            # Gestione generica delle eccezioni durante il caricamento del logo
+            print(f"Eccezione durante il caricamento del logo: {e}")
+            self.logo_widget = QLabel("Errore caricamento logo")
+            self.logo_widget.setAlignment(Qt.AlignCenter)
+            self.logo_widget.setStyleSheet("QLabel { color: red; }")
+
+
+        # 2. Imposta le dimensioni del logo (come prima)
+        #    Anche se il logo non viene caricato, impostare una dimensione fissa
+        #    sul widget (che sia QSvgWidget o QLabel di fallback) aiuta a mantenere il layout.
+        self.logo_widget.setFixedSize(150, 150) 
+
+        # 3. Aggiungi il logo al layout (come prima)
+        logo_container_layout = QHBoxLayout()
+        logo_container_layout.addStretch()
+        logo_container_layout.addWidget(self.logo_widget)
+        logo_container_layout.addStretch()
+        
+        main_layout.addLayout(logo_container_layout)
+
+        # --- FINE INTEGRAZIONE LOGO ---
         # Titolo di Benvenuto
         title_label = QLabel("Gestionale Catasto Storico")
         title_font = QFont()

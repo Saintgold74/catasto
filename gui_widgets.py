@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QLabel, QLineEdit
 
 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent
-from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime, QProcess, QStandardPaths, pyqtSignal
+from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime, QProcess, QStandardPaths, pyqtSignal, QPoint # Importazioni PyQt5
 from app_utils import PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF # Assumendo che GenericTextReportPDF sia in app_utils
 from PyQt5.QtWidgets import QFileDialog, QMessageBox # Già presenti, ma per chiarezza
 from datetime import date # Già presente
@@ -75,63 +75,57 @@ logging.getLogger("CatastoGUI").error("Errore da app_utils.py")
 
 
 class ElencoComuniWidget(QWidget):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        # Inizializza il logger per questa classe, se non hai un logger globale preferito
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}") 
 
         layout = QVBoxLayout(self)
 
         comuni_group = QGroupBox("Elenco Comuni Registrati")
         comuni_layout = QVBoxLayout(comuni_group)
 
-        # ... (filter_comuni_edit e comuni_table come prima) ...
         self.filter_comuni_edit = QLineEdit()
-        self.filter_comuni_edit.setPlaceholderText(
-            "Filtra per nome, provincia...")
+        self.filter_comuni_edit.setPlaceholderText("Filtra per nome, provincia...")
         self.filter_comuni_edit.textChanged.connect(self.apply_filter)
         comuni_layout.addWidget(self.filter_comuni_edit)
 
         self.comuni_table = QTableWidget()
-        self.comuni_table.setColumnCount(7)
+        self.comuni_table.setColumnCount(7) # ID, Nome, Cod. Cat., Prov., Data Ist., Data Sopp., Note
         self.comuni_table.setHorizontalHeaderLabels([
             "ID", "Nome Comune", "Cod. Catastale", "Provincia",
             "Data Istituzione", "Data Soppressione", "Note"
         ])
         self.comuni_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.comuni_table.setSelectionMode(QTableWidget.SingleSelection) # Importante per menu contestuale su una riga
         self.comuni_table.setAlternatingRowColors(True)
         self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.comuni_table.setSortingEnabled(True)
-        self.comuni_table.itemDoubleClicked.connect(
-            self.mostra_partite_del_comune)
+        # self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune) # Il doppio click può rimanere
+
+        # Imposta la policy per il menu contestuale sulla tabella
+        self.comuni_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.comuni_table.customContextMenuRequested.connect(self.apri_menu_contestuale_comune)
+
         comuni_layout.addWidget(self.comuni_table)
 
-        # === NUOVI PULSANTI PER AZIONI SUL COMUNE SELEZIONATO ===
         action_buttons_layout = QHBoxLayout()
-        self.btn_mostra_partite = QPushButton("Mostra Partite del Comune")
+        self.btn_mostra_partite = QPushButton("Mostra Partite del Comune Selezionato")
         self.btn_mostra_partite.clicked.connect(self.azione_mostra_partite)
         action_buttons_layout.addWidget(self.btn_mostra_partite)
 
-        self.btn_mostra_possessori = QPushButton(
-            "Mostra Possessori del Comune")  # NUOVO
-        self.btn_mostra_possessori.clicked.connect(
-            self.azione_mostra_possessori)  # NUOVO
-        action_buttons_layout.addWidget(self.btn_mostra_possessori)  # NUOVO
+        self.btn_mostra_possessori = QPushButton("Mostra Possessori del Comune Selezionato")
+        self.btn_mostra_possessori.clicked.connect(self.azione_mostra_possessori)
+        action_buttons_layout.addWidget(self.btn_mostra_possessori)
 
-        # === VERIFICA QUESTA SEZIONE ===
-        self.btn_mostra_localita = QPushButton(
-            "Mostra Località del comune")  # 1. Creazione del pulsante
-        self.btn_mostra_localita.setToolTip(
-            "Mostra le località del comune selezionato")
-        self.btn_mostra_localita.clicked.connect(
-            self.azione_mostra_localita)  # 2. Connessione al metodo
-        # 3. Aggiunta al layout dei pulsanti
+        self.btn_mostra_localita = QPushButton("Mostra Località del Comune Selezionato")
+        self.btn_mostra_localita.clicked.connect(self.azione_mostra_localita)
         action_buttons_layout.addWidget(self.btn_mostra_localita)
-        # ===============================
+        
         action_buttons_layout.addStretch()
         comuni_layout.addLayout(action_buttons_layout)
-        # =======================================================
-
         layout.addWidget(comuni_group)
         self.setLayout(layout)
 
@@ -191,6 +185,33 @@ class ElencoComuniWidget(QWidget):
                 self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
         finally:
             self.comuni_table.setSortingEnabled(True)
+         # Assicurati che chiami self.db_manager.get_all_comuni_details()
+        self.logger.info(f"ElencoComuniWidget ({id(self)}): Esecuzione di load_comuni_data().")
+        self.comuni_table.setRowCount(0)
+        self.comuni_table.setSortingEnabled(False)
+        try:
+            comuni_list = self.db_manager.get_all_comuni_details() #
+            if comuni_list:
+                self.comuni_table.setRowCount(len(comuni_list))
+                for row_idx, comune in enumerate(comuni_list):
+                    col = 0
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(comune.get('id', '')))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('nome_comune', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('codice_catastale', ''))); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('provincia', ''))); col+=1
+                    data_ist = comune.get('data_istituzione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_ist) if data_ist else '')); col+=1
+                    data_soppr = comune.get('data_soppressione')
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_soppr) if data_soppr else '')); col+=1
+                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('note', ''))); col+=1
+                self.comuni_table.resizeColumnsToContents()
+            else:
+                self.logger.info("Nessun comune trovato nel database.")
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+        finally:
+            self.comuni_table.setSortingEnabled(True)
 
     def apply_filter(self):
         """Filtra le righe della tabella in base al testo inserito."""
@@ -206,6 +227,41 @@ class ElencoComuniWidget(QWidget):
                         row_visible = True
                         break
             self.comuni_table.setRowHidden(row, not row_visible)
+        
+        filter_text = self.filter_comuni_edit.text().strip().lower()
+        for row in range(self.comuni_table.rowCount()):
+            row_visible = False
+            if not filter_text:
+                row_visible = True
+            else:
+                for col in range(self.comuni_table.columnCount()):
+                    item = self.comuni_table.item(row, col)
+                    if item and filter_text in item.text().lower():
+                        row_visible = True
+                        break
+            self.comuni_table.setRowHidden(row, not row_visible)
+    
+    def _get_comune_info_from_row(self, row: int) -> Optional[Tuple[int, str]]:
+        """Helper per ottenere ID e nome del comune da una specifica riga."""
+        try:
+            comune_id_item = self.comuni_table.item(row, 0) # Colonna ID
+            nome_comune_item = self.comuni_table.item(row, 1) # Colonna Nome Comune
+            if comune_id_item and nome_comune_item and comune_id_item.text().isdigit():
+                return int(comune_id_item.text()), nome_comune_item.text()
+        except Exception as e:
+            self.logger.error(f"Errore nel recuperare info comune dalla riga {row}: {e}")
+        return None
+
+    def _get_selected_comune_info_from_table(self) -> Optional[Tuple[int, str]]:
+        """Helper per ottenere ID e nome del comune attualmente selezionato nella tabella."""
+        current_row = self.comuni_table.currentRow()
+        if current_row < 0:
+            # Nessuna riga selezionata, ma il menu contestuale potrebbe essere stato attivato su una riga specifica
+            # Questo metodo è più per i pulsanti che dipendono da una selezione esplicita.
+            return None 
+        return self._get_comune_info_from_row(current_row)
+    
+    
 
     def _get_selected_comune_info(self) -> Optional[Tuple[int, str]]:
         """Helper per ottenere ID e nome del comune correntemente selezionato nella tabella."""
@@ -272,46 +328,94 @@ class ElencoComuniWidget(QWidget):
             logging.getLogger("CatastoGUI").error(
                 f"Errore in mostra_partite_del_comune: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore", f"Errore: {e}")
+    def apri_menu_contestuale_comune(self, position: QPoint):
+        index = self.comuni_table.indexAt(position)
+        if not index.isValid(): return
+        row = index.row()
+        comune_info = self._get_comune_info_from_row(row)
+        if not comune_info: return
+        comune_id_selezionato, nome_comune_selezionato = comune_info
+        
+        menu = QMenu(self.comuni_table)
+        
+       # ... (azioni esistenti per Visualizza Partite, Possessori, Località) ...
+        action_vedi_partite = menu.addAction(QApplication.style().standardIcon(QStyle.SP_FileDialogContentsView), "Visualizza Partite")
+        action_vedi_partite.triggered.connect(lambda: self._slot_vedi_partite_comune(comune_id_selezionato, nome_comune_selezionato))
+        
+        action_vedi_possessori = menu.addAction(QApplication.style().standardIcon(QStyle.SP_DirLinkIcon), "Visualizza Possessori")
+        action_vedi_possessori.triggered.connect(lambda: self._slot_vedi_possessori_comune(comune_id_selezionato, nome_comune_selezionato))
 
+        action_vedi_localita = menu.addAction(QApplication.style().standardIcon(QStyle.SP_DirHomeIcon), "Visualizza Località")
+        action_vedi_localita.triggered.connect(lambda: self._slot_vedi_localita_comune(comune_id_selezionato, nome_comune_selezionato))
+        
+        menu.addSeparator()
+
+        # --- NUOVA AZIONE PER MODIFICA COMUNE ---
+         # Azione 4: Modifica Dati Comune (senza icona)
+        action_modifica_comune = menu.addAction("Modifica Dati Comune")
+        action_modifica_comune.triggered.connect(
+            lambda: self._slot_modifica_dati_comune(comune_id_selezionato)
+        )
+        
+        menu.exec_(self.comuni_table.viewport().mapToGlobal(position))
+
+    # --- Slot per le azioni del menu contestuale (e dei pulsanti) ---
+    # NUOVO SLOT per gestire l'azione di modifica
+    def _slot_modifica_dati_comune(self, comune_id: int):
+        self.logger.info(f"Menu contestuale: richiesta modifica per comune ID {comune_id}")
+        # Assicurati che ModificaComuneDialog sia importato
+        dialog = ModificaComuneDialog(self.db_manager, comune_id, self) # self è il parent
+        if dialog.exec_() == QDialog.Accepted:
+            self.logger.info(f"Dati del comune ID {comune_id} modificati. Aggiornamento lista comuni.")
+            self.load_comuni_data() # Ricarica la tabella per mostrare le modifiche
+        else:
+            self.logger.info(f"Modifica del comune ID {comune_id} annullata dall'utente.")
+    def _slot_vedi_partite_comune(self, comune_id: int, nome_comune: str):
+        self.logger.info(f"Azione: Visualizza partite per comune ID {comune_id} ('{nome_comune}')")
+        dialog = PartiteComuneDialog(self.db_manager, comune_id, nome_comune, self)
+        dialog.exec_()
+
+    def _slot_vedi_possessori_comune(self, comune_id: int, nome_comune: str):
+        self.logger.info(f"Azione: Visualizza possessori per comune ID {comune_id} ('{nome_comune}')")
+        dialog = PossessoriComuneDialog(self.db_manager, comune_id, nome_comune, self)
+        dialog.exec_()
+
+    def _slot_vedi_localita_comune(self, comune_id: int, nome_comune: str):
+        self.logger.info(f"Azione: Visualizza località per comune ID {comune_id} ('{nome_comune}')")
+        dialog = LocalitaSelectionDialog(self.db_manager, comune_id, self, selection_mode=False)
+        dialog.setWindowTitle(f"Località del Comune di {nome_comune}")
+        dialog.exec_()
+
+     # Metodi per i pulsanti esterni (possono riutilizzare gli slot)
     def azione_mostra_partite(self):
-        """Azione per il pulsante 'Mostra Partite del Comune'."""
-        selected_info = self._get_selected_comune_info()
+        selected_info = self._get_selected_comune_info_from_table()
         if selected_info:
-            comune_id, nome_comune = selected_info
-            dialog = PartiteComuneDialog(
-                self.db_manager, comune_id, nome_comune, self)
-            dialog.exec_()
+            self._slot_vedi_partite_comune(selected_info[0], selected_info[1])
+        else:
+            QMessageBox.information(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
 
-    def azione_mostra_possessori(self):  # NUOVO METODO
-        """Azione per il pulsante 'Mostra Possessori del Comune'."""
-        selected_info = self._get_selected_comune_info()
+    def azione_mostra_possessori(self):
+        selected_info = self._get_selected_comune_info_from_table()
         if selected_info:
-            comune_id, nome_comune = selected_info
-            dialog = PossessoriComuneDialog(
-                self.db_manager, comune_id, nome_comune, self)
-            dialog.exec_()
-
+            self._slot_vedi_possessori_comune(selected_info[0], selected_info[1])
+        else:
+            QMessageBox.information(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+            
     def azione_mostra_localita(self):
-        """Azione per il pulsante 'Mostra Località del Comune'.
-        Usa la LocalitaSelectionDialog esistente per visualizzazione."""
-        selected_info = self._get_selected_comune_info()
+        selected_info = self._get_selected_comune_info_from_table()
         if selected_info:
-            comune_id, nome_comune = selected_info
-
-            # Usa la tua classe LocalitaSelectionDialog esistente
-            dialog = LocalitaSelectionDialog(
-                self.db_manager, comune_id, self)  # Passa 'self' come parent
-
-            # Opzionale: personalizza il titolo se vuoi che sia diverso da "Seleziona Località"
-            # quando viene aperta solo per consultazione.
-            dialog.setWindowTitle(
-                f"Località del Comune di {nome_comune} (ID: {comune_id})")
-
-            # .exec_() aprirà il dialogo in modo modale.
-            # L'utente potrà vedere le località nel tab "Seleziona Esistente".
-            # Non ci interessa il valore restituito (selected_localita_id) in questo contesto.
-            dialog.exec_()
-
+            self._slot_vedi_localita_comune(selected_info[0], selected_info[1])
+        else:
+            QMessageBox.information(self, "Nessuna Selezione", "Seleziona un comune dalla tabella.")
+            
+    # Il vecchio _get_selected_comune_info è stato rinominato e ora si basa sulla selezione corrente
+    # Il vecchio mostra_partite_del_comune (da doppio click) può essere rimosso o adattato per usare _get_comune_info_from_row
+    # Se vuoi mantenere il doppio click:
+    # def mostra_partite_del_comune(self, item: QTableWidgetItem):
+    #     if not item: return
+    #     comune_info = self._get_comune_info_from_row(item.row())
+    #     if comune_info:
+    #         self._slot_vedi_partite_comune(comune_info[0], comune_info[1])
 
 class RicercaPartiteWidget(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -7018,6 +7122,168 @@ class ModificaPossessoreDialog(QDialog):
                 f"Errore critico imprevisto durante il salvataggio del possessore ID {self.possessore_id}: {e_poss}", exc_info=True)
             QMessageBox.critical(self, "Errore Critico Imprevisto",
                                  f"Si è verificato un errore di sistema imprevisto:\n{type(e_poss).__name__}: {e_poss}")
+class ModificaComuneDialog(QDialog):
+    def __init__(self, db_manager: 'CatastoDBManager', comune_id: int, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.comune_id = comune_id
+        self.comune_data_originale: Optional[Dict[str, Any]] = None
+        # Per caricare i periodi storici nella UI, se necessario
+        self.periodi_storici_list: List[Dict[str, Any]] = []
+
+
+        self.setWindowTitle(f"Modifica Dati Comune ID: {self.comune_id}")
+        self.setMinimumWidth(450)
+        self.setModal(True)
+
+        self._initUI()
+        self._load_comune_data()
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+        form_layout.setRowWrapPolicy(QFormLayout.WrapAllRows) # Utile per form lunghi
+        form_layout.setLabelAlignment(Qt.AlignLeft) # Allinea etichette
+
+        self.id_label = QLabel(str(self.comune_id))
+        form_layout.addRow("ID Comune:", self.id_label)
+
+        self.nome_edit = QLineEdit()
+        form_layout.addRow("Nome Comune (*):", self.nome_edit)
+
+        self.provincia_edit = QLineEdit()
+        self.provincia_edit.setMaxLength(2) # Esempio di validazione
+        form_layout.addRow("Provincia (*):", self.provincia_edit)
+
+        self.regione_edit = QLineEdit()
+        form_layout.addRow("Regione (*):", self.regione_edit)
+
+        self.codice_catastale_edit = QLineEdit()
+        self.codice_catastale_edit.setPlaceholderText("Es. A123 (opzionale)")
+        form_layout.addRow("Codice Catastale:", self.codice_catastale_edit)
+
+        # Per periodo_id, idealmente useresti una QComboBox caricata con i periodi
+        # Per semplicità qui uso QSpinBox, ma una ComboBox è meglio per UX
+        self.periodo_id_spinbox = QSpinBox()
+        self.periodo_id_spinbox.setMinimum(0) # 0 potrebbe significare 'non assegnato' o usa specialValueText
+        self.periodo_id_spinbox.setMaximum(99999) 
+        self.periodo_id_spinbox.setSpecialValueText("Nessuno") # Se 0 significa Nessuno
+        form_layout.addRow("Periodo Storico ID:", self.periodo_id_spinbox)
+        # TODO: Caricare e mostrare i periodi storici in una QComboBox qui per migliore UX
+
+        self.data_istituzione_edit = QDateEdit(calendarPopup=True)
+        self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_istituzione_edit.setSpecialValueText(" ") # Permette campo vuoto
+        self.data_istituzione_edit.setDate(QDate()) # Data nulla di default
+        form_layout.addRow("Data Istituzione:", self.data_istituzione_edit)
+        
+        self.data_soppressione_edit = QDateEdit(calendarPopup=True)
+        self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_soppressione_edit.setSpecialValueText(" ")
+        self.data_soppressione_edit.setDate(QDate())
+        form_layout.addRow("Data Soppressione:", self.data_soppressione_edit)
+
+        self.note_edit = QTextEdit()
+        self.note_edit.setFixedHeight(80)
+        form_layout.addRow("Note:", self.note_edit)
+
+        main_layout.addLayout(form_layout)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self._save_changes)
+        self.button_box.rejected.connect(self.reject)
+        main_layout.addWidget(self.button_box)
+
+        self.setLayout(main_layout)
+
+    def _load_comune_data(self):
+        # Assumiamo che db_manager abbia un metodo get_comune_details(comune_id)
+        # che restituisca tutti i campi necessari, incluso periodo_id, ecc.
+        # Se non esiste, bisogna crearlo. Per ora, usiamo get_all_comuni_details
+        # e filtriamo, ma è inefficiente.
+        
+        # Metodo migliore: self.comune_data_originale = self.db_manager.get_comune_details_by_id(self.comune_id)
+        # Per ora, usiamo un fallback temporaneo se quel metodo non c'è:
+        all_comuni = self.db_manager.get_all_comuni_details() #
+        found_comune = next((c for c in all_comuni if c.get('id') == self.comune_id), None)
+        
+        if not found_comune:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare dati per Comune ID: {self.comune_id}.")
+            # QTimer.singleShot(0, self.reject) # Importa QTimer da QtCore se usi questo
+            self.reject() # Chiudi subito se non trovi il comune
+            return
+        
+        self.comune_data_originale = found_comune
+
+        self.nome_edit.setText(self.comune_data_originale.get('nome_comune', '')) # 'nome_comune' da get_all_comuni_details
+        self.provincia_edit.setText(self.comune_data_originale.get('provincia', ''))
+        self.regione_edit.setText(self.comune_data_originale.get('regione', ''))
+        self.codice_catastale_edit.setText(self.comune_data_originale.get('codice_catastale', ''))
+        
+        periodo_id_val = self.comune_data_originale.get('periodo_id')
+        self.periodo_id_spinbox.setValue(periodo_id_val if periodo_id_val is not None else self.periodo_id_spinbox.minimum())
+
+        # Gestione date (assumendo che siano stringhe ISO o oggetti date/datetime)
+        di_str = self.comune_data_originale.get('data_istituzione')
+        if di_str: self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd"))
+        else: self.data_istituzione_edit.setDate(QDate())
+            
+        ds_str = self.comune_data_originale.get('data_soppressione')
+        if ds_str: self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd"))
+        else: self.data_soppressione_edit.setDate(QDate())
+
+        self.note_edit.setText(self.comune_data_originale.get('note', ''))
+
+    def _save_changes(self):
+        dati_modificati = {
+            "nome": self.nome_edit.text().strip(),
+            "provincia": self.provincia_edit.text().strip().upper(),
+            "regione": self.regione_edit.text().strip(),
+            "codice_catastale": self.codice_catastale_edit.text().strip() or None,
+            "periodo_id": None,
+            "data_istituzione": None,
+            "data_soppressione": None,
+            "note": self.note_edit.toPlainText().strip() or None,
+        }
+
+        if self.periodo_id_spinbox.value() != self.periodo_id_spinbox.minimum(): # Se non è "Nessuno"
+            dati_modificati["periodo_id"] = self.periodo_id_spinbox.value()
+
+        if self.data_istituzione_edit.date().isValid() and self.data_istituzione_edit.text().strip() != "":
+            dati_modificati["data_istituzione"] = self.data_istituzione_edit.date().toPyDate()
+        
+        if self.data_soppressione_edit.date().isValid() and self.data_soppressione_edit.text().strip() != "":
+            dati_modificati["data_soppressione"] = self.data_soppressione_edit.date().toPyDate()
+
+        # Validazioni UI
+        if not dati_modificati["nome"]:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del comune è obbligatorio.")
+            return
+        if not dati_modificati["provincia"] or len(dati_modificati["provincia"]) != 2 :
+            QMessageBox.warning(self, "Dati Mancanti", "La provincia è obbligatoria (2 caratteri).")
+            return
+        if not dati_modificati["regione"]:
+            QMessageBox.warning(self, "Dati Mancanti", "La regione è obbligatoria.")
+            return
+        
+        if dati_modificati["data_istituzione"] and dati_modificati["data_soppressione"]:
+            if dati_modificati["data_soppressione"] < dati_modificati["data_istituzione"]:
+                QMessageBox.warning(self, "Date Non Valide", "La data di soppressione non può precedere quella di istituzione.")
+                return
+
+        try:
+            # Assumiamo che esista self.db_manager.update_comune(comune_id, dati_modificati)
+            success = self.db_manager.update_comune(self.comune_id, dati_modificati)
+            if success:
+                QMessageBox.information(self, "Successo", "Dati del comune aggiornati con successo.")
+                self.accept() # Chiude il dialogo e segnala successo
+            # else: update_comune solleva eccezione in caso di errore
+        except (DBNotFoundError, DBUniqueConstraintError, DBDataError, DBMError) as e:
+            logging.getLogger("CatastoGUI").error(f"Errore salvataggio comune ID {self.comune_id}: {str(e)}")
+            QMessageBox.critical(self, "Errore Salvataggio", str(e))
+        except Exception as e_gen:
+            logging.getLogger("CatastoGUI").critical(f"Errore imprevisto salvataggio comune ID {self.comune_id}: {str(e_gen)}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {str(e_gen)}")
 
 
 class PossessoriComuneDialog(QDialog):

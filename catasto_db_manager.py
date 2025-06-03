@@ -1389,6 +1389,95 @@ class CatastoDBManager:
     #         conn.close()
     #         self.logger.debug("Connessione chiusa.")
 
+    def update_comune(self, comune_id: int, dati_modificati: Dict[str, Any]) -> bool:
+        """
+        Aggiorna i dati di un comune esistente.
+        Utilizza il pool di connessioni.
+        Solleva eccezioni specifiche in caso di errore.
+        """
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            self.logger.error(f"update_comune: comune_id non valido: {comune_id}")
+            raise DBDataError(f"ID comune non valido per l'aggiornamento: {comune_id}")
+
+        set_clauses = []
+        params = []
+
+        # Mappa dei campi ammessi e nome colonna DB
+        allowed_fields_map = {
+            "nome": "nome",
+            "provincia": "provincia",
+            "regione": "regione",
+            "codice_catastale": "codice_catastale",
+            "periodo_id": "periodo_id",
+            "data_istituzione": "data_istituzione",
+            "data_soppressione": "data_soppressione",
+            "note": "note"
+        }
+
+        for key_dict, col_db in allowed_fields_map.items():
+            if key_dict in dati_modificati: # Solo se il campo è presente nei dati da modificare
+                set_clauses.append(f"{col_db} = %s")
+                params.append(dati_modificati[key_dict])
+        
+        if not set_clauses:
+            self.logger.info(f"Nessun campo valido fornito per aggiornare comune ID {comune_id} (esclusa data_modifica).")
+            # Non fare nulla se non ci sono campi da aggiornare, oppure aggiorna solo data_modifica
+            # Per ora, se non ci sono campi, consideriamo l'operazione "riuscita" senza modifiche.
+            return True 
+
+        set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+        params.append(comune_id) # Per la clausola WHERE id = %s
+
+        query = f"UPDATE {self.schema}.comune SET {', '.join(set_clauses)} WHERE id = %s"
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione UPDATE comune ID {comune_id} con query: {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
+                if cur.rowcount == 0:
+                    cur.execute(f"SELECT 1 FROM {self.schema}.comune WHERE id = %s", (comune_id,))
+                    if not cur.fetchone():
+                        conn.rollback()
+                        raise DBNotFoundError(f"Comune con ID {comune_id} non trovato per l'aggiornamento.")
+                    self.logger.info(f"Nessuna modifica effettiva ai dati per comune ID {comune_id} (valori già aggiornati o identici, data_modifica aggiornata).")
+                conn.commit()
+                self.logger.info(f"Comune ID {comune_id} aggiornato con successo.")
+                return True
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint = getattr(uve.diag, 'constraint_name', 'N/D')
+            msg = f"Impossibile aggiornare il comune: i dati violano un vincolo di unicità (vincolo: {constraint})."
+            if "comune_nome_key" in str(constraint).lower() or "comune_nome_unique" in str(constraint).lower(): # Adatta al nome del tuo vincolo
+                msg += " Esiste già un comune con lo stesso nome."
+            elif "comune_codice_catastale_key" in str(constraint).lower(): # Se hai un UNIQUE su codice_catastale
+                msg += " Esiste già un comune con lo stesso codice catastale."
+            self.logger.error(f"Errore unicità aggiornando comune ID {comune_id}: {msg}. Dettaglio DB: {getattr(uve, 'pgerror', str(uve))}")
+            raise DBUniqueConstraintError(msg, constraint_name=constraint, details=getattr(uve, 'pgerror', str(uve))) from uve
+        # Aggiungere gestione per ForeignKeyViolation se periodo_id non valido
+        except psycopg2.errors.ForeignKeyViolation as fke:
+            if conn: conn.rollback()
+            if "comune_periodo_id_fkey" in str(fke): # Adatta al nome del tuo vincolo FK
+                msg = f"ID Periodo Storico non valido: {dati_modificati.get('periodo_id')}"
+                self.logger.error(msg + f" Dettaglio DB: {getattr(fke, 'pgerror', str(fke))}")
+                raise DBDataError(msg) from fke
+            raise DBMError(f"Errore di integrità referenziale: {getattr(fke, 'pgerror', str(fke))}") from fke
+        except (DBNotFoundError, DBDataError, DBMError) as e_custom:
+            if conn: conn.rollback()
+            raise e_custom
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB generico aggiornando comune ID {comune_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database aggiornando comune: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto aggiornando comune ID {comune_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto aggiornando comune: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+    
     def update_possessore(self, possessore_id: int, dati_modificati: Dict[str, Any]):
         """
         Aggiorna i dati di un possessore esistente nel database.

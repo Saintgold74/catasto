@@ -15,7 +15,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QListWidgetItem, QFileDialog, QStyle, QStyleFactory, QSpinBox,
                              QInputDialog, QHeaderView, QFrame, QAbstractItemView, QSizePolicy, QAction,
                              QMenu, QFormLayout, QDialogButtonBox, QProgressBar, QDoubleSpinBox)
-# Aggiunto QCloseEvent
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QGroupBox, QApplication, QStyle # Assicurati che QApplication e QStyle siano importati se usi icone standard
+
+
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent
 from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime, QProcess, QStandardPaths, pyqtSignal
 from app_utils import PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF # Assumendo che GenericTextReportPDF sia in app_utils
@@ -1263,207 +1265,182 @@ class InserimentoComuneWidget(QWidget):
 
 
 class InserimentoPossessoreWidget(QWidget):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None): # Usa la stringa per il type hint se CatastoDBManager non è ancora definito/importato globalmente
         super().__init__(parent)
         self.db_manager = db_manager
-        # Per memorizzare i dati dei comuni
         self.comuni_list_data: List[Dict[str, Any]] = []
-        self.selected_comune_id: Optional[int] = None
+        # self.selected_comune_id: Optional[int] = None # Se lo usi, assicurati sia gestito
 
         main_layout = QVBoxLayout(self)
 
-        # === Gruppo per i dati del possessore ===
         form_group = QGroupBox("Dati del Nuovo Possessore")
-        form_layout = QGridLayout(form_group)
+        form_layout = QGridLayout(form_group) # Usiamo QGridLayout per più flessibilità
 
-        form_layout.addWidget(QLabel("Nome Completo:"), 0, 0)
-        self.nome_completo_edit = QLineEdit()
-        form_layout.addWidget(self.nome_completo_edit, 0, 1)
+        # 1. Cognome e Nome (diventa l'input primario per queste info)
+        form_layout.addWidget(QLabel("Cognome e Nome (*):"), 0, 0)
+        self.cognome_nome_edit = QLineEdit() # Questo era opzionale, ora è primario
+        self.cognome_nome_edit.setPlaceholderText("Es. Rossi Mario, Bianchi Giovanni")
+        form_layout.addWidget(self.cognome_nome_edit, 0, 1, 1, 2) # Span su 2 colonne
 
-        form_layout.addWidget(QLabel("Paternità:"), 1, 0)
+        # 2. Paternità
+        form_layout.addWidget(QLabel("Paternità (es. fu Carlo):"), 1, 0)
         self.paternita_edit = QLineEdit()
-        form_layout.addWidget(self.paternita_edit, 1, 1)
+        form_layout.addWidget(self.paternita_edit, 1, 1, 1, 2) # Span su 2 colonne
 
-        form_layout.addWidget(
-            QLabel("Cognome Nome (opzionale, per ricerca):"), 2, 0)
-        # Se hai questo campo nel DB e lo vuoi inserire
-        self.cognome_nome_edit = QLineEdit()
-        form_layout.addWidget(self.cognome_nome_edit, 2, 1)
+        # 3. Pulsante per Generare Nome Completo
+        self.btn_genera_nome_completo = QPushButton("Genera Nome Completo")
+        self.btn_genera_nome_completo.setToolTip("Genera il Nome Completo dai campi Cognome/Nome e Paternità")
+        self.btn_genera_nome_completo.clicked.connect(self._genera_e_imposta_nome_completo)
+        form_layout.addWidget(self.btn_genera_nome_completo, 2, 1, 1, 1) # Posizionato sotto i campi di input
 
-        form_layout.addWidget(QLabel("Comune di Riferimento:"), 3, 0)
+        # 4. Nome Completo (ora principalmente generato, ma può essere editabile per correzioni)
+        form_layout.addWidget(QLabel("Nome Completo (generato) (*):"), 3, 0)
+        self.nome_completo_edit = QLineEdit()
+        self.nome_completo_edit.setPlaceholderText("Verrà generato o inserire manualmente se necessario")
+        form_layout.addWidget(self.nome_completo_edit, 3, 1, 1, 2) # Span su 2 colonne
+
+        # 5. Comune di Riferimento (come prima)
+        form_layout.addWidget(QLabel("Comune di Riferimento (*):"), 4, 0)
         self.comune_combo = QComboBox()
-        self._load_comuni_for_combo()  # Popola la combobox
-        form_layout.addWidget(self.comune_combo, 3, 1)
+        self._load_comuni_for_combo()
+        form_layout.addWidget(self.comune_combo, 4, 1, 1, 2) # Span su 2 colonne
 
+        # 6. Checkbox Attivo (come prima)
         self.attivo_checkbox = QCheckBox("Attivo")
-        self.attivo_checkbox.setChecked(True)  # Default a True
-        form_layout.addWidget(self.attivo_checkbox, 4, 0,
-                              1, 2)  # Span su due colonne
+        self.attivo_checkbox.setChecked(True)
+        form_layout.addWidget(self.attivo_checkbox, 5, 0, 1, 3) # Span su 3 colonne
+
+        # Rimuovi il vecchio campo "Cognome Nome (opzionale, per ricerca)" se non serve più come input separato
+        # Se il campo cognome_nome nel DB è distinto da nome_completo e serve per ricerca,
+        # allora lo si può popolare automaticamente quando si genera nome_completo o lo si salva.
 
         main_layout.addWidget(form_group)
 
-        # === Tabella per visualizzare i possessori (SE QUESTO WIDGET LA NECESSITA) ===
-        # Se InserimentoPossessoreWidget è *solo* un form per creare un nuovo possessore,
-        # allora questa tabella potrebbe non essere necessaria qui.
-        # Se è necessaria, ad esempio per mostrare una lista di possessori esistenti
-        # per evitare duplicati o per selezionarne uno da modificare (anche se il nome del widget
-        # suggerisce solo "Inserimento"), allora inizializzala.
+        self.save_button = QPushButton(QApplication.style().standardIcon(
+            QStyle.SP_DialogSaveButton), "Salva Nuovo Possessore")
+        self.save_button.clicked.connect(self._salva_possessore)
+        
+        self.clear_button = QPushButton(QApplication.style().standardIcon(
+            QStyle.SP_DialogDiscardButton), "Pulisci Campi")
+        self.clear_button.clicked.connect(self._pulisci_campi_possessore)
 
-        # 1. CREA l'istanza della tabella e assegnala a self.attributo
-        # self.possessori_table = QTableWidget(self) # 'self' come parent
-
-        # 2. DEFINISCI le colonne e le etichette SPECIFICHE per questa tabella
-        #    Usa valori letterali o costanti di classe/modulo ben definite.
-        #    NON usare 'NUOVE_COLONNE_POSSESSORI' a meno che non sia definita
-        #    globalmente o come costante di classe e sia intesa per QUESTO widget.
-
-        # Esempio: se questa tabella mostra una lista di possessori già inseriti
-        # per riferimento o per una futura funzionalità di modifica da qui.
-        # Ad Esempio: ID, Nome Completo, Paternità, Comune, Attivo
-        numero_colonne_per_tabella_inserimento = 5
-        etichette_per_tabella_inserimento = [
-            "ID", "Nome Completo", "Paternità", "Comune Rif.", "Stato"]
-
-        # self.possessori_table.setColumnCount(numero_colonne_per_tabella_inserimento) # Questa era la riga problematica
-        # self.possessori_table.setHorizontalHeaderLabels(etichette_per_tabella_inserimento)
-
-        # Configura la tabella
-        # self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        # self.possessori_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # self.possessori_table.setAlternatingRowColors(True)
-        # self.possessori_table.horizontalHeader().setStretchLastSection(True)
-        # Potresti voler caricare i dati in questa tabella con un pulsante o all'inizializzazione.
-        # self._carica_possessori_esistenti_in_tabella() # Esempio di metodo da chiamare
-
-        # Aggiungi la tabella al layout SOLO SE deve essere visibile in questo widget
-        # Se il widget è solo un form, probabilmente non vuoi mostrarla qui.
-        # main_layout.addWidget(self.possessori_table)
-
-        # Pulsante per salvare
-        self.save_button = QPushButton("Salva Nuovo Possessore")
-        self.save_button.setIcon(
-            QApplication.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.save_button.clicked.connect(
-            self._salva_possessore)  # Connetti a un metodo
-        main_layout.addWidget(self.save_button)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.clear_button)
+        main_layout.addLayout(button_layout)
 
         main_layout.addStretch()
         self.setLayout(main_layout)
+        self._pulisci_campi_possessore() # Per impostare lo stato iniziale
 
-    def _load_comuni_for_combo(self):
+    def _genera_e_imposta_nome_completo(self):
+        """
+        Genera il nome completo concatenando "Cognome Nome" e "Paternità"
+        e lo imposta nel campo nome_completo_edit.
+        """
+        cognome_nome = self.cognome_nome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        nome_completo_generato = cognome_nome # Inizia con cognome e nome
+
+        if cognome_nome and paternita: # Aggiungi paternità solo se entrambi sono presenti
+            nome_completo_generato += f" {paternita}" # Es. "Rossi Mario fu Giovanni"
+        elif cognome_nome and not paternita: # Solo cognome e nome
+            pass # nome_completo_generato è già corretto
+        elif not cognome_nome and paternita: # Solo paternità (improbabile ma gestito)
+            nome_completo_generato = paternita 
+        else: # Entrambi vuoti
+            nome_completo_generato = ""
+            
+        self.nome_completo_edit.setText(nome_completo_generato.strip())
+
+    def _load_comuni_for_combo(self): # Come prima
         try:
-            self.comuni_list_data = self.db_manager.get_comuni()
+            # Assumendo che self.db_manager sia già inizializzato
+            self.comuni_list_data = self.db_manager.get_comuni() # Metodo che restituisce lista di dict [{'id': X, 'nome': 'Y', 'provincia': 'Z'}]
             self.comune_combo.clear()
             if self.comuni_list_data:
-                for comune in self.comuni_list_data:
-                    self.comune_combo.addItem(
-                        f"{comune['nome']} ({comune['provincia']})", userData=comune['id'])
+                for comune_data in self.comuni_list_data:
+                    display_text = f"{comune_data.get('nome', 'N/D')} ({comune_data.get('provincia', 'N/P')})"
+                    self.comune_combo.addItem(display_text, userData=comune_data.get('id'))
             else:
-                self.comune_combo.addItem("Nessun comune nel DB")
+                self.comune_combo.addItem("Nessun comune nel DB", userData=None)
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore caricamento comuni in InserimentoPossessoreWidget: {e}")
-            self.comune_combo.addItem("Errore caricamento comuni")
+            logging.getLogger("CatastoGUI").error(f"Errore caricamento comuni per InserimentoPossessoreWidget: {e}", exc_info=True)
+            self.comune_combo.clear()
+            self.comune_combo.addItem("Errore caricamento comuni", userData=None)
+
+    def _pulisci_campi_possessore(self):
+        """Pulisce i campi del form possessore."""
+        self.cognome_nome_edit.clear()
+        self.paternita_edit.clear()
+        self.nome_completo_edit.clear()
+        if self.comune_combo.count() > 0:
+            self.comune_combo.setCurrentIndex(0) # O -1 per nessuna selezione se preferito
+        self.attivo_checkbox.setChecked(True)
+        self.cognome_nome_edit.setFocus()
 
     def _salva_possessore(self):
-        nome_completo = self.nome_completo_edit.text().strip()
-        paternita = self.paternita_edit.text().strip()
-        cognome_nome = self.cognome_nome_edit.text().strip()  # Recupera anche questo
+        # Ora 'cognome_nome' è l'input primario per nome/cognome
+        # 'nome_completo' è quello generato o corretto dall'utente
+        cognome_nome_input = self.cognome_nome_edit.text().strip() # Usato per DB e per generare nome completo se serve
+        paternita_input = self.paternita_edit.text().strip()
+        nome_completo_input = self.nome_completo_edit.text().strip() # Questo è il valore da salvare
 
         idx_comune = self.comune_combo.currentIndex()
-        # Assicurati che itemData restituisca un intero o sia convertibile
         comune_id_selezionato_data = self.comune_combo.itemData(idx_comune)
         comune_id_selezionato: Optional[int] = None
         if comune_id_selezionato_data is not None:
             try:
                 comune_id_selezionato = int(comune_id_selezionato_data)
             except ValueError:
-                logging.getLogger("CatastoGUI").error(
-                    f"ID comune non valido nella combobox: {comune_id_selezionato_data}")
-                QMessageBox.warning(self, "Errore Interno",
-                                    "ID comune selezionato non valido.")
+                QMessageBox.warning(self, "Errore Interno", "ID comune selezionato non valido.")
                 return
 
         attivo = self.attivo_checkbox.isChecked()
 
-        # Validazione input lato UI (prima di chiamare il DBManager)
-        if not nome_completo:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Il campo 'Nome Completo' è obbligatorio.")
+        if not nome_completo_input: # Il nome completo (generato o manuale) rimane obbligatorio
+            QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Nome Completo' è obbligatorio. Utilizzare 'Genera Nome Completo' o inserirlo manualmente.")
             self.nome_completo_edit.setFocus()
             return
+        if not cognome_nome_input: # Rendiamo anche questo obbligatorio per coerenza
+            QMessageBox.warning(self, "Dati Mancanti", "Il campo 'Cognome e Nome' è obbligatorio.")
+            self.cognome_nome_edit.setFocus()
+            return
         if comune_id_selezionato is None:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Selezionare un comune di riferimento.")
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune di riferimento.")
             self.comune_combo.setFocus()
             return
 
         try:
-            # La chiamata a db_manager.create_possessore ora restituisce l'ID del nuovo possessore
-            # o solleva un'eccezione specifica in caso di errore.
             new_possessore_id = self.db_manager.create_possessore(
-                nome_completo=nome_completo,
-                paternita=paternita if paternita else None,
+                nome_completo=nome_completo_input,
+                paternita=paternita_input if paternita_input else None,
                 comune_riferimento_id=comune_id_selezionato,
                 attivo=attivo,
-                cognome_nome=cognome_nome if cognome_nome else None
+                cognome_nome=cognome_nome_input # Passa il campo cognome_nome al DB manager
             )
 
-            # Se create_possessore non solleva eccezioni e restituisce un ID, l'operazione è andata a buon fine.
-            # Controllo aggiuntivo, anche se dovrebbe sempre esserci un ID o un'eccezione.
             if new_possessore_id is not None:
                 QMessageBox.information(self, "Successo",
-                                        f"Possessore '{nome_completo}' creato con successo. ID: {new_possessore_id}.")
-                # Pulisci i campi del form dopo il salvataggio
-                self.nome_completo_edit.clear()
-                self.paternita_edit.clear()
-                self.cognome_nome_edit.clear()
-                # Resetta la combobox (seleziona nessun item)
-                self.comune_combo.setCurrentIndex(-1)
-                self.attivo_checkbox.setChecked(True)  # Riporta al default
-
-                # Opzionale: se InserimentoPossessoreWidget avesse una tabella per mostrare i possessori,
-                # qui si potrebbe chiamare un metodo per ricaricarla, ad esempio:
-                # self._carica_possessori_esistenti_in_tabella()
-            else:
-                # Questo blocco potrebbe non essere mai raggiunto se create_possessore
-                # solleva sempre un'eccezione in caso di fallimento piuttosto che restituire None.
-                # Ma lo teniamo per sicurezza nel caso create_possessore potesse restituire None
-                # per qualche fallimento "silenzioso" non gestito da eccezioni.
-                logging.getLogger("CatastoGUI").error(
-                    "create_possessore ha restituito None senza sollevare un'eccezione esplicita.")
-                QMessageBox.critical(self, "Errore Inserimento",
-                                     "Impossibile creare il possessore. Nessun ID restituito e nessun errore specifico dal database.")
-
+                                        f"Possessore '{nome_completo_input}' creato con successo. ID: {new_possessore_id}.")
+                self._pulisci_campi_possessore()
+                # Qui potresti emettere un segnale se altri widget devono essere aggiornati
+            # else: create_possessore solleva eccezioni
+        # ... (stessa gestione eccezioni di prima per _salva_possessore) ...
         except DBUniqueConstraintError as uve:
-            logging.getLogger("CatastoGUI").warning(
-                f"Errore di unicità durante il salvataggio del possessore '{nome_completo}': {uve.message}")
-            QMessageBox.critical(self, "Errore di Unicità",
-                                 f"Impossibile creare il possessore:\n{uve.message}")
-            # Potresti voler mettere il focus sul campo che ha causato il problema, se noto.
-            # Esempio: if "nome_completo" in uve.message.lower(): self.nome_completo_edit.setFocus()
-
+            logging.getLogger("CatastoGUI").warning(f"Errore di unicità salvando possessore '{nome_completo_input}': {uve.message}")
+            QMessageBox.critical(self, "Errore di Unicità", f"Impossibile creare il possessore:\n{uve.message}")
         except DBDataError as dde:
-            logging.getLogger("CatastoGUI").warning(
-                f"Errore nei dati forniti per il possessore '{nome_completo}': {dde.message}")
-            QMessageBox.warning(self, "Dati Non Validi",
-                                f"Impossibile creare il possessore:\n{dde.message}")
-            # Potresti voler mettere il focus sul campo problematico.
-            # Esempio: if "comune" in dde.message.lower(): self.comune_combo.setFocus()
+            logging.getLogger("CatastoGUI").warning(f"Errore dati per possessore '{nome_completo_input}': {dde.message}")
+            QMessageBox.warning(self, "Dati Non Validi", f"Impossibile creare il possessore:\n{dde.message}")
+        except DBMError as dbe:
+            logging.getLogger("CatastoGUI").error(f"Errore database salvando possessore '{nome_completo_input}': {dbe.message}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore durante la creazione del possessore:\n{dbe.message}")
+        except Exception as e:
+            logging.getLogger("CatastoGUI").critical(f"Errore critico imprevisto salvando possessore '{nome_completo_input}': {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico Imprevisto", f"Errore di sistema imprevisto:\n{type(e).__name__}: {e}")
 
-        except DBMError as dbe:  # Altri errori specifici del DBManager ma non di unicità o dati.
-            logging.getLogger("CatastoGUI").error(
-                f"Errore database gestito durante il salvataggio del possessore '{nome_completo}': {dbe.message}", exc_info=True)
-            QMessageBox.critical(self, "Errore Database",
-                                 f"Si è verificato un errore durante la creazione del possessore nel database:\n{dbe.message}")
-
-        except Exception as e:  # Catch-all per qualsiasi altra eccezione Python imprevista
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore critico e imprevisto durante il salvataggio del possessore '{nome_completo}': {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico Imprevisto",
-                                 f"Si è verificato un errore di sistema imprevisto durante il salvataggio:\n"
-                                 f"{type(e).__name__}: {e}\n"
-                                 "Controllare i log dell'applicazione per il traceback completo.")
 
 
 # --- Scheda per Localita ---
@@ -1499,7 +1476,7 @@ class InserimentoLocalitaWidget(QWidget):
         # Tipo
         tipo_label = QLabel("Tipo:")
         self.tipo_combo = QComboBox()
-        self.tipo_combo.addItems(["regione", "via", "borgata"])
+        self.tipo_combo.addItems(["Regione", "Via", "Borgata","Altro"])
 
         form_layout.addWidget(tipo_label, 2, 0)
         form_layout.addWidget(self.tipo_combo, 2, 1)
@@ -7414,7 +7391,7 @@ class ModificaLocalitaDialog(QDialog):
 
         self.tipo_combo = QComboBox()
         # Coerente con la tabella
-        self.tipo_combo.addItems(["regione", "via", "borgata"])
+        self.tipo_combo.addItems(["Regione", "Via", "Borgata","Altro"])
         form_layout.addRow("Tipo (*):", self.tipo_combo)
 
         self.civico_spinbox = QSpinBox()

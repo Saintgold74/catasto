@@ -4,7 +4,7 @@ SET search_path TO catasto;
 -- 1. Estensione per la gestione di periodi storici
 CREATE TABLE periodo_storico (
     id SERIAL PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
+    nome VARCHAR(100) NOT NULL UNIQUE,
     anno_inizio INTEGER NOT NULL,
     anno_fine INTEGER,
     descrizione TEXT,
@@ -15,7 +15,8 @@ INSERT INTO periodo_storico (nome, anno_inizio, anno_fine, descrizione)
 VALUES 
 ('Regno di Sardegna', 1720, 1861, 'Periodo del Regno di Sardegna prima dell''unità d''Italia'),
 ('Regno d''Italia', 1861, 1946, 'Periodo del Regno d''Italia'),
-('Repubblica Italiana', 1946, NULL, 'Periodo della Repubblica Italiana');
+('Repubblica Italiana', 1946, NULL, 'Periodo della Repubblica Italiana')
+ON CONFLICT (nome) DO NOTHING; -- O DO UPDATE SET ... se preferisci aggiornare
 
 -- 2. Estensione delle tabelle per contemplare il periodo storico
 ALTER TABLE comune ADD COLUMN periodo_id INTEGER REFERENCES periodo_storico(id);

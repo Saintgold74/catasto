@@ -1,8 +1,8 @@
 -- Imposta lo schema
-SET search_path TO catasto;
+SET search_path TO catasto,public;
 
 -- Tabella per gli utenti
-CREATE TABLE utente (
+CREATE TABLE IF NOT EXISTS catasto.utente (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL, -- Hash della password (NON salvare password in chiaro!)
@@ -18,25 +18,7 @@ CREATE TABLE utente (
 CREATE INDEX idx_utente_username ON utente(username);
 CREATE INDEX idx_utente_ruolo ON utente(ruolo);
 
--- Tabella per il log degli accessi
-CREATE TABLE accesso_log (
-    id SERIAL PRIMARY KEY,
-    utente_id INTEGER REFERENCES utente(id) ON DELETE SET NULL, -- <<< MODIFICA QUI
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    azione VARCHAR(50) NOT NULL,
-    indirizzo_ip VARCHAR(40),
-    user_agent TEXT,
-    esito BOOLEAN,
-    session_id VARCHAR(100) NULL,
-    application_name VARCHAR(100) NULL
-);
-
-COMMENT ON COLUMN accesso_log.session_id IS 'ID univoco della sessione utente, se applicabile.';
-COMMENT ON COLUMN accesso_log.application_name IS 'Nome dell''applicazione client che ha generato l''accesso (es. CatastoApp, WebApp).';
-
-CREATE INDEX idx_accesso_utente ON accesso_log(utente_id);
-CREATE INDEX idx_accesso_timestamp ON accesso_log(timestamp);
-
+-- Trigger per aggiornare il timestamp di modifica
 -- Tabella per i permessi
 CREATE TABLE permesso (
     id SERIAL PRIMARY KEY,
@@ -99,120 +81,104 @@ END;
 $$;
 
 -- Procedura per aggiornare l'ultimo accesso di un utente
-CREATE OR REPLACE PROCEDURE registra_accesso(
+-- In 07_user-management.sql (o in 19_creazione_tabella_sessioni.sql dopo la creazione della tabella)
+CREATE OR REPLACE PROCEDURE catasto.registra_evento_sessione(
     p_utente_id INTEGER,
-    p_azione VARCHAR(50),
-    p_indirizzo_ip VARCHAR(40),
-    p_user_agent TEXT,
+    p_id_sessione_uuid TEXT, -- UUID generato dall'app
+    p_azione VARCHAR(50), -- 'login', 'logout', 'fail_login', 'timeout'
     p_esito BOOLEAN,
-	p_session_id VARCHAR(100),       -- NUOVO
-    p_application_name VARCHAR(100)  -- NUOVO
+    p_indirizzo_ip VARCHAR(45) DEFAULT NULL,
+    p_applicazione VARCHAR(100) DEFAULT NULL,
+    p_dettagli TEXT DEFAULT NULL
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- Registra l'accesso
-    INSERT INTO accesso_log (utente_id, azione, indirizzo_ip, user_agent, esito)
-    VALUES (p_utente_id, p_azione, p_indirizzo_ip, p_user_agent, p_esito);
-
-    -- Se è un login riuscito, aggiorna l'ultimo accesso
     IF p_azione = 'login' AND p_esito = TRUE THEN
-        UPDATE utente SET ultimo_accesso = CURRENT_TIMESTAMP
-        WHERE id = p_utente_id;
+        INSERT INTO catasto.sessioni_accesso 
+            (utente_id, id_sessione, data_login, indirizzo_ip, applicazione, azione, esito, dettagli, attiva)
+        VALUES 
+            (p_utente_id, p_id_sessione_uuid, CURRENT_TIMESTAMP, p_indirizzo_ip, p_applicazione, p_azione, p_esito, p_dettagli, TRUE);
+
+        -- Aggiorna ultimo_accesso nella tabella utente
+        UPDATE catasto.utente SET ultimo_accesso = CURRENT_TIMESTAMP WHERE id = p_utente_id;
+
+    ELSIF p_azione = 'fail_login' THEN
+        INSERT INTO catasto.sessioni_accesso
+            (utente_id, id_sessione, data_login, indirizzo_ip, applicazione, azione, esito, dettagli, attiva)
+        VALUES
+            (p_utente_id, p_id_sessione_uuid, CURRENT_TIMESTAMP, p_indirizzo_ip, p_applicazione, p_azione, FALSE, p_dettagli, FALSE);
+    -- Altri casi come 'logout', 'timeout' verranno gestiti da procedure specifiche
+    -- che aggiornano record esistenti in sessioni_accesso.
     END IF;
 END;
 $$;
+COMMENT ON PROCEDURE catasto.registra_evento_sessione IS 'Registra eventi di login o tentativi falliti nella tabella sessioni_accesso.';
 
--- Inserire in 07_user-management.sql o 15_integration_audit_users.sql
--- Assicurarsi che lo schema sia corretto (SET search_path TO catasto, public;)
-
-CREATE OR REPLACE PROCEDURE catasto.logout_utente(
+CREATE OR REPLACE PROCEDURE catasto.logout_utente_sessione(
     p_utente_id INTEGER,
-    p_session_id VARCHAR(100),
-    p_client_ip VARCHAR(40) DEFAULT NULL -- Opzionale, ma utile per il log
+    p_id_sessione_uuid TEXT,
+    p_client_ip VARCHAR(45) DEFAULT NULL,
+    p_applicazione VARCHAR(100) DEFAULT NULL -- Assicurati che catasto.sessioni_accesso abbia questa colonna
 )
 LANGUAGE plpgsql
 AS $$
-DECLARE
-    v_application_name VARCHAR(100);
 BEGIN
-    -- Potrebbe voler recuperare il nome dell'applicazione dal contesto di sessione se impostato,
-    -- o passarlo come parametro se necessario per accesso_log.
-    -- Per semplicità, qui lo impostiamo a un valore generico o lo lasciamo NULL
-    -- se la tabella accesso_log accetta NULL per application_name.
-    -- Se la sua tabella accesso_log richiede application_name, dovrà gestirlo.
-    
-    -- Tentativo di recuperare application_name se impostato in sessione (opzionale)
-    BEGIN
-        v_application_name := current_setting('app.application_name', true);
-    EXCEPTION
-        WHEN undefined_object THEN -- 'app.application_name' non è impostato
-            v_application_name := 'CatastoApp-Logout'; -- Valore di default o NULL
-    END;
+    UPDATE catasto.sessioni_accesso
+    SET data_logout = CURRENT_TIMESTAMP,
+        attiva = FALSE,
+        azione = 'logout', 
+        esito = TRUE
+        -- Puoi aggiornare p_indirizzo_ip e p_applicazione se necessario al logout
+    WHERE utente_id = p_utente_id 
+      AND id_sessione = p_id_sessione_uuid
+      AND attiva = TRUE;
 
-    -- Registra l'evento di logout nella tabella accesso_log
-    -- Assumiamo che la tabella accesso_log sia stata aggiornata per includere session_id e application_name
-    INSERT INTO catasto.accesso_log (
-        utente_id,
-        azione,
-        indirizzo_ip,
-        session_id,
-        application_name,
-        esito,
-        timestamp -- o lasciare il default se la colonna ha DEFAULT CURRENT_TIMESTAMP
-    )
-    VALUES (
-        p_utente_id,
-        'logout',
-        p_client_ip,
-        p_session_id,
-        v_application_name, -- o un valore fisso/NULL se non gestito
-        TRUE,               -- Logout si assume sempre riuscito a questo punto
-        CURRENT_TIMESTAMP
-    );
-
-    RAISE NOTICE 'Logout registrato per utente ID % (Sessione: %, IP: %)', p_utente_id, p_session_id, p_client_ip;
+    RAISE NOTICE 'Logout registrato in sessioni_accesso per utente ID % (Sessione UUID: %)', p_utente_id, p_id_sessione_uuid;
 
 EXCEPTION
     WHEN OTHERS THEN
-        RAISE WARNING '[logout_utente] Errore durante la registrazione del logout per utente ID %: % - SQLSTATE: %', p_utente_id, SQLERRM, SQLSTATE;
-        -- Non sollevare EXCEPTION qui per permettere al codice Python di procedere con la disconnessione,
-        -- ma loggare l'avviso è importante.
+        RAISE WARNING '[logout_utente_sessione] Errore durante la registrazione del logout per utente ID % (Sessione UUID: %): % - SQLSTATE: %', p_utente_id, p_id_sessione_uuid, SQLERRM, SQLSTATE;
 END;
 $$;
+COMMENT ON PROCEDURE catasto.logout_utente_sessione IS 'Aggiorna la sessione attiva di un utente come terminata (logout) nella tabella sessioni_accesso.';
+
+
+  
 
 -- Inserimento permessi base
-INSERT INTO permesso (nome, descrizione) VALUES
-('visualizza_partite', 'Permesso di visualizzare le partite catastali'),
-('modifica_partite', 'Permesso di modificare le partite catastali'),
-('visualizza_possessori', 'Permesso di visualizzare i possessori'),
-('modifica_possessori', 'Permesso di modificare i possessori'),
-('visualizza_immobili', 'Permesso di visualizzare gli immobili'),
-('modifica_immobili', 'Permesso di modificare gli immobili'),
-('registra_variazioni', 'Permesso di registrare variazioni di proprietà'),
-('gestione_utenti', 'Permesso di gestire gli utenti');
+INSERT INTO catasto.permesso (nome, descrizione) VALUES
+    ('visualizza_partite', 'Permesso di visualizzare le partite catastali'),
+    ('modifica_partite', 'Permesso di modificare le partite catastali'),
+    ('visualizza_possessori', 'Permesso di visualizzare i possessori'),
+    ('modifica_possessori', 'Permesso di modificare i possessori'),
+    ('visualizza_immobili', 'Permesso di visualizzare gli immobili'),
+    ('modifica_immobili', 'Permesso di modificare gli immobili'),
+    ('registra_variazioni', 'Permesso di registrare variazioni di proprietà'), -- Corretto "proprietà"
+    ('gestione_utenti', 'Permesso di gestire gli utenti')
+ON CONFLICT (nome) DO NOTHING; -- IL PUNTO E VIRGOLA VA QUI, ALLA FINE DELL'INTERA ISTRUZIONE INSERT
 
--- Utente amministratore di default (password: admin123 - in produzione usare un hash sicuro!)
+
+-- Inserimento utente amministratore di default
 DO $$
 DECLARE
-    admin_username TEXT := 'admin';
-    admin_email TEXT := 'admin@archivio.savona.it';
-    -- METTA QUI L'HASH BCRYPT VALIDO E GENERATO DA LEI
-    admin_password_hash TEXT := '$2b$12$r0aa.7569LtbyofetxSRtOWZzWAQDbD9XTC1SQ4bHVXDURlQwXszy'; 
-    user_exists BOOLEAN;
+    v_admin_username      TEXT := 'admin';
+    v_admin_email         TEXT := 'admin@archivio.savona.it';
+    v_admin_password_hash TEXT := '$2b$12$r0aa.7569LtbyofetxSRtOWZzWAQDbD9XTC1SQ4bHVXDURlQwXszy'; -- USARE HASH SICURO!
+    v_user_exists         BOOLEAN;
 BEGIN
-    SET LOCAL search_path TO catasto, public;
-    SELECT EXISTS(SELECT 1 FROM utente WHERE username = admin_username) INTO user_exists;
-    IF NOT user_exists THEN
-        INSERT INTO utente (username, password_hash, nome_completo, email, ruolo, attivo)
-        VALUES (admin_username, admin_password_hash, 'Amministratore Sistema', admin_email, 'admin', TRUE);
-        RAISE NOTICE 'Utente amministratore di default "%" creato (da 07_user-management.sql).', admin_username;
-    ELSE
-        RAISE NOTICE 'Utente amministratore di default "%" già esistente (controllato da 07_user-management.sql).', admin_username;
-    END IF;
-END $$;
+    SELECT EXISTS(SELECT 1 FROM catasto.utente WHERE username = v_admin_username) INTO v_user_exists;
 
--- Applicazione del trigger per l'aggiornamento del timestamp di modifica
+    IF NOT v_user_exists THEN
+        INSERT INTO catasto.utente (username, password_hash, nome_completo, email, ruolo, attivo)
+        VALUES (v_admin_username, v_admin_password_hash, 'Amministratore Sistema', v_admin_email, 'admin', TRUE);
+        RAISE NOTICE 'Utente amministratore di default "%" creato.', v_admin_username;
+    ELSE
+        RAISE NOTICE 'Utente amministratore di default "%" già esistente.', v_admin_username;
+    END IF;
+END $$; -- NESSUN COMMENTO DOPO QUESTO TERMINATORE SU QUESTA RIGA
+
+-- Applicazione del trigger (corretto)
 CREATE TRIGGER update_utente_modifica
-BEFORE UPDATE ON utente
-FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+BEFORE UPDATE ON catasto.utente
+FOR EACH ROW EXECUTE FUNCTION catasto.update_modified_column();

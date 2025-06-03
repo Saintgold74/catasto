@@ -86,38 +86,43 @@ class CatastoDBManager:
 
 
     def initialize_main_pool(self) -> bool:
-        """Tenta di inizializzare il pool di connessioni al database principale."""
         if self.pool:
             self.logger.info("Pool principale già inizializzato.")
             return True
-        
+
         target_dbname = self._main_db_conn_params.get("dbname")
+        # Costruisci i parametri per il pool, includendo application_name
         pool_config = {
             "minconn": self._min_conn_pool,
             "maxconn": self._max_conn_pool,
-            **self._main_db_conn_params,
-            "options": f"-c search_path={self.schema},public -c application_name='{self.application_name}_{target_dbname}'" # Nome pool più specifico
+            **self._main_db_conn_params, # Espande dbname, user, password, host, port
+            "options": f"-c search_path={self.schema},public -c application_name='{self.application_name}_{target_dbname}'"
         }
         try:
-            self.logger.info(f"Tentativo di inizializzazione pool per DB '{target_dbname}'...")
+            self.logger.info(f"Tentativo di inizializzazione pool per DB '{target_dbname}' con parametri: { {k:v for k,v in pool_config.items() if k != 'password'} }") # Non loggare la password
             self.pool = psycopg2.pool.ThreadedConnectionPool(**pool_config)
-            
-            # Test rapido della connessione dal pool
+
             conn_test = None
             try:
                 conn_test = self.pool.getconn()
                 self.logger.info(f"Pool di connessioni '{self.application_name}_{target_dbname}' per DB '{target_dbname}' inizializzato e testato con successo.")
                 return True
             except psycopg2.Error as pool_get_err:
-                self.logger.critical(f"Pool per DB '{target_dbname}' creato, ma fallito ottenimento connessione di test: {pool_get_err}", exc_info=False)
-                if self.pool: self.pool.closeall() # Chiudi il pool se il test fallisce
+                self.logger.critical(f"Pool per DB '{target_dbname}' creato, ma FALLITO ottenimento connessione di test. Errore Psycopg2: {pool_get_err}", exc_info=False) # exc_info=False per non avere il traceback completo qui, solo il messaggio psycopg2
+                self.logger.critical(f"   Dettagli Errore Psycopg2: pgcode={getattr(pool_get_err, 'pgcode', 'N/A')}, pgerror={getattr(pool_get_err, 'pgerror', 'N/A')}")
+                if self.pool: self.pool.closeall()
                 self.pool = None
                 return False
             finally:
                 if conn_test and self.pool: self.pool.putconn(conn_test)
 
-        except (psycopg2.Error, Exception) as e:
-            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}': {e}", exc_info=False)
+        except psycopg2.Error as e_init: # Cattura specificamente errori psycopg2 durante la creazione del pool
+            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}'. Errore Psycopg2: {e_init}", exc_info=False)
+            self.logger.critical(f"   Dettagli Errore Psycopg2: pgcode={getattr(e_init, 'pgcode', 'N/A')}, pgerror={getattr(e_init, 'pgerror', 'N/A')}")
+            self.pool = None
+            return False
+        except Exception as e_generic: # Altri errori Python imprevisti
+            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}'. Errore generico: {e_generic}", exc_info=True)
             self.pool = None
             return False
     def close_pool(self):
@@ -251,20 +256,30 @@ class CatastoDBManager:
     def reconnect_pool_if_needed(self) -> bool:
         self.logger.info("Tentativo di ricreare il pool di connessioni dopo operazione di ripristino...")
         if not self.pool: # Se il pool è None (come dopo close_pool)
-            self._initialize_pool() # Tenta di reinizializzarlo
+            # CORREZIONE QUI: chiama il metodo corretto
+            if not self.initialize_main_pool(): # Tenta di reinizializzarlo
+                self.logger.error("Fallimento nella reinizializzazione del pool durante reconnect_pool_if_needed.")
+                return False # Indica che la reinizializzazione è fallita
         
-        # Verifica aggiuntiva che il pool sia ora attivo
+        # Verifica aggiuntiva che il pool sia ora attivo e funzionante
         if self.pool:
             try:
-                test_conn = self._get_connection()
-                self._release_connection(test_conn)
-                self.logger.info("Pool ricreato e testato con successo.")
-                return True
-            except Exception as e:
-                self.logger.error(f"Pool ricreato, ma test di connessione fallito: {e}", exc_info=True)
+                test_conn = self._get_connection() # Questo solleverà DBMError se il pool è ancora None o problematico
+                if test_conn: # Assicurati che la connessione sia valida
+                    self._release_connection(test_conn)
+                    self.logger.info("Pool ricreato/verificato e testato con successo dopo riconnessione.")
+                    return True
+                else: # _get_connection ha restituito None senza sollevare eccezione (improbabile con la logica attuale)
+                    self.logger.error("Pool sembra attivo ma _get_connection ha restituito None durante reconnect_pool_if_needed.")
+                    return False
+            except DBMError as e_dbm: # Cattura DBMError se _get_connection fallisce
+                self.logger.error(f"Pool ricreato (o era già esistente), ma test di connessione fallito: {e_dbm}", exc_info=False)
                 return False
-        else:
-            self.logger.error("Fallimento nella ricreazione del pool.")
+            except Exception as e: # Altri errori imprevisti
+                self.logger.error(f"Errore generico durante il test del pool ricreato: {e}", exc_info=True)
+                return False
+        else: # Se self.pool è ancora None dopo il tentativo di initialize_main_pool()
+            self.logger.error("Fallimento nella ricreazione del pool (self.pool è ancora None) durante reconnect_pool_if_needed.")
             return False
 
     def get_current_dbname(self) -> Optional[str]:
@@ -3078,77 +3093,117 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
 
-    def register_access(self, user_id: int, action: str, esito: bool, 
-                        indirizzo_ip: Optional[str] = None, 
+    # Metodo ESISTENTE da MODIFICARE
+    def register_access(self, user_id: int, action: str, esito: bool,
+                        indirizzo_ip: Optional[str] = None,
                         dettagli: Optional[str] = None,
-                        application_name: Optional[str] = None, # Potrebbe essere utile
-                        id_sessione_registrata: Optional[str] = None # Per collegare al logout
-                       ) -> Optional[str]: # Restituisce l'ID sessione se l'azione è 'login' e ha successo
-        """Registra un accesso o un tentativo di accesso, usando il pool."""
+                        application_name: Optional[str] = None,
+                        # id_sessione_registrata non serve più come input se gestiamo la generazione qui
+                       ) -> Optional[str]: # Restituisce l'ID sessione (UUID string) se login e successo, altrimenti None o solleva eccezione
+        """
+        Registra un evento di sessione (login, fail_login) nella tabella sessioni_accesso.
+        Per il login con successo, genera e restituisce un UUID per la sessione.
+        Utilizza il pool di connessioni.
+        """
         conn = None
-        session_id_to_return = None
+        session_id_to_return: Optional[str] = None
+
+        if action == 'login' and esito:
+            session_id_to_return = str(uuid.uuid4()) # Genera UUID per nuova sessione di login
+            self.logger.info(f"Nuovo ID sessione generato per login utente {user_id}: {session_id_to_return}")
+        elif action == 'fail_login':
+            # Per i tentativi falliti, potremmo generare un UUID solo per logging,
+            # ma la sessione non diventa "attiva". La procedura SQL lo gestirà.
+            # O decidere di non passare un UUID specifico se la procedura lo gestisce opzionalmente per fail_login.
+            # Per coerenza con la firma della procedura, passiamo un UUID anche per fail_login.
+            session_id_to_return = str(uuid.uuid4()) 
+            self.logger.info(f"ID evento generato per fail_login utente {user_id}: {session_id_to_return}")
+        # Per altre azioni (es. 'logout', 'timeout'), l'ID sessione dovrebbe essere noto e l'aggiornamento
+        # avverrebbe tramite un metodo/procedura diversa (es. logout_user che chiama logout_utente_sessione).
+
+        # Nome della procedura SQL aggiornata
+        call_proc_str = f"CALL {self.schema}.registra_evento_sessione(%s, %s, %s, %s, %s, %s, %s);"
+        
+        # Parametri per la procedura SQL
+        # p_utente_id, p_id_sessione_uuid, p_azione, p_esito, p_indirizzo_ip, p_applicazione, p_dettagli
+        params = (
+            user_id,
+            session_id_to_return, # Passa l'UUID generato (o None se non applicabile per l'azione)
+            action,
+            esito,
+            indirizzo_ip,
+            application_name if application_name else self.application_name, # Usa default se non fornito
+            dettagli
+        )
+
         try:
             conn = self._get_connection()
             with conn.cursor() as cur:
-                if action == 'login' and esito:
-                    # Genera un ID sessione univoco per il login
-                    cur.execute("SELECT uuid_generate_v4();") # Richiede uuid-ossp
-                    session_id_to_return = str(cur.fetchone()[0])
-                else:
-                    session_id_to_return = id_sessione_registrata # Usa quello esistente per logout o fallimenti
-
-                query = f"""
-                    INSERT INTO {self.schema}.sessioni_accesso 
-                        (utente_id, id_sessione, data_login, indirizzo_ip, applicazione, azione, esito, dettagli)
-                    VALUES (%s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s);
-                """
-                # Usa l'application_name dell'istanza CatastoDBManager se non specificato
-                app_name_to_log = application_name if application_name else self.application_name
-                
-                cur.execute(query, (user_id, session_id_to_return, indirizzo_ip, app_name_to_log, action, esito, dettagli))
+                self.logger.debug(f"Chiamata a procedura catasto.registra_evento_sessione per utente {user_id}, azione {action}")
+                cur.execute(call_proc_str, params)
                 conn.commit()
-                self.logger.info(f"Registrato accesso: Utente ID {user_id}, Azione {action}, Esito {esito}, Sessione {str(session_id_to_return)[:8]}...")
-                return session_id_to_return if action == 'login' and esito else (session_id_to_return or True) # True per successo generico se non login
+                self.logger.info(f"Evento sessione registrato: Utente ID {user_id}, Azione {action}, Esito {esito}, Sessione/Evento ID {str(session_id_to_return)[:8]}...")
+                
+                # Restituisce l'ID sessione solo se è un login andato a buon fine
+                if action == 'login' and esito:
+                    return session_id_to_return
+                # Per altri casi, potremmo restituire True per successo generico o None/False per fallimento
+                # Ma la firma ora suggerisce di restituire Optional[str] per l'ID sessione.
+                # Se l'evento è registrato ma non è un login, restituire l'ID evento (che è lo stesso dell'UUID) può essere utile.
+                return session_id_to_return # Restituisce l'UUID generato (o None se non è stato generato)
+
         except psycopg2.Error as db_err:
             if conn: conn.rollback()
-            self.logger.error(f"Errore DB in register_access per utente {user_id}, azione {action}: {db_err}", exc_info=True)
-            return None if action == 'login' and esito else False
+            self.logger.error(f"Errore DB in register_access (nuova logica sessioni) per utente {user_id}, azione {action}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database durante la registrazione dell'evento di sessione: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            if conn and not conn.closed : conn.rollback()
-            self.logger.error(f"Errore Python in register_access per utente {user_id}, azione {action}: {e}", exc_info=True)
-            return None if action == 'login' and esito else False
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python in register_access (nuova logica sessioni) per utente {user_id}, azione {action}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante la registrazione dell'evento di sessione: {e}") from e
         finally:
             if conn:
                 self._release_connection(conn)
+        # Se arriviamo qui a causa di un'eccezione non gestita sopra, o se non è un login con successo
+        return None # O sollevare eccezione
+
+    # Metodo ESISTENTE da MODIFICARE
     def logout_user(self, user_id: int, session_id: str, ip_address: Optional[str]) -> bool:
-        """Registra il logout dell'utente e chiude la sessione specifica, usando il pool."""
+        """
+        Registra il logout dell'utente aggiornando la sessione attiva in sessioni_accesso
+        e pulisce le variabili di sessione per l'audit.
+        Utilizza il pool di connessioni.
+        """
         conn = None
         try:
             conn = self._get_connection()
             with conn.cursor() as cur:
-                query_session_logout = f"""
-                    UPDATE {self.schema}.sessioni_accesso
-                    SET data_logout = CURRENT_TIMESTAMP, attiva = FALSE
-                    WHERE utente_id = %s AND id_sessione = %s AND attiva = TRUE;
-                """
-                cur.execute(query_session_logout, (user_id, session_id))
+                # Nome della procedura SQL aggiornata
+                call_proc_str = f"CALL {self.schema}.logout_utente_sessione(%s, %s, %s, %s);"
+                # Parametri: p_utente_id, p_id_sessione_uuid, p_indirizzo_ip, p_applicazione
+                params = (
+                    user_id, 
+                    session_id, # Questo è l'UUID della sessione da chiudere
+                    ip_address, 
+                    self.application_name # O un valore specifico passato dalla GUI
+                )
+                self.logger.debug(f"Chiamata a procedura catasto.logout_utente_sessione per utente {user_id}, sessione {session_id[:8]}...")
+                cur.execute(call_proc_str, params)
                 
-                # Opzionale: registra anche una riga 'logout' in access_log se la logica è separata
-                # self.register_access(user_id, 'logout', esito=True, indirizzo_ip=ip_address, id_sessione_registrata=session_id)
-
-                # Pulisce le variabili di sessione per l'audit sulla STESSA connessione
-                self._clear_audit_session_variables_with_conn(conn) 
+                # La procedura logout_utente_sessione aggiorna la tabella sessioni_accesso.
+                # Ora, puliamo le variabili di audit SULLA STESSA CONNESSIONE prima del commit.
+                self._clear_audit_session_variables_with_conn(conn)
                 
                 conn.commit()
-                self.logger.info(f"Logout registrato per utente ID {user_id}, sessione {session_id[:8]}...")
+                self.logger.info(f"Logout per utente ID {user_id}, sessione {session_id[:8]}... completato e variabili audit pulite.")
                 return True
         except psycopg2.Error as e:
             if conn: conn.rollback()
-            self.logger.error(f"Errore DB durante il logout dell'utente {user_id}: {e}", exc_info=True)
+            self.logger.error(f"Errore DB durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {getattr(e, 'pgerror', str(e))}", exc_info=True)
+            # Non sollevare eccezione, ma indica fallimento
             return False
         except Exception as e:
             if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore generico durante il logout dell'utente {user_id}: {e}", exc_info=True)
+            self.logger.error(f"Errore Python generico durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {e}", exc_info=True)
             return False
         finally:
             if conn:
@@ -3197,28 +3252,46 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
         return utenti_list
-    def get_utente_by_id(self, utente_id: int) -> Optional[Dict]:
-        """Recupera i dettagli di un singolo utente tramite ID."""
-        try:
-            query = "SELECT id, username, nome_completo, email, ruolo, attivo FROM utente WHERE id = %s"
-            if self.execute_query(query, (utente_id,)):
-                return self.fetchone()
-            return None
-        except Exception as e:
-            logger.error(f"Errore durante il recupero dell'utente ID {utente_id}: {e}")
+    def get_utente_by_id(self, utente_id: int) -> Optional[Dict[str, Any]]:
+        """Recupera i dettagli di un singolo utente tramite ID, usando il pool."""
+        if not isinstance(utente_id, int) or utente_id <= 0:
+            self.logger.error(f"get_utente_by_id: utente_id non valido: {utente_id}")
             return None
 
-    def update_user_details(self, utente_id: int, nome_completo: Optional[str] = None, 
-                            email: Optional[str] = None, ruolo: Optional[str] = None, 
+        query = f"SELECT id, username, nome_completo, email, ruolo, attivo FROM {self.schema}.utente WHERE id = %s"
+        conn = None
+        try:
+            conn = self._get_connection() # Ottiene connessione dal pool
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_utente_by_id per ID: {utente_id}")
+                cur.execute(query, (utente_id,))
+                user_data = cur.fetchone()
+                if user_data:
+                    return dict(user_data)
+                else:
+                    self.logger.warning(f"Nessun utente trovato con ID: {utente_id}")
+                    return None
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_utente_by_id (ID: {utente_id}): {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            # Non sollevare eccezione per coerenza con la firma che restituisce Optional[Dict]
+            return None
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_utente_by_id (ID: {utente_id}): {e}", exc_info=True)
+            return None
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    def update_user_details(self, utente_id: int, nome_completo: Optional[str] = None,
+                            email: Optional[str] = None, ruolo: Optional[str] = None,
                             attivo: Optional[bool] = None) -> bool:
         """
-        Aggiorna i dettagli di un utente (nome_completo, email, ruolo, stato attivo).
-        Non aggiorna lo username o la password qui.
+        Aggiorna i dettagli di un utente. Utilizza il pool di connessioni.
         """
-        if not any([nome_completo, email, ruolo, attivo is not None]):
-            logger.warning("Nessun dettaglio fornito per l'aggiornamento utente.")
-            return False
-        
+        if not any([nome_completo is not None, email is not None, ruolo is not None, attivo is not None]):
+            self.logger.warning(f"Nessun dettaglio valido fornito per l'aggiornamento dell'utente ID {utente_id}.")
+            return False # Nessuna operazione da eseguire se nessun campo valido è fornito
+
         fields_to_update = []
         params = []
 
@@ -3230,125 +3303,188 @@ class CatastoDBManager:
             params.append(email)
         if ruolo is not None:
             if ruolo not in ['admin', 'archivista', 'consultatore']:
-                logger.error(f"Ruolo non valido: {ruolo}")
-                return False
+                self.logger.error(f"Ruolo non valido fornito per l'aggiornamento: {ruolo}")
+                raise DBDataError(f"Ruolo non valido: {ruolo}") # Solleva eccezione per dati non validi
             fields_to_update.append("ruolo = %s")
             params.append(ruolo)
         if attivo is not None:
             fields_to_update.append("attivo = %s")
             params.append(attivo)
         
-        if not fields_to_update: # Dovrebbe essere già gestito dal controllo any() sopra
-            return False
+        if not fields_to_update: # Se, nonostante il check any(), nessun campo è stato aggiunto (improbabile)
+            self.logger.info(f"Nessun campo effettivamente da aggiornare per utente ID {utente_id} (esclusa data_modifica).")
+            return True # Nessuna modifica richiesta, consideralo successo
 
-        params.append(utente_id)
-        query = f"UPDATE utente SET {', '.join(fields_to_update)}, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+        fields_to_update.append("data_modifica = CURRENT_TIMESTAMP")
+        params.append(utente_id) # Per la clausola WHERE
+
+        query = f"UPDATE {self.schema}.utente SET {', '.join(fields_to_update)} WHERE id = %s"
         
+        conn = None
         try:
-            if self.execute_query(query, tuple(params)):
-                self.commit()
-                logger.info(f"Dettagli utente ID {utente_id} aggiornati.")
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione UPDATE utente ID {utente_id}: {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
+                if cur.rowcount == 0:
+                    # Verifica se l'utente esiste per distinguere "non trovato" da "dati identici"
+                    cur.execute(f"SELECT 1 FROM {self.schema}.utente WHERE id = %s", (utente_id,))
+                    if not cur.fetchone():
+                        conn.rollback()
+                        self.logger.warning(f"Tentativo di aggiornare utente ID {utente_id} non trovato.")
+                        raise DBNotFoundError(f"Utente con ID {utente_id} non trovato per l'aggiornamento.")
+                    self.logger.info(f"Nessuna modifica effettiva ai dati per utente ID {utente_id} (valori già aggiornati o identici).")
+                conn.commit()
+                self.logger.info(f"Dettagli utente ID {utente_id} aggiornati.")
                 return True
-            return False
-        except psycopg2.errors.UniqueViolation:
-            logger.error(f"Errore aggiornamento utente ID {utente_id}: Email '{email}' potrebbe essere già in uso.")
-            self.rollback()
-            return False
+        except psycopg2.errors.UniqueViolation as uve:
+            if conn: conn.rollback()
+            constraint_name = getattr(uve.diag, 'constraint_name', 'N/D')
+            msg = f"Errore aggiornamento utente ID {utente_id}: Email '{email}' potrebbe essere già in uso (vincolo: {constraint_name})."
+            self.logger.error(msg + f" Dettaglio DB: {getattr(uve, 'pgerror', str(uve))}")
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=getattr(uve, 'pgerror', str(uve))) from uve
+        except (DBDataError, DBMError) as e_custom: # Rilancia eccezioni custom
+            if conn: conn.rollback()
+            self.logger.error(f"Errore dati/DBM in update_user_details per ID {utente_id}: {e_custom}")
+            raise
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB generico durante l'aggiornamento dell'utente ID {utente_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database durante l'aggiornamento utente: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            logger.error(f"Errore durante l'aggiornamento dell'utente ID {utente_id}: {e}")
-            self.rollback()
-            return False
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante l'aggiornamento dell'utente ID {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'aggiornamento utente: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+        # return False # Non dovrebbe essere raggiunto se le eccezioni sono gestite
 
     def reset_user_password(self, utente_id: int, new_password_hash: str) -> bool:
-        """Resetta la password di un utente (tipicamente da un admin)."""
+        """Resetta la password di un utente. Utilizza il pool di connessioni."""
+        query = f"UPDATE {self.schema}.utente SET password_hash = %s, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+        conn = None
         try:
-            query = "UPDATE utente SET password_hash = %s, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
-            if self.execute_query(query, (new_password_hash, utente_id)):
-                self.commit()
-                logger.info(f"Password resettata per utente ID {utente_id}.")
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(query, (new_password_hash, utente_id))
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    self.logger.warning(f"Reset password fallito: utente ID {utente_id} non trovato.")
+                    raise DBNotFoundError(f"Utente con ID {utente_id} non trovato per reset password.")
+                conn.commit()
+                self.logger.info(f"Password resettata per utente ID {utente_id}.")
                 return True
-            return False
+        except (DBNotFoundError, DBMError) as e_custom:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore in reset_user_password per ID {utente_id}: {e_custom}")
+            raise
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB durante il reset password per utente ID {utente_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database durante il reset password: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            logger.error(f"Errore durante il reset password per utente ID {utente_id}: {e}")
-            self.rollback()
-            return False
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto durante il reset password per utente ID {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante il reset password: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    def _update_user_active_status(self, utente_id: int, nuovo_stato_attivo: bool) -> bool:
+        """Metodo helper per attivare o disattivare un utente."""
+        query = f"UPDATE {self.schema}.utente SET attivo = %s, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(query, (nuovo_stato_attivo, utente_id))
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    self.logger.warning(f"Aggiornamento stato attivo fallito: utente ID {utente_id} non trovato.")
+                    raise DBNotFoundError(f"Utente con ID {utente_id} non trovato per aggiornamento stato.")
+                conn.commit()
+                status_str = "attivato" if nuovo_stato_attivo else "disattivato"
+                self.logger.info(f"Utente ID {utente_id} {status_str}.")
+                return True
+        except (DBNotFoundError, DBMError) as e_custom:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore in _update_user_active_status per ID {utente_id}: {e_custom}")
+            raise
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB aggiornando stato utente ID {utente_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database aggiornando stato utente: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore Python imprevisto aggiornando stato utente ID {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto aggiornando stato utente: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def deactivate_user(self, utente_id: int) -> bool:
-        """Disattiva un utente (soft delete)."""
-        try:
-            # Potremmo anche voler invalidare sessioni attive qui, ma è più complesso.
-            query = "UPDATE utente SET attivo = FALSE, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
-            if self.execute_query(query, (utente_id,)):
-                self.commit()
-                logger.info(f"Utente ID {utente_id} disattivato.")
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"Errore durante la disattivazione dell'utente ID {utente_id}: {e}")
-            self.rollback()
-            return False
+        """Disattiva un utente. Utilizza _update_user_active_status."""
+        return self._update_user_active_status(utente_id, False)
 
-    # Potrebbe essere utile anche un activate_user se si vuole riattivare
     def activate_user(self, utente_id: int) -> bool:
-        """Riattiva un utente precedentemente disattivato."""
-        try:
-            query = "UPDATE utente SET attivo = TRUE, data_modifica = CURRENT_TIMESTAMP WHERE id = %s"
-            if self.execute_query(query, (utente_id,)):
-                self.commit()
-                logger.info(f"Utente ID {utente_id} riattivato.")
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"Errore durante la riattivazione dell'utente ID {utente_id}: {e}")
-            self.rollback()
-            return False
-    def delete_user_permanently(self, utente_id: int) -> bool:
-        """
-        Elimina fisicamente un utente dal database.
-        ATTENZIONE: Operazione distruttiva. Considerare le implicazioni per i log.
-        """
-        # Controllo preliminare per evitare di eliminare l'unico admin o utenti speciali
-        # Questa logica potrebbe essere più complessa (es. controllare se è l'UNICO admin)
-        utente_da_eliminare = self.get_utente_by_id(utente_id)
-        if utente_da_eliminare and utente_da_eliminare.get('ruolo') == 'admin':
-            # Conta quanti admin ci sono
-            admin_count_query = "SELECT COUNT(*) AS count FROM utente WHERE ruolo = 'admin' AND attivo = TRUE"
-            if self.execute_query(admin_count_query):
-                count_result = self.fetchone()
-                if count_result and count_result['count'] <= 1:
-                    logger.error(f"Tentativo di eliminare l'unico utente amministratore (ID: {utente_id}). Operazione negata.")
-                    return False
-    
-        try:
-            # Opzionale: prima di eliminare l'utente, si potrebbero gestire i record dipendenti
-            # in accesso_log e audit_log se non si usa ON DELETE SET NULL o CASCADE.
-            # Esempio: ANNULLARE utente_id / app_user_id nei log (se si preferisce non avere ID orfani)
-            # self.execute_query("UPDATE accesso_log SET utente_id = NULL WHERE utente_id = %s", (utente_id,))
-            # self.execute_query("UPDATE audit_log SET app_user_id = NULL WHERE app_user_id = %s", (utente_id,))
-            # self.commit() # Se si eseguono queste query
+        """Riattiva un utente. Utilizza _update_user_active_status."""
+        return self._update_user_active_status(utente_id, True)
 
-            query = "DELETE FROM utente WHERE id = %s"
-            if self.execute_query(query, (utente_id,)):
-                # execute_query dovrebbe aver già fatto commit se la query è andata a buon fine
-                # ma se l'operazione DELETE non solleva eccezioni e rowcount è > 0, si assume successo.
-                # Per DELETE, rowcount è importante. self.cur.rowcount dopo execute_query
-                if self.cur and self.cur.rowcount > 0:
-                    self.commit() # Commit esplicito dopo il DELETE
-                    logger.info(f"Utente ID {utente_id} eliminato fisicamente con successo.")
+    def delete_user_permanently(self, utente_id: int) -> bool:
+        """Elimina fisicamente un utente. Utilizza il pool di connessioni."""
+        utente_da_eliminare = self.get_utente_by_id(utente_id) # Usa il metodo già corretto
+        if not utente_da_eliminare: # Se get_utente_by_id restituisce None
+            self.logger.warning(f"Tentativo di eliminare utente ID {utente_id} non trovato.")
+            # Potresti sollevare DBNotFoundError qui o restituire False come fa il codice originale
+            return False 
+            
+        if utente_da_eliminare.get('ruolo') == 'admin':
+            conn_count = None
+            try:
+                conn_count = self._get_connection()
+                with conn_count.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur_count:
+                    cur_count.execute(f"SELECT COUNT(*) AS count FROM {self.schema}.utente WHERE ruolo = 'admin' AND attivo = TRUE")
+                    count_result = cur_count.fetchone()
+                    if count_result and count_result['count'] <= 1:
+                        self.logger.error(f"Tentativo di eliminare l'unico utente amministratore attivo (ID: {utente_id}). Operazione negata.")
+                        # Non sollevare eccezione, ma restituisci False per indicare fallimento dell'operazione logica
+                        return False
+            except Exception as e_count: # Qualsiasi errore durante il conteggio
+                 self.logger.error(f"Errore durante il conteggio degli admin prima dell'eliminazione dell'utente ID {utente_id}: {e_count}", exc_info=True)
+                 return False # Non procedere se non possiamo verificare il conteggio
+            finally:
+                if conn_count:
+                    self._release_connection(conn_count)
+        
+        conn_delete = None
+        try:
+            conn_delete = self._get_connection()
+            with conn_delete.cursor() as cur_delete:
+                # FK da sessioni_accesso a utente è ON DELETE CASCADE, quindi non serve pulire sessioni_accesso manualmente
+                # FK da audit_log a utente (app_user_id) è ON DELETE SET NULL (da script 15), quindi si aggiornerà automaticamente
+                
+                cur_delete.execute(f"DELETE FROM {self.schema}.utente WHERE id = %s", (utente_id,))
+                if cur_delete.rowcount > 0:
+                    conn_delete.commit()
+                    self.logger.info(f"Utente ID {utente_id} eliminato fisicamente con successo.")
                     return True
                 else:
-                    logger.warning(f"Nessun utente trovato con ID {utente_id} per l'eliminazione fisica, o rowcount non disponibile.")
-                    self.rollback() # Rollback se nessun utente è stato effettivamente eliminato
-                    return False
-            return False
-        except psycopg2.Error as db_err: # Specificamente per errori DB come violazioni FK
-            logger.error(f"Errore DB durante l'eliminazione fisica dell'utente ID {utente_id}: {db_err}")
-            self.rollback()
-            return False
+                    # Questo caso è già coperto da get_utente_by_id sopra, ma per sicurezza
+                    conn_delete.rollback()
+                    self.logger.warning(f"Nessun utente trovato con ID {utente_id} per l'eliminazione fisica (controllo post-query).")
+                    return False 
+        except psycopg2.Error as db_err:
+            if conn_delete: conn_delete.rollback()
+            self.logger.error(f"Errore DB durante l'eliminazione fisica dell'utente ID {utente_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database durante l'eliminazione utente: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            logger.error(f"Errore Python durante l'eliminazione fisica dell'utente ID {utente_id}: {e}")
-            self.rollback()
-            return False
+            if conn_delete and not conn_delete.closed: conn_delete.rollback()
+            self.logger.error(f"Errore Python imprevisto durante l'eliminazione fisica dell'utente ID {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto durante l'eliminazione utente: {e}") from e
+        finally:
+            if conn_delete:
+                self._release_connection(conn_delete)
 
     # --- Metodi Sistema Backup (Invariati rispetto a comune_id) ---
     def get_audit_logs(self,
@@ -3542,16 +3678,18 @@ class CatastoDBManager:
         if not actual_pg_dump_path:
             return None
 
-        db_user = self._conn_params_dict.get("user")
-        db_host = self._conn_params_dict.get("host")
-        db_port = str(self._conn_params_dict.get("port"))
-        db_name = self._conn_params_dict.get("dbname")
+        # USA L'ATTRIBUTO CORRETTO: _main_db_conn_params
+        db_user = self._main_db_conn_params.get("user")
+        db_host = self._main_db_conn_params.get("host")
+        db_port = str(self._main_db_conn_params.get("port"))
+        db_name = self._main_db_conn_params.get("dbname")
 
         if not all([db_user, db_host, db_port, db_name]):
-            self.logger.error("Parametri di connessione mancanti per il backup (da _conn_params_dict).")
+            self.logger.error("Parametri di connessione mancanti per il backup (da _main_db_conn_params).")
             return None
 
         command = [actual_pg_dump_path, "-U", db_user, "-h", db_host, "-p", db_port]
+        
         if format_type == "custom": command.append("-Fc")
         elif format_type == "plain": command.append("-Fp")
         else:
@@ -3566,13 +3704,14 @@ class CatastoDBManager:
                                   backup_file_path: str,
                                   pg_tool_executable_path_ui: str
                                  ) -> Optional[List[str]]:
-        db_user = self._conn_params_dict.get("user")
-        db_host = self._conn_params_dict.get("host")
-        db_port = str(self._conn_params_dict.get("port"))
-        db_name = self._conn_params_dict.get("dbname")
+        # USA L'ATTRIBUTO CORRETTO: _main_db_conn_params
+        db_user = self._main_db_conn_params.get("user")
+        db_host = self._main_db_conn_params.get("host")
+        db_port = str(self._main_db_conn_params.get("port"))
+        db_name = self._main_db_conn_params.get("dbname")
 
         if not all([db_user, db_host, db_port, db_name]):
-            self.logger.error("Parametri di connessione mancanti per il ripristino (da _conn_params_dict).")
+            self.logger.error("Parametri di connessione mancanti per il ripristino (da _main_db_conn_params).")
             return None
 
         command: List[str] = []
@@ -3584,15 +3723,15 @@ class CatastoDBManager:
             actual_pg_tool_path = self._resolve_executable_path(pg_tool_executable_path_ui, "pg_restore.exe")
             if not actual_pg_tool_path: return None
             command = [actual_pg_tool_path, "-U", db_user, "-h", db_host, "-p", db_port, "-d", db_name]
-            command.extend(["--clean", "--if-exists", "--verbose"])
+            command.extend(["--clean", "--if-exists", "--verbose"]) # Opzioni comuni per pg_restore
             command.append(backup_file_path)
         elif file_extension == ".sql":
             actual_pg_tool_path = self._resolve_executable_path(pg_tool_executable_path_ui, "psql.exe")
             if not actual_pg_tool_path: return None
             command = [actual_pg_tool_path, "-U", db_user, "-h", db_host, "-p", db_port, "-d", db_name]
-            command.extend(["-f", backup_file_path, "-v", "ON_ERROR_STOP=1"])
+            command.extend(["-f", backup_file_path, "-v", "ON_ERROR_STOP=1"]) # Esegui script SQL con psql
         else:
-            self.logger.error(f"Formato file di backup non riconosciuto: '{file_extension}'"); return None
+            self.logger.error(f"Formato file di backup non riconosciuto o non supportato: '{file_extension}'"); return None
         self.logger.info(f"Comando di ripristino preparato: {' '.join(command)}")
         return command
 

@@ -233,10 +233,10 @@ DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 DO $$ BEGIN RAISE NOTICE '--- TEST 11: Ricerca avanzata possessore ---'; END $$;
 -- Assumiamo che la funzione sia stata corretta in 16_advanced_search.sql per includere comune_nome
 DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Angelo Fosati" (typo)'; END $$;
-SELECT * FROM ricerca_avanzata_possessori('Angelo Fosati', 0.2);
+SELECT * FROM catasto.ricerca_avanzata_possessori('Angelo Fosati'::TEXT, 0.2::REAL);
 
 DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Rossi A"'; END $$;
-SELECT * FROM ricerca_avanzata_possessori('Rossi A', 0.3);
+FROM catasto.ricerca_avanzata_possessori('Rossi A'::TEXT, 0.3::REAL);
 
 DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 

@@ -3,7 +3,7 @@ import os
 import logging
 import json
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 
 # Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -24,10 +24,16 @@ from datetime import date # Già presente
 import logging # Già presente
 # In gui_main.py, dopo le importazioni PyQt e standard:
 # E le sue eccezioni se servono qui
-from catasto_db_manager import CatastoDBManager
+if TYPE_CHECKING:
+    # Questa importazione avviene solo per i type checker (es. MyPy), 
+    # non a runtime, quindi non crea il ciclo.
+    from gui_main import CatastoMainWindow 
+    from catasto_db_manager import CatastoDBManager # Se serve anche per type hint
 
 # In gui_widgets.py, dopo le importazioni PyQt e standard:
-from catasto_db_manager import CatastoDBManager, DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
+from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
+
+from app_utils import CreateUserDialog # Per GestioneUtentiWidget
 
 # Dai nuovi moduli che creeremo:
 from app_utils import (
@@ -46,6 +52,8 @@ from app_utils import (
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
 
+NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome",
+                              "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
 
 # Importazione del gestore DB e eccezioni
 try:
@@ -128,27 +136,11 @@ class ElencoComuniWidget(QWidget):
         self.load_comuni_data()
 
     def load_comuni_data(self):
-        """Carica i dati di tutti i comuni nella tabella."""
-        self.comuni_table.setRowCount(0)  # Pulisce la tabella
-        # Disabilita sorting durante il caricamento
+        logging.getLogger("CatastoGUI").info(f"ElencoComuniWidget ({id(self)}): Esecuzione di load_comuni_data().") # Log per tracciare la chiamata
+        self.comuni_table.setRowCount(0)
         self.comuni_table.setSortingEnabled(False)
-
         try:
-            # Assumiamo che db_manager.get_all_comuni_details() esista e restituisca tutti i campi.
-            # Se non esiste, dobbiamo crearlo o adattare un metodo esistente.
-            # get_comuni() potrebbe non bastare se non restituisce tutti i dettagli.
-            # Per ora, creiamo un ipotetico get_all_comuni_details basato sullo schema.
-
-            # Metodo ipotetico in CatastoDBManager:
-            # def get_all_comuni_details(self) -> List[Dict[str, Any]]:
-            #     query = "SELECT comune_id AS id, nome_comune, codice_catastale, provincia, data_istituzione, data_soppressione, note FROM catasto.comuni ORDER BY nome_comune;"
-            #     if self.execute_query(query):
-            #         return self.fetchall()
-            #     return []
-
-            # Assicurati che questo metodo esista e funzioni!
-            comuni_list = self.db_manager.get_all_comuni_details()
-
+            comuni_list = self.db_manager.get_all_comuni_details() # Assicurati che questo metodo restituisca tutti i comuni
             if comuni_list:
                 self.comuni_table.setRowCount(len(comuni_list))
                 for row_idx, comune in enumerate(comuni_list):
@@ -181,9 +173,9 @@ class ElencoComuniWidget(QWidget):
                     col += 1
 
                 self.comuni_table.resizeColumnsToContents()
+                logging.getLogger("CatastoGUI").info(f"ElencoComuniWidget: Tabella comuni aggiornata con {len(comuni_list)} elementi.")
             else:
-                logging.getLogger("CatastoGUI").info(
-                    "Nessun comune trovato nel database.")
+                logging.getLogger("CatastoGUI").info("ElencoComuniWidget: Nessun comune trovato nel database per l'aggiornamento.")
 
         except AttributeError as ae:  # Se get_all_comuni_details non esiste
             logging.getLogger("CatastoGUI").error(
@@ -196,7 +188,7 @@ class ElencoComuniWidget(QWidget):
             QMessageBox.critical(
                 self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
         finally:
-            self.comuni_table.setSortingEnabled(True)  # Riabilita sorting
+            self.comuni_table.setSortingEnabled(True)
 
     def apply_filter(self):
         """Filtra le righe della tabella in base al testo inserito."""
@@ -992,24 +984,19 @@ class RicercaAvanzataImmobiliWidget(QWidget):
 
 
 class InserimentoComuneWidget(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None,  # parent come primo argomento dopo self
+    # Definisci il segnale a livello di classe
+    # Questo segnale emetterà l'ID del nuovo comune inserito (o True/False per successo generico)
+    comune_appena_inserito = pyqtSignal(int) # Emette l'ID del nuovo comune
+    # Oppure, se non vuoi passare l'ID: comune_appena_inserito = pyqtSignal()
+
+    def __init__(self, parent: Optional[QWidget] = None,
                  db_manager: Optional['CatastoDBManager'] = None,
                  utente_attuale_info: Optional[Dict[str, Any]] = None):
-        super().__init__(parent)  # Passa il parent ricevuto
-
-        # È buona norma verificare se db_manager è stato fornito, se è essenziale
-        if db_manager is None:
-            logging.getLogger("CatastoGUI").critical(
-                "InserimentoComuneWidget: db_manager non fornito all'inizializzazione!")
-            # Qui potrebbe essere necessario disabilitare il widget o sollevare un errore
-            # per evitare AttributeError più avanti se si tenta di usare self.db_manager.
-            # Per ora, ci affidiamo al fatto che venga sempre passato correttamente.
-
+        super().__init__(parent)
         self.db_manager = db_manager
         self.utente_attuale_info = utente_attuale_info
-
         self._initUI()
-        self._carica_elenco_periodi()  # Assumendo che _carica_elenco_periodi esista
+        self._carica_elenco_periodi()
 
     def _initUI(self):
         # ... (definizione di main_layout, form_group, form_layout_container, form_layout come prima) ...
@@ -1207,6 +1194,7 @@ class InserimentoComuneWidget(QWidget):
         self.nome_comune_edit.setFocus()
 
     def inserisci_comune(self):
+        """Inserisce un nuovo comune nel database."""
         nome_comune = self.nome_comune_edit.text().strip()
         provincia = self.provincia_edit.text().strip()
         regione = self.regione_edit.text().strip()
@@ -1249,17 +1237,12 @@ class InserimentoComuneWidget(QWidget):
                     self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
                 self.pulisci_campi()
                 self._carica_elenco_periodi()
-                main_window = self.window()
-                if isinstance(main_window, CatastoMainWindow):
-                    if hasattr(main_window, 'consultazione_sub_tabs'):
-                        for i in range(main_window.consultazione_sub_tabs.count()):
-                            widget_in_tab = main_window.consultazione_sub_tabs.widget(
-                                i)
-                            if isinstance(widget_in_tab, ElencoComuniWidget):
-                                widget_in_tab.load_comuni_data()
-                                logging.getLogger("CatastoGUI").info(
-                                    "Elenco comuni nel tab consultazione aggiornato.")
-                                break
+                # Emetti il segnale con l'ID del nuovo comune!
+                self.comune_appena_inserito.emit(comune_id)
+                logging.getLogger("CatastoGUI").info(f"Segnale comune_appena_inserito emesso per comune ID: {comune_id}")
+
+                
+                              
         except DBUniqueConstraintError as uve:
             logging.getLogger("CatastoGUI").warning(
                 f"Unicità violata inserendo comune '{nome_comune}': {str(uve)}")

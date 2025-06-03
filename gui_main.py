@@ -30,12 +30,14 @@ from catasto_db_manager import CatastoDBManager
 
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
-    ElencoComuniWidget, RicercaPartiteWidget, RicercaPossessoriWidget,
-    RicercaAvanzataImmobiliWidget, InserimentoComuneWidget, InserimentoPossessoreWidget,
-    InserimentoLocalitaWidget, RegistrazioneProprietaWidget, OperazioniPartitaWidget,
-    EsportazioniWidget, ReportisticaWidget, StatisticheWidget, GestioneUtentiWidget,
-    AuditLogViewerWidget, BackupRestoreWidget, AdminDBOperationsWidget,RegistraConsultazioneWidget
-   )
+    LandingPageWidget, ElencoComuniWidget, RicercaPartiteWidget, 
+    RicercaPossessoriWidget, RicercaAvanzataImmobiliWidget, InserimentoComuneWidget, 
+    InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget, 
+    OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget, 
+    GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, AdminDBOperationsWidget,
+    RegistraConsultazioneWidget # Aggiunto se non c'era
+)
+   
 from app_utils import FPDF_AVAILABLE, QPasswordLineEdit, _verify_password, _hash_password
 
 
@@ -587,6 +589,42 @@ class LoginDialog(QDialog):
                 logging.getLogger("CatastoGUI").error(f"Errore imprevisto durante il login per {username}: {str(e_gen)}", exc_info=True)
 
 class CatastoMainWindow(QMainWindow):
+    # ... ( __init__ e altri metodi come perform_initial_setup, update_ui_based_on_role, ecc. ) ...
+    # Assicurati che i riferimenti ai widget siano inizializzati a None in __init__
+    # Esempio:
+    # def __init__(self):
+    #     super().__init__()
+    #     self.logger = logging.getLogger("CatastoGUI")
+    #     self.db_manager: Optional[CatastoDBManager] = None
+    #     self.logged_in_user_info: Optional[Dict[str, Any]] = None
+    #     # ... altri attributi ...
+    #     self.tabs = QTabWidget() # Il QTabWidget principale
+    #     self.consultazione_sub_tabs = QTabWidget() # Sotto-tab per Consultazione
+    #     self.inserimento_sub_tabs = QTabWidget()   # Sotto-tab per Inserimento
+    #     self.sistema_sub_tabs = QTabWidget()       # Sotto-tab per Sistema
+
+    #     # Riferimenti ai widget specifici
+    #     self.landing_page_widget: Optional[LandingPageWidget] = None
+    #     self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
+    #     self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
+    #     self.ricerca_possessori_widget_ref: Optional[RicercaPossessoriWidget] = None
+    #     self.ricerca_avanzata_immobili_widget_ref: Optional[RicercaAvanzataImmobiliWidget] = None
+    #     self.inserimento_comune_widget_ref: Optional[InserimentoComuneWidget] = None
+    #     self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
+    #     self.inserimento_localita_widget_ref: Optional[InserimentoLocalitaWidget] = None # Potresti averne due, gestisci i nomi
+    #     self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
+    #     self.operazioni_partita_widget_ref: Optional[OperazioniPartitaWidget] = None
+    #     self.registra_consultazione_widget_ref: Optional[RegistraConsultazioneWidget] = None
+    #     self.esportazioni_widget_ref: Optional[EsportazioniWidget] = None
+    #     self.reportistica_widget_ref: Optional[ReportisticaWidget] = None
+    #     self.statistiche_widget_ref: Optional[StatisticheWidget] = None
+    #     self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
+    #     self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None # Rinominato per coerenza
+    #     self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None # Rinominato
+    #     self.admin_db_ops_widget_ref: Optional[AdminDBOperationsWidget] = None # Rinominato
+        
+    #     self.initUI() # Chiama initUI che a sua volta imposta il layout base e i tab
+
     def __init__(self):
         super(CatastoMainWindow, self).__init__()
         self.logger = logging.getLogger("CatastoGUI") # ASSEGNA IL LOGGER QUI
@@ -598,6 +636,13 @@ class CatastoMainWindow(QMainWindow):
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
+        self.landing_page_widget: Optional[LandingPageWidget] = None
+        self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
+        self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
+        self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
+        self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
+        self.registra_consultazione_widget_ref: Optional[RegistraConsultazioneWidget] = None
+        self.reportistica_widget_ref: Optional[ReportisticaWidget] = None
         # Aggiungere altri se necessario (es. per Sistema)
 
         self.initUI()
@@ -618,10 +663,9 @@ class CatastoMainWindow(QMainWindow):
 
         self.statusBar().showMessage("Pronto.")
         # self.create_menu_bar() # Commenta o rimuovi questa riga se il menu bar non è usato
+        
 
-    # Esempio di Menu Bar (opzionale)
-    # All'interno della classe CatastoMainWindow
-    # All'interno della classe CatastoMainWindow
+   
     def create_menu_bar(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
@@ -756,256 +800,229 @@ class CatastoMainWindow(QMainWindow):
 
     def setup_tabs(self):
         if not self.db_manager:
-            logging.getLogger("CatastoGUI").error(
-                "Tentativo di configurare i tab senza un db_manager.")
-            QMessageBox.critical(self, "Errore Critico",
-                                 "DB Manager non inizializzato.")
+            logging.getLogger("CatastoGUI").error("Tentativo di configurare i tab senza un db_manager.")
+            QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato.")
             return
-        self.tabs.clear()  # Pulisce i tab principali esistenti prima di ricrearli
+        
+        # Pulisce i tab principali esistenti prima di ricrearli
+        # Questo distrugge i widget contenuti, quindi i riferimenti andranno ricreati.
+        self.tabs.clear() 
 
-        # --- Tab Consultazione (QTabWidget per contenere sotto-tab) ---
-        # Assicurati che self.consultazione_sub_tabs sia un'istanza di QTabWidget
-        if not hasattr(self, 'consultazione_sub_tabs') or not isinstance(self.consultazione_sub_tabs, QTabWidget):
-            self.consultazione_sub_tabs = QTabWidget()
-        self.consultazione_sub_tabs.clear()  # Pulisce i sotto-tab precedenti
+        # Pulisci i QTabWidget dei sotto-tab (se sono attributi di istanza e vengono riutilizzati)
+        # Se vengono creati localmente ogni volta in setup_tabs, questa pulizia non è necessaria qui
+        # ma è buona norma se sono attributi di istanza.
+        if hasattr(self, 'consultazione_sub_tabs') and self.consultazione_sub_tabs: self.consultazione_sub_tabs.clear()
+        else: self.consultazione_sub_tabs = QTabWidget()
 
-        # Crea e memorizza il riferimento a ElencoComuniWidget
-        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs) #
+        if hasattr(self, 'inserimento_sub_tabs') and self.inserimento_sub_tabs: self.inserimento_sub_tabs.clear()
+        else: self.inserimento_sub_tabs = QTabWidget()
+        
+        if hasattr(self, 'sistema_sub_tabs') and self.sistema_sub_tabs: self.sistema_sub_tabs.clear()
+        else: self.sistema_sub_tabs = QTabWidget()
+
+        # --- 1. Landing Page (Primo Tab) ---
+        self.landing_page_widget = LandingPageWidget(self.tabs)
+        self.tabs.addTab(self.landing_page_widget, "🏠 Home")
+
+        # Connetti i segnali della landing page agli slot di navigazione
+        if self.landing_page_widget: # Controlla se l'istanza è valida
+            self.landing_page_widget.apri_elenco_comuni_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Elenco Comuni")
+            )
+            self.landing_page_widget.apri_ricerca_partite_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite")
+            )
+            self.landing_page_widget.apri_ricerca_possessori_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Avanzata Possessori")
+            )
+            self.landing_page_widget.apri_registra_proprieta_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registrazione Proprietà")
+            )
+            self.landing_page_widget.apri_registra_possessore_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Nuovo Possessore")
+            )
+            self.landing_page_widget.apri_registra_consultazione_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione")
+            )
+            self.landing_page_widget.apri_certificato_proprieta_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Reportistica", "Certificato Proprietà", activate_report_sub_tab=True)
+            )
+            self.landing_page_widget.apri_report_genealogico_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Reportistica", "Report Genealogico", activate_report_sub_tab=True)
+            )
+
+        # --- 2. Tab Consultazione e Modifica ---
+        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs)
         self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Elenco Comuni")
         
-        self.consultazione_sub_tabs.addTab(RicercaPartiteWidget(
-            self.db_manager, self.consultazione_sub_tabs), "Ricerca Partite") #
-        self.consultazione_sub_tabs.addTab(RicercaPossessoriWidget(
-            self.db_manager, self.consultazione_sub_tabs), "Ricerca Avanzata Possessori") #
-        self.consultazione_sub_tabs.addTab(RicercaAvanzataImmobiliWidget(
-            self.db_manager, self.consultazione_sub_tabs), "Ricerca Immobili Avanzata") #
+        self.ricerca_partite_widget_ref = RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_partite_widget_ref, "Ricerca Partite")
+        
+        self.ricerca_possessori_widget_ref = RicercaPossessoriWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_possessori_widget_ref, "Ricerca Avanzata Possessori")
+        
+        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
         
         self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione e Modifica")
 
-        # --- Tab Inserimento e Gestione ---
-        inserimento_gestione_contenitore = QWidget()
-        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore)
-
-        if not hasattr(self, 'inserimento_sub_tabs') or not isinstance(self.inserimento_sub_tabs, QTabWidget):
-            self.inserimento_sub_tabs = QTabWidget()
-        self.inserimento_sub_tabs.clear() # Pulisci i sotto-tab di inserimento
-
+        # --- 3. Tab Inserimento e Gestione ---
         utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
+        inserimento_gestione_contenitore = QWidget() # Il widget contenitore principale per questo tab
+        
+        # *** QUESTA RIGA DEVE ESSERE PRESENTE E DECOMMENTATA ***
+        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore)
+        # Non è necessario fare inserimento_gestione_contenitore.setLayout() se passi il parent al costruttore del layout
 
-        # 1. Crea l'istanza di InserimentoComuneWidget e assegnala a self.inserimento_comune_widget_ref
-        self.inserimento_comune_widget_ref = InserimentoComuneWidget( #
+        self.inserimento_comune_widget_ref = InserimentoComuneWidget(
             parent=self.inserimento_sub_tabs,
             db_manager=self.db_manager,
             utente_attuale_info=utente_per_inserimenti
         )
-        
-        # 2. Ora puoi tentare la disconnessione (opzionale, ma più sicuro se fatto qui)
-        #    e poi la connessione.
-        try:
+        # Disconnessione e Riconnessione del segnale per InserimentoComuneWidget
+        try: # Prova a disconnettere, potrebbe non essere connesso se è la prima volta o se il widget è stato ricreato
             self.inserimento_comune_widget_ref.comune_appena_inserito.disconnect(self.handle_comune_appena_inserito)
-            logging.getLogger("CatastoGUI").debug("Disconnessione precedente di comune_appena_inserito (se esistente) riuscita.")
-        except TypeError: 
-            logging.getLogger("CatastoGUI").debug("Nessuna connessione precedente da disconnettere per comune_appena_inserito.")
-        
+        except TypeError: # Sollevato se il segnale non era connesso
+            pass # Non fare nulla, significa che non c'era una connessione precedente
         self.inserimento_comune_widget_ref.comune_appena_inserito.connect(self.handle_comune_appena_inserito)
-        logging.getLogger("CatastoGUI").info(f"Segnale comune_appena_inserito da istanza ID {id(self.inserimento_comune_widget_ref)} connesso allo slot handle_comune_appena_inserito.")
-        
         self.inserimento_sub_tabs.addTab(self.inserimento_comune_widget_ref, "Nuovo Comune")
         
-        # Aggiungi gli altri sotto-tab di inserimento
-        self.inserimento_sub_tabs.addTab(InserimentoPossessoreWidget( #
-            self.db_manager, self.inserimento_sub_tabs), "Nuovo Possessore")
-        self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget( #
-            self.db_manager, self.inserimento_sub_tabs), "Nuova Località")
+        self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Nuovo Possessore")
         
-        # Istanza di RegistrazioneProprietaWidget e OperazioniPartitaWidget
-        # Salva i riferimenti se necessario per connettere segnali tra loro
-        registrazione_widget_instance = RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs) #
-        self.inserimento_sub_tabs.addTab(registrazione_widget_instance, "Registrazione Proprietà")
-        
-        operazioni_widget_instance = OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs) #
-        self.inserimento_sub_tabs.addTab(operazioni_widget_instance, "Operazioni Partita")
+        # Per "Nuova Località", se hai due istanze con funzionalità diverse, dovrai gestirle con nomi diversi
+        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Nuova Località")
+        # Se c'è una seconda istanza per "Nuova Località" (come nel codice originale), crea un altro riferimento o non salvarlo se non serve
+        # self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località") # Riga duplicata nel codice fornito, rimossa se non intenzionale
 
-        # Connetti il segnale da RegistrazioneProprietaWidget a OperazioniPartitaWidget
-        if registrazione_widget_instance and operazioni_widget_instance:
-            registrazione_widget_instance.partita_creata_per_operazioni_collegate.connect(
+        self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
+        
+        self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni Partita")
+
+        if self.registrazione_proprieta_widget_ref and self.operazioni_partita_widget_ref:
+            try:
+                self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.disconnect()
+            except TypeError: pass # Nessuna connessione precedente
+            self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.connect(
                 lambda partita_id, comune_id: self._handle_partita_creata_per_operazioni(
-                    partita_id, comune_id, operazioni_widget_instance
+                    partita_id, comune_id, self.operazioni_partita_widget_ref
                 )
             )
-            logging.getLogger("CatastoGUI").info(
-                "Segnale 'partita_creata_per_operazioni_collegate' connesso.")
-        else: # Questo log è utile per il debug se qualcosa va storto con le istanze
-            logging.getLogger("CatastoGUI").error(
-                "Impossibile connettere il segnale partita_creata: RegistrazioneProprietaWidget o OperazioniPartitaWidget non sono state istanziate correttamente.")
+            logging.getLogger("CatastoGUI").info("Segnale 'partita_creata_per_operazioni_collegate' connesso.")
+        else:
+            logging.getLogger("CatastoGUI").error("Impossibile connettere segnale partita_creata: widget non istanziati.")
 
-        self.inserimento_sub_tabs.addTab(
-            RegistraConsultazioneWidget( #
-                self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs),
-            "Registra Consultazione"
-        )
+        self.registra_consultazione_widget_ref = RegistraConsultazioneWidget(
+            self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Registra Consultazione")
         
         layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
         self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
 
-        # --- Tab Esportazioni ---
-        self.tabs.addTab(EsportazioniWidget(self.db_manager, self), "Esportazioni") #
+        # --- 4. Tab Esportazioni ---
+        self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager, self)
+        self.tabs.addTab(self.esportazioni_widget_ref, "Esportazioni")
 
-        # --- Tab Reportistica ---
-        self.tabs.addTab(ReportisticaWidget(self.db_manager, self), "Reportistica") #
+        # --- 5. Tab Reportistica ---
+        self.reportistica_widget_ref = ReportisticaWidget(self.db_manager, self)
+        self.tabs.addTab(self.reportistica_widget_ref, "Reportistica")
 
-        # --- Tab Statistiche e Viste Materializzate ---
-        self.tabs.addTab(StatisticheWidget(self.db_manager, self), "Statistiche e Viste") #
+        # --- 6. Tab Statistiche e Viste Materializzate ---
+        self.statistiche_widget_ref = StatisticheWidget(self.db_manager, self)
+        self.tabs.addTab(self.statistiche_widget_ref, "Statistiche e Viste")
 
-        # --- Tab Gestione Utenti (solo per admin) ---
+        # --- 7. Tab Gestione Utenti (condizionale) ---
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
-            self.tabs.addTab(GestioneUtentiWidget( #
-                self.db_manager, self.logged_in_user_info, self), "Gestione Utenti")
-
-        # --- Tab Sistema ---
-        # sistema_sub_tabs viene ricreato qui, quindi non serve clear() se è locale a questo metodo
-        sistema_sub_tabs = QTabWidget() 
-        if self.db_manager:
-            self.audit_viewer_widget = AuditLogViewerWidget(self.db_manager, sistema_sub_tabs) #
-            sistema_sub_tabs.addTab(self.audit_viewer_widget, "Log di Audit")
-
-            self.backup_restore_widget = BackupRestoreWidget(self.db_manager, sistema_sub_tabs) #
-            sistema_sub_tabs.addTab(self.backup_restore_widget, "Backup/Ripristino DB")
-
-            self.admin_db_ops_widget = AdminDBOperationsWidget(self.db_manager, sistema_sub_tabs) #
-            sistema_sub_tabs.addTab(self.admin_db_ops_widget, "Amministrazione DB")
+            self.gestione_utenti_widget_ref = GestioneUtentiWidget(
+                self.db_manager, self.logged_in_user_info, self)
+            self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
         else:
-            # Fallback se db_manager non è pronto
-            error_widget_audit = QLabel("Errore: DB Manager non inizializzato per il Log di Audit.")
-            sistema_sub_tabs.addTab(error_widget_audit, "Log di Audit")
-            error_widget_backup = QLabel(
-                "Errore: DB Manager non inizializzato per Backup/Ripristino.")
-            sistema_sub_tabs.addTab(error_widget_backup, "Backup/Ripristino")
+            self.gestione_utenti_widget_ref = None # Assicura che sia None se non creato
 
-        # --- Tab Sistema ---
-        sistema_sub_tabs = QTabWidget()
+        # --- 8. Tab Sistema ---
         if self.db_manager:
-            self.audit_viewer_widget = AuditLogViewerWidget(
-                self.db_manager, sistema_sub_tabs)
-            sistema_sub_tabs.addTab(self.audit_viewer_widget, "Log di Audit")
+            self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log di Audit")
 
-            self.backup_restore_widget = BackupRestoreWidget(
-                self.db_manager, sistema_sub_tabs)
-            sistema_sub_tabs.addTab(
-                self.backup_restore_widget, "Backup/Ripristino DB")
+            self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino DB")
 
-            # --- NUOVO TAB AMMINISTRAZIONE DB ---
-            self.admin_db_ops_widget = AdminDBOperationsWidget(
-                self.db_manager, sistema_sub_tabs)
-            sistema_sub_tabs.addTab(
-                self.admin_db_ops_widget, "Amministrazione DB")
-            # --- FINE NUOVO TAB ---
+            self.admin_db_ops_widget_ref = AdminDBOperationsWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.admin_db_ops_widget_ref, "Amministrazione DB")
         else:
-            # ... (fallback come prima) ...
-            error_widget_audit = QLabel(
-                "Errore: DB Manager non inizializzato per il Log di Audit.")
-            sistema_sub_tabs.addTab(error_widget_audit, "Log di Audit")
-            error_widget_backup = QLabel(
-                "Errore: DB Manager non inizializzato per Backup/Ripristino.")
-            sistema_sub_tabs.addTab(
-                error_widget_backup, "Backup/Ripristino DB")
-            error_widget_admin_ops = QLabel(
-                "Errore: DB Manager non inizializzato per Amministrazione DB.")
-            sistema_sub_tabs.addTab(
-                error_widget_admin_ops, "Amministrazione DB")
+            # Fallback (anche se db_manager dovrebbe essere sempre disponibile qui se il flusso è corretto)
+            error_label = QLabel("DB Manager non disponibile per i widget di sistema.")
+            error_label.setAlignment(Qt.AlignCenter)
+            self.sistema_sub_tabs.addTab(error_label, "Errore Sistema")
 
-        self.tabs.addTab(sistema_sub_tabs, "Sistema")
+        self.tabs.addTab(self.sistema_sub_tabs, "Sistema")
+        
+        self.tabs.setCurrentIndex(0) # Imposta la Landing Page come tab attivo all'avvio
+        logging.getLogger("CatastoGUI").info("Setup dei tab completato. Tab corrente impostato su 'Home'.")
 
-        # La chiamata a self.update_ui_based_on_role() avverrà dopo in perform_initial_setup,
-        # quindi il pulsante self.btn_nuovo_comune_nel_tab e i tab verranno abilitati/disabilitati correttamente.
 
-    # ... (definizione di is_admin, is_archivista, is_admin_offline come prima) ...
-        ruolo = None
-        if self.logged_in_user_info:  # Verifica se logged_in_user_info è stato impostato
-            ruolo = self.logged_in_user_info.get('ruolo')
-
-        is_admin = ruolo == 'admin'
-        is_archivista = ruolo == 'archivista'
-        is_admin_offline = ruolo == 'admin_offline'
-
-        # Abilita/disabilita il pulsante nel tab Inserimento e Gestione
-        if hasattr(self, 'btn_nuovo_comune_nel_tab'):  # Controllo per sicurezza
-            self.btn_nuovo_comune_nel_tab.setEnabled(is_admin or is_archivista)
-
-        tab_indices = {self.tabs.tabText(
-            i): i for i in range(self.tabs.count())}
-
-        # Abilitazione standard dei tab se l'utente è loggato e non è admin_offline
-        consultazione_enabled = bool(
-            self.logged_in_user_info and not is_admin_offline)
-        inserimento_enabled = (
-            is_admin or is_archivista) and not is_admin_offline
-        # Anche archivisti vedono statistiche
-        statistiche_enabled = (
-            is_admin or is_archivista) and not is_admin_offline
-        gestione_utenti_enabled = is_admin and not is_admin_offline
-        # Solo admin normali per il tab Sistema, l'admin_offline lo gestiamo dopo
-        sistema_enabled = is_admin
-
-        if "Consultazione" in tab_indices:
-            self.tabs.setTabEnabled(
-                tab_indices["Consultazione"], consultazione_enabled)
-        if "Inserimento e Gestione" in tab_indices:
-            self.tabs.setTabEnabled(
-                tab_indices["Inserimento e Gestione"], inserimento_enabled)
-        if "Esportazioni" in tab_indices:
-            # Anche consultatori esportano
-            self.tabs.setTabEnabled(
-                tab_indices["Esportazioni"], consultazione_enabled)
-        if "Reportistica" in tab_indices:
-            # Anche consultatori vedono report
-            self.tabs.setTabEnabled(
-                tab_indices["Reportistica"], consultazione_enabled)
-        if "Statistiche e Viste" in tab_indices:
-            self.tabs.setTabEnabled(
-                tab_indices["Statistiche e Viste"], statistiche_enabled)
-        if "Gestione Utenti" in tab_indices:
-            self.tabs.setTabEnabled(
-                tab_indices["Gestione Utenti"], gestione_utenti_enabled)
-
-        # Gestione specifica per il tab "Sistema"
-        if "Sistema" in tab_indices:
-            if is_admin_offline:  # Se siamo in modalità setup DB
-                # Abilita solo il tab Sistema
-                self.tabs.setTabEnabled(tab_indices["Sistema"], True)
-                # Seleziona automaticamente il tab Sistema e il sotto-tab Amministrazione DB
-                self.tabs.setCurrentIndex(tab_indices["Sistema"])
-                if hasattr(self, 'sistema_sub_tabs'):
-                    admin_db_ops_tab_index = -1
-                    for i in range(self.sistema_sub_tabs.count()):
-                        if self.sistema_sub_tabs.tabText(i) == "Amministrazione DB":
-                            admin_db_ops_tab_index = i
-                            break
-                    if admin_db_ops_tab_index != -1:
-                        self.sistema_sub_tabs.setCurrentIndex(
-                            admin_db_ops_tab_index)
-            else:  # Utente admin normale loggato
-                self.tabs.setTabEnabled(tab_indices["Sistema"], is_admin)
-
-        # Disabilita tutti gli altri tab se siamo in modalità admin_offline e il pool non è inizializzato
-        if is_admin_offline and hasattr(self, 'pool_initialized_successfully') and not self.pool_initialized_successfully:
-            for i in range(self.tabs.count()):
-                if self.tabs.tabText(i) != "Sistema":
-                    self.tabs.setTabEnabled(i, False)
-
-        # Logout button
-        if hasattr(self, 'logout_button'):
-            self.logout_button.setEnabled(
-                not is_admin_offline and bool(self.logged_in_user_id))
+    # Nuovo metodo per attivare i tab e sotto-tab
+    @pyqtSlot(str, str, bool) # main_tab_name, sub_tab_name, activate_report_sub_tab (opzionale)
+    def activate_tab_and_sub_tab(self, main_tab_name: str, sub_tab_name: str, activate_report_sub_tab: bool = False):
+        self.logger.info(f"Richiesta attivazione: Tab Principale='{main_tab_name}', Sotto-Tab='{sub_tab_name}'")
+        
+        main_tab_index = -1
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == main_tab_name:
+                main_tab_index = i
+                break
+        
+        if main_tab_index != -1:
+            self.tabs.setCurrentIndex(main_tab_index)
+            # Ora gestisci il sotto-tab
+            main_tab_widget = self.tabs.widget(main_tab_index)
+            if isinstance(main_tab_widget, QTabWidget): # Se il tab principale contiene altri tab
+                sub_tab_index = -1
+                for i in range(main_tab_widget.count()):
+                    if main_tab_widget.tabText(i) == sub_tab_name:
+                        sub_tab_index = i
+                        break
+                if sub_tab_index != -1:
+                    main_tab_widget.setCurrentIndex(sub_tab_index)
+                    
+                    # Logica specifica se si attiva un sotto-tab della Reportistica
+                    if activate_report_sub_tab and main_tab_name == "Reportistica":
+                        if hasattr(self, 'reportistica_widget_ref') and self.reportistica_widget_ref:
+                            # Il widget ReportisticaWidget stesso è un QTabWidget
+                            report_tabs = self.reportistica_widget_ref.findChild(QTabWidget) # Cerca il QTabWidget interno
+                            if report_tabs:
+                                target_report_tab_index = -1
+                                for i in range(report_tabs.count()):
+                                    if report_tabs.tabText(i) == sub_tab_name: # sub_tab_name qui è il nome del report specifico
+                                        target_report_tab_index = i
+                                        break
+                                if target_report_tab_index != -1:
+                                    report_tabs.setCurrentIndex(target_report_tab_index)
+                                    self.logger.info(f"Attivato sotto-tab '{sub_tab_name}' in Reportistica.")
+                                else:
+                                    self.logger.warning(f"Sotto-tab report '{sub_tab_name}' non trovato in Reportistica.")
+                            else:
+                                self.logger.warning("QTabWidget interno non trovato in ReportisticaWidget per attivare sotto-tab.")
+                else:
+                    self.logger.warning(f"Sotto-tab '{sub_tab_name}' non trovato nel tab principale '{main_tab_name}'.")
+            elif main_tab_widget is not None: # Il tab principale è un widget diretto, non un QTabWidget
+                 self.logger.info(f"Tab principale '{main_tab_name}' attivato (è un widget diretto).")
+            else:
+                self.logger.error(f"Widget per il tab principale '{main_tab_name}' non trovato (None).")
+        else:
+            self.logger.error(f"Tab principale '{main_tab_name}' non trovato.")
 
     @pyqtSlot(int)
     def handle_comune_appena_inserito(self, nuovo_comune_id: int):
-        self.logger.info(f"SLOT handle_comune_appena_inserito ESEGUITO per nuovo comune ID: {nuovo_comune_id}") # Log entrata slot
-        if self.elenco_comuni_widget_ref is not None:
+        self.logger.info(f"SLOT handle_comune_appena_inserito ESEGUITO per nuovo comune ID: {nuovo_comune_id}")
+        if hasattr(self, 'elenco_comuni_widget_ref') and self.elenco_comuni_widget_ref:
             self.logger.info(f"Riferimento a ElencoComuniWidget ({id(self.elenco_comuni_widget_ref)}) valido. Chiamata a load_comuni_data().")
             self.elenco_comuni_widget_ref.load_comuni_data()
         else:
-            self.logger.warning("Riferimento a ElencoComuniWidget è None! Impossibile aggiornare la lista dei comuni.")
+            self.logger.warning("Riferimento a ElencoComuniWidget è None o non esiste! Impossibile aggiornare la lista dei comuni.")
     def _handle_partita_creata_per_operazioni(self, nuova_partita_id: int, comune_id_partita: int,
                                               target_operazioni_widget: OperazioniPartitaWidget):
         """

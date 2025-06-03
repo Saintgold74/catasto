@@ -7715,3 +7715,106 @@ class ImmobiliTableWidget(QTableWidget):
 
         # Adatta le dimensioni delle colonne al contenuto
         self.resizeColumnsToContents()
+# In gui_widgets.py
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGroupBox, QGridLayout,QSizePolicy
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont # Per i titoli
+
+class LandingPageWidget(QWidget):
+    # Definisci segnali per ogni azione/pulsante che deve cambiare il tab nella main window
+    apri_elenco_comuni_signal = pyqtSignal()
+    apri_ricerca_partite_signal = pyqtSignal()
+    apri_ricerca_possessori_signal = pyqtSignal()
+    apri_registra_proprieta_signal = pyqtSignal()
+    apri_registra_possessore_signal = pyqtSignal()
+    apri_registra_consultazione_signal = pyqtSignal()
+    apri_certificato_proprieta_signal = pyqtSignal()
+    apri_report_genealogico_signal = pyqtSignal()
+    # Aggiungi altri segnali se necessario
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignTop) # Allinea il contenuto in alto
+        main_layout.setSpacing(20) # Spazio tra le sezioni
+
+        # Titolo di Benvenuto
+        title_label = QLabel("Gestionale Catasto Storico")
+        title_font = QFont()
+        title_font.setPointSize(20)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title_label)
+
+        subtitle_label = QLabel("Archivio di Stato di Savona - Funzionalità Principali")
+        subtitle_font = QFont()
+        subtitle_font.setPointSize(12)
+        subtitle_label.setFont(subtitle_font)
+        subtitle_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(subtitle_label)
+        main_layout.addSpacing(10)
+
+        # Layout a griglia per le sezioni di pulsanti
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(15)
+        main_layout.addLayout(grid_layout)
+
+        # Sezione Consultazione Rapida
+        consultazione_group = QGroupBox("Consultazione Rapida")
+        consultazione_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        consultazione_layout = QVBoxLayout(consultazione_group)
+        consultazione_layout.setSpacing(10)
+
+        btn_elenco_comuni = QPushButton("Elenco Comuni")
+        btn_elenco_comuni.clicked.connect(self.apri_elenco_comuni_signal.emit)
+        consultazione_layout.addWidget(btn_elenco_comuni)
+
+        btn_ricerca_partite = QPushButton("Ricerca Partite")
+        btn_ricerca_partite.clicked.connect(self.apri_ricerca_partite_signal.emit)
+        consultazione_layout.addWidget(btn_ricerca_partite)
+
+        btn_ricerca_possessori = QPushButton("Ricerca Possessori")
+        btn_ricerca_possessori.clicked.connect(self.apri_ricerca_possessori_signal.emit)
+        consultazione_layout.addWidget(btn_ricerca_possessori)
+        grid_layout.addWidget(consultazione_group, 0, 0)
+
+        # Sezione Operazioni Comuni
+        operazioni_group = QGroupBox("Operazioni Comuni")
+        operazioni_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        operazioni_layout = QVBoxLayout(operazioni_group)
+        operazioni_layout.setSpacing(10)
+
+        btn_reg_proprieta = QPushButton("Registra Nuova Proprietà")
+        btn_reg_proprieta.clicked.connect(self.apri_registra_proprieta_signal.emit)
+        operazioni_layout.addWidget(btn_reg_proprieta)
+
+        btn_reg_possessore = QPushButton("Registra Nuovo Possessore")
+        btn_reg_possessore.clicked.connect(self.apri_registra_possessore_signal.emit)
+        operazioni_layout.addWidget(btn_reg_possessore)
+        
+        btn_reg_consultazione = QPushButton("Registra Consultazione")
+        btn_reg_consultazione.clicked.connect(self.apri_registra_consultazione_signal.emit)
+        operazioni_layout.addWidget(btn_reg_consultazione)
+        grid_layout.addWidget(operazioni_group, 0, 1)
+
+        # Sezione Report (Opzionale)
+        report_group = QGroupBox("Report Principali")
+        report_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        report_layout = QVBoxLayout(report_group)
+        report_layout.setSpacing(10)
+
+        btn_cert_proprieta = QPushButton("Genera Certificato Proprietà")
+        btn_cert_proprieta.clicked.connect(self.apri_certificato_proprieta_signal.emit)
+        report_layout.addWidget(btn_cert_proprieta)
+
+        btn_rep_genealogico = QPushButton("Genera Report Genealogico")
+        btn_rep_genealogico.clicked.connect(self.apri_report_genealogico_signal.emit)
+        report_layout.addWidget(btn_rep_genealogico)
+        grid_layout.addWidget(report_group, 1, 0, 1, 2) # Span su due colonne
+
+        main_layout.addStretch() # Spinge tutto in alto
+        self.setLayout(main_layout)

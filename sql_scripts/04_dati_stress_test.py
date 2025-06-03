@@ -35,8 +35,8 @@ DECLARE
     v_nome_possessore TEXT;
     v_nome_localita TEXT;
     v_numero_partita INTEGER;
-    v_start_time TIMESTAMPTZ;
-    v_end_time TIMESTAMPTZ;
+    v_start_time TIMESTAMPTZ(0);
+    v_end_time TIMESTAMPTZ(0);
     v_last_partita_num INTEGER := 1000; -- Numero di partenza per le partite generate
     v_possessore_ids INTEGER[];
     v_partita_ids INTEGER[];

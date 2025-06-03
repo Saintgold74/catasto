@@ -4412,7 +4412,150 @@ class CatastoDBManager:
             self.logger.debug("Variabili di sessione audit resettate (connessione esistente).")
         except Exception as e:
             self.logger.error(f"Errore resettando variabili audit con connessione esistente: {e}", exc_info=True)
+    def aggiungi_documento_storico(self, titolo: str, tipo_documento: str, percorso_file: str,
+                                  descrizione: Optional[str] = None, anno: Optional[int] = None,
+                                  periodo_id: Optional[int] = None, 
+                                  metadati_json: Optional[str] = None) -> Optional[int]: # Restituisce l'ID del nuovo documento
+        """Inserisce un nuovo record nella tabella documento_storico."""
+        query = f"""
+            INSERT INTO {self.schema}.documento_storico 
+                (titolo, tipo_documento, percorso_file, descrizione, anno, periodo_id, metadati)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+            RETURNING id;
+        """
+        params = (titolo, tipo_documento, percorso_file, descrizione, anno, periodo_id, metadati_json)
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.info(f"Aggiunta documento: {titolo}, Percorso: {percorso_file}")
+                cur.execute(query, params)
+                doc_id = cur.fetchone()['id']
+                conn.commit()
+                self.logger.info(f"Documento storico ID {doc_id} aggiunto con successo.")
+                return doc_id
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB aggiungendo documento storico '{titolo}': {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        # ... (gestione altre eccezioni come per altri metodi INSERT) ...
+        finally:
+            if conn: self._release_connection(conn)
+        return None
 
+    def collega_documento_a_partita(self, documento_id: int, partita_id: int, 
+                                   rilevanza: str, note: Optional[str] = None) -> bool:
+        """Inserisce un record nella tabella di collegamento documento_partita."""
+        if rilevanza not in ['primaria', 'secondaria', 'correlata']:
+            self.logger.error(f"Valore di rilevanza non valido: {rilevanza}")
+            raise DBDataError(f"Valore di rilevanza non valido: {rilevanza}. Ammessi: 'primaria', 'secondaria', 'correlata'.")
+        
+        query = f"""
+            INSERT INTO {self.schema}.documento_partita
+                (documento_id, partita_id, rilevanza, note)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (documento_id, partita_id) DO UPDATE SET 
+                rilevanza = EXCLUDED.rilevanza, 
+                note = EXCLUDED.note,
+                data_creazione = {self.schema}.documento_partita.data_creazione; -- Mantiene data_creazione originale
+        """ # ON CONFLICT aggiorna se il legame esiste già
+        params = (documento_id, partita_id, rilevanza, note)
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.info(f"Collegamento documento ID {documento_id} a partita ID {partita_id}, rilevanza: {rilevanza}")
+                cur.execute(query, params)
+                conn.commit()
+                self.logger.info("Documento collegato/aggiornato alla partita con successo.")
+                return True
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            self.logger.error(f"Errore DB collegando doc {documento_id} a partita {partita_id}: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        # ... (gestione altre eccezioni) ...
+        finally:
+            if conn: self._release_connection(conn)
+        return False
+
+    def get_documenti_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
+        """Recupera l'elenco dei documenti (con dettagli) associati a una partita."""
+        query = f"""
+            SELECT 
+                ds.id as documento_id, 
+                ds.titolo, 
+                ds.tipo_documento, 
+                ds.percorso_file, 
+                ds.anno,
+                dp.id as documento_partita_id_rel, -- AGGIUNGI QUESTA LINEA per ottenere l'ID della relazione
+                dp.rilevanza, 
+                dp.note as note_legame,
+                ps.nome as nome_periodo
+            FROM {self.schema}.documento_storico ds
+            JOIN {self.schema}.documento_partita dp ON ds.id = dp.documento_id
+            LEFT JOIN {self.schema}.periodo_storico ps ON ds.periodo_id = ps.id
+            WHERE dp.partita_id = %s
+            ORDER BY ds.anno DESC, ds.titolo;
+        """
+        conn = None
+        documenti = []
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(query, (partita_id,))
+                documenti = [dict(row) for row in cur.fetchall()]
+                self.logger.info(f"Recuperati {len(documenti)} documenti per partita ID {partita_id}.")
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB durante il recupero dei documenti per la partita ID {partita_id}: {db_err}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei documenti per la partita ID {partita_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema: {e}") from e
+        finally:
+            if conn: self._release_connection(conn)
+        return documenti
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
+
+    def scollega_documento_da_partita(self, documento_partita_id: int) -> bool:
+        """
+        Rimuove un legame documento-partita dalla tabella documento_partita.
+        Solleva eccezioni specifiche in caso di errore.
+        """
+        if not (isinstance(documento_partita_id, int) and documento_partita_id > 0):
+            self.logger.error(f"scollega_documento_da_partita: ID relazione documento-partita non valido: {documento_partita_id}")
+            raise DBDataError(f"ID relazione documento-partita non valido: {documento_partita_id}")
+
+        query = f"DELETE FROM {self.schema}.documento_partita WHERE id = %s;"
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                self.logger.debug(f"Esecuzione query scollega_documento_da_partita ID {documento_partita_id}: {cur.mogrify(query, (documento_partita_id,)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (documento_partita_id,))
+                
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    self.logger.warning(f"Tentativo di scollegare documento-partita ID {documento_partita_id} non trovato.")
+                    raise DBNotFoundError(f"Nessun legame documento-partita trovato con ID {documento_partita_id} da scollegare.")
+                
+                conn.commit()
+                self.logger.info(f"Legame documento-partita ID {documento_partita_id} scollegato con successo. Righe modificate: {cur.rowcount}")
+                return True
+
+        except psycopg2.Error as e:
+            if conn: conn.rollback()
+            error_detail = getattr(e, 'pgerror', str(e))
+            self.logger.error(f"Errore DB scollegando documento-partita {documento_partita_id}: {error_detail}", exc_info=True)
+            raise DBMError(f"Errore database durante lo scollegamento del documento: {error_detail}") from e
+        except Exception as e:
+            if conn and not conn.closed: conn.rollback()
+            self.logger.error(f"Errore imprevisto scollegando documento-partita {documento_partita_id}: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    # Opzionali: scollega_documento_da_partita, elimina_documento_storico (con gestione file!)
         
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

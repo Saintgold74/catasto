@@ -5,7 +5,7 @@ SET search_path TO catasto;
 CREATE TABLE backup_registro (
     id SERIAL PRIMARY KEY,
     nome_file VARCHAR(255) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     utente VARCHAR(100) NOT NULL,
     dimensione_bytes BIGINT,
     tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('completo', 'schema', 'dati')),
@@ -93,7 +93,7 @@ CREATE OR REPLACE PROCEDURE pulizia_backup_vecchi(p_giorni_conservazione INTEGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_data_limite TIMESTAMP;
+    v_data_limite TIMESTAMP(0);
     v_backup_record backup_registro%ROWTYPE;
 BEGIN
     v_data_limite := current_timestamp - (p_giorni_conservazione || ' days')::INTERVAL;

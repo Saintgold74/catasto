@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS catasto.utente (
     email VARCHAR(100) UNIQUE NOT NULL,
     ruolo VARCHAR(20) NOT NULL CHECK (ruolo IN ('admin', 'archivista', 'consultatore')),
     attivo BOOLEAN DEFAULT TRUE,
-    ultimo_accesso TIMESTAMP,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ultimo_accesso TIMESTAMP(0),
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_utente_username ON utente(username);
@@ -30,7 +30,7 @@ CREATE TABLE permesso (
 CREATE TABLE utente_permesso (
     utente_id INTEGER REFERENCES utente(id) ON DELETE CASCADE,
     permesso_id INTEGER REFERENCES permesso(id) ON DELETE CASCADE,
-    data_assegnazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_assegnazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (utente_id, permesso_id)
 );
 

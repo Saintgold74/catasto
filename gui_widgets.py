@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 
 # Importazioni PyQt5
 # Importazioni necessarie (QSvgWidget già dovrebbe esserci dalla risposta precedente)
-from PyQt5.QtSvgWidgets import QSvgWidget
+#from PyQt5.QtSvgWidgets import QSvgWidget
 # QByteArray non è più necessario se carichi da file
 # from PyQt5.QtCore import QByteArray
 from PyQt5.QtWidgets import QHBoxLayout, QLabel # Aggiungi QLabel per un eventuale fallback
@@ -56,7 +56,7 @@ from app_utils import (
     gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
     GenericTextReportPDF,  # Per ReportisticaWidget
     # Se usate in GestioneUtentiWidget direttamente (anche se è in CreateUserDialog)
-    _hash_password, _verify_password
+    _hash_password, _verify_password, AggiungiDocumentoDialog    
 )
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
@@ -6091,6 +6091,7 @@ class PartitaDetailsDialog(QDialog):
 class ModificaPartitaDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, partita_id: int, parent=None):
         super().__init__(parent)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}") # AGGIUNGI QUESTA RIGA
         self.db_manager = db_manager
         self.partita_id = partita_id
         self.partita_data_originale = None
@@ -6224,6 +6225,42 @@ class ModificaPartitaDialog(QDialog):
         buttons_layout.addWidget(self.close_dialog_button)
         main_layout.addLayout(buttons_layout)
 
+        # --- Tab 3: Documenti Allegati ---
+        self.tab_documenti = QWidget()
+        layout_documenti = QVBoxLayout(self.tab_documenti)
+
+        self.documenti_table = QTableWidget()
+        self.documenti_table.setColumnCount(6) # Adatta colonne se necessario
+        self.documenti_table.setHorizontalHeaderLabels(
+            ["ID Doc.", "Titolo", "Tipo Doc.", "Anno", "Rilevanza", "Percorso/Azione"])
+        self.documenti_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.documenti_table.setSelectionBehavior(QTableWidget.SelectRows)
+        # self.documenti_table.itemDoubleClicked.connect(self._apri_documento_selezionato)
+        layout_documenti.addWidget(self.documenti_table)
+
+        doc_buttons_layout = QHBoxLayout()
+        btn_allega_nuovo = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileLinkIcon), "Allega Nuovo Documento...")
+        btn_allega_nuovo.clicked.connect(self._allega_nuovo_documento_a_partita)
+        doc_buttons_layout.addWidget(btn_allega_nuovo)
+
+        btn_apri_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento Selezionato")
+        btn_apri_doc.clicked.connect(self._apri_documento_selezionato)
+        doc_buttons_layout.addWidget(btn_apri_doc)
+         # Riattiva e connetti il pulsante scollega
+        self.btn_scollega_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_TrashIcon), "Scollega Documento")
+        self.btn_scollega_doc.clicked.connect(self._scollega_documento_selezionato)
+        self.btn_scollega_doc.setEnabled(False) # Inizialmente disabilitato
+        doc_buttons_layout.addWidget(self.btn_scollega_doc)
+        doc_buttons_layout.addStretch()
+        layout_documenti.addLayout(doc_buttons_layout)
+        
+        self.tab_widget.addTab(self.tab_documenti, "Documenti Allegati")
+
+        # Nell'__init__ di ModificaPartitaDialog, dopo _load_partita_data():
+        # self._load_documenti_allegati()
+        
+        
+        
         self.setLayout(main_layout)
 
     def _load_partita_data(self):
@@ -6275,6 +6312,45 @@ class ModificaPartitaDialog(QDialog):
         else:
             self.numero_provenienza_spinbox.setValue(
                 self.numero_provenienza_spinbox.minimum())
+    """"
+    def _load_partita_data(self):
+        # ... (come prima, popola i campi del tab "Dati Generali") ...
+        self.partita_data_originale = self.db_manager.get_partita_details(
+            self.partita_id)
+        if not self.partita_data_originale:
+            QMessageBox.critical(
+                self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
+            from PyQt5.QtCore import QTimer  # Importazione locale
+            QTimer.singleShot(0, self.reject)
+            return
+
+        self.comune_label.setText(
+            self.partita_data_originale.get('comune_nome', "N/D"))
+        self.numero_partita_spinbox.setValue(
+            self.partita_data_originale.get('numero_partita', 0))
+        tipo_idx = self.tipo_combo.findText(
+            self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
+        if tipo_idx >= 0:
+            self.tipo_combo.setCurrentIndex(tipo_idx)
+        data_impianto = self.partita_data_originale.get('data_impianto')
+        if data_impianto:
+            self.data_impianto_edit.setDate(
+                QDate(data_impianto.year, data_impianto.month, data_impianto.day))
+        else:
+            self.data_impianto_edit.setDate(QDate())
+        data_chiusura = self.partita_data_originale.get('data_chiusura')
+        if data_chiusura:
+            self.data_chiusura_edit.setDate(
+                QDate(data_chiusura.year, data_chiusura.month, data_chiusura.day))
+        else:
+            self.data_chiusura_edit.setDate(QDate())
+        self.numero_provenienza_spinbox.setValue(
+            self.partita_data_originale.get('numero_provenienza') or 0)
+        stato_idx = self.stato_combo.findText(
+            self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
+        if stato_idx >= 0:
+            self.stato_combo.setCurrentIndex(stato_idx)
+"""
 
     def _save_changes(self):
         # Raccogli i dati dai campi del form
@@ -6369,46 +6445,224 @@ class ModificaPartitaDialog(QDialog):
         self.btn_modifica_legame_possessore.setEnabled(has_selection)
         self.btn_rimuovi_possessore.setEnabled(has_selection)
 
-    def _load_partita_data(self):
-        # ... (come prima, popola i campi del tab "Dati Generali") ...
-        self.partita_data_originale = self.db_manager.get_partita_details(
-            self.partita_id)
-        if not self.partita_data_originale:
-            QMessageBox.critical(
-                self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
-            from PyQt5.QtCore import QTimer  # Importazione locale
-            QTimer.singleShot(0, self.reject)
+    def _load_documenti_allegati(self):
+        self.documenti_table.setRowCount(0)
+        if not self.partita_id: return
+
+        try:
+            documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
+            self.documenti_table.setRowCount(len(documenti))
+            for row, doc in enumerate(documenti):
+                self.documenti_table.setItem(row, 0, QTableWidgetItem(str(doc.get("documento_id"))))
+                self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
+                self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
+                self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
+                self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
+                # La colonna percorso_file potrebbe contenere il nome del file o un pulsante "Apri"
+                # Per ora, mostriamo il percorso (o parte di esso)
+                path_item = QTableWidgetItem(doc.get("percorso_file", "N/D"))
+                path_item.setData(Qt.UserRole, doc.get("percorso_file")) # Salva percorso completo
+                self.documenti_table.setItem(row, 5, path_item)
+            self.documenti_table.resizeColumnsToContents()
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare documenti allegati: {e}")
+            logging.getLogger("CatastoGUI").error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
+
+    def _allega_nuovo_documento_a_partita(self):
+        dialog = AggiungiDocumentoDialog(self.db_manager, self.partita_id, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.document_data:
+            doc_info = dialog.document_data
+            percorso_originale = doc_info["percorso_file_originale"]
+            
+            # --- Logica di Copia File ---
+            # Definire una directory base per gli allegati (configurabile!)
+            # Esempio: BASE_ALLEGATI_DIR = os.path.join(QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation), "CatastoAllegati")
+            # Per ora usiamo un percorso relativo semplice per dimostrazione:
+            allegati_dir = os.path.join(".", "allegati_catasto", f"partita_{self.partita_id}")
+            os.makedirs(allegati_dir, exist_ok=True)
+            
+            nome_file_originale = os.path.basename(percorso_originale)
+            # Potresti voler generare un nome file univoco (es. con UUID) per evitare sovrascritture
+            # e conservare il nome originale nei metadati.
+            # Esempio nome univoco: nome_file_dest = f"{uuid.uuid4()}_{nome_file_originale}"
+            nome_file_dest = nome_file_originale # Semplice per ora
+            percorso_destinazione_completo = os.path.join(allegati_dir, nome_file_dest)
+            
+            try:
+                import shutil # Importa shutil
+                shutil.copy2(percorso_originale, percorso_destinazione_completo) # copy2 preserva metadati
+                self.logger.info(f"File copiato da '{percorso_originale}' a '{percorso_destinazione_completo}'")
+
+                # Salva il percorso RELATIVO o quello che hai deciso di usare nel DB
+                percorso_file_db = percorso_destinazione_completo # O un percorso relativo alla BASE_ALLEGATI_DIR
+
+                # Inserisci nel DB
+                doc_id = self.db_manager.aggiungi_documento_storico(
+                    titolo=doc_info["titolo"],
+                    tipo_documento=doc_info["tipo_documento"],
+                    percorso_file=percorso_file_db, # Percorso del file copiato
+                    descrizione=doc_info["descrizione"],
+                    anno=doc_info["anno"],
+                    periodo_id=doc_info["periodo_id"],
+                    metadati_json=doc_info["metadati_json"]
+                )
+                if doc_id:
+                    success_link = self.db_manager.collega_documento_a_partita(
+                        doc_id, self.partita_id, doc_info["rilevanza"], doc_info["note_legame"]
+                    )
+                    if success_link:
+                        QMessageBox.information(self, "Successo", "Documento allegato e collegato con successo.")
+                        self._load_documenti_allegati() # Aggiorna la tabella
+                    else:
+                        QMessageBox.warning(self, "Attenzione", "Documento salvato ma fallito il collegamento alla partita.")
+                else:
+                    QMessageBox.critical(self, "Errore", "Impossibile salvare le informazioni del documento nel database.")
+                    # Considera di eliminare il file copiato se il salvataggio DB fallisce
+                    if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo)
+
+            except FileNotFoundError:
+                QMessageBox.critical(self, "Errore File", f"File sorgente non trovato: {percorso_originale}")
+            except PermissionError:
+                QMessageBox.critical(self, "Errore Permessi", f"Permessi non sufficienti per copiare il file in '{allegati_dir}'.")
+            except DBMError as e_db:
+                QMessageBox.critical(self, "Errore Database", f"Errore durante il salvataggio: {e_db}")
+                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo) # Cleanup
+            except Exception as e:
+                QMessageBox.critical(self, "Errore Imprevisto", f"Errore durante l'allegazione del documento: {e}")
+                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo) # Cleanup
+                logging.getLogger("CatastoGUI").error(f"Errore allegando documento: {e}", exc_info=True)
+
+    def _apri_documento_selezionato(self):
+        selected_items = self.documenti_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
+            return
+        
+        row = self.documenti_table.currentRow()
+        percorso_file_item = self.documenti_table.item(row, 5) # Assumendo che la colonna 5 abbia il percorso
+        if percorso_file_item:
+            # Recupera il percorso completo salvato in UserRole, o usa il testo dell'item
+            percorso_file_completo = percorso_file_item.data(Qt.UserRole) or percorso_file_item.text()
+            
+            if os.path.exists(percorso_file_completo):
+                from PyQt5.QtGui import QDesktopServices
+                from PyQt5.QtCore import QUrl
+                success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
+                if not success:
+                    QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il file:\n{percorso_file_completo}\nVerificare che sia installata un'applicazione associata.")
+            else:
+                QMessageBox.warning(self, "File Non Trovato", f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}")
+        else:
+            QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili.")
+
+    # Dovrai chiamare self._load_documenti_allegati() quando il dialogo ModificaPartitaDialog 
+    # viene caricato (es. in _load_partita_data() o subito dopo).
+    
+# All'interno della classe ModificaPartitaDialog in prova.py
+    def _aggiorna_stato_pulsanti_documenti(self):
+        """Abilita/disabilita i pulsanti di azione sui documenti in base alla selezione nella tabella."""
+        has_selection = bool(self.documenti_table.selectedItems())
+        self.btn_scollega_doc.setEnabled(has_selection)
+        # Potresti voler abilitare/disabilitare anche btn_apri_doc qui
+        self.btn_apri_doc.setEnabled(has_selection)
+
+    def _scollega_documento_selezionato(self):
+        selected_items = self.documenti_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per scollegarlo.")
             return
 
-        self.comune_label.setText(
-            self.partita_data_originale.get('comune_nome', "N/D"))
-        self.numero_partita_spinbox.setValue(
-            self.partita_data_originale.get('numero_partita', 0))
-        tipo_idx = self.tipo_combo.findText(
-            self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
-        if tipo_idx >= 0:
-            self.tipo_combo.setCurrentIndex(tipo_idx)
-        data_impianto = self.partita_data_originale.get('data_impianto')
-        if data_impianto:
-            self.data_impianto_edit.setDate(
-                QDate(data_impianto.year, data_impianto.month, data_impianto.day))
-        else:
-            self.data_impianto_edit.setDate(QDate())
-        data_chiusura = self.partita_data_originale.get('data_chiusura')
-        if data_chiusura:
-            self.data_chiusura_edit.setDate(
-                QDate(data_chiusura.year, data_chiusura.month, data_chiusura.day))
-        else:
-            self.data_chiusura_edit.setDate(QDate())
-        self.numero_provenienza_spinbox.setValue(
-            self.partita_data_originale.get('numero_provenienza') or 0)
-        stato_idx = self.stato_combo.findText(
-            self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
-        if stato_idx >= 0:
-            self.stato_combo.setCurrentIndex(stato_idx)
+        row = self.documenti_table.currentRow()
+        # L'ID del documento storico è nella prima colonna
+        documento_id = int(self.documenti_table.item(row, 0).text())
+        # L'ID della relazione documento_partita non è direttamente visibile, ma possiamo recuperarlo dal DB
+        # o modificarci il metodo get_documenti_per_partita per restituirlo.
+        # Per ora, si assume che get_documenti_per_partita restituisca i dati che includono l'ID della relazione.
+        # Se non lo fa, dovrai recuperarlo prima di chiamare il db_manager.
 
-# All'interno della classe ModificaPartitaDialog in prova.py
+        # Miglioramento: Modifica _load_documenti_allegati per salvare l'ID della relazione
+        # in UserRole della prima colonna, come fai per i possessori.
+        # Oppure, se get_documenti_per_partita non restituisce l'ID della relazione,
+        # dovrai fare una query aggiuntiva per ottenerlo prima di scollegare.
 
+        # Assumiamo temporaneamente che la prima colonna (ID Doc.) sia l'ID della relazione per semplicità di esempio.
+        # In un'implementazione robusta, recupereresti l'ID della relazione da un dato nascosto o una query.
+        
+        # Recupera l'ID della relazione (documento_partita.id) dal dato salvato nell'item
+        # Questo richiede una modifica a _load_documenti_allegati per salvare anche questo ID.
+        documento_partita_id_rel = self.documenti_table.item(row, 0).data(Qt.UserRole + 1) # Assumiamo UserRole + 1 per l'ID della relazione
+
+        if documento_partita_id_rel is None:
+            QMessageBox.critical(self, "Errore Interno", "ID della relazione del documento non disponibile. Impossibile scollegare.")
+            self.logger.error(f"ID relazione documento-partita non recuperato dalla tabella per scollegamento di documento ID {documento_id}.")
+            return
+
+        titolo_documento = self.documenti_table.item(row, 1).text() # Titolo del documento
+
+        reply = QMessageBox.question(self, "Conferma Scollegamento",
+                                     f"Sei sicuro di voler scollegare il documento '{titolo_documento}' (ID Documento: {documento_id}) da questa partita?\n\n"
+                                     "Il file fisico NON verrà eliminato, solo il collegamento logico nel database.",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            self.logger.info(f"Tentativo di scollegare relazione documento-partita ID {documento_partita_id_rel} (Documento ID: {documento_id}) dalla partita {self.partita_id}.")
+            try:
+                success = self.db_manager.scollega_documento_da_partita(documento_partita_id_rel)
+                if success:
+                    QMessageBox.information(self, "Successo", f"Documento '{titolo_documento}' scollegato con successo dalla partita.")
+                    self._load_documenti_allegati() # Ricarica la tabella per aggiornare la visualizzazione
+                # else: Il metodo db_manager solleva eccezioni in caso di errore, quindi l'else non è strettamente necessario qui.
+            except DBNotFoundError as nfe:
+                self.logger.warning(f"Scollegamento documento fallito: relazione ID {documento_partita_id_rel} non trovata. {nfe.message}")
+                QMessageBox.warning(self, "Errore", f"Impossibile scollegare: {nfe.message}. Il documento potrebbe essere già stato scollegato.")
+                self._load_documenti_allegati() # Aggiorna la tabella comunque
+            except DBMError as dbe:
+                self.logger.error(f"Errore DB durante lo scollegamento del documento {documento_id}: {dbe.message}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore durante lo scollegamento:\n{dbe.message}")
+            except Exception as e:
+                self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento {documento_id}: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore di sistema: {e}")
+
+    # Aggiorna il metodo _load_documenti_allegati per recuperare e salvare l'ID della relazione
+    def _load_documenti_allegati(self):
+        self.documenti_table.setRowCount(0)
+        self.documenti_table.setSortingEnabled(False) # Disabilita per il popolamento
+        if not self.partita_id: return
+
+        try:
+            # Modifica la query in catasto_db_manager.py (get_documenti_per_partita)
+            # per includere anche l'ID della relazione documento_partita.
+            # Ad esempio, la query dovrebbe selezionare anche dp.id AS documento_partita_id_rel.
+            documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
+            
+            self.documenti_table.setRowCount(len(documenti))
+            for row, doc in enumerate(documenti):
+                # Assicurati che 'documento_partita_id_rel' sia restituito dal DBManager
+                documento_partita_id_rel = doc.get("documento_partita_id_rel") 
+
+                item_doc_id = QTableWidgetItem(str(doc.get("documento_id")))
+                # Salva l'ID della relazione (documento_partita.id) in UserRole + 1 per il pulsante scollega
+                item_doc_id.setData(Qt.UserRole + 1, documento_partita_id_rel)
+                self.documenti_table.setItem(row, 0, item_doc_id)
+                
+                self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
+                self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
+                self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
+                self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
+                
+                # La colonna percorso_file potrebbe contenere il nome del file o un pulsante "Apri"
+                percorso_file_full = doc.get("percorso_file")
+                path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
+                path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
+                self.documenti_table.setItem(row, 5, path_item)
+            
+            self.documenti_table.resizeColumnsToContents()
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare documenti allegati: {e}")
+            self.logger.error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
+        finally:
+            self.documenti_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsanti_documenti() # Aggiorna lo stato dei pulsanti dopo il caricamento
     def _load_possessori_associati(self):
         self.possessori_table.setRowCount(0)
         self.possessori_table.setSortingEnabled(False)

@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS catasto.sessioni_accesso (
     id SERIAL PRIMARY KEY,
     utente_id INTEGER NOT NULL REFERENCES catasto.utente(id) ON DELETE CASCADE, -- Chi si è loggato
     id_sessione VARCHAR(100) NOT NULL UNIQUE, -- UUID della sessione
-    data_login TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    data_logout TIMESTAMP WITHOUT TIME ZONE,
+    data_login TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    data_logout TIMESTAMP(0) WITHOUT TIME ZONE,
     indirizzo_ip VARCHAR(45),
     applicazione VARCHAR(100), -- Nome dell'applicazione client
     azione VARCHAR(50) NOT NULL DEFAULT 'login', -- login, logout, timeout, fail_login

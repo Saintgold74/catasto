@@ -8,7 +8,7 @@ CREATE TABLE periodo_storico (
     anno_inizio INTEGER NOT NULL,
     anno_fine INTEGER,
     descrizione TEXT,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT INTO periodo_storico (nome, anno_inizio, anno_fine, descrizione)
@@ -36,7 +36,7 @@ CREATE TABLE nome_storico (
     anno_inizio INTEGER NOT NULL,
     anno_fine INTEGER,
     note TEXT,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_nome_storico_entita ON nome_storico(entita_tipo, entita_id);
@@ -147,8 +147,8 @@ CREATE TABLE documento_storico (
     tipo_documento VARCHAR(100) NOT NULL,
     percorso_file VARCHAR(255),
     metadati JSONB,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_documento_anno ON documento_storico(anno);
@@ -161,7 +161,7 @@ CREATE TABLE documento_partita (
     partita_id INTEGER REFERENCES partita(id) ON DELETE CASCADE,
     rilevanza VARCHAR(20) NOT NULL CHECK (rilevanza IN ('primaria', 'secondaria', 'correlata')),
     note TEXT,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (documento_id, partita_id)
 );
 

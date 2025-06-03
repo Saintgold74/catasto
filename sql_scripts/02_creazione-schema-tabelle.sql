@@ -19,8 +19,8 @@ CREATE TABLE comune (
     nome VARCHAR(100) NOT NULL UNIQUE, -- Nome rimane, ma ora è solo UNIQUE
     provincia VARCHAR(100) NOT NULL,
     regione VARCHAR(100) NOT NULL,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
     -- La colonna periodo_id da script 11 verrà aggiunta lì o qui se preferito
 );
 COMMENT ON TABLE comune IS 'Tabella dei comuni catalogati nel catasto storico (con ID PK).';
@@ -32,8 +32,8 @@ CREATE TABLE registro_partite (
     anno_impianto INTEGER NOT NULL,
     numero_volumi INTEGER NOT NULL,
     stato_conservazione VARCHAR(100),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comune_id, anno_impianto) -- UNIQUE su ID + anno
 );
 COMMENT ON TABLE registro_partite IS 'Registro delle partite catastali per comune (referenzia comune.id).';
@@ -45,8 +45,8 @@ CREATE TABLE registro_matricole (
     anno_impianto INTEGER NOT NULL,
     numero_volumi INTEGER NOT NULL,
     stato_conservazione VARCHAR(100),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comune_id, anno_impianto) -- UNIQUE su ID + anno
 );
 COMMENT ON TABLE registro_matricole IS 'Registro delle matricole (possessori) per comune (referenzia comune.id).';
@@ -61,8 +61,8 @@ CREATE TABLE partita (
     data_chiusura DATE,
     numero_provenienza INTEGER,
     stato VARCHAR(20) NOT NULL DEFAULT 'attiva' CHECK (stato IN ('attiva', 'inattiva')),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comune_id, numero_partita) -- UNIQUE su ID + numero_partita
 );
 COMMENT ON TABLE partita IS 'Partite catastali (referenzia comune.id).';
@@ -75,8 +75,8 @@ CREATE TABLE possessore (
     paternita VARCHAR(255),
     nome_completo VARCHAR(255) NOT NULL,
     attivo BOOLEAN NOT NULL DEFAULT TRUE,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE possessore IS 'Proprietari o possessori di immobili (referenzia comune.id).';
 
@@ -88,8 +88,8 @@ CREATE TABLE partita_possessore (
     tipo_partita VARCHAR(20) NOT NULL CHECK (tipo_partita IN ('principale', 'secondaria')),
     titolo VARCHAR(50) NOT NULL DEFAULT 'proprietà esclusiva',
     quota VARCHAR(20) DEFAULT NULL,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(partita_id, possessore_id)
 );
 COMMENT ON TABLE partita_possessore IS 'Relazione tra partite e possessori.';
@@ -101,8 +101,8 @@ CREATE TABLE localita (
     nome VARCHAR(255) NOT NULL,
     tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Regione', 'Via', 'Borgata', 'Altro')),
     civico INTEGER,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comune_id, nome, civico) -- UNIQUE su ID + nome + civico
     -- La colonna periodo_id da script 11 verrà aggiunta lì o qui se preferito
 );
@@ -118,8 +118,8 @@ CREATE TABLE immobile (
     numero_vani INTEGER,
     consistenza VARCHAR(255),
     classificazione VARCHAR(100),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE immobile IS 'Immobili registrati nel catasto.';
 
@@ -128,8 +128,8 @@ CREATE TABLE partita_relazione (
     id SERIAL PRIMARY KEY,
     partita_principale_id INTEGER NOT NULL REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     partita_secondaria_id INTEGER NOT NULL REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     CHECK (partita_principale_id != partita_secondaria_id),
     UNIQUE(partita_principale_id, partita_secondaria_id)
 );
@@ -144,8 +144,8 @@ CREATE TABLE variazione (
     data_variazione DATE NOT NULL,
     numero_riferimento VARCHAR(50),
     nominativo_riferimento VARCHAR(255),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE variazione IS 'Variazioni di proprietà o modifiche alle partite.';
 
@@ -158,8 +158,8 @@ CREATE TABLE contratto (
     notaio VARCHAR(255),
     repertorio VARCHAR(100),
     note TEXT,
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE contratto IS 'Contratti che documentano le variazioni.';
 
@@ -172,8 +172,8 @@ CREATE TABLE consultazione (
     motivazione TEXT,
     materiale_consultato TEXT,
     funzionario_autorizzante VARCHAR(255),
-    data_creazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE consultazione IS 'Registro delle consultazioni dello archivio.';
 
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS catasto.audit_log (
     dati_dopo JSONB,
     utente VARCHAR(100), -- Nome utente DB che ha eseguito l'operazione
     ip_address VARCHAR(40),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
     -- Colonne per integrazione utenti
     session_id VARCHAR(100), -- Aggiunto da script 15
     app_user_id INTEGER      -- Aggiunto da script 15

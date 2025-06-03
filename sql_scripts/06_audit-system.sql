@@ -1,19 +1,6 @@
 -- Imposta lo schema
 SET search_path TO catasto;
 
--- Tabella per i log di audit
-CREATE TABLE audit_log (
-    id SERIAL PRIMARY KEY,
-    tabella VARCHAR(100) NOT NULL,
-    operazione CHAR(1) NOT NULL CHECK (operazione IN ('I', 'U', 'D')),
-    record_id INTEGER NOT NULL,
-    dati_prima JSONB,
-    dati_dopo JSONB,
-    utente VARCHAR(100) NOT NULL,
-    ip_address VARCHAR(40),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE INDEX idx_audit_tabella ON audit_log(tabella);
 CREATE INDEX idx_audit_operazione ON audit_log(operazione);
 CREATE INDEX idx_audit_timestamp ON audit_log(timestamp);
@@ -74,7 +61,7 @@ FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 CREATE OR REPLACE FUNCTION get_record_history(p_tabella VARCHAR, p_record_id INTEGER)
 RETURNS TABLE (
     operazione CHAR(1),
-    "timestamp" TIMESTAMP,
+    "timestamp" TIMESTAMP(0),
     utente VARCHAR,
     dati_prima JSONB,
     dati_dopo JSONB

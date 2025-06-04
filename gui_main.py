@@ -16,13 +16,13 @@ from typing import Optional, List, Dict, Any, Tuple
 
 # Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                            QHBoxLayout, QPushButton, QLabel, QLineEdit,
-                            QComboBox, QTabWidget,  QMessageBox,
-                            QGridLayout, QDialog,  QMainWindow,  QStyle,  QSpinBox,
-                            QInputDialog,  QFrame,  QAction,
-                            QFormLayout, QDialogButtonBox, )
+                             QHBoxLayout, QPushButton, QLabel, QLineEdit,
+                             QComboBox, QTabWidget,  QMessageBox,
+                             QGridLayout, QDialog,  QMainWindow,  QStyle,  QSpinBox,
+                             QInputDialog,  QFrame,  QAction,
+                             QFormLayout, QDialogButtonBox, )
 # Aggiunto QCloseEvent
-from PyQt5.QtGui import  QCloseEvent
+from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot, QEvent, QObject, pyqtSignal
 # In gui_main.py, dopo le importazioni PyQt e standard:
 # E le sue eccezioni se servono qui
@@ -30,14 +30,14 @@ from catasto_db_manager import CatastoDBManager
 
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
-    LandingPageWidget, ElencoComuniWidget, RicercaPartiteWidget, 
-    RicercaPossessoriWidget, RicercaAvanzataImmobiliWidget, InserimentoComuneWidget, 
-    InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget, 
-    OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget, 
+    LandingPageWidget, ElencoComuniWidget, RicercaPartiteWidget,
+    RicercaPossessoriWidget, RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
+    InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
+    OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, AdminDBOperationsWidget,
-    RegistraConsultazioneWidget # Aggiunto se non c'era
+    RegistraConsultazioneWidget, WelcomeScreen  # Aggiunto se non c'era
 )
-   
+
 from app_utils import FPDF_AVAILABLE, QPasswordLineEdit, _verify_password, _hash_password
 
 
@@ -122,7 +122,7 @@ SETTINGS_DB_PASSWORD = "Database/Password"
 MODERN_STYLESHEET = """
     * {
         font-family: Segoe UI, Arial, sans-serif; /* Font più moderno, fallback a sans-serif */
-        font-size: 10pt;
+        font-size: 11pt;
         color: #333333; /* Testo scuro di default */
     }
     QMainWindow {
@@ -274,11 +274,14 @@ MODERN_STYLESHEET = """
 gui_logger = logging.getLogger("CatastoGUI")
 if not gui_logger.hasHandlers():
     # ... (configurazione handler come prima) ...
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s' # Aggiunto filename e lineno
-    gui_log_handler = logging.FileHandler("catasto_gui.log", mode='a', encoding='utf-8') # Aggiunto encoding e mode
+    # Aggiunto filename e lineno
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    gui_log_handler = logging.FileHandler(
+        "catasto_gui.log", mode='a', encoding='utf-8')  # Aggiunto encoding e mode
     gui_log_handler.setFormatter(logging.Formatter(log_format))
     gui_logger.addHandler(gui_log_handler)
-    gui_logger.setLevel(logging.DEBUG) # Imposta a DEBUG per più dettagli durante lo sviluppo
+    # Imposta a DEBUG per più dettagli durante lo sviluppo
+    gui_logger.setLevel(logging.DEBUG)
 
     # Esempio di Console Handler (per debug durante lo sviluppo)
     # if not getattr(sys, 'frozen', False): # Per non mostrare in console se è un eseguibile frozen
@@ -475,7 +478,8 @@ class LoginDialog(QDialog):
         self.db_manager = db_manager
         self.logged_in_user_id: Optional[int] = None
         self.logged_in_user_info: Optional[Dict] = None
-        self.current_session_id_from_dialog: Optional[str] = None # NUOVO attributo per conservare l'UUID
+        # NUOVO attributo per conservare l'UUID
+        self.current_session_id_from_dialog: Optional[str] = None
 
         self.setWindowTitle("Login - Catasto Storico")
         self.setMinimumWidth(350)
@@ -515,35 +519,47 @@ class LoginDialog(QDialog):
         password = self.password_edit.text()
 
         if not username or not password:
-            QMessageBox.warning(self, "Login Fallito", "Username e password sono obbligatori.")
+            QMessageBox.warning(self, "Login Fallito",
+                                "Username e password sono obbligatori.")
             return
 
-        credentials = self.db_manager.get_user_credentials(username) # Presumiamo restituisca anche 'id' utente app
+        credentials = self.db_manager.get_user_credentials(
+            username)  # Presumiamo restituisca anche 'id' utente app
         login_success = False
-        user_id_app = None # ID utente dell'applicazione
+        user_id_app = None  # ID utente dell'applicazione
 
         if credentials:
-            user_id_app = credentials.get('id') # ID dell'utente dalla tabella 'utente'
+            # ID dell'utente dalla tabella 'utente'
+            user_id_app = credentials.get('id')
             stored_hash = credentials.get('password_hash')
             is_active = credentials.get('attivo', False)
 
             if not is_active:
-                QMessageBox.warning(self, "Login Fallito", "Utente non attivo.")
-                logging.getLogger("CatastoGUI").warning(f"Login GUI fallito (utente '{username}' non attivo).")
-                return # Non procedere oltre se l'utente non è attivo
+                QMessageBox.warning(self, "Login Fallito",
+                                    "Utente non attivo.")
+                logging.getLogger("CatastoGUI").warning(
+                    f"Login GUI fallito (utente '{username}' non attivo).")
+                return  # Non procedere oltre se l'utente non è attivo
 
-            if stored_hash and _verify_password(stored_hash, password): # Usa la tua funzione di verifica
+            # Usa la tua funzione di verifica
+            if stored_hash and _verify_password(stored_hash, password):
                 login_success = True
-                logging.getLogger("CatastoGUI").info(f"Verifica password GUI OK per utente '{username}' (ID App: {user_id_app})")
+                logging.getLogger("CatastoGUI").info(
+                    f"Verifica password GUI OK per utente '{username}' (ID App: {user_id_app})")
             else:
-                QMessageBox.warning(self, "Login Fallito", "Username o Password errati.")
-                logging.getLogger("CatastoGUI").warning(f"Login GUI fallito (pwd errata) per utente '{username}'.")
+                QMessageBox.warning(self, "Login Fallito",
+                                    "Username o Password errati.")
+                logging.getLogger("CatastoGUI").warning(
+                    f"Login GUI fallito (pwd errata) per utente '{username}'.")
                 self.password_edit.selectAll()
                 self.password_edit.setFocus()
                 return
         else:
-            QMessageBox.warning(self, "Login Fallito", "Username o Password errati.") # Messaggio generico
-            logging.getLogger("CatastoGUI").warning(f"Login GUI fallito (utente '{username}' non trovato).")
+            # Messaggio generico
+            QMessageBox.warning(self, "Login Fallito",
+                                "Username o Password errati.")
+            logging.getLogger("CatastoGUI").warning(
+                f"Login GUI fallito (utente '{username}' non trovato).")
             self.username_edit.selectAll()
             self.username_edit.setFocus()
             return
@@ -553,97 +569,86 @@ class LoginDialog(QDialog):
                 # Chiamata a register_access (modificato in db_manager)
                 # Ora dovrebbe restituire l'UUID della sessione
                 session_uuid_returned = self.db_manager.register_access(
-                    user_id=user_id_app, # Passa l'ID dell'utente dell'applicazione
+                    user_id=user_id_app,  # Passa l'ID dell'utente dell'applicazione
                     action='login',
                     esito=True,
-                    indirizzo_ip=client_ip_address_gui, # Assumendo che client_ip_address_gui sia definita globalmente o accessibile
+                    # Assumendo che client_ip_address_gui sia definita globalmente o accessibile
+                    indirizzo_ip=client_ip_address_gui,
                     application_name='CatastoAppGUI'
                 )
 
                 if session_uuid_returned:
                     self.logged_in_user_id = user_id_app
-                    self.logged_in_user_info = credentials # Contiene tutti i dati dell'utente, incluso 'id'
-                    self.current_session_id_from_dialog = session_uuid_returned # Salva l'UUID
+                    # Contiene tutti i dati dell'utente, incluso 'id'
+                    self.logged_in_user_info = credentials
+                    self.current_session_id_from_dialog = session_uuid_returned  # Salva l'UUID
 
                     # Imposta le variabili di sessione PostgreSQL per l'audit
                     # user_id_app è l'ID dell'utente da 'utente.id'
                     # session_uuid_returned è l'UUID dalla tabella 'sessioni_accesso.id_sessione'
                     if not self.db_manager.set_audit_session_variables(user_id_app, session_uuid_returned):
-                        QMessageBox.critical(self, "Errore Audit", "Impossibile impostare le informazioni di sessione per l'audit. Il login non può procedere.")
+                        QMessageBox.critical(
+                            self, "Errore Audit", "Impossibile impostare le informazioni di sessione per l'audit. Il login non può procedere.")
                         # Considera di non fare self.accept() qui se questo è un errore bloccante
-                        return 
-                    
+                        return
+
                     QMessageBox.information(self, "Login Riuscito",
                                             f"Benvenuto {self.logged_in_user_info.get('nome_completo', username)}!")
-                    self.accept() # Chiude il dialogo e segnala successo
+                    self.accept()  # Chiude il dialogo e segnala successo
                 else:
                     # register_access ha fallito nel restituire un session_id
-                    QMessageBox.critical(self, "Login Fallito", "Errore critico: Impossibile registrare la sessione di accesso nel database.")
-                    logging.getLogger("CatastoGUI").error(f"Login GUI OK per utente '{username}' ma fallita registrazione della sessione (nessun UUID sessione restituito).")
-            
-            except DBMError as e_dbm: # Cattura DBMError da register_access o set_audit_session_variables
-                QMessageBox.critical(self, "Errore di Login (DB)", f"Errore durante il processo di login:\n{str(e_dbm)}")
-                logging.getLogger("CatastoGUI").error(f"DBMError durante il login per {username}: {str(e_dbm)}")
-            except Exception as e_gen: # Altri errori imprevisti
-                QMessageBox.critical(self, "Errore Imprevisto", f"Errore di sistema durante il login:\n{str(e_gen)}")
-                logging.getLogger("CatastoGUI").error(f"Errore imprevisto durante il login per {username}: {str(e_gen)}", exc_info=True)
+                    QMessageBox.critical(
+                        self, "Login Fallito", "Errore critico: Impossibile registrare la sessione di accesso nel database.")
+                    logging.getLogger("CatastoGUI").error(
+                        f"Login GUI OK per utente '{username}' ma fallita registrazione della sessione (nessun UUID sessione restituito).")
+
+            except DBMError as e_dbm:  # Cattura DBMError da register_access o set_audit_session_variables
+                QMessageBox.critical(
+                    self, "Errore di Login (DB)", f"Errore durante il processo di login:\n{str(e_dbm)}")
+                logging.getLogger("CatastoGUI").error(
+                    f"DBMError durante il login per {username}: {str(e_dbm)}")
+            except Exception as e_gen:  # Altri errori imprevisti
+                QMessageBox.critical(
+                    self, "Errore Imprevisto", f"Errore di sistema durante il login:\n{str(e_gen)}")
+                logging.getLogger("CatastoGUI").error(
+                    f"Errore imprevisto durante il login per {username}: {str(e_gen)}", exc_info=True)
+
 
 class CatastoMainWindow(QMainWindow):
-    # ... ( __init__ e altri metodi come perform_initial_setup, update_ui_based_on_role, ecc. ) ...
-    # Assicurati che i riferimenti ai widget siano inizializzati a None in __init__
-    # Esempio:
-    # def __init__(self):
-    #     super().__init__()
-    #     self.logger = logging.getLogger("CatastoGUI")
-    #     self.db_manager: Optional[CatastoDBManager] = None
-    #     self.logged_in_user_info: Optional[Dict[str, Any]] = None
-    #     # ... altri attributi ...
-    #     self.tabs = QTabWidget() # Il QTabWidget principale
-    #     self.consultazione_sub_tabs = QTabWidget() # Sotto-tab per Consultazione
-    #     self.inserimento_sub_tabs = QTabWidget()   # Sotto-tab per Inserimento
-    #     self.sistema_sub_tabs = QTabWidget()       # Sotto-tab per Sistema
-
-    #     # Riferimenti ai widget specifici
-    #     self.landing_page_widget: Optional[LandingPageWidget] = None
-    #     self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
-    #     self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
-    #     self.ricerca_possessori_widget_ref: Optional[RicercaPossessoriWidget] = None
-    #     self.ricerca_avanzata_immobili_widget_ref: Optional[RicercaAvanzataImmobiliWidget] = None
-    #     self.inserimento_comune_widget_ref: Optional[InserimentoComuneWidget] = None
-    #     self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
-    #     self.inserimento_localita_widget_ref: Optional[InserimentoLocalitaWidget] = None # Potresti averne due, gestisci i nomi
-    #     self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
-    #     self.operazioni_partita_widget_ref: Optional[OperazioniPartitaWidget] = None
-    #     self.registra_consultazione_widget_ref: Optional[RegistraConsultazioneWidget] = None
-    #     self.esportazioni_widget_ref: Optional[EsportazioniWidget] = None
-    #     self.reportistica_widget_ref: Optional[ReportisticaWidget] = None
-    #     self.statistiche_widget_ref: Optional[StatisticheWidget] = None
-    #     self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
-    #     self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None # Rinominato per coerenza
-    #     self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None # Rinominato
-    #     self.admin_db_ops_widget_ref: Optional[AdminDBOperationsWidget] = None # Rinominato
-        
-    #     self.initUI() # Chiama initUI che a sua volta imposta il layout base e i tab
-
     def __init__(self):
         super(CatastoMainWindow, self).__init__()
-        self.logger = logging.getLogger("CatastoGUI") # ASSEGNA IL LOGGER QUI
+        self.logger = logging.getLogger("CatastoGUI")
         self.db_manager: Optional[CatastoDBManager] = None
-        self.logged_in_user_id: Optional[int] = None      # ID utente dell'applicazione
-        self.logged_in_user_info: Optional[Dict] = None # Dettagli utente
-        self.current_session_id: Optional[str] = None   # UUID della sessione attiva
+        self.logged_in_user_id: Optional[int] = None
+        self.logged_in_user_info: Optional[Dict] = None
+        self.current_session_id: Optional[str] = None
+        # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
+        self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
 
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
+        self.sistema_sub_tabs = QTabWidget()  # Deve essere inizializzato qui
+
+        # Riferimenti ai widget specifici, inizializzati a None
         self.landing_page_widget: Optional[LandingPageWidget] = None
         self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
         self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
-        self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
+        self.ricerca_possessori_widget_ref: Optional[RicercaPossessoriWidget] = None
+        self.ricerca_avanzata_immobili_widget_ref: Optional[RicercaAvanzataImmobiliWidget] = None
+        self.inserimento_comune_widget_ref: Optional[InserimentoComuneWidget] = None
         self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
+        self.inserimento_localita_widget_ref: Optional[InserimentoLocalitaWidget] = None
+        self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
+        self.operazioni_partita_widget_ref: Optional[OperazioniPartitaWidget] = None
         self.registra_consultazione_widget_ref: Optional[RegistraConsultazioneWidget] = None
+        self.esportazioni_widget_ref: Optional[EsportazioniWidget] = None
         self.reportistica_widget_ref: Optional[ReportisticaWidget] = None
-        # Aggiungere altri se necessario (es. per Sistema)
+        self.statistiche_widget_ref: Optional[StatisticheWidget] = None
+        self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
+        self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None
+        self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None
+        self.admin_db_ops_widget_ref: Optional[AdminDBOperationsWidget] = None
 
         self.initUI()
 
@@ -655,17 +660,14 @@ class CatastoMainWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
 
         self.create_status_bar_content()
-        self.create_menu_bar()  # Aggiungi questa chiamata
+        self.create_menu_bar()
 
         self.tabs = QTabWidget()
         self.main_layout.addWidget(self.tabs)
         self.setCentralWidget(self.central_widget)
 
         self.statusBar().showMessage("Pronto.")
-        # self.create_menu_bar() # Commenta o rimuovi questa riga se il menu bar non è usato
-        
 
-   
     def create_menu_bar(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
@@ -743,14 +745,16 @@ class CatastoMainWindow(QMainWindow):
         self.main_layout.addWidget(status_frame)
 
     def perform_initial_setup(self, db_manager: CatastoDBManager,
-                              user_id: Optional[int],      # ID utente dell'applicazione
+                              # ID utente dell'applicazione
+                              user_id: Optional[int],
                               user_info: Optional[Dict],   # Dettagli utente
                               session_id: Optional[str]):  # UUID della sessione
-        logging.getLogger("CatastoGUI").info(">>> CatastoMainWindow: Inizio perform_initial_setup")
+        logging.getLogger("CatastoGUI").info(
+            ">>> CatastoMainWindow: Inizio perform_initial_setup")
         self.db_manager = db_manager
         self.logged_in_user_id = user_id
         self.logged_in_user_info = user_info
-        self.current_session_id = session_id # Memorizza l'UUID della sessione
+        self.current_session_id = session_id  # Memorizza l'UUID della sessione
 
         # --- Aggiornamento etichetta stato DB ---
         db_name_configured = "N/Config"  # Default
@@ -768,166 +772,286 @@ class CatastoMainWindow(QMainWindow):
             connection_status_text = f"Database: Stato Sconosciuto ({db_name_configured})"
         self.db_status_label.setText(connection_status_text)
 
-        if self.logged_in_user_info: # Se l'utente è loggato
-            user_display = self.logged_in_user_info.get('nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+        if self.logged_in_user_info:  # Se l'utente è loggato
+            user_display = self.logged_in_user_info.get(
+                'nome_completo') or self.logged_in_user_info.get('username', 'N/D')
             ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
             # L'ID utente è già in self.logged_in_user_id
-            self.user_status_label.setText(f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display}, Sessione: {str(self.current_session_id)[:8]}...)")
+            self.user_status_label.setText(
+                f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display}, Sessione: {str(self.current_session_id)[:8]}...)")
             self.logout_button.setEnabled(True)
-            self.statusBar().showMessage(f"Login come {user_display} effettuato con successo.")
-        else: # Modalità setup DB (admin_offline) o nessun login
-            ruolo_fittizio = self.logged_in_user_info.get('ruolo') if self.logged_in_user_info else None
+            self.statusBar().showMessage(
+                f"Login come {user_display} effettuato con successo.")
+        else:  # Modalità setup DB (admin_offline) o nessun login
+            ruolo_fittizio = self.logged_in_user_info.get(
+                'ruolo') if self.logged_in_user_info else None
             if ruolo_fittizio == 'admin_offline':
-                 self.user_status_label.setText(f"Utente: Admin Setup (Sessione: {str(self.current_session_id)[:8]}...)")
-                 self.logout_button.setEnabled(True) # L'admin_offline può fare "logout" per chiudere l'app
-                 self.statusBar().showMessage("Modalità configurazione database.")
-            else: # Nessun login valido, ma il pool potrebbe essere attivo (improbabile con flusso attuale)
-                 self.user_status_label.setText("Utente: Non Autenticato")
-                 self.logout_button.setEnabled(False)
-                 self.statusBar().showMessage("Pronto.")
+                self.user_status_label.setText(
+                    f"Utente: Admin Setup (Sessione: {str(self.current_session_id)[:8]}...)")
+                # L'admin_offline può fare "logout" per chiudere l'app
+                self.logout_button.setEnabled(True)
+                self.statusBar().showMessage("Modalità configurazione database.")
+            # Nessun login valido, ma il pool potrebbe essere attivo (improbabile con flusso attuale)
+            else:
+                self.user_status_label.setText("Utente: Non Autenticato")
+                self.logout_button.setEnabled(False)
+                self.statusBar().showMessage("Pronto.")
 
-
-        logging.getLogger("CatastoGUI").info(">>> CatastoMainWindow: Chiamata a setup_tabs")
+        logging.getLogger("CatastoGUI").info(
+            ">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
-        logging.getLogger("CatastoGUI").info(">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
+        logging.getLogger("CatastoGUI").info(
+            ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()
-        
-        logging.getLogger("CatastoGUI").info(">>> CatastoMainWindow: Chiamata a self.show()")
+
+        logging.getLogger("CatastoGUI").info(
+            ">>> CatastoMainWindow: Chiamata a self.show()")
         self.show()
-        logging.getLogger("CatastoGUI").info(">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
+        logging.getLogger("CatastoGUI").info(
+            ">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
 
     # All'interno della classe CatastoMainWindow in prova.py
 
+    def create_menu_bar(self):
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("&File")
+        settings_menu = menu_bar.addMenu("&Impostazioni")
+        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon),
+                                   "Configurazione &Database...", self)
+        config_db_action.setStatusTip(
+            "Modifica i parametri di connessione al database")
+        config_db_action.triggered.connect(
+            self._apri_dialogo_configurazione_db)
+        settings_menu.addAction(config_db_action)
+
+        exit_action = QAction(QApplication.style().standardIcon(
+            QStyle.SP_DialogCloseButton), "&Esci", self)
+        exit_action.setStatusTip("Chiudi l'applicazione")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+    def create_status_bar_content(self):
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.StyledPanel)
+        status_frame.setFrameShadow(QFrame.Sunken)
+        status_layout = QHBoxLayout(status_frame)
+
+        self.db_status_label = QLabel("Database: Non connesso")
+        self.user_status_label = QLabel("Utente: Nessuno")
+
+        self.logout_button = QPushButton(QApplication.style(
+        ).standardIcon(QStyle.SP_DialogCloseButton), "Logout")
+        self.logout_button.setToolTip(
+            "Effettua il logout dell'utente corrente")
+        self.logout_button.clicked.connect(self.handle_logout)
+        self.logout_button.setEnabled(False)
+
+        status_layout.addWidget(self.db_status_label)
+        status_layout.addSpacing(20)
+        status_layout.addWidget(self.user_status_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.logout_button)
+        self.main_layout.addWidget(status_frame)
+
+    def perform_initial_setup(self, db_manager: CatastoDBManager,
+                              user_id: Optional[int],
+                              user_info: Optional[Dict],
+                              session_id: Optional[str]):
+        self.logger.info(">>> CatastoMainWindow: Inizio perform_initial_setup")
+        self.db_manager = db_manager
+        self.logged_in_user_id = user_id
+        self.logged_in_user_info = user_info
+        self.current_session_id = session_id
+
+        db_name_configured = "N/Config"
+        if self.db_manager:
+            db_name_configured = self.db_manager.get_current_dbname() or "N/Config(None)"
+
+        connection_status_text = ""
+        # Questo controllo è ridondante se pool_initialized_successful è sempre inizializzato in __init__
+        if hasattr(self, 'pool_initialized_successful'):
+            if self.pool_initialized_successful:
+                connection_status_text = f"Database: Connesso ({db_name_configured})"
+            else:
+                connection_status_text = f"Database: Non Pronto/Inesistente ({db_name_configured})"
+        else:  # Questo ramo non dovrebbe più essere raggiunto se pool_initialized_successful è sempre inizializzato
+            connection_status_text = f"Database: Stato Sconosciuto ({db_name_configured})"
+        self.db_status_label.setText(connection_status_text)
+
+        if self.logged_in_user_info:
+            user_display = self.logged_in_user_info.get(
+                'nome_completo') or self.logged_in_user_info.get('username', 'N/D')
+            ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
+            self.user_status_label.setText(
+                f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display}, Sessione: {str(self.current_session_id)[:8]}...)")
+            self.logout_button.setEnabled(True)
+            self.statusBar().showMessage(
+                f"Login come {user_display} effettuato con successo.")
+        else:
+            ruolo_fittizio = self.logged_in_user_info.get(
+                'ruolo') if self.logged_in_user_info else None
+            if ruolo_fittizio == 'admin_offline':
+                self.user_status_label.setText(
+                    f"Utente: Admin Setup (Sessione: {str(self.current_session_id)[:8]}...)")
+                self.logout_button.setEnabled(True)
+                self.statusBar().showMessage("Modalità configurazione database.")
+            else:
+                self.user_status_label.setText("Utente: Non Autenticato")
+                self.logout_button.setEnabled(False)
+                self.statusBar().showMessage("Pronto.")
+
+        self.logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
+        self.setup_tabs()
+        self.logger.info(
+            ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
+        self.update_ui_based_on_role()
+
+        self.logger.info(">>> CatastoMainWindow: Chiamata a self.show()")
+        self.show()
+        self.logger.info(
+            ">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
+
     def setup_tabs(self):
         if not self.db_manager:
-            logging.getLogger("CatastoGUI").error("Tentativo di configurare i tab senza un db_manager.")
-            QMessageBox.critical(self, "Errore Critico", "DB Manager non inizializzato.")
+            self.logger.error(
+                "Tentativo di configurare i tab senza un db_manager.")
+            QMessageBox.critical(self, "Errore Critico",
+                                 "DB Manager non inizializzato.")
             return
-        
-        # Pulisce i tab principali esistenti prima di ricrearli
-        # Questo distrugge i widget contenuti, quindi i riferimenti andranno ricreati.
-        self.tabs.clear() 
 
-        # Pulisci i QTabWidget dei sotto-tab (se sono attributi di istanza e vengono riutilizzati)
-        # Se vengono creati localmente ogni volta in setup_tabs, questa pulizia non è necessaria qui
-        # ma è buona norma se sono attributi di istanza.
-        if hasattr(self, 'consultazione_sub_tabs') and self.consultazione_sub_tabs: self.consultazione_sub_tabs.clear()
-        else: self.consultazione_sub_tabs = QTabWidget()
+        self.tabs.clear()
 
-        if hasattr(self, 'inserimento_sub_tabs') and self.inserimento_sub_tabs: self.inserimento_sub_tabs.clear()
-        else: self.inserimento_sub_tabs = QTabWidget()
-        
-        if hasattr(self, 'sistema_sub_tabs') and self.sistema_sub_tabs: self.sistema_sub_tabs.clear()
-        else: self.sistema_sub_tabs = QTabWidget()
+        # Inizializza gli attributi self.xxxx_sub_tabs qui, se sono usati per contenere i sotto-tab
+        # Esempio: self.consultazione_sub_tabs = QTabWidget()
+        # Se non sono attributi di istanza, non serve self. qui, ma è meglio che lo siano per la coerenza
+        # e per permettere a update_ui_based_on_role di accedervi.
+        self.consultazione_sub_tabs = QTabWidget()
+        self.inserimento_sub_tabs = QTabWidget()
+        self.sistema_sub_tabs = QTabWidget()  # Assicurati sia inizializzato
 
         # --- 1. Landing Page (Primo Tab) ---
         self.landing_page_widget = LandingPageWidget(self.tabs)
         self.tabs.addTab(self.landing_page_widget, "🏠 Home")
 
-        # Connetti i segnali della landing page agli slot di navigazione
-        if self.landing_page_widget: # Controlla se l'istanza è valida
+        if self.landing_page_widget:
             self.landing_page_widget.apri_elenco_comuni_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Elenco Comuni")
-            )
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Elenco Comuni"))
             self.landing_page_widget.apri_ricerca_partite_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite")
-            )
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite"))
             self.landing_page_widget.apri_ricerca_possessori_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Avanzata Possessori")
-            )
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Avanzata Possessori"))
             self.landing_page_widget.apri_registra_proprieta_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registrazione Proprietà")
-            )
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registrazione Proprietà"))
             self.landing_page_widget.apri_registra_possessore_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Nuovo Possessore")
-            )
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Nuovo Possessore"))
             self.landing_page_widget.apri_registra_consultazione_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione")
-            )
-            self.landing_page_widget.apri_report_proprieta_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Reportistica", "Certificato Proprietà", activate_report_sub_tab=True)
-            )
-            self.landing_page_widget.apri_report_genealogico_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Reportistica", "Report Genealogico", activate_report_sub_tab=True)
-            )
+                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione"))
+            # Correggi i nomi dei segnali per Reportistica, usando i nomi che hai dichiarato in gui_widgets.py
+            self.landing_page_widget.apri_certificato_proprieta_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Reportistica", "Report Proprietà", activate_report_sub_tab=True))
+            self.landing_page_widget.apri_report_genealogico_signal.connect(lambda: self.activate_tab_and_sub_tab(
+                "Reportistica", "Report Genealogico", activate_report_sub_tab=True))
 
         # --- 2. Tab Consultazione e Modifica ---
-        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Elenco Comuni")
-        
-        self.ricerca_partite_widget_ref = RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(self.ricerca_partite_widget_ref, "Ricerca Partite")
-        
-        self.ricerca_possessori_widget_ref = RicercaPossessoriWidget(self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(self.ricerca_possessori_widget_ref, "Ricerca Avanzata Possessori")
-        
-        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
-        
-        self.tabs.addTab(self.consultazione_sub_tabs, "Consultazione e Modifica")
+        self.elenco_comuni_widget_ref = ElencoComuniWidget(
+            self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(
+            self.elenco_comuni_widget_ref, "Elenco Comuni")
+
+        self.ricerca_partite_widget_ref = RicercaPartiteWidget(
+            self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(
+            self.ricerca_partite_widget_ref, "Ricerca Partite")
+
+        self.ricerca_possessori_widget_ref = RicercaPossessoriWidget(
+            self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(
+            self.ricerca_possessori_widget_ref, "Ricerca Avanzata Possessori")
+
+        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(
+            self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(
+            self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
+
+        self.tabs.addTab(self.consultazione_sub_tabs,
+                         "Consultazione e Modifica")
 
         # --- 3. Tab Inserimento e Gestione ---
         utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
-        inserimento_gestione_contenitore = QWidget() # Il widget contenitore principale per questo tab
-        
-        # *** QUESTA RIGA DEVE ESSERE PRESENTE E DECOMMENTATA ***
-        layout_contenitore_inserimento = QVBoxLayout(inserimento_gestione_contenitore)
-        # Non è necessario fare inserimento_gestione_contenitore.setLayout() se passi il parent al costruttore del layout
+        inserimento_gestione_contenitore = QWidget()
+        layout_contenitore_inserimento = QVBoxLayout(
+            inserimento_gestione_contenitore)  # Corretto, ora usa il contenitore
 
         self.inserimento_comune_widget_ref = InserimentoComuneWidget(
-            parent=self.inserimento_sub_tabs,
+            parent=self.inserimento_sub_tabs,  # Parent è il QTabWidget interno
             db_manager=self.db_manager,
             utente_attuale_info=utente_per_inserimenti
         )
-        # Disconnessione e Riconnessione del segnale per InserimentoComuneWidget
-        try: # Prova a disconnettere, potrebbe non essere connesso se è la prima volta o se il widget è stato ricreato
-            self.inserimento_comune_widget_ref.comune_appena_inserito.disconnect(self.handle_comune_appena_inserito)
-        except TypeError: # Sollevato se il segnale non era connesso
-            pass # Non fare nulla, significa che non c'era una connessione precedente
-        self.inserimento_comune_widget_ref.comune_appena_inserito.connect(self.handle_comune_appena_inserito)
-        self.inserimento_sub_tabs.addTab(self.inserimento_comune_widget_ref, "Nuovo Comune")
-        
-        self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Nuovo Possessore")
-        
-        # Per "Nuova Località", se hai due istanze con funzionalità diverse, dovrai gestirle con nomi diversi
-        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Nuova Località")
-        # Se c'è una seconda istanza per "Nuova Località" (come nel codice originale), crea un altro riferimento o non salvarlo se non serve
-        # self.inserimento_sub_tabs.addTab(InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs), "Nuova Località") # Riga duplicata nel codice fornito, rimossa se non intenzionale
+        try:  # Disconnessione e Riconnessione del segnale per InserimentoComuneWidget
+            self.inserimento_comune_widget_ref.comune_appena_inserito.disconnect(
+                self.handle_comune_appena_inserito)
+        except TypeError:
+            pass  # Sollevato se il segnale non era connesso
+        self.inserimento_comune_widget_ref.comune_appena_inserito.connect(
+            self.handle_comune_appena_inserito)
+        self.inserimento_sub_tabs.addTab(
+            self.inserimento_comune_widget_ref, "Nuovo Comune")
 
-        self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
-        
-        self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni Partita")
+        self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(
+            self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(
+            self.inserimento_possessore_widget_ref, "Nuovo Possessore")
+
+        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(
+            self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(
+            self.inserimento_localita_widget_ref, "Nuova Località")
+
+        self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(
+            self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(
+            self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
+
+        self.operazioni_partita_widget_ref = OperazioniPartitaWidget(
+            self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(
+            self.operazioni_partita_widget_ref, "Operazioni Partita")
 
         if self.registrazione_proprieta_widget_ref and self.operazioni_partita_widget_ref:
-            try:
+            try:  # Disconnetti prima di riconnettere per evitare connessioni multiple
                 self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.disconnect()
-            except TypeError: pass # Nessuna connessione precedente
+            except TypeError:
+                pass
             self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.connect(
                 lambda partita_id, comune_id: self._handle_partita_creata_per_operazioni(
                     partita_id, comune_id, self.operazioni_partita_widget_ref
                 )
             )
-            logging.getLogger("CatastoGUI").info("Segnale 'partita_creata_per_operazioni_collegate' connesso.")
+            self.logger.info(
+                "Segnale 'partita_creata_per_operazioni_collegate' connesso.")
         else:
-            logging.getLogger("CatastoGUI").error("Impossibile connettere segnale partita_creata: widget non istanziati.")
+            self.logger.error(
+                "Impossibile connettere segnale partita_creata: widget non istanziati.")
 
         self.registra_consultazione_widget_ref = RegistraConsultazioneWidget(
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Registra Consultazione")
-        
+        self.inserimento_sub_tabs.addTab(
+            self.registra_consultazione_widget_ref, "Registra Consultazione")
+
+        # Aggiungi i sotto-tab al layout del contenitore
         layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
-        self.tabs.addTab(inserimento_gestione_contenitore, "Inserimento e Gestione")
+        # Aggiungi il contenitore come tab principale
+        self.tabs.addTab(inserimento_gestione_contenitore,
+                         "Inserimento e Gestione")
 
         # --- 4. Tab Esportazioni ---
-        self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager, self)
+        self.esportazioni_widget_ref = EsportazioniWidget(
+            self.db_manager, self)
         self.tabs.addTab(self.esportazioni_widget_ref, "Esportazioni")
 
         # --- 5. Tab Reportistica ---
-        self.reportistica_widget_ref = ReportisticaWidget(self.db_manager, self)
+        self.reportistica_widget_ref = ReportisticaWidget(
+            self.db_manager, self)
         self.tabs.addTab(self.reportistica_widget_ref, "Reportistica")
 
         # --- 6. Tab Statistiche e Viste Materializzate ---
@@ -938,48 +1062,68 @@ class CatastoMainWindow(QMainWindow):
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.gestione_utenti_widget_ref = GestioneUtentiWidget(
                 self.db_manager, self.logged_in_user_info, self)
-            self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
+            self.tabs.addTab(self.gestione_utenti_widget_ref,
+                             "Gestione Utenti")
         else:
-            self.gestione_utenti_widget_ref = None # Assicura che sia None se non creato
+            self.gestione_utenti_widget_ref = None
 
         # --- 8. Tab Sistema ---
+        # Il contenitore per i sotto-tab di sistema
+        sistema_contenitore = QWidget()
+        # Assicurati che questo sia passato correttamente
+        layout_contenitore_sistema = QVBoxLayout(sistema_contenitore)
+
         if self.db_manager:
-            self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log di Audit")
+            self.audit_viewer_widget_ref = AuditLogViewerWidget(
+                self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(
+                self.audit_viewer_widget_ref, "Log di Audit")
 
-            self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino DB")
+            self.backup_restore_widget_ref = BackupRestoreWidget(
+                self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(
+                self.backup_restore_widget_ref, "Backup/Ripristino DB")
 
-            self.admin_db_ops_widget_ref = AdminDBOperationsWidget(self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(self.admin_db_ops_widget_ref, "Amministrazione DB")
+            self.admin_db_ops_widget_ref = AdminDBOperationsWidget(
+                self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(
+                self.admin_db_ops_widget_ref, "Amministrazione DB")
         else:
-            # Fallback (anche se db_manager dovrebbe essere sempre disponibile qui se il flusso è corretto)
-            error_label = QLabel("DB Manager non disponibile per i widget di sistema.")
+            error_label = QLabel(
+                "DB Manager non disponibile per i widget di sistema.")
             error_label.setAlignment(Qt.AlignCenter)
             self.sistema_sub_tabs.addTab(error_label, "Errore Sistema")
 
-        self.tabs.addTab(self.sistema_sub_tabs, "Sistema")
-        
-        self.tabs.setCurrentIndex(0) # Imposta la Landing Page come tab attivo all'avvio
-        logging.getLogger("CatastoGUI").info("Setup dei tab completato. Tab corrente impostato su 'Home'.")
+        # Aggiungi i sotto-tab al layout del contenitore
+        layout_contenitore_sistema.addWidget(self.sistema_sub_tabs)
+        # Aggiungi il contenitore come tab principale
+        self.tabs.addTab(sistema_contenitore, "Sistema")
 
+        # Imposta la Landing Page come tab attivo all'avvio
+        self.tabs.setCurrentIndex(0)
+        logging.getLogger("CatastoGUI").info(
+            "Setup dei tab completato. Tab corrente impostato su 'Home'.")
 
     # Nuovo metodo per attivare i tab e sotto-tab
-    @pyqtSlot(str, str, bool) # main_tab_name, sub_tab_name, activate_report_sub_tab (opzionale)
+
+    # main_tab_name, sub_tab_name, activate_report_sub_tab (opzionale)
+    @pyqtSlot(str, str, bool)
     def activate_tab_and_sub_tab(self, main_tab_name: str, sub_tab_name: str, activate_report_sub_tab: bool = False):
-        self.logger.info(f"Richiesta attivazione: Tab Principale='{main_tab_name}', Sotto-Tab='{sub_tab_name}'")
-        
+        self.logger.info(
+            f"Richiesta attivazione: Tab Principale='{main_tab_name}', Sotto-Tab='{sub_tab_name}'")
+
         main_tab_index = -1
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i) == main_tab_name:
                 main_tab_index = i
                 break
-        
+
         if main_tab_index != -1:
             self.tabs.setCurrentIndex(main_tab_index)
             # Ora gestisci il sotto-tab
             main_tab_widget = self.tabs.widget(main_tab_index)
-            if isinstance(main_tab_widget, QTabWidget): # Se il tab principale contiene altri tab
+            # Se il tab principale contiene altri tab
+            if isinstance(main_tab_widget, QTabWidget):
                 sub_tab_index = -1
                 for i in range(main_tab_widget.count()):
                     if main_tab_widget.tabText(i) == sub_tab_name:
@@ -987,42 +1131,55 @@ class CatastoMainWindow(QMainWindow):
                         break
                 if sub_tab_index != -1:
                     main_tab_widget.setCurrentIndex(sub_tab_index)
-                    
+
                     # Logica specifica se si attiva un sotto-tab della Reportistica
                     if activate_report_sub_tab and main_tab_name == "Reportistica":
                         if hasattr(self, 'reportistica_widget_ref') and self.reportistica_widget_ref:
                             # Il widget ReportisticaWidget stesso è un QTabWidget
-                            report_tabs = self.reportistica_widget_ref.findChild(QTabWidget) # Cerca il QTabWidget interno
+                            report_tabs = self.reportistica_widget_ref.findChild(
+                                QTabWidget)  # Cerca il QTabWidget interno
                             if report_tabs:
                                 target_report_tab_index = -1
                                 for i in range(report_tabs.count()):
-                                    if report_tabs.tabText(i) == sub_tab_name: # sub_tab_name qui è il nome del report specifico
+                                    # sub_tab_name qui è il nome del report specifico
+                                    if report_tabs.tabText(i) == sub_tab_name:
                                         target_report_tab_index = i
                                         break
                                 if target_report_tab_index != -1:
-                                    report_tabs.setCurrentIndex(target_report_tab_index)
-                                    self.logger.info(f"Attivato sotto-tab '{sub_tab_name}' in Reportistica.")
+                                    report_tabs.setCurrentIndex(
+                                        target_report_tab_index)
+                                    self.logger.info(
+                                        f"Attivato sotto-tab '{sub_tab_name}' in Reportistica.")
                                 else:
-                                    self.logger.warning(f"Sotto-tab report '{sub_tab_name}' non trovato in Reportistica.")
+                                    self.logger.warning(
+                                        f"Sotto-tab report '{sub_tab_name}' non trovato in Reportistica.")
                             else:
-                                self.logger.warning("QTabWidget interno non trovato in ReportisticaWidget per attivare sotto-tab.")
+                                self.logger.warning(
+                                    "QTabWidget interno non trovato in ReportisticaWidget per attivare sotto-tab.")
                 else:
-                    self.logger.warning(f"Sotto-tab '{sub_tab_name}' non trovato nel tab principale '{main_tab_name}'.")
-            elif main_tab_widget is not None: # Il tab principale è un widget diretto, non un QTabWidget
-                 self.logger.info(f"Tab principale '{main_tab_name}' attivato (è un widget diretto).")
+                    self.logger.warning(
+                        f"Sotto-tab '{sub_tab_name}' non trovato nel tab principale '{main_tab_name}'.")
+            elif main_tab_widget is not None:  # Il tab principale è un widget diretto, non un QTabWidget
+                self.logger.info(
+                    f"Tab principale '{main_tab_name}' attivato (è un widget diretto).")
             else:
-                self.logger.error(f"Widget per il tab principale '{main_tab_name}' non trovato (None).")
+                self.logger.error(
+                    f"Widget per il tab principale '{main_tab_name}' non trovato (None).")
         else:
             self.logger.error(f"Tab principale '{main_tab_name}' non trovato.")
 
     @pyqtSlot(int)
     def handle_comune_appena_inserito(self, nuovo_comune_id: int):
-        self.logger.info(f"SLOT handle_comune_appena_inserito ESEGUITO per nuovo comune ID: {nuovo_comune_id}")
+        self.logger.info(
+            f"SLOT handle_comune_appena_inserito ESEGUITO per nuovo comune ID: {nuovo_comune_id}")
         if hasattr(self, 'elenco_comuni_widget_ref') and self.elenco_comuni_widget_ref:
-            self.logger.info(f"Riferimento a ElencoComuniWidget ({id(self.elenco_comuni_widget_ref)}) valido. Chiamata a load_comuni_data().")
+            self.logger.info(
+                f"Riferimento a ElencoComuniWidget ({id(self.elenco_comuni_widget_ref)}) valido. Chiamata a load_comuni_data().")
             self.elenco_comuni_widget_ref.load_comuni_data()
         else:
-            self.logger.warning("Riferimento a ElencoComuniWidget è None o non esiste! Impossibile aggiornare la lista dei comuni.")
+            self.logger.warning(
+                "Riferimento a ElencoComuniWidget è None o non esiste! Impossibile aggiornare la lista dei comuni.")
+
     def _handle_partita_creata_per_operazioni(self, nuova_partita_id: int, comune_id_partita: int,
                                               target_operazioni_widget: OperazioniPartitaWidget):
         """
@@ -1071,97 +1228,126 @@ class CatastoMainWindow(QMainWindow):
                 "Impossibile trovare il tab principale 'Inserimento e Gestione'.")
 
     def update_ui_based_on_role(self):
-        logging.getLogger("CatastoGUI").info(
+        self.logger.info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         ruolo = None
         is_admin_offline_mode = False
 
         # Determina se siamo in modalità offline o se un utente è loggato
-        if hasattr(self, 'pool_initialized_successfully') and not self.pool_initialized_successfully:
+        # La pool_initialized_successful è un attributo di CatastoMainWindow.
+        # logged_in_user_info è un dizionario con i dettagli dell'utente.
+
+        # Scenario 1: Modalità Admin Offline (DB non connesso in modo normale)
+        # Questo si verifica quando self.pool_initialized_successful è False.
+        if not self.pool_initialized_successful:
             if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin_offline':
                 is_admin_offline_mode = True
-                ruolo = 'admin_offline'  # Usa il ruolo fittizio
+                ruolo = 'admin_offline'  # Ruolo fittizio per la gestione UI in questa modalità
+            else:
+                # Se pool_initialized_successful è False ma non siamo admin_offline,
+                # significa che la connessione è fallita e l'utente non ha scelto admin_offline.
+                # In questo caso, nessun ruolo "normale" è valido per abilitare i tab.
+                ruolo = None  # Nessun ruolo normale per abilitare i tab
+        else:
+            # Scenario 2: Database connesso normalmente
+            if self.logged_in_user_info:
+                ruolo = self.logged_in_user_info.get('ruolo')
+            else:
+                # Questo caso non dovrebbe succedere con il flusso attuale (dopo login, user_info non è None)
+                # Ma per sicurezza, se non c'è user_info, il ruolo è None.
+                ruolo = None
 
-        if not is_admin_offline_mode and self.logged_in_user_info:
-            ruolo = self.logged_in_user_info.get('ruolo')
+        is_admin = (ruolo == 'admin')
+        is_archivista = (ruolo == 'archivista')
+        is_consultatore = (ruolo == 'consultatore')
 
-        is_admin = ruolo == 'admin'
-        is_archivista = ruolo == 'archivista'
-
-        logging.getLogger("CatastoGUI").debug(
+        self.logger.debug(
             f"update_ui_based_on_role: Ruolo effettivo considerato: {ruolo}, is_admin_offline: {is_admin_offline_mode}")
 
-        # Abilitazione pulsante Nuovo Comune nel tab Inserimento (se esiste)
-        if hasattr(self, 'btn_nuovo_comune_nel_tab'):
-            can_add_comune = (
-                is_admin or is_archivista) and not is_admin_offline_mode
-            self.btn_nuovo_comune_nel_tab.setEnabled(can_add_comune)
-            logging.getLogger("CatastoGUI").debug(
-                f"Pulsante Nuovo Comune abilitato: {can_add_comune}")
+        # La logica di abilitazione dei tab principali si basa sul ruolo e sullo stato della connessione.
+        # db_ready_for_normal_ops è True solo se il pool è inizializzato con successo E NON siamo in modalità admin_offline.
+        db_ready_for_normal_ops = self.pool_initialized_successful and not is_admin_offline_mode
 
-        tab_indices = {self.tabs.tabText(
-            i): i for i in range(self.tabs.count())}
-        logging.getLogger("CatastoGUI").debug(
-            f"Tab disponibili: {tab_indices}")
-
-        # Logica di abilitazione dei tab
-        # Se il pool non è inizializzato o siamo in admin_offline, la maggior parte dei tab è disabilitata
-        # a meno che non sia il tab "Sistema".
-        db_ready_for_normal_ops = hasattr(
-            self, 'pool_initialized_successfully') and self.pool_initialized_successfully and not is_admin_offline_mode
-
-        # Tutti gli utenti loggati (non offline)
+        # Determina lo stato di abilitazione per ciascun tipo di funzionalità
+        # Consultazione e Modifica (Elenco Comuni, Ricerca Partite, Ricerca Possessori, Ricerca Immobili Avanzata)
         consultazione_enabled = db_ready_for_normal_ops
-        inserimento_enabled = (
-            is_admin or is_archivista) and db_ready_for_normal_ops
-        statistiche_enabled = (
-            is_admin or is_archivista) and db_ready_for_normal_ops
-        gestione_utenti_enabled = is_admin and db_ready_for_normal_ops
 
-        # Tab Sistema è accessibile per admin normali, o per admin_offline (per setup DB)
+        # Inserimento e Gestione (Nuovo Comune, Nuovo Possessore, Nuova Località, Registrazione Proprietà, Operazioni Partita, Registra Consultazione)
+        inserimento_enabled = db_ready_for_normal_ops and (
+            is_admin or is_archivista)
+
+        # Esportazioni (Partita, Possessore)
+        esportazioni_enabled = db_ready_for_normal_ops and (
+            is_admin or is_archivista or is_consultatore)  # Tutti gli utenti normali
+
+        # Reportistica (Report Proprietà, Genealogico, Possessore, Consultazioni)
+        reportistica_enabled = db_ready_for_normal_ops and (
+            is_admin or is_archivista or is_consultatore)  # Tutti gli utenti normali
+
+        # Statistiche e Viste (Statistiche per Comune, Immobili per Tipologia, Manutenzione Database)
+        statistiche_enabled = db_ready_for_normal_ops and (
+            is_admin or is_archivista)  # Generalmente per ruoli più gestionali
+
+        # Gestione Utenti (Solo per admin connessi normalmente)
+        gestione_utenti_enabled = db_ready_for_normal_ops and is_admin
+
+        # Sistema (Log di Audit, Backup/Ripristino DB, Amministrazione DB)
+        # Accessibile per admin normali O per admin_offline (per setup DB iniziale)
         sistema_enabled = is_admin or is_admin_offline_mode
 
-        if "Consultazione" in tab_indices:
+        # Applica lo stato di abilitazione ai tab
+        tab_indices = {self.tabs.tabText(
+            i): i for i in range(self.tabs.count())}
+
+        if "Consultazione e Modifica" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Consultazione"], consultazione_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Consultazione abilitato: {consultazione_enabled}")
+                tab_indices["Consultazione e Modifica"], consultazione_enabled)
+            self.logger.debug(
+                f"Tab 'Consultazione e Modifica' abilitato: {consultazione_enabled}")
+
         if "Inserimento e Gestione" in tab_indices:
             self.tabs.setTabEnabled(
                 tab_indices["Inserimento e Gestione"], inserimento_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Inserimento e Gestione abilitato: {inserimento_enabled}")
+            self.logger.debug(
+                f"Tab 'Inserimento e Gestione' abilitato: {inserimento_enabled}")
+
         if "Esportazioni" in tab_indices:
             self.tabs.setTabEnabled(
-                # Anche consultatori
-                tab_indices["Esportazioni"], consultazione_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Esportazioni abilitato: {consultazione_enabled}")
+                tab_indices["Esportazioni"], esportazioni_enabled)
+            self.logger.debug(
+                f"Tab 'Esportazioni' abilitato: {esportazioni_enabled}")
+
         if "Reportistica" in tab_indices:
             self.tabs.setTabEnabled(
-                # Anche consultatori
-                tab_indices["Reportistica"], consultazione_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Reportistica abilitato: {consultazione_enabled}")
+                tab_indices["Reportistica"], reportistica_enabled)
+            self.logger.debug(
+                f"Tab 'Reportistica' abilitato: {reportistica_enabled}")
+
         if "Statistiche e Viste" in tab_indices:
             self.tabs.setTabEnabled(
                 tab_indices["Statistiche e Viste"], statistiche_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Statistiche e Viste abilitato: {statistiche_enabled}")
+            self.logger.debug(
+                f"Tab 'Statistiche e Viste' abilitato: {statistiche_enabled}")
+
+        # Il tab "Gestione Utenti" è un tab diretto, non un sotto-tab. Se è stato aggiunto come tale.
+        # Se invece è un sotto-tab di "Sistema", allora il controllo è sul sotto-tab specifico.
+        # Data la tua struttura: self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
         if "Gestione Utenti" in tab_indices:
             self.tabs.setTabEnabled(
                 tab_indices["Gestione Utenti"], gestione_utenti_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Gestione Utenti abilitato: {gestione_utenti_enabled}")
+            self.logger.debug(
+                f"Tab 'Gestione Utenti' abilitato: {gestione_utenti_enabled}")
 
         if "Sistema" in tab_indices:
             self.tabs.setTabEnabled(tab_indices["Sistema"], sistema_enabled)
-            logging.getLogger("CatastoGUI").debug(
-                f"Tab Sistema abilitato: {sistema_enabled}")
+            self.logger.debug(f"Tab 'Sistema' abilitato: {sistema_enabled}")
+
+            # Se siamo in modalità admin_offline, forza la selezione del tab "Sistema" -> "Amministrazione DB"
             if sistema_enabled and is_admin_offline_mode:
                 self.tabs.setCurrentIndex(tab_indices["Sistema"])
                 if hasattr(self, 'sistema_sub_tabs'):
                     admin_db_ops_tab_index = -1
+                    # Cerca il sotto-tab "Amministrazione DB" all'interno del QTabWidget self.sistema_sub_tabs
                     for i in range(self.sistema_sub_tabs.count()):
                         if self.sistema_sub_tabs.tabText(i) == "Amministrazione DB":
                             admin_db_ops_tab_index = i
@@ -1169,12 +1355,21 @@ class CatastoMainWindow(QMainWindow):
                     if admin_db_ops_tab_index != -1:
                         self.sistema_sub_tabs.setCurrentIndex(
                             admin_db_ops_tab_index)
-                        logging.getLogger("CatastoGUI").debug(
-                            "Tab Sistema -> Amministrazione DB selezionato per modalità offline.")
+                        self.logger.debug(
+                            "Tab 'Sistema' -> 'Amministrazione DB' selezionato per modalità offline.")
+                    else:
+                        self.logger.warning(
+                            "Sotto-tab 'Amministrazione DB' non trovato nel tab 'Sistema'.")
+                else:
+                    self.logger.warning(
+                        "self.sistema_sub_tabs non è un QTabWidget o non è stato inizializzato.")
 
+        # Abilitazione/Disabilitazione del pulsante Logout
         if hasattr(self, 'logout_button'):
             self.logout_button.setEnabled(
                 not is_admin_offline_mode and bool(self.logged_in_user_id))
+
+        self.logger.info("update_ui_based_on_role completato.")
 
     def apri_dialog_inserimento_comune(self):  # Metodo integrato nella classe
         if not self.db_manager:
@@ -1259,17 +1454,21 @@ class CatastoMainWindow(QMainWindow):
         if self.logged_in_user_id is not None and self.current_session_id and self.db_manager:
             # Chiama il logout_user del db_manager passando l'ID utente e l'ID sessione correnti
             if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
-                QMessageBox.information(self, "Logout", "Logout effettuato con successo.")
-                logging.getLogger("CatastoGUI").info(f"Logout utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}... registrato nel DB.")
+                QMessageBox.information(
+                    self, "Logout", "Logout effettuato con successo.")
+                logging.getLogger("CatastoGUI").info(
+                    f"Logout utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}... registrato nel DB.")
             else:
                 # Anche se la registrazione DB fallisce, procedi con il logout lato client
-                QMessageBox.warning(self, "Logout", "Logout effettuato. Errore durante la registrazione remota del logout.")
-                logging.getLogger("CatastoGUI").warning(f"Logout utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}... Errore registrazione DB.")
+                QMessageBox.warning(
+                    self, "Logout", "Logout effettuato. Errore durante la registrazione remota del logout.")
+                logging.getLogger("CatastoGUI").warning(
+                    f"Logout utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}... Errore registrazione DB.")
 
             # Resetta le informazioni utente e sessione nella GUI
             self.logged_in_user_id = None
             self.logged_in_user_info = None
-            self.current_session_id = None # IMPORTANTE: Resetta l'ID sessione
+            self.current_session_id = None  # IMPORTANTE: Resetta l'ID sessione
 
             # Non è necessario chiamare db_manager.clear_session_app_user() qui perché
             # db_manager.logout_user() dovrebbe già chiamare _clear_audit_session_variables_with_conn()
@@ -1277,33 +1476,36 @@ class CatastoMainWindow(QMainWindow):
 
             self.user_status_label.setText("Utente: Nessuno")
             # Potresti voler cambiare lo stato del DB qui, ma di solito rimane "Connesso"
-            # self.db_status_label.setText("Database: Connesso (Logout effettuato)") 
+            # self.db_status_label.setText("Database: Connesso (Logout effettuato)")
             self.logout_button.setEnabled(False)
-            
-            self.tabs.clear() # Rimuove tutti i tab
+
+            self.tabs.clear()  # Rimuove tutti i tab
             # Potresti voler re-inizializzare i tab in uno stato "non loggato" o semplicemente chiudere.
             # Per ora, chiudiamo l'applicazione dopo il logout per semplicità.
             self.statusBar().showMessage("Logout effettuato. L'applicazione verrà chiusa.")
-            
+
             # Chiude l'applicazione dopo un breve ritardo per permettere all'utente di leggere il messaggio
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(1500, self.close) # Chiude dopo 1.5 secondi
+            QTimer.singleShot(1500, self.close)  # Chiude dopo 1.5 secondi
 
         else:
-            logging.getLogger("CatastoGUI").warning("Tentativo di logout senza una sessione utente valida o db_manager.")
-
+            logging.getLogger("CatastoGUI").warning(
+                "Tentativo di logout senza una sessione utente valida o db_manager.")
 
     def closeEvent(self, event: QCloseEvent):
-        logging.getLogger("CatastoGUI").info("Evento closeEvent intercettato in CatastoMainWindow.")
-        
+        logging.getLogger("CatastoGUI").info(
+            "Evento closeEvent intercettato in CatastoMainWindow.")
+
         if hasattr(self, 'db_manager') and self.db_manager:
             pool_era_attivo = self.db_manager.pool is not None
 
             if pool_era_attivo:
                 # Se un utente è loggato con una sessione attiva, esegui il logout
                 if self.logged_in_user_id is not None and self.current_session_id:
-                    logging.getLogger("CatastoGUI").info(f"Chiusura applicazione: logout di sicurezza per utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}...")
-                    self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
+                    logging.getLogger("CatastoGUI").info(
+                        f"Chiusura applicazione: logout di sicurezza per utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}...")
+                    self.db_manager.logout_user(
+                        self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
                 else:
                     # Se non c'è un utente loggato specifico o una sessione, ma il pool è attivo,
                     # potremmo comunque voler tentare una pulizia generica delle variabili di sessione sulla connessione usata per questo.
@@ -1311,7 +1513,8 @@ class CatastoMainWindow(QMainWindow):
                     # clear_audit_session_variables() (quella che prende una nuova connessione dal pool) potrebbe essere chiamata,
                     # ma è meno critica qui se non c'è una sessione utente attiva da invalidare.
                     # La cosa più importante è che logout_user chiami _clear_audit_session_variables_with_conn.
-                    self.logger.info("Nessun utente/sessione attiva da loggare out esplicitamente, ma il pool era attivo.")
+                    self.logger.info(
+                        "Nessun utente/sessione attiva da loggare out esplicitamente, ma il pool era attivo.")
                     # Se db_manager.clear_audit_session_variables() è progettato per essere chiamato in modo sicuro
                     # anche se non c'è una sessione utente specifica (es. resetta per la prossima connessione),
                     # potresti chiamarlo. Altrimenti, è meglio affidarsi alla pulizia fatta da logout_user.
@@ -1319,197 +1522,226 @@ class CatastoMainWindow(QMainWindow):
 
             # Chiudi sempre il pool se esiste
             self.db_manager.close_pool()
-            logging.getLogger("CatastoGUI").info("Tentativo di chiusura del pool di connessioni al database completato durante closeEvent.")
+            logging.getLogger("CatastoGUI").info(
+                "Tentativo di chiusura del pool di connessioni al database completato durante closeEvent.")
         else:
-            logging.getLogger("CatastoGUI").warning("DB Manager non disponibile durante closeEvent o pool già None.")
+            logging.getLogger("CatastoGUI").warning(
+                "DB Manager non disponibile durante closeEvent o pool già None.")
 
-        logging.getLogger("CatastoGUI").info("Applicazione GUI Catasto Storico terminata via closeEvent.")
+        logging.getLogger("CatastoGUI").info(
+            "Applicazione GUI Catasto Storico terminata via closeEvent.")
         event.accept()
 
 # --- Fine Classe CatastoMainWindow ---
+# --- Funzione run_gui_app (con le correzioni) ---
+# --- Funzione run_gui_app (CON LE CORREZIONI AGGIORNATE) ---
+
+
 def run_gui_app():
     app = QApplication(sys.argv)
     QApplication.setOrganizationName("ArchivioDiStatoSavona")
     QApplication.setApplicationName("CatastoStoricoApp")
     app.setStyleSheet(MODERN_STYLESHEET)
 
-    # Questo avviso è meglio mostrarlo una volta che la finestra principale è visibile, se FPDF_AVAILABLE è False
-    # dal file app_utils.py
-    # if not FPDF_AVAILABLE:
-    # QMessageBox.warning(None, "Avviso Dipendenza Mancante", ...)
-
     settings = QSettings(QSettings.IniFormat, QSettings.UserScope,
                          "ArchivioDiStatoSavona", "CatastoStoricoApp")
 
     db_manager_gui: Optional[CatastoDBManager] = None
-    main_window_instance = CatastoMainWindow() # Crea istanza finestra principale
+    main_window_instance = CatastoMainWindow()
 
-    retry_setup = True
-    initial_setup_successful = False # Flag per controllare se l'app può procedere al loop eventi
+    # Definire il percorso del logo e dell'URL di aiuto per la WelcomeScreen
+    base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
+    logo_path_for_welcome = os.path.join(
+        base_dir_app, "resources", "logo_meridiana.png")
+    help_manual_url = "https://www.google.com/search?q=manuale+catasto+storico+online"
 
-    while retry_setup:
-        retry_setup = False # Assume successo per questa iterazione, a meno di errori specifici
+    # --- Inizio del flusso di avvio riorganizzato e corretto ---
+    while True:  # Loop esterno per la gestione della configurazione/connessione DB
         active_db_config: Optional[Dict[str, Any]] = None
+        db_password: str = ""
 
-        # 1. Carica o chiedi configurazione DB
+        # 1. Carica configurazione DB da settings o chiedila all'utente
         if settings.contains(SETTINGS_DB_NAME) and settings.value(SETTINGS_DB_NAME, type=str).strip():
-            gui_logger.info(f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
+            gui_logger.info(
+                f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
             active_db_config = {
-                # ... (logica per caricare da QSettings come nel tuo codice, assicurati che SETTINGS_DB_PORT sia gestito correttamente come int)
                 "type": settings.value(SETTINGS_DB_TYPE, "Locale (localhost)"),
                 "host": settings.value(SETTINGS_DB_HOST, "localhost"),
-                "port": settings.value(SETTINGS_DB_PORT, 5432, type=int), # Leggi come int
+                "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
                 "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico"),
                 "user": settings.value(SETTINGS_DB_USER, "postgres"),
                 "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto")
             }
         else:
-            gui_logger.info("Nessuna configurazione DB valida. Apertura dialogo di configurazione iniziale.")
+            gui_logger.info(
+                "Nessuna configurazione DB valida. Apertura dialogo di configurazione iniziale.")
             config_dialog = DBConfigDialog(parent=None, initial_config=None)
             if config_dialog.exec_() == QDialog.Accepted:
                 active_db_config = config_dialog.get_config_values()
                 if not active_db_config or not active_db_config.get("dbname"):
-                    QMessageBox.critical(None, "Errore Critico", "Configurazione DB non valida. L'applicazione si chiuderà.")
-                    if db_manager_gui: db_manager_gui.close_pool() # Assicura chiusura se istanziato
+                    QMessageBox.critical(
+                        None, "Errore Critico", "Configurazione DB non valida. L'applicazione si chiuderà.")
+                    # Uscita immediata se la configurazione è invalida
                     sys.exit(1)
-            else: # Dialogo di configurazione annullato
-                gui_logger.info("Configurazione DB iniziale annullata dall'utente. Uscita.")
-                if db_manager_gui: db_manager_gui.close_pool()
-                sys.exit(0)
-        
-        gui_logger.info(f"Configurazione DB attiva: { {k:v for k,v in active_db_config.items() if k != 'password'} }")
+            else:
+                gui_logger.info(
+                    "Configurazione DB iniziale annullata dall'utente. Uscita.")
+                sys.exit(0)  # Uscita pulita
 
-        # 2. Chiedi password DB
-        db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
-                                               f"Password per utente '{active_db_config['user']}'\nDB: '{active_db_config['dbname']}'@{active_db_config['host']}:{active_db_config['port']}",
-                                               QLineEdit.Password)
-        if not ok: # Utente ha annullato il dialogo password
-            gui_logger.info("Inserimento password annullato dall'utente. Uscita.")
-            if db_manager_gui: db_manager_gui.close_pool()
-            sys.exit(0)
-        # La password vuota è permessa, sarà il DB a validarla
+        # Se la configurazione non è valida, riprova il loop esterno
+        if not active_db_config or not active_db_config.get("dbname"):
+            gui_logger.critical(
+                "Configurazione DB ottenuta è vuota o invalida. Riprovo il ciclo.")
+            continue
 
-        # 3. Istanzia/Re-istanzia DBManager e inizializza il pool
-        if db_manager_gui and db_manager_gui.pool: # Chiudi pool precedente se si ritenta
-            db_manager_gui.close_pool()
-        
-        db_manager_gui = CatastoDBManager(
-            dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
-            host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
-            application_name=f"CatastoAppGUI_{active_db_config['dbname']}", # Nome app specifico per il pool
-            log_level=gui_logger.level # Usa lo stesso livello di log della GUI per il db_manager
-        )
-        main_window_instance.db_manager = db_manager_gui # Assegna alla finestra principale
-        main_window_instance.pool_initialized_successfully = False # Resetta per questo tentativo
+        # 2. Richiedi la password del DB e tenta la connessione (loop interno)
+        while True:
+            db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
+                                                   f"Password per utente '{active_db_config['user']}'\nDB: '{active_db_config['dbname']}'@{active_db_config['host']}:{active_db_config['port']}",
+                                                   QLineEdit.Password)
+            if not ok:
+                gui_logger.info(
+                    "Inserimento password DB annullato dall'utente. Uscita.")
+                sys.exit(0)  # Uscita pulita
 
-        # 4. Tentativo di inizializzare il pool principale
-        if db_manager_gui.initialize_main_pool():
-            main_window_instance.pool_initialized_successfully = True
-            gui_logger.info(f"Pool per DB '{active_db_config['dbname']}' inizializzato con successo.")
-            
-            # 4.1. Procedi con il Login Utente normale
-            login_dialog_success = False
-            while not login_dialog_success: # Permetti di ritentare il login utente
-                login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
-                if login_dialog.exec_() == QDialog.Accepted:
-                    if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
-                        main_window_instance.perform_initial_setup(
-                            db_manager_gui,
-                            login_dialog.logged_in_user_id,
-                            login_dialog.logged_in_user_info,
-                            login_dialog.current_session_id_from_dialog
-                        )
-                        login_dialog_success = True
-                        initial_setup_successful = True # L'app è pronta per il loop eventi
-                        retry_setup = False # Successo, esci dal loop di configurazione DB
-                    else: # Errore interno di LoginDialog dopo aver premuto OK
-                        QMessageBox.critical(None, "Errore Login Interno", "Dati di login non validi dopo l'autenticazione. Riprovare.")
-                        # Non uscire dall'app, lascia che l'utente ritenti il login o annulli
-                        # login_dialog_success rimane False, quindi il loop di login continua
-                else: # Utente ha annullato il LoginDialog
-                    gui_logger.info("Login utente annullato. Uscita dall'applicazione.")
-                    retry_setup = False # Esci dal loop di configurazione DB
-                    initial_setup_successful = False # L'app non deve procedere
-                    break # Esci dal loop di login
-            
-            if not login_dialog_success and not initial_setup_successful: # Se è uscito dal loop di login senza successo
-                if db_manager_gui: db_manager_gui.close_pool()
-                sys.exit(0)
-
-        else: # initialize_main_pool() è fallito
-            main_window_instance.pool_initialized_successfully = False
-            db_target_name_failed = active_db_config.get("dbname", "N/D")
-            host_failed = active_db_config.get("host", "N/D")
-            gui_logger.error(f"Fallimento inizializzazione pool principale per DB '{db_target_name_failed}' su host '{host_failed}'.")
-
-            # 4.2. Gestisci fallimento inizializzazione pool
-            db_exists_on_server = db_manager_gui.check_database_exists(
-                db_target_name_failed, active_db_config.get("user"), db_password
-            )
-
-            if not db_exists_on_server and host_failed.lower() in ["localhost", "127.0.0.1"]:
-                gui_logger.warning(f"DB '{db_target_name_failed}' non trovato su server locale. Avvio in modalità setup limitata (admin_offline).")
-                QMessageBox.information(None, "Database Non Trovato",
-                                        f"Il database '{db_target_name_failed}' non sembra esistere sul server locale.\n"
-                                        "L'applicazione verrà avviata in modalità limitata per permettere la creazione e configurazione del database tramite il tab 'Sistema -> Amministrazione DB'.")
-                
-                main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
-                main_window_instance.logged_in_user_id = 0
-                main_window_instance.current_session_id = str(uuid.uuid4()) # Sessione fittizia per admin_offline
-                
-                main_window_instance.perform_initial_setup(
-                    db_manager_gui, 
-                    main_window_instance.logged_in_user_id, 
-                    main_window_instance.logged_in_user_info, 
-                    main_window_instance.current_session_id
-                )
-                initial_setup_successful = True # L'app può partire in modalità limitata
-                retry_setup = False 
-            else: # DB esiste ma inaccessibile, o server remoto non risponde, o credenziali errate, ecc.
-                error_msg_detail = f"Impossibile connettersi al database: '{db_target_name_failed}' su '{host_failed}'.\n"
-                if db_exists_on_server:
-                    error_msg_detail += "Il database sembra esistere, ma la connessione è fallita (verificare password, privilegi, stato server).\n"
-                else:
-                    error_msg_detail += "Il database potrebbe non esistere o il server non è raggiungibile.\n"
-                error_msg_detail += "\nControllare i file di log per dettagli specifici sull'errore di connessione.\nVuoi modificare la configurazione e riprovare?"
-
-                reply = QMessageBox.critical(None, "Errore Connessione Database",
-                                             error_msg_detail,
-                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-                if reply == QMessageBox.Yes:
-                    retry_setup = True # Riprova il ciclo di configurazione DB
-                    # DBConfigDialog verrà mostrato all'inizio del prossimo ciclo while
-                else: # Utente sceglie di non riconfigurare
-                    gui_logger.info("Uscita scelta dall'utente dopo fallimento connessione DB e nessuna riconfigurazione.")
-                    initial_setup_successful = False
-                    retry_setup = False # Esci dal loop
-
-    # --- Fine Loop `while retry_setup` ---
-
-    if initial_setup_successful:
-        gui_logger.info("Setup iniziale completato. Avvio loop eventi dell'applicazione...")
-        try:
-            exit_code = app.exec_()
-            gui_logger.info(f"Loop eventi applicazione terminato con codice: {exit_code}")
-        except Exception as e_exec:
-            gui_logger.critical(f"Errore imprevisto durante app.exec_(): {e_exec}", exc_info=True)
-            # Assicura chiusura pool anche qui
-            if db_manager_gui:
+            if db_manager_gui:  # Se db_manager_gui esiste già, chiudi il suo pool prima di ricrearlo
                 db_manager_gui.close_pool()
-            sys.exit(1) # Uscita con errore
-    else:
-        gui_logger.warning("Setup iniziale non completato con successo. L'applicazione non verrà avviata.")
-        # Il pool potrebbe essere stato chiuso nei blocchi di errore precedenti se istanziato
-        # Ma una chiamata sicura qui non fa male.
+
+            db_manager_gui = CatastoDBManager(
+                dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
+                host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
+                application_name=f"CatastoAppGUI_{active_db_config['dbname']}",
+                log_level=gui_logger.level
+            )
+            main_window_instance.db_manager = db_manager_gui
+            # Resetta per ogni tentativo di connessione
+            main_window_instance.pool_initialized_successful = False
+
+            if db_manager_gui.initialize_main_pool():
+                main_window_instance.pool_initialized_successful = True
+                gui_logger.info(
+                    f"Pool per DB '{active_db_config['dbname']}' inizializzato con successo.")
+                break  # Esci dal loop di richiesta password DB, connessione riuscita
+            else:  # Inizializzazione pool fallita
+                main_window_instance.pool_initialized_successful = False
+                db_target_name_failed = active_db_config.get("dbname", "N/D")
+                host_failed = active_db_config.get("host", "N/D")
+                gui_logger.error(
+                    f"Fallimento inizializzazione pool principale per DB '{db_target_name_failed}' su host '{host_failed}'.")
+
+                db_exists_on_server = db_manager_gui.check_database_exists(
+                    db_target_name_failed, active_db_config.get(
+                        "user"), db_password
+                )
+
+                if not db_exists_on_server and host_failed.lower() in ["localhost", "127.0.0.1"]:
+                    # Modalità Admin Offline
+                    gui_logger.warning(
+                        f"DB '{db_target_name_failed}' non trovato su server locale. Avvio in modalità setup limitata (admin_offline).")
+                    QMessageBox.information(None, "Database Non Trovato",
+                                            f"Il database '{db_target_name_failed}' non sembra esistere sul server locale.\n"
+                                            "L'applicazione verrà avviata in modalità limitata per permettere la creazione e configurazione del database tramite il tab 'Sistema -> Amministrazione DB'.")
+
+                    main_window_instance.logged_in_user_info = {
+                        'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
+                    main_window_instance.logged_in_user_id = 0
+                    main_window_instance.current_session_id = str(uuid.uuid4())
+
+                    main_window_instance.perform_initial_setup(
+                        db_manager_gui,
+                        main_window_instance.logged_in_user_id,
+                        main_window_instance.logged_in_user_info,
+                        main_window_instance.current_session_id
+                    )
+                    app.exec_()  # Avvia il loop degli eventi per la modalità offline
+                    # Se l'utente chiude la finestra in modalità offline, l'app si chiude
+                    sys.exit(0)  # Uscita dopo l'esecuzione in modalità offline
+                else:  # DB esiste ma non accessibile, o server remoto, o password errata
+                    error_msg_detail = f"Impossibile connettersi al database: '{db_target_name_failed}' su '{host_failed}'.\n"
+                    if db_exists_on_server:
+                        error_msg_detail += "Il database sembra esistere, ma la connessione è fallita (verificare password, privilegi, stato server).\n"
+                    else:
+                        error_msg_detail += "Il database potrebbe non esistere o il server non è raggiungibile.\n"
+                    error_msg_detail += "\nControllare i file di log per dettagli specifici sull'errore di connessione.\nVuoi modificare la configurazione e riprovare?"
+
+                    reply = QMessageBox.critical(None, "Errore Connessione Database",
+                                                 error_msg_detail,
+                                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                    if reply == QMessageBox.Yes:
+                        # Torna al loop esterno per riconfigurare o riprovare
+                        break  # Esce dal loop interno, continua nel loop esterno
+                    else:
+                        gui_logger.info(
+                            "Uscita scelta dall'utente dopo fallimento connessione DB e nessuna riconfigurazione.")
+                        sys.exit(0)  # Uscita pulita
+
+        # --- A questo punto, il pool è stato inizializzato con successo in modalità normale ---
+
+        # 3. Login Utente normale
+        login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
+        if login_dialog.exec_() == QDialog.Accepted:
+            if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
+                # Mostra la Welcome Screen
+                welcome_screen = WelcomeScreen(
+                    parent=None,  # La WelcomeScreen non ha parent, così non si chiude con main_window
+                    logo_path=logo_path_for_welcome,
+                    help_url=help_manual_url
+                )
+                welcome_screen_result = welcome_screen.exec_()
+
+                if welcome_screen_result == QDialog.Accepted:
+                    gui_logger.info("Welcome Screen chiusa (Accepted).")
+                    main_window_instance.perform_initial_setup(
+                        db_manager_gui,
+                        login_dialog.logged_in_user_id,
+                        login_dialog.logged_in_user_info,
+                        login_dialog.current_session_id_from_dialog
+                    )
+                    break  # Setup completato con successo, esci dal loop principale
+
+                # Welcome Screen chiusa non "Accepted" (es. utente chiude x sulla barra del titolo)
+                else:
+                    gui_logger.info(
+                        "Welcome Screen chiusa (non Accepted). Uscita dall'applicazione.")
+                    sys.exit(0)  # Uscita pulita
+
+            # Errore interno di LoginDialog (dati mancanti dopo accettazione)
+            else:
+                QMessageBox.critical(
+                    None, "Errore Login Interno", "Dati di login non validi dopo l'autenticazione. Riprovare.")
+                # Riprova il ciclo principale (richiederà password DB, poi login)
+                continue
+
+        else:  # Utente ha annullato il LoginDialog
+            gui_logger.info(
+                "Login utente annullato. Uscita dall'applicazione.")
+            sys.exit(0)  # Uscita pulita
+
+    # --- Fine del flusso di avvio riorganizzato ---
+
+    # Se l'applicazione è arrivata qui, significa che il setup è stato completato e la main_window_instance è stata mostrata.
+    gui_logger.info(
+        "Setup iniziale completato. Avvio loop eventi dell'applicazione...")
+    try:
+        exit_code = app.exec_()
+        gui_logger.info(
+            f"Loop eventi applicazione terminato con codice: {exit_code}")
+    except Exception as e_exec:
+        gui_logger.critical(
+            f"Errore imprevisto durante app.exec_(): {e_exec}", exc_info=True)
+        # Assicura chiusura pool anche in caso di crash del loop eventi
         if db_manager_gui:
             db_manager_gui.close_pool()
-        sys.exit(1) # Uscita se il setup non è andato a buon fine
+        sys.exit(1)
 
-    # Chiusura finale del pool se non già fatto
+    # La chiusura finale del pool dovrebbe essere gestita da CatastoMainWindow.closeEvent
+    # ma questa è una sicurezza per casi non standard.
     if db_manager_gui:
         db_manager_gui.close_pool()
-    
-    sys.exit(getattr(app, 'returnCode', 0) if 'app' in locals() and hasattr(app, 'returnCode') else 0)
+
+    sys.exit(getattr(app, 'returnCode', 0)
+             if hasattr(app, 'returnCode') else 0)
+
 
 if __name__ == "__main__":
     # Assicurati che il logger sia configurato prima di qualsiasi chiamata

@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 # from PyQt5.QtCore import QByteArray
 from PyQt5.QtWidgets import QHBoxLayout, QLabel # Aggiungi QLabel per un eventuale fallback
 from PyQt5.QtCore import Qt # Per Qt.AlignCenter nel fallback
-import os # Importa il modulo 'os' per la gestione dei percorsi
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QComboBox, QTabWidget, QTextEdit, QMessageBox,
@@ -27,10 +26,14 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QLabel, QLineEdit
 
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette, QCloseEvent
 from PyQt5.QtCore import Qt, QDate, QSettings, QDateTime, QProcess, QStandardPaths, pyqtSignal, QPoint # Importazioni PyQt5
-from app_utils import PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF # Assumendo che GenericTextReportPDF sia in app_utils
 from PyQt5.QtWidgets import QFileDialog, QMessageBox # Già presenti, ma per chiarezza
+#from PyQt5.QtSvgWidgets import QSvgWidget # <--- AGGIUNGI QUESTA RIGA
+from PyQt5.QtGui import QPixmap # Assicurati che QPixmap sia importato
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem
+from PyQt5.QtGui import QPixmap, QDesktopServices, QFont
+from PyQt5.QtCore import Qt, QUrl, QTimer, QSize
 from datetime import date # Già presente
-import logging # Già presente
+
 # In gui_main.py, dopo le importazioni PyQt e standard:
 # E le sue eccezioni se servono qui
 if TYPE_CHECKING:
@@ -41,8 +44,6 @@ if TYPE_CHECKING:
 
 # In gui_widgets.py, dopo le importazioni PyQt e standard:
 from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
-
-from app_utils import CreateUserDialog # Per GestioneUtentiWidget
 
 # Dai nuovi moduli che creeremo:
 from app_utils import (
@@ -56,7 +57,8 @@ from app_utils import (
     gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
     GenericTextReportPDF,  # Per ReportisticaWidget
     # Se usate in GestioneUtentiWidget direttamente (anche se è in CreateUserDialog)
-    _hash_password, _verify_password, AggiungiDocumentoDialog    
+    _hash_password, _verify_password, AggiungiDocumentoDialog, CreateUserDialog, 
+    PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF 
 )
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
@@ -5892,219 +5894,424 @@ class PartitaDetailsDialog(QDialog):
     def __init__(self, partita_data, parent=None):
         super(PartitaDetailsDialog, self).__init__(parent)
         self.partita = partita_data
+        self.db_manager = getattr(parent, 'db_manager', None)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
             f"Dettagli Partita {partita_data['numero_partita']}")
         self.setMinimumSize(700, 500)
 
-        layout = QVBoxLayout()
+        self._init_ui()
+        self._load_all_data()
+        self._update_document_tab_title()
 
-        NUOVE_COLONNE_POSSESSORI = 6  # o 5 se non mostri cognome_nome separato
-        NUOVE_ETICHETTE_POSSESSORI = [
-            "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
-    # --- Layout della finestra ---
-        # Intestazione
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Intestazione (come prima)
         header_layout = QHBoxLayout()
-
-        title_label = QLabel(
-            f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
+        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
         header_layout.addWidget(title_label)
-
         layout.addLayout(header_layout)
 
-        # Informazioni generali
+        # Informazioni generali (come prima)
+        header_layout = QHBoxLayout()
+        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
+        header_layout.addWidget(title_label)
+        layout.addLayout(header_layout)
+
         info_group = QGroupBox("Informazioni Generali")
         info_layout = QGridLayout()
-
         info_layout.addWidget(QLabel("<b>ID:</b>"), 0, 0)
         info_layout.addWidget(QLabel(str(self.partita['id'])), 0, 1)
-
         info_layout.addWidget(QLabel("<b>Tipo:</b>"), 0, 2)
         info_layout.addWidget(QLabel(self.partita['tipo']), 0, 3)
-
         info_layout.addWidget(QLabel("<b>Stato:</b>"), 1, 0)
         info_layout.addWidget(QLabel(self.partita['stato']), 1, 1)
-
         info_layout.addWidget(QLabel("<b>Data Impianto:</b>"), 1, 2)
         info_layout.addWidget(QLabel(str(self.partita['data_impianto'])), 1, 3)
-
         if self.partita.get('data_chiusura'):
             info_layout.addWidget(QLabel("<b>Data Chiusura:</b>"), 2, 0)
-            info_layout.addWidget(
-                QLabel(str(self.partita['data_chiusura'])), 2, 1)
-
+            info_layout.addWidget(QLabel(str(self.partita['data_chiusura'])), 2, 1)
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
 
-        # Tabs per possessori, immobili, variazioni
-        tabs = QTabWidget()
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs)
+
+        # Tabs per possessori, immobili, variazioni, documenti
+        self.tabs = QTabWidget() # Rinomina a self.tabs per coerenza
+        layout.addWidget(self.tabs)
 
         # Tab Possessori
         possessori_tab = QWidget()
-        possessori_layout = QVBoxLayout()
-
+        possessori_layout = QVBoxLayout(possessori_tab)
         possessori_table = QTableWidget()
         possessori_table.setColumnCount(4)
-        possessori_table.setHorizontalHeaderLabels(
-            ["ID", "Nome Completo", "Titolo", "Quota"])
+        possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
         possessori_table.setAlternatingRowColors(True)
-
         if self.partita.get('possessori'):
             possessori_table.setRowCount(len(self.partita['possessori']))
             for i, possessore in enumerate(self.partita['possessori']):
-                possessori_table.setItem(
-                    i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
-                possessori_table.setItem(i, 1, QTableWidgetItem(
-                    possessore.get('nome_completo', '')))
-                possessori_table.setItem(
-                    i, 2, QTableWidgetItem(possessore.get('titolo', '')))
-                possessori_table.setItem(
-                    i, 3, QTableWidgetItem(possessore.get('quota', '')))
-
+                possessori_table.setItem(i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
+                possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('nome_completo', '')))
+                possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('titolo', '')))
+                possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
         possessori_layout.addWidget(possessori_table)
-        possessori_tab.setLayout(possessori_layout)
-        tabs.addTab(possessori_tab, "Possessori")
+        self.tabs.addTab(possessori_tab, "Possessori")
 
         # Tab Immobili
         immobili_tab = QWidget()
-        immobili_layout = QVBoxLayout()
-
+        immobili_layout = QVBoxLayout(immobili_tab)
         immobili_table = ImmobiliTableWidget()
-
         if self.partita.get('immobili'):
             immobili_table.populate_data(self.partita['immobili'])
-
         immobili_layout.addWidget(immobili_table)
-        immobili_tab.setLayout(immobili_layout)
-        tabs.addTab(immobili_tab, "Immobili")
+        self.tabs.addTab(immobili_tab, "Immobili")
 
         # Tab Variazioni
         variazioni_tab = QWidget()
-        variazioni_layout = QVBoxLayout()
-
+        variazioni_layout = QVBoxLayout(variazioni_tab)
         variazioni_table = QTableWidget()
         variazioni_table.setColumnCount(5)
-        variazioni_table.setHorizontalHeaderLabels(
-            ["ID", "Tipo", "Data", "Partita Dest.", "Contratto"])
+        variazioni_table.setHorizontalHeaderLabels(["ID", "Tipo", "Data", "Partita Dest.", "Contratto"])
         variazioni_table.setAlternatingRowColors(True)
-
         if self.partita.get('variazioni'):
             variazioni_table.setRowCount(len(self.partita['variazioni']))
             for i, var in enumerate(self.partita['variazioni']):
-                variazioni_table.setItem(
-                    i, 0, QTableWidgetItem(str(var.get('id', ''))))
-                variazioni_table.setItem(
-                    i, 1, QTableWidgetItem(var.get('tipo', '')))
-                variazioni_table.setItem(i, 2, QTableWidgetItem(
-                    str(var.get('data_variazione', ''))))
-
-                # Partita destinazione
-                dest_text = str(var.get('partita_destinazione_id', '')) if var.get(
-                    'partita_destinazione_id') else "-"
+                variazioni_table.setItem(i, 0, QTableWidgetItem(str(var.get('id', ''))))
+                variazioni_table.setItem(i, 1, QTableWidgetItem(var.get('tipo', '')))
+                variazioni_table.setItem(i, 2, QTableWidgetItem(str(var.get('data_variazione', ''))))
+                dest_text = str(var.get('partita_destinazione_id', '')) if var.get('partita_destinazione_id') else "-"
                 variazioni_table.setItem(i, 3, QTableWidgetItem(dest_text))
-
-                # Contratto info
                 contratto_text = ""
                 if var.get('tipo_contratto'):
                     contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
                     if var.get('notaio'):
                         contratto_text += f" - {var['notaio']}"
-
-                variazioni_table.setItem(
-                    i, 4, QTableWidgetItem(contratto_text))
-
+                variazioni_table.setItem(i, 4, QTableWidgetItem(contratto_text))
         variazioni_layout.addWidget(variazioni_table)
-        variazioni_tab.setLayout(variazioni_layout)
-        tabs.addTab(variazioni_tab, "Variazioni")
+        self.tabs.addTab(variazioni_tab, "Variazioni")
 
-        layout.addWidget(tabs)
+        # Tab Documenti (come prima)
+        self.documents_tab_widget = QWidget()
+        self.documents_tab_layout = QVBoxLayout(self.documents_tab_widget)
+        self.documents_table = QTableWidget()
+        self.documents_table.setColumnCount(6)
+        self.documents_table.setHorizontalHeaderLabels(["ID Doc.", "Titolo", "Tipo Doc.", "Anno", "Rilevanza", "Percorso"])
+        self.documents_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.documents_table.horizontalHeader().setStretchLastSection(True)
+        self.documents_table.setSortingEnabled(True)
+        self.documents_table.itemSelectionChanged.connect(self._update_details_doc_buttons_state)
+        self.documents_tab_layout.addWidget(self.documents_table)
+        
+        doc_buttons_layout = QHBoxLayout()
+        self.btn_apri_doc_details_dialog = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento")
+        self.btn_apri_doc_details_dialog.clicked.connect(self._apri_documento_selezionato_from_details_dialog)
+        self.btn_apri_doc_details_dialog.setEnabled(False)
+        doc_buttons_layout.addWidget(self.btn_apri_doc_details_dialog)
+        doc_buttons_layout.addStretch()
+        self.documents_tab_layout.addLayout(doc_buttons_layout)
+        self.tabs.addTab(self.documents_tab_widget, "Documenti Allegati")
 
-        # Pulsanti
+
+        # --- Sostituzione dei pulsanti di esportazione ---
         buttons_layout = QHBoxLayout()
 
-        export_button = QPushButton("Esporta in JSON")
-        export_button.clicked.connect(self.export_to_json)
+        self.btn_export_txt = QPushButton("Esporta TXT")
+        self.btn_export_txt.clicked.connect(self._export_partita_to_txt)
+        buttons_layout.addWidget(self.btn_export_txt)
+
+        self.btn_export_pdf = QPushButton("Esporta PDF")
+        self.btn_export_pdf.clicked.connect(self._export_partita_to_pdf)
+        self.btn_export_pdf.setEnabled(FPDF_AVAILABLE) # Abilita solo se FPDF è disponibile
+        buttons_layout.addWidget(self.btn_export_pdf)
+
+        # Il pulsante JSON che avevi prima era export_button. Lo rimuoviamo o lo rendiamo PDF/TXT.
+        # export_button = QPushButton("Esporta in JSON")
+        # export_button.clicked.connect(self.export_to_json) # Non più chiamato
+        # buttons_layout.addWidget(export_button) # Rimuovi o commenta questa riga
 
         close_button = QPushButton("Chiudi")
         close_button.clicked.connect(self.accept)
 
-        buttons_layout.addWidget(export_button)
+        buttons_layout.addStretch()
+        # buttons_layout.addWidget(export_button) # Rimosso
         buttons_layout.addWidget(close_button)
 
         layout.addLayout(buttons_layout)
-
         self.setLayout(layout)
-
-    def export_to_json(self):
-        """Esporta i dettagli della partita in formato JSON."""
-        if not self.partita:  # Assicurati che self.partita contenga i dati
-            QMessageBox.warning(self, "Errore Dati",
-                                "Nessun dato della partita da esportare.")
+    
+    def _load_all_data(self):
+        """Carica i dati per tutti i tab."""
+        # Se il db_manager non è stato passato o non è valido
+        if not self.db_manager:
+            self.logger.warning("DB Manager non disponibile, impossibile caricare i dati dei documenti.")
+            # Popola la tabella con un messaggio di errore o lascia vuota
+            self.documents_table.setRowCount(1)
+            item_msg = QTableWidgetItem("DB Manager non disponibile. Impossibile caricare documenti.")
+            item_msg.setTextAlignment(Qt.AlignCenter)
+            self.documents_table.setItem(0, 0, item_msg)
+            self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
             return
 
-        partita_id = self.partita.get(
-            'id', 'sconosciuto')  # Usa .get per sicurezza
+        # Carica i documenti e aggiorna la tabella dei documenti
+        try:
+            documenti_list = self.db_manager.get_documenti_per_partita(self.partita['id'])
+            self.documents_table.setRowCount(0) # Pulisci prima di popolare
 
-        # Usa isoformat per la data nel nome file
-        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json"
+            if documenti_list:
+                self.documents_table.setRowCount(len(documenti_list))
+                for row, doc_data in enumerate(documenti_list):
+                    self.documents_table.setItem(row, 0, QTableWidgetItem(str(doc_data.get('documento_id', ''))))
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc_data.get('titolo', '')))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc_data.get('tipo_documento', '')))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc_data.get('anno', ''))))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc_data.get('rilevanza', '')))
+                    
+                    # Percorso, con un tooltip che mostra il percorso completo
+                    percorso_file_full = doc_data.get('percorso_file', 'N/D')
+                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
+                    path_item.setToolTip(percorso_file_full) # Il tooltip mostrerà il percorso completo
+                    # Salva il percorso completo nell'UserRole per il pulsante "Apri"
+                    path_item.setData(Qt.UserRole, percorso_file_full) 
+                    self.documents_table.setItem(row, 5, path_item)
+                self.documents_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessun documento allegato per la partita ID {self.partita['id']}.")
+                self.documents_table.setRowCount(1)
+                no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
+                no_docs_item.setTextAlignment(Qt.AlignCenter)
+                self.documents_table.setItem(0, 0, no_docs_item)
+                self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento dei documenti per la partita {self.partita['id']}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Documenti", f"Si è verificato un errore durante il caricamento dei documenti: {e}")
+            self.documents_table.setRowCount(1)
+            error_item = QTableWidgetItem("Errore nel caricamento dei documenti.")
+            error_item.setTextAlignment(Qt.AlignCenter)
+            self.documents_table.setItem(0, 0, error_item)
+            self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
+        finally:
+            self.documents_table.setSortingEnabled(True)
+            self._update_document_tab_title() # Aggiorna il titolo del tab con il conteggio
+            self._update_details_doc_buttons_state() # Aggiorna lo stato dei pulsanti Apri
+
+    def _export_partita_to_txt(self):
+        """Esporta i dettagli della partita in formato TXT (testo leggibile)."""
+        if not self.partita:
+            QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
+            return
+
+        partita_id = self.partita.get('id', 'sconosciuto')
+        default_filename = f"dettaglio_partita_{partita_id}_{date.today().isoformat()}.txt"
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Salva JSON Partita",
+            "Salva Dettaglio Partita in TXT",
             default_filename,
-            "JSON files (*.json)"
+            "File di testo (*.txt);;Tutti i file (*)"
         )
 
         if file_path:
             try:
-                # --- INIZIO MODIFICA ---
-                def json_serial(obj):
-                    """JSON serializer per oggetti non serializzabili di default (date/datetime)."""
-                    if isinstance(obj, (datetime, date)):
-                        return obj.isoformat()  # Converte date/datetime in stringa ISO 8601
-                    raise TypeError(
-                        f"Object of type {type(obj).__name__} is not JSON serializable")
-
-                # Usa l'handler personalizzato con json.dumps
-                json_str = json.dumps(
-                    self.partita, indent=4, ensure_ascii=False, default=json_serial)
-                # --- FINE MODIFICA ---
+                # Genera un testo leggibile con le informazioni della partita
+                text_content = self._generate_partita_text_report()
 
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(json_str)
+                    f.write(text_content)
 
                 QMessageBox.information(
-                    self, "Esportazione Completata", f"I dati della partita sono stati salvati in:\n{file_path}")
-            except TypeError as te:  # Cattura specificamente il TypeError se json_serial non copre tutto
-                logging.getLogger("CatastoGUI").error(
-                    f"Errore di serializzazione JSON: {te} - Dati: {self.partita}")
-                QMessageBox.critical(self, "Errore di Serializzazione",
-                                     f"Errore durante la conversione dei dati in JSON: {te}\n"
-                                     "Controllare i log per i dettagli dei dati problematici.")
+                    self, "Esportazione Completata", f"Il dettaglio della partita è stato salvato in:\n{file_path}")
             except Exception as e:
-                logging.getLogger("CatastoGUI").error(
-                    f"Errore durante l'esportazione JSON della partita: {e}")
-                QMessageBox.critical(
-                    self, "Errore Esportazione", f"Errore durante il salvataggio del file JSON:\n{e}")
+                self.logger.error(f"Errore durante l'esportazione TXT del dettaglio partita: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file TXT:\n{e}")
 
+    def _export_partita_to_pdf(self):
+        """Esporta i dettagli della partita in formato PDF."""
+        if not FPDF_AVAILABLE:
+            QMessageBox.critical(self, "Errore Libreria", "La libreria FPDF (fpdf2) non è disponibile per generare PDF.")
+            return
+        if not self.partita:
+            QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
+            return
+
+        partita_id = self.partita.get('id', 'sconosciuto')
+        pdf_report_title = f"Dettaglio Partita N.{self.partita.get('numero_partita', 'N/D')} - Comune: {self.partita.get('comune_nome', 'N/D')}"
+        default_filename_prefix = f"dettaglio_partita_{partita_id}"
+
+        # Genera un testo leggibile per l'anteprima e per il PDF
+        text_content = self._generate_partita_text_report()
+
+        # Usa la classe generica per l'esportazione PDF (che include l'anteprima)
+        # Nota: PDFApreviewDialog e GenericTextReportPDF sono in app_utils
+        preview_dialog = PDFApreviewDialog(text_content, self, title=f"Anteprima: {pdf_report_title}")
+        if preview_dialog.exec_() != QDialog.Accepted:
+            self.logger.info(f"Esportazione PDF per '{pdf_report_title}' annullata dall'utente dopo anteprima.")
+            return
+
+        filename_pdf, _ = QFileDialog.getSaveFileName(
+            self, f"Salva PDF - {pdf_report_title}", f"{default_filename_prefix}_{date.today().isoformat()}.pdf", "File PDF (*.pdf)")
+
+        if filename_pdf:
+            try:
+                pdf = GenericTextReportPDF(report_title=pdf_report_title)
+                pdf.add_page()
+                pdf.add_report_text(text_content)
+                pdf.output(filename_pdf)
+                QMessageBox.information(self, "Esportazione PDF Completata",
+                                        f"Dettaglio partita PDF salvato con successo in:\n{filename_pdf}")
+            except Exception as e:
+                self.logger.error(f"Errore durante la generazione del PDF per il dettaglio partita: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
+
+    def _generate_partita_text_report(self) -> str:
+        """Genera un report testuale formattato con tutti i dettagli della partita."""
+        report_lines = []
+        partita = self.partita
+
+        report_lines.append("="*50)
+        report_lines.append(f"DETTAGLIO PARTITA N. {partita.get('numero_partita', 'N/D')}")
+        report_lines.append(f"Comune: {partita.get('comune_nome', 'N/D')}")
+        report_lines.append(f"ID Partita: {partita.get('id', 'N/D')}")
+        report_lines.append("="*50)
+        report_lines.append(f"Tipo: {partita.get('tipo', 'N/D')}")
+        report_lines.append(f"Stato: {partita.get('stato', 'N/D')}")
+        report_lines.append(f"Data Impianto: {partita.get('data_impianto', 'N/D')}")
+        report_lines.append(f"Data Chiusura: {partita.get('data_chiusura', 'N/D') if partita.get('data_chiusura') else 'N/A'}")
+        report_lines.append(f"Numero Provenienza: {partita.get('numero_provenienza', 'N/A') if partita.get('numero_provenienza') else 'N/A'}")
+        report_lines.append("\n" + "="*50)
+        report_lines.append("POSSESSORI")
+        report_lines.append("="*50)
+        if partita.get('possessori'):
+            for poss in partita['possessori']:
+                report_lines.append(f"  - ID: {poss.get('id')}, Nome: {poss.get('nome_completo')}")
+                report_lines.append(f"    Titolo: {poss.get('titolo')}, Quota: {poss.get('quota', 'N/A')}")
+        else:
+            report_lines.append("  Nessun possessore associato.")
+
+        report_lines.append("\n" + "="*50)
+        report_lines.append("IMMOBILI")
+        report_lines.append("="*50)
+        if partita.get('immobili'):
+            for imm in partita['immobili']:
+                report_lines.append(f"  - ID: {imm.get('id')}, Natura: {imm.get('natura')}")
+                localita_info = f"{imm.get('localita_nome', '')}"
+                if imm.get('civico'): localita_info += f", civ. {imm.get('civico')}"
+                if imm.get('localita_tipo'): localita_info += f" ({imm.get('localita_tipo')})"
+                report_lines.append(f"    Località: {localita_info.strip()}")
+                report_lines.append(f"    Classificazione: {imm.get('classificazione', 'N/A')}, Consistenza: {imm.get('consistenza', 'N/A')}")
+                piani_vani_info = []
+                if imm.get('numero_piani') is not None: piani_vani_info.append(f"Piani: {imm.get('numero_piani')}")
+                if imm.get('numero_vani') is not None: piani_vani_info.append(f"Vani: {imm.get('numero_vani')}")
+                if piani_vani_info: report_lines.append(f"    {' | '.join(piani_vani_info)}")
+        else:
+            report_lines.append("  Nessun immobile associato.")
+
+        report_lines.append("\n" + "="*50)
+        report_lines.append("VARIAZIONI")
+        report_lines.append("="*50)
+        if partita.get('variazioni'):
+            for var in partita['variazioni']:
+                report_lines.append(f"  - ID Variazione: {var.get('id')}")
+                report_lines.append(f"    Tipo: {var.get('tipo')}, Data: {var.get('data_variazione')}")
+                report_lines.append(f"    Partita Origine: {var.get('partita_origine_id', 'N/A')}, Partita Destinazione: {var.get('partita_destinazione_id', 'N/A')}")
+                contr_info = []
+                if var.get('tipo_contratto'): contr_info.append(f"Tipo Contratto: {var.get('tipo_contratto')}")
+                if var.get('data_contratto'): contr_info.append(f"Data Contratto: {var.get('data_contratto')}")
+                if var.get('notaio'): contr_info.append(f"Notaio: {var.get('notaio')}")
+                if var.get('repertorio'): contr_info.append(f"Repertorio: {var.get('repertorio')}")
+                if contr_info: report_lines.append(f"    Contratto: {' | '.join(contr_info)}")
+                if var.get('note') : report_lines.append(f"    Note: {var.get('note')}")
+        else:
+            report_lines.append("  Nessuna variazione registrata.")
+
+        report_lines.append("\n" + "="*50)
+        report_lines.append(f"DOCUMENTI ALLEGATI ({self.documents_table.rowCount() if self.documents_table.item(0,0) and 'Nessun documento' not in self.documents_table.item(0,0).text() else 0})")
+        report_lines.append("="*50)
+        # Assicurati che self.documents_table.rowCount() sia preciso
+        if self.documents_table.rowCount() > 0 and self.documents_table.item(0,0) and "Nessun documento" not in self.documents_table.item(0,0).text():
+            for r in range(self.documents_table.rowCount()):
+                doc_id = self.documents_table.item(r,0).text()
+                titolo = self.documents_table.item(r,1).text()
+                tipo_doc = self.documents_table.item(r,2).text()
+                anno = self.documents_table.item(r,3).text()
+                rilevanza = self.documents_table.item(r,4).text()
+                percorso_short = self.documents_table.item(r,5).text()
+                report_lines.append(f"  - ID: {doc_id}, Titolo: {titolo}")
+                report_lines.append(f"    Tipo: {tipo_doc}, Anno: {anno}, Rilevanza: {rilevanza}")
+                report_lines.append(f"    Percorso (locale): {percorso_short}")
+        else:
+            report_lines.append("  Nessun documento allegato.")
+
+
+        report_lines.append("\n" + "="*50)
+        report_lines.append("FINE DETTAGLIO PARTITA")
+        report_lines.append("="*50)
+
+        return "\n".join(report_lines)
+    def _update_document_tab_title(self):
+        """Aggiorna il titolo del tab "Documenti Allegati" con il conteggio."""
+        count = self.documents_table.rowCount()
+        # Se la tabella ha solo 1 riga e il testo è "Nessun documento allegato..." allora il conteggio è 0
+        if count == 1 and self.documents_table.item(0,0) and "Nessun documento" in self.documents_table.item(0,0).text():
+            count = 0
+        
+        tab_index = self.tabs.indexOf(self.documents_tab_widget)
+        if tab_index != -1:
+            self.tabs.setTabText(tab_index, f"Documenti Allegati ({count})")
+            self.logger.info(f"Titolo tab documenti aggiornato a 'Documenti Allegati ({count})'.")
+
+
+    def _update_details_doc_buttons_state(self):
+        """Abilita/disabilita il pulsante 'Apri Documento' in base alla selezione."""
+        has_selection = bool(self.documents_table.selectedItems())
+        self.btn_apri_doc_details_dialog.setEnabled(has_selection)
+
+    def _apri_documento_selezionato_from_details_dialog(self):
+        selected_items = self.documents_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
+            return
+        
+        row = self.documents_table.currentRow()
+        percorso_file_item = self.documents_table.item(row, 5) 
+        if percorso_file_item:
+            percorso_file_completo = percorso_file_item.data(Qt.UserRole) # Recupera il percorso completo salvato
+            
+            if os.path.exists(percorso_file_completo):
+                from PyQt5.QtGui import QDesktopServices
+                from PyQt5.QtCore import QUrl
+                success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
+                if not success:
+                    QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il file:\n{percorso_file_completo}\nVerificare che sia installata un'applicazione associata o che i permessi siano corretti.")
+            else:
+                QMessageBox.warning(self, "File Non Trovato", f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}\nIl file potrebbe essere stato spostato o eliminato.")
+        else:
+            QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
 
 class ModificaPartitaDialog(QDialog):
+    
     def __init__(self, db_manager: CatastoDBManager, partita_id: int, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}") # AGGIUNGI QUESTA RIGA
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         self.db_manager = db_manager
         self.partita_id = partita_id
         self.partita_data_originale = None
-        self.problematic_default_date_db = date(
-            2000, 1, 1)  # Definiamo la data problematica
+        self.problematic_default_date_db = date(2000, 1, 1)
 
         self.setWindowTitle(f"Modifica Partita ID: {self.partita_id}")
         self.setMinimumWidth(600)
         self.setMinimumHeight(500)
 
-        self._init_ui()  # Chiama l'inizializzazione dell'UI
-        self._load_partita_data()  # Carica i dati della partita
-        self._load_possessori_associati()  # Carica i possessori per il tab
+        self._init_ui()
+        self._load_partita_data()
+        self._load_possessori_associati()
+        self._load_documenti_allegati() # Questa chiamata popola la tabella e abilita i pulsanti inizialmente
+        # Aggiungi una riga per assicurarti che lo stato dei pulsanti documenti sia corretto
+        # dopo il caricamento iniziale e l'eventuale reset della selezione da _load_documenti_allegati
+        self._aggiorna_stato_pulsanti_documenti()
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -6230,37 +6437,35 @@ class ModificaPartitaDialog(QDialog):
         layout_documenti = QVBoxLayout(self.tab_documenti)
 
         self.documenti_table = QTableWidget()
-        self.documenti_table.setColumnCount(6) # Adatta colonne se necessario
+        self.documenti_table.setColumnCount(6)
         self.documenti_table.setHorizontalHeaderLabels(
             ["ID Doc.", "Titolo", "Tipo Doc.", "Anno", "Rilevanza", "Percorso/Azione"])
         self.documenti_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.documenti_table.setSelectionBehavior(QTableWidget.SelectRows)
-        # self.documenti_table.itemDoubleClicked.connect(self._apri_documento_selezionato)
+        # Connetti il segnale per abilitare/disabilitare i pulsanti
+        self.documenti_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_documenti)
         layout_documenti.addWidget(self.documenti_table)
 
         doc_buttons_layout = QHBoxLayout()
-        btn_allega_nuovo = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileLinkIcon), "Allega Nuovo Documento...")
-        btn_allega_nuovo.clicked.connect(self._allega_nuovo_documento_a_partita)
-        doc_buttons_layout.addWidget(btn_allega_nuovo)
+        self.btn_allega_nuovo = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileLinkIcon), "Allega Nuovo Documento...")
+        self.btn_allega_nuovo.clicked.connect(self._allega_nuovo_documento_a_partita)
+        doc_buttons_layout.addWidget(self.btn_allega_nuovo)
 
-        btn_apri_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento Selezionato")
-        btn_apri_doc.clicked.connect(self._apri_documento_selezionato)
-        doc_buttons_layout.addWidget(btn_apri_doc)
-         # Riattiva e connetti il pulsante scollega
+        self.btn_apri_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento Selezionato")
+        self.btn_apri_doc.clicked.connect(self._apri_documento_selezionato)
+        self.btn_apri_doc.setEnabled(False) # Inizialmente disabilitato
+        doc_buttons_layout.addWidget(self.btn_apri_doc)
+        
         self.btn_scollega_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_TrashIcon), "Scollega Documento")
         self.btn_scollega_doc.clicked.connect(self._scollega_documento_selezionato)
         self.btn_scollega_doc.setEnabled(False) # Inizialmente disabilitato
         doc_buttons_layout.addWidget(self.btn_scollega_doc)
+        
         doc_buttons_layout.addStretch()
         layout_documenti.addLayout(doc_buttons_layout)
         
         self.tab_widget.addTab(self.tab_documenti, "Documenti Allegati")
 
-        # Nell'__init__ di ModificaPartitaDialog, dopo _load_partita_data():
-        # self._load_documenti_allegati()
-        
-        
-        
         self.setLayout(main_layout)
 
     def _load_partita_data(self):
@@ -6444,30 +6649,60 @@ class ModificaPartitaDialog(QDialog):
         has_selection = bool(self.possessori_table.selectedItems())
         self.btn_modifica_legame_possessore.setEnabled(has_selection)
         self.btn_rimuovi_possessore.setEnabled(has_selection)
-
     def _load_documenti_allegati(self):
         self.documenti_table.setRowCount(0)
-        if not self.partita_id: return
+        self.documenti_table.setSortingEnabled(False)
+        self.documenti_table.clearSelection() # Pulisce la selezione prima di ricaricare i dati
+        
+        if not self.partita_id:
+            self.logger.warning("Partita ID non disponibile per caricare documenti allegati.")
+            self._aggiorna_stato_pulsanti_documenti() # Assicura che i pulsanti siano disabilitati
+            return
 
         try:
             documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
+            
             self.documenti_table.setRowCount(len(documenti))
-            for row, doc in enumerate(documenti):
-                self.documenti_table.setItem(row, 0, QTableWidgetItem(str(doc.get("documento_id"))))
-                self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
-                self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
-                self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
-                self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
-                # La colonna percorso_file potrebbe contenere il nome del file o un pulsante "Apri"
-                # Per ora, mostriamo il percorso (o parte di esso)
-                path_item = QTableWidgetItem(doc.get("percorso_file", "N/D"))
-                path_item.setData(Qt.UserRole, doc.get("percorso_file")) # Salva percorso completo
-                self.documenti_table.setItem(row, 5, path_item)
-            self.documenti_table.resizeColumnsToContents()
+            if documenti:
+                for row, doc in enumerate(documenti):
+                    documento_id_storico = doc.get("documento_id")
+                    # dp_documento_id_rel sarà uguale a documento_id_storico per questa riga
+                    dp_documento_id_rel = doc.get("dp_documento_id") 
+                    dp_partita_id_rel = doc.get("dp_partita_id")
+                    
+                    item_doc_id = QTableWidgetItem(str(documento_id_storico))
+                    # Salva gli ID della relazione composta in UserRole per il pulsante scollega
+                    item_doc_id.setData(Qt.UserRole + 1, documento_id_storico)
+                    item_doc_id.setData(Qt.UserRole + 2, self.partita_id) # Usiamo self.partita_id per la partita_id_rel
+                    
+                    self.documenti_table.setItem(row, 0, item_doc_id)
+                    
+                    self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
+                    self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
+                    self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
+                    self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
+                    
+                    percorso_file_full = doc.get("percorso_file")
+                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
+                    path_item.setData(Qt.UserRole, percorso_file_full)
+                    self.documenti_table.setItem(row, 5, path_item)
+                
+                self.documenti_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessun documento trovato per la partita ID {self.partita_id}.")
+                self.documenti_table.setRowCount(1)
+                no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
+                no_docs_item.setTextAlignment(Qt.AlignCenter)
+                self.documenti_table.setItem(0, 0, no_docs_item)
+                self.documenti_table.setSpan(0, 0, 1, self.documenti_table.columnCount())
+
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Impossibile caricare documenti allegati: {e}")
-            logging.getLogger("CatastoGUI").error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
-
+            self.logger.error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
+        finally:
+            self.documenti_table.setSortingEnabled(True)
+            # Chiamata qui per assicurarsi che i pulsanti abbiano lo stato corretto dopo il caricamento
+            self._aggiorna_stato_pulsanti_documenti()
     def _allega_nuovo_documento_a_partita(self):
         dialog = AggiungiDocumentoDialog(self.db_manager, self.partita_id, self)
         if dialog.exec_() == QDialog.Accepted and dialog.document_data:
@@ -6557,13 +6792,11 @@ class ModificaPartitaDialog(QDialog):
 
     # Dovrai chiamare self._load_documenti_allegati() quando il dialogo ModificaPartitaDialog 
     # viene caricato (es. in _load_partita_data() o subito dopo).
-    
-# All'interno della classe ModificaPartitaDialog in prova.py
     def _aggiorna_stato_pulsanti_documenti(self):
         """Abilita/disabilita i pulsanti di azione sui documenti in base alla selezione nella tabella."""
         has_selection = bool(self.documenti_table.selectedItems())
+        self.logger.debug(f"_aggiorna_stato_pulsanti_documenti chiamato. has_selection: {has_selection}")
         self.btn_scollega_doc.setEnabled(has_selection)
-        # Potresti voler abilitare/disabilitare anche btn_apri_doc qui
         self.btn_apri_doc.setEnabled(has_selection)
 
     def _scollega_documento_selezionato(self):
@@ -6573,96 +6806,45 @@ class ModificaPartitaDialog(QDialog):
             return
 
         row = self.documenti_table.currentRow()
-        # L'ID del documento storico è nella prima colonna
-        documento_id = int(self.documenti_table.item(row, 0).text())
-        # L'ID della relazione documento_partita non è direttamente visibile, ma possiamo recuperarlo dal DB
-        # o modificarci il metodo get_documenti_per_partita per restituirlo.
-        # Per ora, si assume che get_documenti_per_partita restituisca i dati che includono l'ID della relazione.
-        # Se non lo fa, dovrai recuperarlo prima di chiamare il db_manager.
 
-        # Miglioramento: Modifica _load_documenti_allegati per salvare l'ID della relazione
-        # in UserRole della prima colonna, come fai per i possessori.
-        # Oppure, se get_documenti_per_partita non restituisce l'ID della relazione,
-        # dovrai fare una query aggiuntiva per ottenerlo prima di scollegare.
-
-        # Assumiamo temporaneamente che la prima colonna (ID Doc.) sia l'ID della relazione per semplicità di esempio.
-        # In un'implementazione robusta, recupereresti l'ID della relazione da un dato nascosto o una query.
-        
-        # Recupera l'ID della relazione (documento_partita.id) dal dato salvato nell'item
-        # Questo richiede una modifica a _load_documenti_allegati per salvare anche questo ID.
-        documento_partita_id_rel = self.documenti_table.item(row, 0).data(Qt.UserRole + 1) # Assumiamo UserRole + 1 per l'ID della relazione
-
-        if documento_partita_id_rel is None:
-            QMessageBox.critical(self, "Errore Interno", "ID della relazione del documento non disponibile. Impossibile scollegare.")
-            self.logger.error(f"ID relazione documento-partita non recuperato dalla tabella per scollegamento di documento ID {documento_id}.")
-            return
+        # Recupera gli ID compositi salvati in _load_documenti_allegati
+        documento_id_to_unlink = self.documenti_table.item(row, 0).data(Qt.UserRole + 1)
+        partita_id_to_unlink = self.documenti_table.item(row, 0).data(Qt.UserRole + 2) # Questo dovrebbe essere self.partita_id
 
         titolo_documento = self.documenti_table.item(row, 1).text() # Titolo del documento
 
+        if documento_id_to_unlink is None or partita_id_to_unlink is None:
+            QMessageBox.critical(self, "Errore Interno", "ID del documento o della partita non disponibili. Impossibile scollegare.")
+            self.logger.error(f"ID relazione documento-partita non recuperati dalla tabella per scollegamento.")
+            return
+
         reply = QMessageBox.question(self, "Conferma Scollegamento",
-                                     f"Sei sicuro di voler scollegare il documento '{titolo_documento}' (ID Documento: {documento_id}) da questa partita?\n\n"
-                                     "Il file fisico NON verrà eliminato, solo il collegamento logico nel database.",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        
+                                    f"Sei sicuro di voler scollegare il documento '{titolo_documento}' (ID Documento: {documento_id_to_unlink}) da questa partita?\n\n"
+                                    "Il file fisico NON verrà eliminato, solo il collegamento logico nel database.",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
         if reply == QMessageBox.Yes:
-            self.logger.info(f"Tentativo di scollegare relazione documento-partita ID {documento_partita_id_rel} (Documento ID: {documento_id}) dalla partita {self.partita_id}.")
+            self.logger.info(f"Tentativo di scollegare documento ID {documento_id_to_unlink} dalla partita {partita_id_to_unlink}.")
             try:
-                success = self.db_manager.scollega_documento_da_partita(documento_partita_id_rel)
+                # Chiama il db_manager con i due ID
+                success = self.db_manager.scollega_documento_da_partita(documento_id_to_unlink, partita_id_to_unlink)
                 if success:
                     QMessageBox.information(self, "Successo", f"Documento '{titolo_documento}' scollegato con successo dalla partita.")
                     self._load_documenti_allegati() # Ricarica la tabella per aggiornare la visualizzazione
                 # else: Il metodo db_manager solleva eccezioni in caso di errore, quindi l'else non è strettamente necessario qui.
             except DBNotFoundError as nfe:
-                self.logger.warning(f"Scollegamento documento fallito: relazione ID {documento_partita_id_rel} non trovata. {nfe.message}")
+                self.logger.warning(f"Scollegamento documento fallito: relazione tra documento {documento_id_to_unlink} e partita {partita_id_to_unlink} non trovata. {nfe.message}")
                 QMessageBox.warning(self, "Errore", f"Impossibile scollegare: {nfe.message}. Il documento potrebbe essere già stato scollegato.")
                 self._load_documenti_allegati() # Aggiorna la tabella comunque
             except DBMError as dbe:
-                self.logger.error(f"Errore DB durante lo scollegamento del documento {documento_id}: {dbe.message}", exc_info=True)
+                self.logger.error(f"Errore DB durante lo scollegamento del documento {documento_id_to_unlink}: {dbe.message}", exc_info=True)
                 QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore durante lo scollegamento:\n{dbe.message}")
             except Exception as e:
-                self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento {documento_id}: {e}", exc_info=True)
+                self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento {documento_id_to_unlink}: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore di sistema: {e}")
 
     # Aggiorna il metodo _load_documenti_allegati per recuperare e salvare l'ID della relazione
-    def _load_documenti_allegati(self):
-        self.documenti_table.setRowCount(0)
-        self.documenti_table.setSortingEnabled(False) # Disabilita per il popolamento
-        if not self.partita_id: return
-
-        try:
-            # Modifica la query in catasto_db_manager.py (get_documenti_per_partita)
-            # per includere anche l'ID della relazione documento_partita.
-            # Ad esempio, la query dovrebbe selezionare anche dp.id AS documento_partita_id_rel.
-            documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
-            
-            self.documenti_table.setRowCount(len(documenti))
-            for row, doc in enumerate(documenti):
-                # Assicurati che 'documento_partita_id_rel' sia restituito dal DBManager
-                documento_partita_id_rel = doc.get("documento_partita_id_rel") 
-
-                item_doc_id = QTableWidgetItem(str(doc.get("documento_id")))
-                # Salva l'ID della relazione (documento_partita.id) in UserRole + 1 per il pulsante scollega
-                item_doc_id.setData(Qt.UserRole + 1, documento_partita_id_rel)
-                self.documenti_table.setItem(row, 0, item_doc_id)
-                
-                self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
-                self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
-                self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
-                self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
-                
-                # La colonna percorso_file potrebbe contenere il nome del file o un pulsante "Apri"
-                percorso_file_full = doc.get("percorso_file")
-                path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
-                path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
-                self.documenti_table.setItem(row, 5, path_item)
-            
-            self.documenti_table.resizeColumnsToContents()
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Impossibile caricare documenti allegati: {e}")
-            self.logger.error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
-        finally:
-            self.documenti_table.setSortingEnabled(True)
-            self._aggiorna_stato_pulsanti_documenti() # Aggiorna lo stato dei pulsanti dopo il caricamento
+    
     def _load_possessori_associati(self):
         self.possessori_table.setRowCount(0)
         self.possessori_table.setSortingEnabled(False)
@@ -8248,19 +8430,19 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont # Per i titoli
 
 class LandingPageWidget(QWidget):
-    # Definisci segnali per ogni azione/pulsante che deve cambiare il tab nella main window
+    # Definisci TUTTI i segnali che vengono emessi da questa pagina
     apri_elenco_comuni_signal = pyqtSignal()
     apri_ricerca_partite_signal = pyqtSignal()
     apri_ricerca_possessori_signal = pyqtSignal()
     apri_registra_proprieta_signal = pyqtSignal()
     apri_registra_possessore_signal = pyqtSignal()
     apri_registra_consultazione_signal = pyqtSignal()
-    apri_report_proprieta_signal = pyqtSignal()
-    apri_report_genealogico_signal = pyqtSignal()
-    # Aggiungi altri segnali se necessario
+    apri_certificato_proprieta_signal = pyqtSignal() # Questo era mancante
+    apri_report_genealogico_signal = pyqtSignal()    # Questo era mancante
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         self.initUI()
 
     def initUI(self):
@@ -8274,42 +8456,49 @@ class LandingPageWidget(QWidget):
         #    e il logo sia in una sottocartella 'resources'.
 
         try:
-            # Percorso base della directory contenente questo script (gui_widgets.py)
             base_dir = os.path.dirname(os.path.abspath(__file__))
             
-            # Percorso al file del logo (modifica "resources" e "logo_meridiana.svg" se necessario)
-            logo_path = os.path.join(base_dir, "resources", "logo_meridiana.svg")
+            # Percorso al file dell'immagine (PNG o JPG)
+            logo_path = os.path.join(base_dir, "resources", "logo_meridiana.png") # Assicurati che questo percorso sia corretto e il file esista
 
-            # Se il logo fosse nella stessa cartella di gui_widgets.py:
-            # logo_path = os.path.join(base_dir, "logo_meridiana.svg")
-
-            self.logo_widget = QSvgWidget() # Crea l'istanza
-
+            self.logo_widget = QLabel() # Inizializza come QLabel
+            
             if os.path.exists(logo_path):
-                self.logo_widget.load(logo_path) # Carica l'SVG dal file specificato
+                pixmap = QPixmap(logo_path)
+                if not pixmap.isNull():
+                    # Definire le nuove dimensioni desiderate per il logo (es. 250x250 o 300x300)
+                    # Ho aumentato da 150 a 250. Puoi sperimentare con valori maggiori.
+                    new_width = 250
+                    new_height = 140
+
+                    # Scala l'immagine per adattarla alle dimensioni desiderate
+                    # Qt.KeepAspectRatio: mantiene le proporzioni per evitare distorsioni.
+                    # Qt.SmoothTransformation: usa un algoritmo di scalatura di alta qualità.
+                    scaled_pixmap = pixmap.scaled(new_width, new_height,
+                                                  Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    self.logo_widget.setPixmap(scaled_pixmap)
+                    self.logo_widget.setAlignment(Qt.AlignCenter) # Centra l'immagine all'interno della QLabel
+                else:
+                    self.logger.error(f"Impossibile caricare QPixmap dal file: {logo_path}. Il file potrebbe essere corrotto o non un'immagine valida.")
+                    self.logo_widget.setText("Errore caricamento immagine")
+                    self.logo_widget.setAlignment(Qt.AlignCenter)
+                    self.logo_widget.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             else:
-                messaggio_errore = f"ERRORE: File logo SVG non trovato in:\n{logo_path}\nAssicurati che il file esista e il percorso sia corretto."
-                print(messaggio_errore) # Logga l'errore sulla console
-                # Crea un QLabel come fallback per indicare che il logo non è stato trovato
-                self.logo_widget = QLabel("Logo non caricato") # Sovrascrive QSvgWidget con un QLabel
+                self.logger.error(f"File logo immagine non trovato in:\n{logo_path}")
+                self.logo_widget.setText("Logo non caricato")
                 self.logo_widget.setAlignment(Qt.AlignCenter)
                 self.logo_widget.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-                # Potresti voler anche impostare una dimensione fissa per il messaggio di errore
-                # self.logo_widget.setFixedSize(150, 50)
-
 
         except Exception as e:
-            # Gestione generica delle eccezioni durante il caricamento del logo
-            print(f"Eccezione durante il caricamento del logo: {e}")
+            self.logger.error(f"Eccezione durante il caricamento del logo (tentativo con QPixmap): {e}", exc_info=True)
             self.logo_widget = QLabel("Errore caricamento logo")
             self.logo_widget.setAlignment(Qt.AlignCenter)
             self.logo_widget.setStyleSheet("QLabel { color: red; }")
 
+        # Imposta le dimensioni fisse del widget contenitore (QLabel)
+        # Queste devono corrispondere o essere leggermente superiori alle dimensioni di scalatura del pixmap
+        self.logo_widget.setFixedSize(new_width, new_height) # Usa le stesse dimensioni di scalatura
 
-        # 2. Imposta le dimensioni del logo (come prima)
-        #    Anche se il logo non viene caricato, impostare una dimensione fissa
-        #    sul widget (che sia QSvgWidget o QLabel di fallback) aiuta a mantenere il layout.
-        self.logo_widget.setFixedSize(150, 150) 
 
         # 3. Aggiungi il logo al layout (come prima)
         logo_container_layout = QHBoxLayout()
@@ -8380,20 +8569,157 @@ class LandingPageWidget(QWidget):
         operazioni_layout.addWidget(btn_reg_consultazione)
         grid_layout.addWidget(operazioni_group, 0, 1)
 
-        # Sezione Report (Opzionale)
+        # Sezione Report Principali (assicurati che i pulsanti siano collegati ai segnali corretti)
         report_group = QGroupBox("Report Principali")
         report_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         report_layout = QVBoxLayout(report_group)
         report_layout.setSpacing(10)
 
-        btn_cert_proprieta = QPushButton("Genera Report Proprietà")
-        btn_cert_proprieta.clicked.connect(self.apri_report_proprieta_signal.emit)
+        btn_cert_proprieta = QPushButton("Genera Certificato Proprietà")
+        btn_cert_proprieta.clicked.connect(self.apri_certificato_proprieta_signal.emit) # <--- COLLEGAMENTO
         report_layout.addWidget(btn_cert_proprieta)
 
         btn_rep_genealogico = QPushButton("Genera Report Genealogico")
-        btn_rep_genealogico.clicked.connect(self.apri_report_genealogico_signal.emit)
+        btn_rep_genealogico.clicked.connect(self.apri_report_genealogico_signal.emit) # <--- COLLEGAMENTO
         report_layout.addWidget(btn_rep_genealogico)
         grid_layout.addWidget(report_group, 1, 0, 1, 2) # Span su due colonne
 
-        main_layout.addStretch() # Spinge tutto in alto
+        main_layout.addStretch()
         self.setLayout(main_layout)
+
+class WelcomeScreen(QDialog):
+    def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
+        super().__init__(parent)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self.setWindowTitle("Benvenuto - Catasto Storico")
+        self.setModal(True) # Rende il dialogo modale, blocca l'interazione con la finestra principale sottostante
+        self.setFixedSize(800, 600) # Dimensione fissa per la splash screen
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint) # Senza bordi, sempre in primo piano
+        self.setAttribute(Qt.WA_DeleteOnClose) # Assicura che il widget venga distrutto alla chiusura
+
+        self.logo_path = logo_path
+        self.help_url = help_url
+
+        self._init_ui()
+        self.start_timer()
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(50, 50, 50, 50) # Margini interni per estetica
+        main_layout.setSpacing(30) # Spazio tra gli elementi
+
+        # --- Sezione Logo ---
+        logo_container_layout = QHBoxLayout()
+        logo_container_layout.addStretch()
+        
+        self.logo_label = QLabel()
+        if self.logo_path and os.path.exists(self.logo_path):
+            pixmap = QPixmap(self.logo_path)
+            if not pixmap.isNull():
+                # Scala il logo per essere ben visibile nella splash screen (es. 300x300 o 400x400)
+                # Adatta queste dimensioni in base alla tua immagine e al layout desiderato
+                scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.logo_label.setPixmap(scaled_pixmap)
+                self.logo_label.setAlignment(Qt.AlignCenter)
+                self.logger.info(f"Logo caricato con successo nella Welcome Screen da: {self.logo_path}")
+            else:
+                self.logger.warning(f"QPixmap vuoto per il logo in Welcome Screen: {self.logo_path}")
+                self.logo_label.setText("Logo non caricato")
+                self.logo_label.setAlignment(Qt.AlignCenter)
+                self.logo_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+        else:
+            self.logger.warning(f"Percorso logo non valido o file non trovato per Welcome Screen: {self.logo_path}")
+            self.logo_label.setText("Logo non disponibile")
+            self.logo_label.setAlignment(Qt.AlignCenter)
+            self.logo_label.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
+            
+        logo_container_layout.addWidget(self.logo_label)
+        logo_container_layout.addStretch()
+        main_layout.addLayout(logo_container_layout)
+
+        # --- Sezione Titolo App ---
+        title_label = QLabel("Gestionale Catasto Storico")
+        title_font = QFont("Segoe UI", 24, QFont.Bold)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title_label)
+
+        subtitle_label = QLabel("Archivio di Stato di Savona")
+        subtitle_font = QFont("Segoe UI", 16)
+        subtitle_label.setFont(subtitle_font)
+        subtitle_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(subtitle_label)
+
+        main_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)) # Spazio flessibile
+
+        # --- Sezione Crediti ---
+        credits_label = QLabel(
+            "Sviluppato da: Marco Santoro\n"
+            "Copyright © 2025 - Tutti i diritti riservati\n"
+            "Concesso in comodato d'uso gratuito all'Archivio di Stato di Savona"
+        )
+        credits_font = QFont("Segoe UI", 10)
+        credits_label.setFont(credits_font)
+        credits_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(credits_label)
+
+        # --- Sezione Link a Manuale/Help ---
+        if self.help_url:
+            help_button = QPushButton("Apri Manuale / Guida")
+            help_button.setFont(QFont("Segoe UI", 12))
+            help_button.setFixedSize(200, 40) # Dimensione fissa per il pulsante
+            help_button.clicked.connect(self._open_help_url)
+            
+            help_button_layout = QHBoxLayout()
+            help_button_layout.addStretch()
+            help_button_layout.addWidget(help_button)
+            help_button_layout.addStretch()
+            main_layout.addLayout(help_button_layout)
+        else:
+            self.logger.info("Nessun URL di aiuto fornito, il pulsante manuale non sarà visualizzato.")
+
+
+        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)) # Spazio fisso in basso
+
+        # Stile per il dialogo (opzionale, per un look più moderno)
+        self.setStyleSheet("""
+            WelcomeScreen {
+                background-color: #f0f0f0; /* Grigio chiaro */
+                border: 2px solid #0078D4; /* Bordo blu */
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #333333;
+            }
+            QPushButton {
+                background-color: #0078D4;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #005A9E;
+            }
+        """)
+
+    def _open_help_url(self):
+        if self.help_url:
+            try:
+                QDesktopServices.openUrl(QUrl(self.help_url))
+                self.logger.info(f"Apertura URL di aiuto: {self.help_url}")
+            except Exception as e:
+                self.logger.error(f"Errore nell'apertura dell'URL: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore", f"Impossibile aprire il link al manuale: {e}")
+
+    def start_timer(self):
+        # Il timer chiuderà la splash screen automaticamente dopo un certo tempo
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True) # Si attiva una sola volta
+        self.timer.timeout.connect(self.accept) # Chiude il dialogo quando il timer scade
+        self.timer.start(5000) # 3000 ms = 3 secondi. Adatta il tempo se necessario.
+        self.logger.info("Timer per la Welcome Screen avviato (3 secondi).")
+
+    def mousePressEvent(self, event):
+        # Permetti di chiudere la splash screen cliccando su di essa
+        self.accept()

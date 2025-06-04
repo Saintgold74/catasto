@@ -4481,16 +4481,19 @@ class CatastoDBManager:
     def get_documenti_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
         """Recupera l'elenco dei documenti (con dettagli) associati a una partita."""
         query = f"""
-            SELECT 
-                ds.id as documento_id, 
-                ds.titolo, 
-                ds.tipo_documento, 
-                ds.percorso_file, 
+            SELECT
+                ds.id as documento_id,
+                ds.titolo,
+                ds.tipo_documento,
+                ds.percorso_file,
                 ds.anno,
-                dp.id as documento_partita_id_rel, -- AGGIUNGI QUESTA LINEA per ottenere l'ID della relazione
-                dp.rilevanza, 
+                -- dp.id as documento_partita_id_rel, -- QUESTA RIGA NON DEVE ESSERE PRESENTE
+                dp.rilevanza,
                 dp.note as note_legame,
-                ps.nome as nome_periodo
+                ps.nome as nome_periodo,
+                -- Aggiungi gli ID della relazione composita
+                dp.documento_id as dp_documento_id,
+                dp.partita_id as dp_partita_id
             FROM {self.schema}.documento_storico ds
             JOIN {self.schema}.documento_partita dp ON ds.id = dp.documento_id
             LEFT JOIN {self.schema}.periodo_storico ps ON ds.periodo_id = ps.id
@@ -4502,6 +4505,7 @@ class CatastoDBManager:
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_documenti_per_partita per partita_id {partita_id}: {cur.mogrify(query, (partita_id,)).decode('utf-8', 'ignore')}")
                 cur.execute(query, (partita_id,))
                 documenti = [dict(row) for row in cur.fetchall()]
                 self.logger.info(f"Recuperati {len(documenti)} documenti per partita ID {partita_id}.")
@@ -4514,42 +4518,43 @@ class CatastoDBManager:
         finally:
             if conn: self._release_connection(conn)
         return documenti
-    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
 
-    def scollega_documento_da_partita(self, documento_partita_id: int) -> bool:
+    def scollega_documento_da_partita(self, documento_id: int, partita_id: int) -> bool:
         """
-        Rimuove un legame documento-partita dalla tabella documento_partita.
-        Solleva eccezioni specifiche in caso di errore.
+        Rimuove un legame documento-partita dalla tabella documento_partita usando la chiave primaria composta.
         """
-        if not (isinstance(documento_partita_id, int) and documento_partita_id > 0):
-            self.logger.error(f"scollega_documento_da_partita: ID relazione documento-partita non valido: {documento_partita_id}")
-            raise DBDataError(f"ID relazione documento-partita non valido: {documento_partita_id}")
+        if not (isinstance(documento_id, int) and documento_id > 0):
+            self.logger.error(f"scollega_documento_da_partita: ID documento non valido: {documento_id}")
+            raise DBDataError(f"ID documento non valido: {documento_id}")
+        if not (isinstance(partita_id, int) and partita_id > 0):
+            self.logger.error(f"scollega_documento_da_partita: ID partita non valido: {partita_id}")
+            raise DBDataError(f"ID partita non valido: {partita_id}")
 
-        query = f"DELETE FROM {self.schema}.documento_partita WHERE id = %s;"
+        query = f"DELETE FROM {self.schema}.documento_partita WHERE documento_id = %s AND partita_id = %s;"
         conn = None
         try:
             conn = self._get_connection()
             with conn.cursor() as cur:
-                self.logger.debug(f"Esecuzione query scollega_documento_da_partita ID {documento_partita_id}: {cur.mogrify(query, (documento_partita_id,)).decode('utf-8', 'ignore')}")
-                cur.execute(query, (documento_partita_id,))
-                
+                self.logger.debug(f"Esecuzione query scollega_documento_da_partita per doc_id={documento_id}, part_id={partita_id}: {cur.mogrify(query, (documento_id, partita_id)).decode('utf-8', 'ignore')}")
+                cur.execute(query, (documento_id, partita_id))
+
                 if cur.rowcount == 0:
                     conn.rollback()
-                    self.logger.warning(f"Tentativo di scollegare documento-partita ID {documento_partita_id} non trovato.")
-                    raise DBNotFoundError(f"Nessun legame documento-partita trovato con ID {documento_partita_id} da scollegare.")
-                
+                    self.logger.warning(f"Tentativo di scollegare documento-partita doc_id={documento_id} da partita_id={partita_id} non trovato.")
+                    raise DBNotFoundError(f"Nessun legame documento-partita trovato tra documento ID {documento_id} e partita ID {partita_id} da scollegare.")
+
                 conn.commit()
-                self.logger.info(f"Legame documento-partita ID {documento_partita_id} scollegato con successo. Righe modificate: {cur.rowcount}")
+                self.logger.info(f"Legame documento doc_id={documento_id} a partita_id={partita_id} scollegato con successo. Righe modificate: {cur.rowcount}")
                 return True
 
         except psycopg2.Error as e:
             if conn: conn.rollback()
             error_detail = getattr(e, 'pgerror', str(e))
-            self.logger.error(f"Errore DB scollegando documento-partita {documento_partita_id}: {error_detail}", exc_info=True)
+            self.logger.error(f"Errore DB scollegando documento doc_id={documento_id} da partita_id={partita_id}: {error_detail}", exc_info=True)
             raise DBMError(f"Errore database durante lo scollegamento del documento: {error_detail}") from e
         except Exception as e:
             if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore imprevisto scollegando documento-partita {documento_partita_id}: {e}", exc_info=True)
+            self.logger.error(f"Errore imprevisto scollegando documento doc_id={documento_id} da partita_id={partita_id}: {e}", exc_info=True)
             raise DBMError(f"Errore di sistema imprevisto: {e}") from e
         finally:
             if conn:

@@ -122,7 +122,7 @@ SETTINGS_DB_PASSWORD = "Database/Password"
 MODERN_STYLESHEET = """
     * {
         font-family: Segoe UI, Arial, sans-serif; /* Font più moderno, fallback a sans-serif */
-        font-size: 11pt;
+        font-size: 10pt;
         color: #333333; /* Testo scuro di default */
     }
     QMainWindow {
@@ -935,7 +935,7 @@ class CatastoMainWindow(QMainWindow):
 
         if self.landing_page_widget:
             self.landing_page_widget.apri_elenco_comuni_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Elenco Comuni"))
+                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Principale"))
             self.landing_page_widget.apri_ricerca_partite_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite"))
             self.landing_page_widget.apri_ricerca_possessori_signal.connect(
@@ -956,7 +956,7 @@ class CatastoMainWindow(QMainWindow):
         self.elenco_comuni_widget_ref = ElencoComuniWidget(
             self.db_manager, self.consultazione_sub_tabs)
         self.consultazione_sub_tabs.addTab(
-            self.elenco_comuni_widget_ref, "Elenco Comuni")
+            self.elenco_comuni_widget_ref, "Principale")
 
         self.ricerca_partite_widget_ref = RicercaPartiteWidget(
             self.db_manager, self.consultazione_sub_tabs)
@@ -1269,7 +1269,7 @@ class CatastoMainWindow(QMainWindow):
         db_ready_for_normal_ops = self.pool_initialized_successful and not is_admin_offline_mode
 
         # Determina lo stato di abilitazione per ciascun tipo di funzionalità
-        # Consultazione e Modifica (Elenco Comuni, Ricerca Partite, Ricerca Possessori, Ricerca Immobili Avanzata)
+        # Consultazione e Modifica (Principale, Ricerca Partite, Ricerca Possessori, Ricerca Immobili Avanzata)
         consultazione_enabled = db_ready_for_normal_ops
 
         # Inserimento e Gestione (Nuovo Comune, Nuovo Possessore, Nuova Località, Registrazione Proprietà, Operazioni Partita, Registra Consultazione)
@@ -1405,7 +1405,7 @@ class CatastoMainWindow(QMainWindow):
                     if isinstance(widget, ElencoComuniWidget):
                         widget.load_comuni_data()  # Assumendo che ElencoComuniWidget abbia questo metodo
                         logging.getLogger("CatastoGUI").info(
-                            "Elenco comuni nel tab consultazione aggiornato.")
+                            "Principale nel tab consultazione aggiornato.")
                         break
         else:
             logging.getLogger("CatastoGUI").info(

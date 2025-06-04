@@ -675,28 +675,48 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
 
-    def get_possessori_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
+
+    def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = None
         possessori_list = []
-        query = f"""
+
+        query_base = f"""
             SELECT pos.id, c.nome as comune_nome, pos.cognome_nome, pos.paternita,
-                   pos.nome_completo, pos.attivo
+                pos.nome_completo, pos.attivo
             FROM {self.schema}.possessore pos
             JOIN {self.schema}.comune c ON pos.comune_id = c.id
-            WHERE pos.comune_id = %s ORDER BY pos.nome_completo;
+            WHERE pos.comune_id = %s
         """
+        params = [comune_id]
+
+        if filter_text:
+            query_base += """
+                AND (
+                    pos.nome_completo ILIKE %s OR
+                    pos.cognome_nome ILIKE %s OR
+                    pos.paternita ILIKE %s
+                )
+            """
+            filter_like = f"%{filter_text}%"
+            params.extend([filter_like, filter_like, filter_like])
+
+        query = query_base + " ORDER BY pos.nome_completo;"
+
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                self.logger.debug(f"Esecuzione get_possessori_by_comune per comune_id {comune_id}")
-                cur.execute(query, (comune_id,))
+                self.logger.debug(f"Esecuzione get_possessori_by_comune per comune_id {comune_id} con filtro '{filter_text}': {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
                 results = cur.fetchall()
                 possessori_list = [dict(row) for row in results] if results else []
-                self.logger.info(f"Recuperati {len(possessori_list)} possessori per comune ID {comune_id}.")
+                self.logger.info(f"Recuperati {len(possessori_list)} possessori per comune ID {comune_id} (filtro: '{filter_text}').")
         except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB in get_possessori_by_comune (ID: {comune_id}): {db_err}", exc_info=True)
+            self.logger.error(f"Errore DB in get_possessori_by_comune (ID: {comune_id}, filtro: '{filter_text}'): {db_err}", exc_info=True)
+            raise DBMError(f"Errore database durante il recupero dei possessori: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            self.logger.error(f"Errore Python in get_possessori_by_comune (ID: {comune_id}): {e}", exc_info=True)
+            self.logger.error(f"Errore Python in get_possessori_by_comune (ID: {comune_id}, filtro: '{filter_text}'): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema durante il recupero dei possessori: {e}") from e
         finally:
             if conn:
                 self._release_connection(conn)
@@ -1137,36 +1157,66 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
 
-    def get_partite_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
+
+    def get_partite_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = None
         partite_list = []
-        query = f"""
+        
+        # Inizia con la query base
+        query_base = f"""
             SELECT
                 p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
                 p.data_chiusura, p.stato,
                 string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-                COUNT(DISTINCT i.id) as num_immobili
+                COUNT(DISTINCT i.id) as num_immobili,
+                COUNT(DISTINCT dp.documento_id) AS num_documenti_allegati -- NUOVA COLONNA
             FROM {self.schema}.partita p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
             LEFT JOIN {self.schema}.possessore pos ON pp.possessore_id = pos.id
             LEFT JOIN {self.schema}.immobile i ON p.id = i.partita_id
+            LEFT JOIN {self.schema}.documento_partita dp ON p.id = dp.partita_id -- NUOVO JOIN
             WHERE p.comune_id = %s
-            GROUP BY p.id, c.nome 
+        """
+        params = [comune_id] # Inizializza i parametri con comune_id
+
+        # Aggiungi la clausola di filtro se filter_text è fornito
+        if filter_text:
+            query_base += """
+                AND (
+                    CAST(p.numero_partita AS TEXT) ILIKE %s OR
+                    p.tipo ILIKE %s OR
+                    p.stato ILIKE %s OR
+                    pos.nome_completo ILIKE %s OR
+                    pos.cognome_nome ILIKE %s OR
+                    pos.paternita ILIKE %s
+                )
+            """
+            filter_like = f"%{filter_text}%"
+            params.extend([filter_like, filter_like, filter_like, filter_like, filter_like, filter_like])
+
+        # Aggiungi GROUP BY e ORDER BY
+        # Devi includere tutte le colonne non aggregate nel GROUP BY
+        query = query_base + """
+            GROUP BY p.id, c.nome, p.numero_partita, p.tipo, p.data_impianto, p.data_chiusura, p.stato
             ORDER BY p.numero_partita;
         """
+
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                self.logger.debug(f"Esecuzione get_partite_by_comune per comune_id {comune_id}")
-                cur.execute(query, (comune_id,))
+                self.logger.debug(f"Esecuzione get_partite_by_comune per comune_id {comune_id} con filtro '{filter_text}': {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                cur.execute(query, tuple(params))
                 results = cur.fetchall()
                 partite_list = [dict(row) for row in results] if results else []
-                self.logger.info(f"Recuperate {len(partite_list)} partite per comune ID {comune_id}.")
+                self.logger.info(f"Recuperate {len(partite_list)} partite per comune ID {comune_id} (filtro: '{filter_text}').")
         except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB in get_partite_by_comune (comune_id: {comune_id}): {db_err}", exc_info=True)
+            self.logger.error(f"Errore DB in get_partite_by_comune (comune_id: {comune_id}, filtro: '{filter_text}'): {db_err}", exc_info=True)
+            raise DBMError(f"Errore database durante il recupero delle partite: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            self.logger.error(f"Errore Python in get_partite_by_comune (comune_id: {comune_id}): {e}", exc_info=True)
+            self.logger.error(f"Errore Python in get_partite_by_comune (comune_id: {comune_id}, filtro: '{filter_text}'): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema durante il recupero delle partite: {e}") from e
         finally:
             if conn:
                 self._release_connection(conn)

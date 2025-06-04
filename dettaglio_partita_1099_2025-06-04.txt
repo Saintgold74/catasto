@@ -1,0 +1,43 @@
+==================================================
+DETTAGLIO PARTITA N. 1006
+Comune: Comune Stress Test 3
+ID Partita: 1099
+==================================================
+Tipo: principale
+Stato: attiva
+Data Impianto: 2008-06-04
+Data Chiusura: N/A
+Numero Provenienza: N/A
+
+==================================================
+POSSESSORI
+==================================================
+  - ID: 209, Nome: Possessore 3-2 Rossi
+    Titolo: proprietÃ  esclusiva, Quota: None
+
+==================================================
+IMMOBILI
+==================================================
+  - ID: 3016, Natura: Edificio Stress 1
+    Località: Via Stress 3-13, civ. 56 (Via)
+    Classificazione: Classe Stress 4, Consistenza: 248 mq
+  - ID: 3018, Natura: Edificio Stress 3
+    Località: Via Stress 3-13, civ. 56 (Via)
+    Classificazione: Classe Stress 5, Consistenza: 135 mq
+  - ID: 3017, Natura: Edificio Stress 2
+    Località: Via Stress 3-6, civ. 89 (Via)
+    Classificazione: Classe Stress 4, Consistenza: 87 mq
+
+==================================================
+VARIAZIONI
+==================================================
+  Nessuna variazione registrata.
+
+==================================================
+DOCUMENTI ALLEGATI (0)
+==================================================
+  Nessun documento allegato.
+
+==================================================
+FINE DETTAGLIO PARTITA
+==================================================

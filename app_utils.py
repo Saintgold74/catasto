@@ -2,6 +2,7 @@ import logging
 import bcrypt
 import csv
 import json
+import os
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
@@ -103,8 +104,6 @@ SETTINGS_DB_SCHEMA = "Database/Schema"
 # Non usato, ma definito per completezza
 SETTINGS_DB_PASSWORD = "Database/Password"
 
-logging.getLogger("CatastoGUI").info("Messaggio da gui_widgets.py")
-logging.getLogger("CatastoGUI").error("Errore da app_utils.py")
 # --- Funzioni Helper per Password ---
 
 
@@ -2274,6 +2273,7 @@ class AggiungiDocumentoDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
+
         self.btn_seleziona_file = QPushButton("Seleziona File (PDF, JPG)...")
         self.btn_seleziona_file.clicked.connect(self._seleziona_file)
         self.file_selezionato_label = QLabel("Nessun file selezionato.")
@@ -2321,6 +2321,20 @@ class AggiungiDocumentoDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
         self.setLayout(layout)
+        
+    # --- NUOVO METODO PER IMPOSTARE IL PERCORSO INIZIALE DEL FILE ---
+    def set_initial_file_path(self, file_path: str):
+        """Imposta un percorso file iniziale e aggiorna la label di visualizzazione."""
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            self.selected_file_path = file_path
+            self.file_selezionato_label.setText(os.path.basename(file_path))
+            # Puoi anche tentare di derivare un titolo iniziale dal nome del file qui
+            # es. self.titolo_edit.setText(os.path.splitext(os.path.basename(file_path))[0])
+        else:
+            self.logger.warning(f"Tentativo di impostare un percorso file iniziale non valido in AggiungiDocumentoDialog: {file_path}")
+            self.selected_file_path = None
+            self.file_selezionato_label.setText("Nessun file selezionato (iniziale non valido).")
+    # --- FINE NUOVO METODO ---
 
     def _seleziona_file(self):
         filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona Documento", "", 

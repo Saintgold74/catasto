@@ -32,6 +32,7 @@ from PyQt5.QtGui import QPixmap # Assicurati che QPixmap sia importato
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem
 from PyQt5.QtGui import QPixmap, QDesktopServices, QFont
 from PyQt5.QtCore import Qt, QUrl, QTimer, QSize
+from PyQt5.QtWebEngineWidgets import QWebEngineView # Necessario per visualizzare PDF
 from datetime import date # Già presente
 
 # In gui_main.py, dopo le importazioni PyQt e standard:
@@ -50,14 +51,9 @@ from app_utils import (
     ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog,
     # Dialoghi di selezione
     LocalitaSelectionDialog, DettagliLegamePossessoreDialog, UserSelectionDialog,
-    qdate_to_datetime, datetime_to_qdate,  # Utility di data
-    # Per EsportazioniWidget
-    FPDF_AVAILABLE, gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
-    # Per EsportazioniWidget
+    qdate_to_datetime, datetime_to_qdate, gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
     gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
-    GenericTextReportPDF,  # Per ReportisticaWidget
-    # Se usate in GestioneUtentiWidget direttamente (anche se è in CreateUserDialog)
-    _hash_password, _verify_password, AggiungiDocumentoDialog, CreateUserDialog, 
+    GenericTextReportPDF, AggiungiDocumentoDialog, CreateUserDialog, 
     PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF 
 )
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
@@ -75,12 +71,7 @@ except ImportError:
         pass  # ... definizioni fallback come nel file originale
     print("ATTENZIONE: catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
 
-# Importazioni da app_utils
-# from app_utils import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ...)
-# from app_utils import (qdate_to_datetime, datetime_to_qdate, ...)
-# from app_utils import (FPDF_AVAILABLE, gui_esporta_partita_pdf, ...) # Per EsportazioniWidget
-logging.getLogger("CatastoGUI").info("Messaggio da gui_widgets.py")
-logging.getLogger("CatastoGUI").error("Errore da app_utils.py")
+
 
 
 class ElencoComuniWidget(QWidget):
@@ -3782,7 +3773,117 @@ class ReportisticaWidget(QWidget):
         filename_prefix = "report_consultazioni"
         self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
 
+class DocumentViewerDialog(QDialog):
+    def __init__(self, parent=None, file_path: str = None):
+        super().__init__(parent)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self.file_path = file_path
+        self.setWindowTitle("Visualizzatore Documento")
+        self.setMinimumSize(800, 600)
 
+        self._init_ui()
+        self._load_document()
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+        
+        # Contenitore per il visualizzatore
+        self.viewer_widget = QWidget()
+        self.viewer_layout = QVBoxLayout(self.viewer_widget)
+        self.viewer_layout.setContentsMargins(0,0,0,0) # Rimuove margini per il viewer
+
+        # Contenitore per i pulsanti di chiusura
+        button_layout = QHBoxLayout()
+        self.close_button = QPushButton("Chiudi")
+        self.close_button.clicked.connect(self.accept)
+        button_layout.addStretch()
+        button_layout.addWidget(self.close_button)
+        button_layout.addStretch()
+
+        main_layout.addWidget(self.viewer_widget)
+        main_layout.addLayout(button_layout)
+
+    def _load_document(self):
+        if not self.file_path or not os.path.exists(self.file_path):
+            QMessageBox.critical(self, "Errore", "File non trovato o percorso non valido.")
+            self.logger.error(f"Tentativo di caricare documento non trovato o non valido: {self.file_path}")
+            self.viewer_layout.addWidget(QLabel("Errore: File non trovato."))
+            return
+
+        file_extension = os.path.splitext(self.file_path)[1].lower()
+
+        if file_extension == '.pdf':
+            self._load_pdf()
+        elif file_extension in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']: # Aggiungi altri formati immagine se supportati
+            self._load_image()
+        else:
+            QMessageBox.warning(self, "Formato non supportato", f"Il formato '{file_extension}' non è supportato per la visualizzazione interna.")
+            self.logger.warning(f"Formato documento non supportato per la visualizzazione interna: {self.file_path}")
+            self.viewer_layout.addWidget(QLabel(f"Formato '{file_extension}' non supportato."))
+            # Potresti aggiungere un pulsante per aprirlo esternamente qui
+
+    def _load_pdf(self):
+        try:
+            self.web_view = QWebEngineView(self)
+            self.web_view.setUrl(QUrl.fromLocalFile(self.file_path))
+            self.viewer_layout.addWidget(self.web_view)
+            self.logger.info(f"PDF caricato in QWebEngineView: {self.file_path}")
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento del PDF in QWebEngineView: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore PDF", f"Impossibile visualizzare il PDF. Errore: {e}")
+            self.viewer_layout.addWidget(QLabel("Errore nel caricamento del PDF."))
+            
+    def _load_image(self):
+        try:
+            self.graphics_scene = QGraphicsScene(self)
+            self.graphics_view = QGraphicsView(self.graphics_scene, self)
+            self.graphics_view.setRenderHint(QPainter.Antialiasing)
+            self.graphics_view.setRenderHint(QPainter.SmoothPixmapTransform)
+            self.graphics_view.setCacheMode(QGraphicsView.CacheBackground)
+            self.graphics_view.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
+            self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag) # Per spostarsi con la mano
+
+            pixmap = QPixmap(self.file_path)
+            if pixmap.isNull():
+                raise ValueError(f"Impossibile caricare immagine da: {self.file_path}")
+
+            self.pixmap_item = self.graphics_scene.addPixmap(pixmap)
+            self.graphics_view.fitInView(self.pixmap_item, Qt.KeepAspectRatio) # Adatta l'immagine alla vista
+            self.graphics_view.setAlignment(Qt.AlignCenter)
+
+            # Implementazione zoom (rudimentale, puoi migliorarlo con slider o rotella mouse)
+            self.zoom_factor = 1.0
+            self.graphics_view.wheelEvent = self._image_wheel_event # Sovrascrivi wheel event
+
+            self.viewer_layout.addWidget(self.graphics_view)
+            self.logger.info(f"Immagine caricata in QGraphicsView: {self.file_path}")
+
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento dell'immagine in QGraphicsView: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Immagine", f"Impossibile visualizzare l'immagine. Errore: {e}")
+            self.viewer_layout.addWidget(QLabel("Errore nel caricamento dell'immagine."))
+
+    def _image_wheel_event(self, event):
+        """Gestisce lo zoom con la rotella del mouse per le immagini."""
+        zoom_in_factor = 1.15  # Fattore di zoom in
+        zoom_out_factor = 1 / zoom_in_factor # Fattore di zoom out
+        
+        # Zoom in/out in base alla direzione della rotella
+        if event.angleDelta().y() > 0: # Rotella in avanti (zoom in)
+            self.zoom_factor *= zoom_in_factor
+        else: # Rotella all'indietro (zoom out)
+            self.zoom_factor *= zoom_out_factor
+
+        # Limita lo zoom per evitare problemi di performance o immagini invisibili
+        self.zoom_factor = max(0.1, min(self.zoom_factor, 10.0)) # Zoom da 10% a 1000%
+
+        # Trasforma l'immagine
+        transform = self.graphics_view.transform()
+        transform.reset() # Resetta la trasformazione attuale
+        transform.scale(self.zoom_factor, self.zoom_factor) # Applica il nuovo fattore di zoom
+        self.graphics_view.setTransform(transform)
+
+        event.accept() # Accetta l'evento della rotella
 
 class StatisticheWidget(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -5908,12 +6009,8 @@ class PartitaDetailsDialog(QDialog):
     def _init_ui(self):
         layout = QVBoxLayout(self)
 
-        # Intestazione (come prima)
-        header_layout = QHBoxLayout()
-        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
-        header_layout.addWidget(title_label)
-        layout.addLayout(header_layout)
-
+        
+        
         # Informazioni generali (come prima)
         header_layout = QHBoxLayout()
         title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
@@ -6792,6 +6889,38 @@ class ModificaPartitaDialog(QDialog):
 
     # Dovrai chiamare self._load_documenti_allegati() quando il dialogo ModificaPartitaDialog 
     # viene caricato (es. in _load_partita_data() o subito dopo).
+    
+    # Questo è il metodo chiamato dal pulsante "Apri Documento" nel tab "Documenti Allegati"
+    def _apri_documento_selezionato_from_details_dialog(self):
+        selected_items = self.documents_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
+            return
+        
+        row = self.documents_table.currentRow()
+        # Il percorso completo è salvato nell'UserRole della colonna Percorso/Azione (colonna 5)
+        percorso_file_item = self.documents_table.item(row, 5) 
+        if percorso_file_item:
+            percorso_file_completo = percorso_file_item.data(Qt.UserRole)
+            
+            if os.path.exists(percorso_file_completo):
+                # --- SOSTITUISCI LA LOGICA DI APERTURA ESTERNA ---
+                # from PyQt5.QtGui import QDesktopServices
+                # from PyQt5.QtCore import QUrl
+                # success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
+                # if not success:
+                #     QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il file:\n{percorso_file_completo}\nVerificare che sia installata un'applicazione associata.")
+                # --- CON L'APERTURA INTERNA TRAMITE DocumentViewerDialog ---
+                self.logger.info(f"Tentativo di aprire documento internamente: {percorso_file_completo}")
+                viewer_dialog = DocumentViewerDialog(self, file_path=percorso_file_completo)
+                viewer_dialog.exec_() # Mostra il dialogo del visualizzatore
+                # --- FINE SOSTITUZIONE ---
+            else:
+                QMessageBox.warning(self, "File Non Trovato", f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}\nIl file potrebbe essere stato spostato o eliminato.")
+                self.logger.warning(f"File non trovato per visualizzazione interna: {percorso_file_completo}")
+        else:
+            QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
+
     def _aggiorna_stato_pulsanti_documenti(self):
         """Abilita/disabilita i pulsanti di azione sui documenti in base alla selezione nella tabella."""
         has_selection = bool(self.documenti_table.selectedItems())
@@ -7349,37 +7478,131 @@ class ModificaPartitaDialog(QDialog):
                 f"Errore salvataggio dati generali partita ID {self.partita_id}: {e}", exc_info=True)
             QMessageBox.critical(self, error_title, error_message)
 
-    # Metodi placeholder per le azioni sui possessori (da implementare successivamente)
-    # def _aggiungi_possessore_a_partita(self):
-    #     self.output_text_edit.append("DEBUG: _aggiungi_possessore_a_partita da implementare\n")
-    #     # Qui apri dialogo per selezionare possessore e inserire titolo/quota
-    #     # Poi chiama db_manager.aggiungi_possessore_a_partita(...)
-    #     # Poi self._load_possessori_associati()
+    # --- NUOVI METODI PER LA GESTIONE DEL DRAG-AND-DROP ---
 
-    # def _modifica_legame_possessore(self):
-    #     selected_items = self.possessori_table.selectedItems()
-    #     if not selected_items: return
-    #     id_relazione = int(self.possessori_table.item(selected_items[0].row(), 0).text())
-    #     self.output_text_edit.append(f"DEBUG: _modifica_legame_possessore per ID Relazione {id_relazione} (da implementare)\n")
-    #     # Qui apri dialogo per modificare titolo/quota per id_relazione
-    #     # Poi chiama db_manager.aggiorna_legame_partita_possessore(...)
-    #     # Poi self._load_possessori_associati()
+    def documents_table_dragEnterEvent(self, event):
+        """Accetta solo eventi di drag che contengono URL (file)."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
-    # def _rimuovi_possessore_da_partita(self):
-    #     selected_items = self.possessori_table.selectedItems()
-    #     if not selected_items: return
-    #     id_relazione = int(self.possessori_table.item(selected_items[0].row(), 0).text())
-    #     nome_possessore = self.possessori_table.item(selected_items[0].row(), 2).text()
+    def documents_table_dragMoveEvent(self, event):
+        """Mantiene l'accettazione dell'azione se ci sono URL."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
-    #     reply = QMessageBox.question(self, "Conferma Rimozione",
-    #                                  f"Rimuovere il possessore '{nome_possessore}' da questa partita?",
-    #                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-    #     if reply == QMessageBox.Yes:
-    #         self.output_text_edit.append(f"DEBUG: _rimuovi_possessore_da_partita per ID Relazione {id_relazione} (da implementare)\n")
-    #         # Chiama db_manager.rimuovi_possessore_da_partita(id_relazione)
-    #         # Poi self._load_possessori_associati()
+    def documents_table_dropEvent(self, event):
+        """Elabora i file rilasciati sulla tabella."""
+        self.logger.info("Drop event rilevato sulla tabella documenti.")
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                self.logger.info(f"File rilasciato: {file_path}")
+                # Qui chiamiamo la stessa logica di allegazione usata dal pulsante "Allega Nuovo Documento..."
+                # che a sua volta apre AggiungiDocumentoDialog.
+                # Però, dobbiamo passare il file_path al dialogo in modo che sia pre-selezionato.
+                self._handle_dropped_file(file_path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
-# Non dimenticare di importare ModificaPartitaDialog dove serve, ad esempio in PartiteComuneDialog
+    def _handle_dropped_file(self, file_path: str):
+        """Gestisce un singolo file rilasciato, aprendo il dialogo di allegazione."""
+        if not os.path.exists(file_path):
+            QMessageBox.warning(self, "File Non Trovato", f"Il file rilasciato non esiste: {file_path}")
+            self.logger.warning(f"File rilasciato non trovato: {file_path}")
+            return
+        
+        if not os.path.isfile(file_path):
+            QMessageBox.warning(self, "Non un File", f"L'elemento rilasciato non è un file valido: {file_path}")
+            self.logger.warning(f"Elemento rilasciato non è un file: {file_path}")
+            return
+
+        # Filtra i tipi di file accettati, se necessario
+        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension not in allowed_extensions:
+            QMessageBox.warning(self, "Formato Non Supportato", f"Il formato del file '{file_extension}' non è supportato. Sono accettati: {', '.join(allowed_extensions)}.")
+            self.logger.warning(f"Formato file non supportato per il drop: {file_path}")
+            return
+        
+        # Apri il dialogo AggiungiDocumentoDialog e pre-popola il campo file
+        dialog = AggiungiDocumentoDialog(self.db_manager, self.partita_id, self)
+        
+        # Imposta il percorso del file nel dialogo appena aperto
+        # Questo richiede una modifica in AggiungiDocumentoDialog per avere un metodo set_initial_file_path
+        dialog.set_initial_file_path(file_path)
+
+        if dialog.exec_() == QDialog.Accepted and dialog.document_data:
+            doc_info = dialog.document_data
+            percorso_originale = doc_info["percorso_file_originale"] # Ora sarà file_path pre-selezionato
+            
+            # ... (la tua logica esistente di copia file e salvataggio nel DB da _allega_nuovo_documento_a_partita) ...
+            allegati_dir = os.path.join(".", "allegati_catasto", f"partita_{self.partita_id}")
+            os.makedirs(allegati_dir, exist_ok=True)
+            
+            nome_file_originale = os.path.basename(percorso_originale)
+            nome_file_dest = nome_file_originale 
+            percorso_destinazione_completo = os.path.join(allegati_dir, nome_file_dest)
+            
+            try:
+                import shutil
+                shutil.copy2(percorso_originale, percorso_destinazione_completo)
+                self.logger.info(f"File copiato da '{percorso_originale}' a '{percorso_destinazione_completo}'")
+
+                percorso_file_db = percorso_destinazione_completo
+
+                doc_id = self.db_manager.aggiungi_documento_storico(
+                    titolo=doc_info["titolo"],
+                    tipo_documento=doc_info["tipo_documento"],
+                    percorso_file=percorso_file_db,
+                    descrizione=doc_info["descrizione"],
+                    anno=doc_info["anno"],
+                    periodo_id=doc_info["periodo_id"],
+                    metadati_json=doc_info["metadati_json"]
+                )
+                if doc_id:
+                    success_link = self.db_manager.collega_documento_a_partita(
+                        doc_id, self.partita_id, doc_info["rilevanza"], doc_info["note_legame"]
+                    )
+                    if success_link:
+                        QMessageBox.information(self, "Successo", "Documento allegato e collegato con successo.")
+                        self._load_documenti_allegati() # Aggiorna la tabella
+                    else:
+                        QMessageBox.warning(self, "Attenzione", "Documento salvato ma fallito il collegamento alla partita.")
+                else:
+                    QMessageBox.critical(self, "Errore", "Impossibile salvare le informazioni del documento nel database.")
+                    if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo)
+
+            except FileNotFoundError:
+                QMessageBox.critical(self, "Errore File", f"File sorgente non trovato: {percorso_originale}")
+            except PermissionError:
+                QMessageBox.critical(self, "Errore Permessi", f"Permessi non sufficienti per copiare il file in '{allegati_dir}'.")
+            except DBMError as e_db:
+                QMessageBox.critical(self, "Errore Database", f"Errore durante il salvataggio: {e_db}")
+                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo)
+            except Exception as e:
+                QMessageBox.critical(self, "Errore Imprevisto", f"Errore durante l'allegazione del documento: {e}")
+                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo)
+                self.logger.error(f"Errore allegando documento: {e}", exc_info=True)
+        else:
+            self.logger.info("Aggiunta documento tramite drag-and-drop annullata dall'utente (dialogo chiuso).")
+
+    # Modifica _allega_nuovo_documento_a_partita per riutilizzare la logica di _handle_dropped_file
+    def _allega_nuovo_documento_a_partita(self):
+        """Gestisce l'allegazione di un nuovo documento tramite il pulsante Sfoglia."""
+        # Apri il dialogo file, come faceva prima
+        filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona Documento da Allegare", "",
+                                                  "Documenti (*.pdf *.jpg *.jpeg *.png);;File PDF (*.pdf);;Immagini JPG (*.jpg *.jpeg);;Immagini PNG (*.png);;Tutti i file (*)")
+        if filePath:
+            # Reutilizza la logica di gestione del file, che ora include il dialogo
+            self._handle_dropped_file(filePath)
+        else:
+            self.logger.info("Selezione file annullata dall'utente per l'allegazione.")
+
 
 
 class ModificaPossessoreDialog(QDialog):
@@ -7741,7 +7964,20 @@ class PossessoriComuneDialog(QDialog):
         self.setMinimumSize(800, 500)
 
         layout = QVBoxLayout(self)
-
+        # --- SEZIONE FILTRO (NUOVA) ---
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Filtra possessori:")
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Digita per filtrare (nome completo, cognome, paternità)...")
+        
+        self.filter_button = QPushButton("Applica Filtro")
+        self.filter_button.clicked.connect(self.load_possessori_data) # Ricarica i dati con il filtro
+        
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_edit)
+        filter_layout.addWidget(self.filter_button)
+        layout.addLayout(filter_layout)
+        # --- FINE SEZIONE FILTRO ---
         # Tabella Possessori (come prima)
         self.possessori_table = QTableWidget()
         self.possessori_table.setColumnCount(5)
@@ -7841,12 +8077,19 @@ class PossessoriComuneDialog(QDialog):
                                 "Per favore, seleziona un possessore dalla tabella da modificare.")
 
     def load_possessori_data(self):
-        """Carica i possessori per il comune specificato."""
+        """Carica i possessori per il comune specificato, applicando il filtro."""
         self.possessori_table.setRowCount(0)
         self.possessori_table.setSortingEnabled(False)
+        
+        filter_text = self.filter_edit.text().strip() # Ottieni il testo del filtro
+
         try:
+            # Modifica il db_manager.get_possessori_by_comune per accettare un filtro testuale.
+            # Se non hai ancora modificato get_possessori_by_comune, vedi la nota sotto.
             possessori_list = self.db_manager.get_possessori_by_comune(
-                self.comune_id)
+                self.comune_id, filter_text=filter_text if filter_text else None
+            )
+            
             if possessori_list:
                 self.possessori_table.setRowCount(len(possessori_list))
                 for row_idx, possessore in enumerate(possessori_list):
@@ -7863,24 +8106,31 @@ class PossessoriComuneDialog(QDialog):
                     self.possessori_table.setItem(
                         row_idx, col, QTableWidgetItem(possessore.get('paternita', '')))
                     col += 1
-                    stato_str = "Attivo" if possessore.get(
-                        'attivo', False) else "Non Attivo"
+                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
                     self.possessori_table.setItem(
                         row_idx, col, QTableWidgetItem(stato_str))
                     col += 1
                 self.possessori_table.resizeColumnsToContents()
             else:
-                logging.getLogger("CatastoGUI").info(
-                    f"Nessun possessore trovato per il comune ID: {self.comune_id}")
-        # ... (gestione eccezioni come prima) ...
+                self.logger.info(f"Nessun possessore trovato per il comune ID: {self.comune_id} con filtro '{filter_text}'.")
+                # Visualizza un messaggio nella tabella se nessun risultato
+                self.possessori_table.setRowCount(1)
+                item = QTableWidgetItem("Nessun possessore trovato con i criteri specificati.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.possessori_table.setItem(0, 0, item)
+                self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
+
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante il caricamento dei possessori per comune ID {self.comune_id}: {e}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+            self.logger.error(f"Errore durante il caricamento dei possessori per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+            # Visualizza un messaggio di errore nella tabella
+            self.possessori_table.setRowCount(1)
+            item = QTableWidgetItem(f"Errore nel caricamento dei dati: {e}")
+            item.setTextAlignment(Qt.AlignCenter)
+            self.possessori_table.setItem(0, 0, item)
+            self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
         finally:
             self.possessori_table.setSortingEnabled(True)
-            # Aggiorna stato pulsanti dopo caricamento
             self._aggiorna_stato_pulsanti_azione()
 
 
@@ -7890,56 +8140,64 @@ class PartiteComuneDialog(QDialog):
         self.db_manager = db_manager
         self.comune_id = comune_id
         self.nome_comune = nome_comune
-        # Aggiungi per tracciare l'utente loggato, se necessario per l'audit di modifica
-        # self.current_user_info = getattr(parent, 'logged_in_user_info', None) if parent else None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
             f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
-        # Leggermente più grande per il nuovo pulsante
         self.setMinimumSize(850, 550)
 
         layout = QVBoxLayout(self)
 
-        # ... (Tabella Partite come prima) ...
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Filtra partite:")
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Digita per filtrare (numero, tipo, stato, possessore)...")
+        
+        self.filter_button = QPushButton("Applica Filtro")
+        self.filter_button.clicked.connect(self.load_partite_data)
+        
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_edit)
+        filter_layout.addWidget(self.filter_button)
+        layout.addLayout(filter_layout)
+
         self.partite_table = QTableWidget()
-        self.partite_table.setColumnCount(7)
+        # AUMENTA IL NUMERO DI COLONNE A 8
+        self.partite_table.setColumnCount(8) 
+        # AGGIUNGI L'ETICHETTA ALL'HEADER
         self.partite_table.setHorizontalHeaderLabels([
             "ID Partita", "Numero", "Tipo", "Stato",
-            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili"
+            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili", "Num. Documenti" # NUOVA ETICHETTA
         ])
         self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.partite_table.setSelectionMode(QTableWidget.SingleSelection)
         self.partite_table.setAlternatingRowColors(True)
         self.partite_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch)  # O ResizeToContents
+            QHeaderView.Stretch)
         self.partite_table.setSortingEnabled(True)
         self.partite_table.itemDoubleClicked.connect(
             self.apri_dettaglio_partita_selezionata)
-        # Disabilita il pulsante modifica se nessuna riga è selezionata
         self.partite_table.itemSelectionChanged.connect(
             self._aggiorna_stato_pulsante_modifica)
 
         layout.addWidget(self.partite_table)
 
-        # --- Pulsanti Azione ---
         action_buttons_layout = QHBoxLayout()
-
         self.btn_apri_dettaglio = QPushButton(QApplication.style().standardIcon(
             QStyle.SP_FileDialogInfoView), "Vedi Dettagli")
         self.btn_apri_dettaglio.clicked.connect(
             self.apri_dettaglio_partita_selezionata_da_pulsante)
-        self.btn_apri_dettaglio.setEnabled(False)  # Inizialmente disabilitato
+        self.btn_apri_dettaglio.setEnabled(False)
         action_buttons_layout.addWidget(self.btn_apri_dettaglio)
 
         self.btn_modifica_partita = QPushButton(
-            "Modifica Partita")  # USARE ICONA ADATTA
+            "Modifica Partita")
         self.btn_modifica_partita.setToolTip(
             "Modifica i dati della partita selezionata")
         self.btn_modifica_partita.clicked.connect(
             self.apri_modifica_partita_selezionata)
-        self.btn_modifica_partita.setEnabled(
-            False)  # Inizialmente disabilitato
+        self.btn_modifica_partita.setEnabled(False)
         action_buttons_layout.addWidget(self.btn_modifica_partita)
 
         action_buttons_layout.addStretch()
@@ -7952,6 +8210,70 @@ class PartiteComuneDialog(QDialog):
 
         self.setLayout(layout)
         self.load_partite_data()
+
+    def load_partite_data(self):
+        self.partite_table.setRowCount(0)
+        self.partite_table.setSortingEnabled(False)
+        
+        filter_text = self.filter_edit.text().strip()
+
+        try:
+            partite_list = self.db_manager.get_partite_by_comune(
+                self.comune_id, filter_text=filter_text if filter_text else None
+            )
+
+            if partite_list:
+                self.partite_table.setRowCount(len(partite_list))
+                for row_idx, partita in enumerate(partite_list):
+                    col = 0
+                    self.partite_table.setItem(
+                        row_idx, col, QTableWidgetItem(str(partita.get('id', ''))))
+                    col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(partita.get('numero_partita', ''))))
+                    col += 1
+                    self.partite_table.setItem(
+                        row_idx, col, QTableWidgetItem(partita.get('tipo', '')))
+                    col += 1
+                    self.partite_table.setItem(
+                        row_idx, col, QTableWidgetItem(partita.get('stato', '')))
+                    col += 1
+                    data_imp = partita.get('data_impianto')
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(data_imp) if data_imp else ''))
+                    col += 1
+                    self.partite_table.setItem(
+                        row_idx, col, QTableWidgetItem(partita.get('possessori', '')))
+                    col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(partita.get('num_immobili', '0'))))
+                    col += 1
+                    # NUOVA RIGA: Popola la colonna dei documenti allegati
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(partita.get('num_documenti_allegati', '0')))) # NUOVA COLONNA POPOLATA
+                    col += 1 # Incrementa col per la prossima iterazione
+
+                self.partite_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id} con filtro '{filter_text}'.")
+                self.partite_table.setRowCount(1)
+                item = QTableWidgetItem("Nessuna partita trovata con i criteri specificati.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.partite_table.setItem(0, 0, item)
+                self.partite_table.setSpan(0, 0, 1, self.partite_table.columnCount())
+
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+            self.partite_table.setRowCount(1)
+            item = QTableWidgetItem(f"Errore nel caricamento dei dati: {e}")
+            item.setTextAlignment(Qt.AlignCenter)
+            self.partite_table.setItem(0, 0, item)
+            self.partite_table.setSpan(0, 0, 1, self.partite_table.columnCount())
+        finally:
+            self.partite_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsante_modifica()
+
 
     def _aggiorna_stato_pulsante_modifica(self):
         """Abilita/disabilita il pulsante modifica in base alla selezione."""
@@ -8006,53 +8328,7 @@ class PartiteComuneDialog(QDialog):
             QMessageBox.warning(self, "Nessuna Selezione",
                                 "Per favore, seleziona una partita da modificare.")
 
-    # ... (load_partite_data e apri_dettaglio_partita_selezionata (per doppio click) come prima) ...
-    def load_partite_data(self):  # Assicurati che questo metodo esista e funzioni
-        self.partite_table.setRowCount(0)
-        self.partite_table.setSortingEnabled(False)
-        try:
-            partite_list = self.db_manager.get_partite_by_comune(
-                self.comune_id)
-            if partite_list:
-                self.partite_table.setRowCount(len(partite_list))
-                for row_idx, partita in enumerate(partite_list):
-                    col = 0
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(partita.get('id', ''))))
-                    col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(partita.get('numero_partita', ''))))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('tipo', '')))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('stato', '')))
-                    col += 1
-                    data_imp = partita.get('data_impianto')
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(data_imp) if data_imp else ''))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('possessori', '')))
-                    col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(partita.get('num_immobili', '0'))))
-                    col += 1
-                self.partite_table.resizeColumnsToContents()
-            else:
-                logging.getLogger("CatastoGUI").info(
-                    f"Nessuna partita trovata per il comune ID: {self.comune_id}")
-        except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante il caricamento delle partite per comune ID {self.comune_id}: {e}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
-        finally:
-            self.partite_table.setSortingEnabled(True)
-        self._aggiorna_stato_pulsante_modifica()  # Aggiorna stato dopo caricamento
-
-    # Per doppio click
+    
     def apri_dettaglio_partita_selezionata(self, item: QTableWidgetItem):
         if not item:
             return
@@ -8537,7 +8813,7 @@ class LandingPageWidget(QWidget):
         consultazione_layout = QVBoxLayout(consultazione_group)
         consultazione_layout.setSpacing(10)
 
-        btn_elenco_comuni = QPushButton("Elenco Comuni")
+        btn_elenco_comuni = QPushButton("Principale")
         btn_elenco_comuni.clicked.connect(self.apri_elenco_comuni_signal.emit)
         consultazione_layout.addWidget(btn_elenco_comuni)
 
@@ -8592,52 +8868,64 @@ class WelcomeScreen(QDialog):
         super().__init__(parent)
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         self.setWindowTitle("Benvenuto - Catasto Storico")
-        self.setModal(True) # Rende il dialogo modale, blocca l'interazione con la finestra principale sottostante
-        self.setFixedSize(800, 600) # Dimensione fissa per la splash screen
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint) # Senza bordi, sempre in primo piano
-        self.setAttribute(Qt.WA_DeleteOnClose) # Assicura che il widget venga distrutto alla chiusura
+        self.setModal(True)
+        self.setFixedSize(1024, 768)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_DeleteOnClose)
 
         self.logo_path = logo_path
         self.help_url = help_url
 
         self._init_ui()
-        self.start_timer()
-
+        #self.start_timer()
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(50, 50, 50, 50) # Margini interni per estetica
-        main_layout.setSpacing(30) # Spazio tra gli elementi
+        main_layout.setContentsMargins(50, 50, 50, 50)
+        main_layout.setSpacing(30)
 
-        # --- Sezione Logo ---
-        logo_container_layout = QHBoxLayout()
-        logo_container_layout.addStretch()
+        # --- Sezione Logo (Modificata per Centratura) ---
+        # Creiamo un QHBoxLayout per centrare orizzontalmente il logo
+        logo_horizontal_layout = QHBoxLayout()
+        logo_horizontal_layout.addStretch(1) # Spazio flessibile a sinistra per spingere al centro
         
         self.logo_label = QLabel()
+        # Non è necessario self.logo_label.setAlignment(Qt.AlignCenter) se lo centriamo con QHBoxLayout e stretch
+        # ma non fa male averlo.
+        
         if self.logo_path and os.path.exists(self.logo_path):
             pixmap = QPixmap(self.logo_path)
             if not pixmap.isNull():
-                # Scala il logo per essere ben visibile nella splash screen (es. 300x300 o 400x400)
-                # Adatta queste dimensioni in base alla tua immagine e al layout desiderato
-                scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                max_logo_height = 400 
+                max_logo_width = 700 
+                
+                scaled_pixmap = pixmap.scaled(max_logo_width, max_logo_height, 
+                                              Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                
                 self.logo_label.setPixmap(scaled_pixmap)
-                self.logo_label.setAlignment(Qt.AlignCenter)
-                self.logger.info(f"Logo caricato con successo nella Welcome Screen da: {self.logo_path}")
+                self.logo_label.setFixedSize(scaled_pixmap.size()) # Imposta la dimensione del QLabel
+                
+                self.logger.info(f"Logo caricato e scalato a {scaled_pixmap.width()}x{scaled_pixmap.height()} nella Welcome Screen.")
             else:
                 self.logger.warning(f"QPixmap vuoto per il logo in Welcome Screen: {self.logo_path}")
                 self.logo_label.setText("Logo non caricato")
-                self.logo_label.setAlignment(Qt.AlignCenter)
                 self.logo_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                self.logo_label.setFixedSize(300, 300) 
         else:
             self.logger.warning(f"Percorso logo non valido o file non trovato per Welcome Screen: {self.logo_path}")
             self.logo_label.setText("Logo non disponibile")
-            self.logo_label.setAlignment(Qt.AlignCenter)
             self.logo_label.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
+            self.logo_label.setFixedSize(300, 300) 
             
-        logo_container_layout.addWidget(self.logo_label)
-        logo_container_layout.addStretch()
-        main_layout.addLayout(logo_container_layout)
+        logo_horizontal_layout.addWidget(self.logo_label) # Aggiungi il QLabel al layout orizzontale
+        logo_horizontal_layout.addStretch(1) # Spazio flessibile a destra per spingere al centro
 
-        # --- Sezione Titolo App ---
+        # Aggiungi il layout orizzontale del logo al layout verticale principale
+        main_layout.addLayout(logo_horizontal_layout)
+        # ... (resto del codice della _init_ui: titolo, sottotitolo, crediti, pulsante help) ...
+        # Assicurati che lo spaziatore tra il logo e il testo non sia troppo grande
+        # Sezioni Titolo App, Sottotitolo App, e Crediti e Pulsante Help.
+        # Devono essere aggiunti al main_layout.
+
         title_label = QLabel("Gestionale Catasto Storico")
         title_font = QFont("Segoe UI", 24, QFont.Bold)
         title_label.setFont(title_font)
@@ -8650,9 +8938,10 @@ class WelcomeScreen(QDialog):
         subtitle_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(subtitle_label)
 
-        main_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)) # Spazio flessibile
+        # Spazio flessibile tra il sottotitolo e i crediti
+        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # --- Sezione Crediti ---
+        # Sezione Crediti
         credits_label = QLabel(
             "Sviluppato da: Marco Santoro\n"
             "Copyright © 2025 - Tutti i diritti riservati\n"
@@ -8663,11 +8952,11 @@ class WelcomeScreen(QDialog):
         credits_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(credits_label)
 
-        # --- Sezione Link a Manuale/Help ---
+        # Sezione Link a Manuale/Help
         if self.help_url:
             help_button = QPushButton("Apri Manuale / Guida")
             help_button.setFont(QFont("Segoe UI", 12))
-            help_button.setFixedSize(200, 40) # Dimensione fissa per il pulsante
+            help_button.setFixedSize(200, 40)
             help_button.clicked.connect(self._open_help_url)
             
             help_button_layout = QHBoxLayout()
@@ -8681,11 +8970,11 @@ class WelcomeScreen(QDialog):
 
         main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)) # Spazio fisso in basso
 
-        # Stile per il dialogo (opzionale, per un look più moderno)
+        # Stile per il dialogo (opzionale)
         self.setStyleSheet("""
             WelcomeScreen {
-                background-color: #f0f0f0; /* Grigio chiaro */
-                border: 2px solid #0078D4; /* Bordo blu */
+                background-color: #f0f0f0;
+                border: 2px solid #0078D4;
                 border-radius: 10px;
             }
             QLabel {
@@ -8702,6 +8991,7 @@ class WelcomeScreen(QDialog):
                 background-color: #005A9E;
             }
         """)
+        self.setLayout(main_layout)
 
     def _open_help_url(self):
         if self.help_url:
@@ -8712,6 +9002,7 @@ class WelcomeScreen(QDialog):
                 self.logger.error(f"Errore nell'apertura dell'URL: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore", f"Impossibile aprire il link al manuale: {e}")
 
+    """
     def start_timer(self):
         # Il timer chiuderà la splash screen automaticamente dopo un certo tempo
         self.timer = QTimer(self)
@@ -8719,7 +9010,15 @@ class WelcomeScreen(QDialog):
         self.timer.timeout.connect(self.accept) # Chiude il dialogo quando il timer scade
         self.timer.start(5000) # 3000 ms = 3 secondi. Adatta il tempo se necessario.
         self.logger.info("Timer per la Welcome Screen avviato (3 secondi).")
-
+    """
+    # --- NUOVO METODO: Gestisce il click del mouse ---
     def mousePressEvent(self, event):
-        # Permetti di chiudere la splash screen cliccando su di essa
-        self.accept()
+        """
+        Chiude la WelcomeScreen quando si verifica un click del mouse.
+        """
+        # Verifica che il click sia stato con il tasto sinistro del mouse
+        if event.button() == Qt.LeftButton:
+            self.logger.info("Welcome Screen chiusa tramite click del mouse.")
+            self.accept() # Chiude il dialogo
+        # Se vuoi gestire anche altri tasti (es. destro, centrale), puoi aggiungere altri if/elif
+        # event.ignore() # Non è necessario chiamare ignore se l'evento è stato gestito

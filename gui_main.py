@@ -844,7 +844,7 @@ class CatastoMainWindow(QMainWindow):
             self.landing_page_widget.apri_registra_consultazione_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione")
             )
-            self.landing_page_widget.apri_certificato_proprieta_signal.connect(
+            self.landing_page_widget.apri_report_proprieta_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Reportistica", "Certificato Proprietà", activate_report_sub_tab=True)
             )
             self.landing_page_widget.apri_report_genealogico_signal.connect(

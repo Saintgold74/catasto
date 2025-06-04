@@ -31,7 +31,7 @@ Menu Principale
 │   └── 10. Torna al menu principale
 │
 ├── 3. Generazione report
-│   ├── 1. Certificato di proprietà
+│   ├── 1. Report di proprietà
 │   ├── 2. Report genealogico
 │   ├── 3. Report possessore
 │   ├── 4. Report consultazioni

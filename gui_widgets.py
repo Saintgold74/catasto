@@ -8255,7 +8255,7 @@ class LandingPageWidget(QWidget):
     apri_registra_proprieta_signal = pyqtSignal()
     apri_registra_possessore_signal = pyqtSignal()
     apri_registra_consultazione_signal = pyqtSignal()
-    apri_certificato_proprieta_signal = pyqtSignal()
+    apri_report_proprieta_signal = pyqtSignal()
     apri_report_genealogico_signal = pyqtSignal()
     # Aggiungi altri segnali se necessario
 
@@ -8386,8 +8386,8 @@ class LandingPageWidget(QWidget):
         report_layout = QVBoxLayout(report_group)
         report_layout.setSpacing(10)
 
-        btn_cert_proprieta = QPushButton("Genera Certificato Proprietà")
-        btn_cert_proprieta.clicked.connect(self.apri_certificato_proprieta_signal.emit)
+        btn_cert_proprieta = QPushButton("Genera Report Proprietà")
+        btn_cert_proprieta.clicked.connect(self.apri_report_proprieta_signal.emit)
         report_layout.addWidget(btn_cert_proprieta)
 
         btn_rep_genealogico = QPushButton("Genera Report Genealogico")

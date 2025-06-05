@@ -4977,62 +4977,89 @@ class BackupRestoreWidget(QWidget):
         # Resetta la proprietà
         self.process.setProperty("is_restore_operation", False)
 
+        # Il log DEBUG originale può rimanere per gli sviluppatori, ma non verrà mostrato all'utente in una QMessageBox.
         self.output_text_edit.append(
             f"<hr>DEBUG: Processo terminato. ExitCode: {exitCode}, ExitStatus: {exitStatus}, Operazione Ripristino: {is_restore}<hr>")
+        
         # Riabilita UI (pulsanti, progress bar)
         self._update_ui_for_process(False)
 
-        operation_name = "Ripristino" if is_restore else "Backup"
-        success_message_box_needed = False  # <--- INIZIALIZZA QUI a False
+        operation_name_display = "Ripristino del database" if is_restore else "Backup del database"
+        
+        # Inizializza messaggio per l'utente e tipo di QMessageBox
+        user_message_title = f"Esito {operation_name_display}"
+        user_message_text = ""
+        message_box_type = QMessageBox.Information # Default: successo
 
         if exitStatus == QProcess.CrashExit:
+            user_message_title = f"Errore Grave durante il {operation_name_display}"
+            user_message_text = (
+                f"Si è verificato un errore inaspettato e grave durante il {operation_name_display}. "
+                "Il processo è terminato in modo anomalo (crash). "
+                "Controllare attentamente i dettagli nell'area 'Output Operazione' per informazioni tecniche. "
+                "Si consiglia di riprovare l'operazione."
+            )
+            message_box_type = QMessageBox.Critical
             self.output_text_edit.append(
-                f"<font color='red'><b>ERRORE CRITICO: Il processo di {operation_name.lower()} è terminato inaspettatamente (crash).</b></font>")
-            QMessageBox.critical(
-                self, f"Errore Processo {operation_name}", f"Il processo di {operation_name.lower()} è terminato inaspettatamente.")
+                f"<font color='red'><b>ERRORE CRITICO: Il processo di {operation_name_display.lower()} è terminato inaspettatamente (crash).</b></font>")
+            
         elif exitCode != 0:
+            user_message_title = f"Operazione di {operation_name_display} Fallita"
+            user_message_text = (
+                f"L'operazione di {operation_name_display} è fallita con un codice d'errore ({exitCode}). "
+                "Ciò indica che il comando esterno non è stato completato correttamente. "
+                "Controllare i messaggi in rosso nell'area 'Output Operazione' per capire la causa dell'errore (ad es., password errata, permessi mancanti, file non trovato)."
+            )
+            message_box_type = QMessageBox.Warning
             self.output_text_edit.append(
-                f"<font color='red'><b>FALLITO: Il processo di {operation_name.lower()} è terminato con codice d'errore: {exitCode}.</b></font>")
-            QMessageBox.warning(self, f"Operazione {operation_name} Fallita",
-                                f"L'operazione di {operation_name.lower()} è fallita (codice: {exitCode}). Controllare l'output per i dettagli.")
-        else:  # exitCode == 0, il processo stesso ha terminato con successo
-            self.output_text_edit.append(
-                f"<font color='green'><b>Comando di {operation_name.lower()} terminato (exit code 0). Verificare l'output per errori specifici del tool.</b></font>")
-            # Nota: pg_dump può scrivere errori su stderr e uscire comunque con 0.
-            # Il messaggio di "successo" finale dipende se stderr era vuoto o conteneva errori.
-            # Qui, per ora, assumiamo che exit code 0 sia "successo del processo".
-            success_message_box_needed = True  # Imposta a True se l'exit code è 0
+                f"<font color='red'><b>FALLITO: Il processo di {operation_name_display.lower()} è terminato con codice d'errore: {exitCode}.</b></font>")
+        else: # exitCode == 0, il processo stesso ha terminato con successo
+            # Anche se exitCode è 0, pg_dump può scrivere errori su stderr.
+            # Qui possiamo fare una verifica più approfondita se l'output stderr conteneva "ERROR:"
+            # Questo richiede che _handle_stderr abbia collezionato gli errori.
+            # Per semplicità, qui si assume che un exitCode 0 sia un successo generale,
+            # ma si aggiunge un avviso per controllare l'output.
 
-        # --- Gestione Riconnessione Pool e Messaggio Finale ---
+            user_message_title = f"Operazione di {operation_name_display} Completata"
+            user_message_text = (
+                f"L'operazione di {operation_name_display} è stata completata con successo. "
+                "Si consiglia di controllare l'area 'Output Operazione' per eventuali messaggi informativi o di avviso da parte dello strumento."
+            )
+            message_box_type = QMessageBox.Information
+            self.output_text_edit.append(
+                f"<font color='green'><b>Comando di {operation_name_display.lower()} terminato (exit code 0).</b></font>")
+            
+
+        # --- Gestione Riconnessione Pool e Messaggio Finale per l'Utente ---
         if is_restore:
             self.output_text_edit.append(
                 "<i>Tentativo di ripristinare le connessioni dell'applicazione al database...</i>\n")
-            QApplication.processEvents()
-            if self.db_manager.reconnect_pool_if_needed():  # Decommenta quando implementato
+            QApplication.processEvents() # Forzare l'aggiornamento della GUI
+
+            if self.db_manager and self.db_manager.reconnect_pool_if_needed():
                 self.output_text_edit.append(
-                    "<i>Connessioni dell'applicazione al database ripristinate.</i>\n")
-                if success_message_box_needed:
-                    QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                            f"L'operazione di {operation_name.lower()} è stata completata e le connessioni sono state ripristinate.")
-                    QMessageBox.information(self, "Verifica Dati",
-                                            "Il ripristino sembra completato. Si consiglia di verificare i dati e, se necessario, riavviare l'applicazione.")
-            else:
+                    "<i>Connessioni dell'applicazione al database ripristinate con successo.</i>\n")
+                if message_box_type == QMessageBox.Information: # Se l'operazione Restore base è andata bene
+                    user_message_text += "\nLe connessioni dell'applicazione al database sono state ripristinate. L'applicazione è ora pronta all'uso."
+                else: # Se l'operazione Restore ha avuto errori, ma la riconnessione è OK
+                    user_message_text += "\nATTENZIONE: Le connessioni dell'applicazione sono state ripristinate, ma si sono verificati errori durante il ripristino stesso. Verificare l'integrità dei dati."
+                QMessageBox(message_box_type, user_message_title, user_message_text, QMessageBox.Ok, self).exec_()
+                QMessageBox.information(self, "Verifica Importante",
+                                        "Dopo un ripristino, si consiglia sempre di verificare l'integrità dei dati nel database. Se si riscontrano problemi, riavviare l'applicazione.")
+
+            else: # Riconnessione pool fallita dopo un restore
                 self.output_text_edit.append(
                     "<font color='red'><b>FALLITO: Impossibile ripristinare le connessioni al database. Si prega di RIAVVIARE L'APPLICAZIONE.</b></font>\n")
-                QMessageBox.critical(self, "Errore Riconnessione Critico",
-                                     "Impossibile ripristinare le connessioni al database dopo il ripristino.\n"
-                                     "L'applicazione deve essere riavviata.")
-            # Semplificazione temporanea senza gestione pool esplicita qui:
-            if success_message_box_needed:
-                QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                        f"Il comando di {operation_name.lower()} è terminato. Controllare l'output per il risultato effettivo.\n"
-                                        "Se il ripristino ha avuto successo, potrebbe essere necessario riavviare l'applicazione.")
+                user_message_title = f"Errore Critico: Riconnessione Database Fallita"
+                user_message_text = (
+                    f"L'operazione di {operation_name_display} è terminata, ma l'applicazione non è riuscita a riconnettersi al database. "
+                    "Questo è un errore critico. Si prega di chiudere e riavviare l'applicazione immediatamente."
+                )
+                QMessageBox.critical(self, user_message_title, user_message_text, QMessageBox.Ok, self).exec_()
 
-        # Per operazioni diverse dal ripristino (es. backup)
-        elif success_message_box_needed:
-            QMessageBox.information(self, f"Operazione {operation_name} Completata",
-                                    f"Il comando di {operation_name.lower()} è terminato (exit code 0).\n"
-                                    "Controllare l'output per eventuali errori specifici dello strumento (es. pg_dump).")
+        else: # Non è un'operazione di ripristino (es. Backup)
+            QMessageBox(message_box_type, user_message_title, user_message_text, QMessageBox.Ok, self).exec_()
+
 
     def _start_backup(self):
         backup_file = self.backup_file_path_edit.text()
@@ -6068,27 +6095,58 @@ class PartitaDetailsDialog(QDialog):
 
         # Tab Variazioni
         variazioni_tab = QWidget()
-        variazioni_layout = QVBoxLayout(variazioni_tab)
+        variazioni_layout = QVBoxLayout()
+
         variazioni_table = QTableWidget()
-        variazioni_table.setColumnCount(5)
-        variazioni_table.setHorizontalHeaderLabels(["ID", "Tipo", "Data", "Partita Dest.", "Contratto"])
+        # Aumenta il numero di colonne per includere origine e destinazione per esteso
+        variazioni_table.setColumnCount(6) # Ad es., ID, Tipo, Data, Partita Origine, Partita Destinazione, Contratto
+        variazioni_table.setHorizontalHeaderLabels([
+            "ID Var.", "Tipo", "Data Var.", "Partita Origine", "Partita Destinazione", "Contratto" # Etichette aggiornate
+        ])
         variazioni_table.setAlternatingRowColors(True)
+        variazioni_table.horizontalHeader().setStretchLastSection(True) # Per far espandere l'ultima colonna
+        variazioni_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
         if self.partita.get('variazioni'):
             variazioni_table.setRowCount(len(self.partita['variazioni']))
             for i, var in enumerate(self.partita['variazioni']):
-                variazioni_table.setItem(i, 0, QTableWidgetItem(str(var.get('id', ''))))
-                variazioni_table.setItem(i, 1, QTableWidgetItem(var.get('tipo', '')))
-                variazioni_table.setItem(i, 2, QTableWidgetItem(str(var.get('data_variazione', ''))))
-                dest_text = str(var.get('partita_destinazione_id', '')) if var.get('partita_destinazione_id') else "-"
-                variazioni_table.setItem(i, 3, QTableWidgetItem(dest_text))
+                col = 0
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('data_variazione', '')))); col += 1
+
+                # Informazioni Partita Origine
+                origine_text = ""
+                if var.get('partita_origine_id'): # Solo se l'ID esiste
+                    num_orig = var.get('origine_numero_partita', 'N/D')
+                    com_orig = var.get('origine_comune_nome', 'N/D')
+                    origine_text = f"N.{num_orig} ({com_orig})"
+                else:
+                    origine_text = "-" # O "N/A"
+                variazioni_table.setItem(i, col, QTableWidgetItem(origine_text)); col += 1
+
+                # Informazioni Partita Destinazione
+                dest_text = ""
+                if var.get('partita_destinazione_id'): # Solo se l'ID esiste
+                    num_dest = var.get('destinazione_numero_partita', 'N/D')
+                    com_dest = var.get('destinazione_comune_nome', 'N/D')
+                    dest_text = f"N.{num_dest} ({com_dest})"
+                else:
+                    dest_text = "-" # O "N/A"
+                variazioni_table.setItem(i, col, QTableWidgetItem(dest_text)); col += 1
+
+                # Contratto info (come prima)
                 contratto_text = ""
                 if var.get('tipo_contratto'):
                     contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
                     if var.get('notaio'):
                         contratto_text += f" - {var['notaio']}"
-                variazioni_table.setItem(i, 4, QTableWidgetItem(contratto_text))
+                variazioni_table.setItem(i, col, QTableWidgetItem(contratto_text)); col += 1
+
         variazioni_layout.addWidget(variazioni_table)
+        variazioni_tab.setLayout(variazioni_layout)
         self.tabs.addTab(variazioni_tab, "Variazioni")
+
 
         # Tab Documenti (come prima)
         self.documents_tab_widget = QWidget()
@@ -6268,17 +6326,42 @@ class PartitaDetailsDialog(QDialog):
         report_lines = []
         partita = self.partita
 
-        report_lines.append("="*50)
-        report_lines.append(f"DETTAGLIO PARTITA N. {partita.get('numero_partita', 'N/D')}")
-        report_lines.append(f"Comune: {partita.get('comune_nome', 'N/D')}")
-        report_lines.append(f"ID Partita: {partita.get('id', 'N/D')}")
-        report_lines.append("="*50)
-        report_lines.append(f"Tipo: {partita.get('tipo', 'N/D')}")
-        report_lines.append(f"Stato: {partita.get('stato', 'N/D')}")
-        report_lines.append(f"Data Impianto: {partita.get('data_impianto', 'N/D')}")
-        report_lines.append(f"Data Chiusura: {partita.get('data_chiusura', 'N/D') if partita.get('data_chiusura') else 'N/A'}")
-        report_lines.append(f"Numero Provenienza: {partita.get('numero_provenienza', 'N/A') if partita.get('numero_provenienza') else 'N/A'}")
         report_lines.append("\n" + "="*50)
+        report_lines.append("VARIAZIONI")
+        report_lines.append("="*50)
+        if self.partita.get('variazioni'):
+            for var in self.partita['variazioni']:
+                report_lines.append(f"  - ID Variazione: {var.get('id')}")
+                report_lines.append(f"    Tipo: {var.get('tipo')}, Data: {var.get('data_variazione')}")
+                
+                # Informazioni Partita Origine
+                orig_id = var.get('partita_origine_id', 'N/A')
+                orig_num = var.get('origine_numero_partita', 'N/A')
+                orig_com = var.get('origine_comune_nome', 'N/A')
+                if orig_id != 'N/A': # Se l'ID esiste
+                    report_lines.append(f"    Partita Origine: N.{orig_num} (Comune: {orig_com}) [ID: {orig_id}]")
+                else:
+                    report_lines.append(f"    Partita Origine: N/A")
+
+                # Informazioni Partita Destinazione
+                dest_id = var.get('partita_destinazione_id', 'N/A')
+                dest_num = var.get('destinazione_numero_partita', 'N/A')
+                dest_com = var.get('destinazione_comune_nome', 'N/A')
+                if dest_id != 'N/A': # Se l'ID esiste
+                    report_lines.append(f"    Partita Destinazione: N.{dest_num} (Comune: {dest_com}) [ID: {dest_id}]")
+                else:
+                    report_lines.append(f"    Partita Destinazione: N/A")
+
+                contr_info = []
+                if var.get('tipo_contratto'): contr_info.append(f"Tipo Contratto: {var.get('tipo_contratto')}")
+                if var.get('data_contratto'): contr_info.append(f"Data Contratto: {var.get('data_contratto')}")
+                if var.get('notaio'): contr_info.append(f"Notaio: {var.get('notaio')}")
+                if var.get('repertorio'): contr_info.append(f"Repertorio: {var.get('repertorio')}")
+                if contr_info: report_lines.append(f"    Contratto: {' | '.join(contr_info)}")
+                if var.get('contratto_note') : report_lines.append(f"    Note Contratto: {var.get('contratto_note')}") # Se c'è una colonna note nel contratto
+
+        else:
+            report_lines.append("  Nessuna variazione registrata.")
         report_lines.append("POSSESSORI")
         report_lines.append("="*50)
         if partita.get('possessori'):

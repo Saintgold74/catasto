@@ -233,22 +233,23 @@ class CatastoDBManager:
                 raise psycopg2.OperationalError(f"Impossibile ottenere una connessione valida dal pool: {e}")
 
     def _release_connection(self, conn):
-            """Rilascia una connessione al pool."""
-            if self.pool and conn:
-                try:
-                    self.pool.putconn(conn)
-                    self.logger.debug(f"Connessione {id(conn)} rilasciata al pool.")
-                except Exception as e: # Es. se la connessione è in uno stato non valido o il pool è stato chiuso
-                    self.logger.error(f"Errore nel rilasciare connessione {id(conn)} al pool: {e}. Tento chiusura forzata.", exc_info=True)
-                    try: 
-                        if not conn.closed: conn.close()
-                    except psycopg2.Error: pass
-            elif not self.pool:
-                self.logger.warning(f"Tentativo di rilasciare connessione {id(conn)} ma il pool non è (più) attivo. Tento chiusura.")
-                try:
-                    if conn and not conn.closed: conn.close()
+        """Rilascia una connessione al pool."""
+        if self.pool and conn and not conn.closed: # Aggiungi 'and not conn.closed'
+            try:
+                self.pool.putconn(conn)
+                self.logger.debug(f"Connessione {id(conn)} rilasciata al pool.")
+            except Exception as e:
+                self.logger.error(f"Errore nel rilasciare connessione {id(conn)} al pool: {e}. Tento chiusura forzata.", exc_info=True)
+                try: 
+                    if not conn.closed: conn.close()
                 except psycopg2.Error: pass
-    # I tuoi metodi disconnect_pool e reconnect_pool diventano:
+        elif not self.pool:
+            self.logger.warning(f"Tentativo di rilasciare connessione {id(conn)} ma il pool non è (più) attivo. Tento chiusura.")
+            try:
+                if conn and not conn.closed: conn.close()
+            except psycopg2.Error: pass
+        elif conn and conn.closed:
+            self.logger.debug(f"Connessione {id(conn)} era già chiusa, non ripristinato al pool.")
     def disconnect_pool_temporarily(self) -> bool:
         self.logger.info("Chiusura temporanea del pool di connessioni per operazione di ripristino...")
         self.close_pool() # Chiude e nullifica self.pool
@@ -1267,12 +1268,33 @@ class CatastoDBManager:
                 partita_details['immobili'] = [dict(row) for row in immobili_results] if immobili_results else []
 
                 # Variazioni (e contratti associati)
+                # MODIFICA QUI LA QUERY PER INCLUDERE NUMERO PARTITA E NOME COMUNE
                 query_var = f"""
-                    SELECT v.*, 
-                           con.tipo as tipo_contratto, con.data_contratto, con.notaio, 
-                           con.repertorio, con.note as contratto_note
+                    SELECT 
+                        v.*, 
+                        con.tipo as tipo_contratto, 
+                        con.data_contratto, 
+                        con.notaio, 
+                        con.repertorio, 
+                        con.note as contratto_note,
+                        
+                        -- Dati per la partita di origine
+                        po.numero_partita AS origine_numero_partita,
+                        co.nome AS origine_comune_nome,
+                        
+                        -- Dati per la partita di destinazione
+                        pd.numero_partita AS destinazione_numero_partita,
+                        cd.nome AS destinazione_comune_nome
+                        
                     FROM {self.schema}.variazione v 
                     LEFT JOIN {self.schema}.contratto con ON v.id = con.variazione_id
+                    -- JOIN per ottenere il numero di partita e il comune della partita di origine
+                    LEFT JOIN {self.schema}.partita po ON v.partita_origine_id = po.id
+                    LEFT JOIN {self.schema}.comune co ON po.comune_id = co.id
+                    -- JOIN per ottenere il numero di partita e il comune della partita di destinazione
+                    LEFT JOIN {self.schema}.partita pd ON v.partita_destinazione_id = pd.id
+                    LEFT JOIN {self.schema}.comune cd ON pd.comune_id = cd.id
+                    
                     WHERE v.partita_origine_id = %s OR v.partita_destinazione_id = %s
                     ORDER BY v.data_variazione DESC;
                 """
@@ -1280,21 +1302,19 @@ class CatastoDBManager:
                 variazioni_results = cur.fetchall()
                 partita_details['variazioni'] = [dict(row) for row in variazioni_results] if variazioni_results else []
             
-            # Per i SELECT non è necessario un commit esplicito se autocommit è False.
-            # La transazione di lettura si chiuderà quando la connessione viene rilasciata.
             self.logger.info(f"Dettagli completi recuperati per partita ID {partita_id}.")
 
         except psycopg2.Error as db_err:
             self.logger.error(f"Errore DB in get_partita_details (ID: {partita_id}): {db_err}", exc_info=True)
-            return None # O solleva DBMError
+            return None
         except Exception as e:
             self.logger.error(f"Errore Python in get_partita_details (ID: {partita_id}): {e}", exc_info=True)
-            return None # O solleva DBMError
+            return None
         finally:
             if conn:
                 self._release_connection(conn)
         
-        return partita_details if partita_details.get('id') else None # Assicura che almeno i dati base siano stati caricati
+        return partita_details if partita_details.get('id') else None
 
     def update_partita(self, partita_id: int, dati_modificati: Dict[str, Any]):
         """
@@ -3307,46 +3327,58 @@ class CatastoDBManager:
 
     # Metodo ESISTENTE da MODIFICARE
     def logout_user(self, user_id: int, session_id: str, ip_address: Optional[str]) -> bool:
-        """
-        Registra il logout dell'utente aggiornando la sessione attiva in sessioni_accesso
-        e pulisce le variabili di sessione per l'audit.
-        Utilizza il pool di connessioni.
-        """
         conn = None
         try:
             conn = self._get_connection()
             with conn.cursor() as cur:
-                # Nome della procedura SQL aggiornata
                 call_proc_str = f"CALL {self.schema}.logout_utente_sessione(%s, %s, %s, %s);"
-                # Parametri: p_utente_id, p_id_sessione_uuid, p_indirizzo_ip, p_applicazione
                 params = (
                     user_id, 
-                    session_id, # Questo è l'UUID della sessione da chiudere
+                    session_id,
                     ip_address, 
-                    self.application_name # O un valore specifico passato dalla GUI
+                    self.application_name
                 )
                 self.logger.debug(f"Chiamata a procedura catasto.logout_utente_sessione per utente {user_id}, sessione {session_id[:8]}...")
                 cur.execute(call_proc_str, params)
-                
+
                 # La procedura logout_utente_sessione aggiorna la tabella sessioni_accesso.
                 # Ora, puliamo le variabili di audit SULLA STESSA CONNESSIONE prima del commit.
                 self._clear_audit_session_variables_with_conn(conn)
-                
-                conn.commit()
+
+                # Esegui il commit se tutto è andato bene fino a qui
+                conn.commit() 
                 self.logger.info(f"Logout per utente ID {user_id}, sessione {session_id[:8]}... completato e variabili audit pulite.")
                 return True
-        except psycopg2.Error as e:
-            if conn: conn.rollback()
-            self.logger.error(f"Errore DB durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {getattr(e, 'pgerror', str(e))}", exc_info=True)
-            # Non sollevare eccezione, ma indica fallimento
+        except psycopg2.OperationalError as op_err: # Cattura specificamente OperationalError
+            self.logger.error(f"Errore OPERAZIONALE DB durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {op_err}", exc_info=True)
+            # Qui la connessione è quasi certamente chiusa dal server.
+            # Non tentare rollback o putconn, ma chiudi forzatamente se possibile.
+            if conn and not conn.closed:
+                try:
+                    conn.close() # Tenta una chiusura pulita se non è già chiusa
+                    self.logger.warning(f"Connessione {id(conn)} chiusa forzatamente dopo OperationalError.")
+                except Exception as close_err:
+                    self.logger.error(f"Errore durante la chiusura forzata della connessione dopo OperationalError: {close_err}")
+            return False # Indica che il logout al server è fallito
+        except psycopg2.Error as e: # Cattura altri errori psycopg2 (es. InterfaceError se non è già stato chiuso)
+            self.logger.error(f"Errore DB generico durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {e}", exc_info=True)
+            if conn and not conn.closed:
+                try:
+                    conn.rollback() # Tenta il rollback solo se la connessione è ancora aperta
+                    self.logger.warning(f"Rollback eseguito per connessione {id(conn)} dopo errore DB.")
+                except Exception as rb_err:
+                    self.logger.error(f"Errore durante il rollback dopo errore DB: {rb_err}")
             return False
         except Exception as e:
-            if conn and not conn.closed: conn.rollback()
             self.logger.error(f"Errore Python generico durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {e}", exc_info=True)
+            # Nessun rollback necessario per errori Python che non sono DB-specifici
             return False
         finally:
-            if conn:
-                self._release_connection(conn)
+            # Importante: Non chiamare self._release_connection(conn) nel finally
+            # se la connessione potrebbe essere stata chiusa forzatamente sopra.
+            # Il pool potrebbe avere un riferimento a una connessione "morta".
+            # La gestione di `conn` è ora all'interno dei blocchi `except` per `OperationalError`.
+            pass # Rimuovi il finally che chiama _release_connection(conn)
         
 
     def check_permission(self, utente_id: int, permesso_nome: str) -> bool:

@@ -1346,9 +1346,7 @@ class InserimentoComuneWidget(QWidget):
                 # Emetti il segnale con l'ID del nuovo comune!
                 self.comune_appena_inserito.emit(comune_id)
                 logging.getLogger("CatastoGUI").info(f"Segnale comune_appena_inserito emesso per comune ID: {comune_id}")
-
-                
-                              
+                      
         except DBUniqueConstraintError as uve:
             logging.getLogger("CatastoGUI").warning(
                 f"Unicità violata inserendo comune '{nome_comune}': {str(uve)}")
@@ -2290,6 +2288,7 @@ class OperazioniPartitaWidget(QWidget):
             self._update_transfer_button_state_conditionally)
 
     def _crea_tab_passaggio_proprieta(self):
+        # --- Tab Passaggio Proprietà (Voltura) ---
         passaggio_widget_main_container = QWidget()
         passaggio_tab_layout = QVBoxLayout(passaggio_widget_main_container)
         passaggio_scroll = QScrollArea(passaggio_widget_main_container)
@@ -2304,6 +2303,7 @@ class OperazioniPartitaWidget(QWidget):
         passaggio_form_layout = QFormLayout(dati_atto_group)
         passaggio_form_layout.setSpacing(10)
 
+        # ... (campi esistenti prima di tipo atto/contratto) ...
         self.pp_nuova_partita_numero_spinbox = QSpinBox()
         self.pp_nuova_partita_numero_spinbox.setRange(1, 9999999)
         passaggio_form_layout.addRow(
@@ -2327,11 +2327,31 @@ class OperazioniPartitaWidget(QWidget):
         self.pp_data_variazione_edit.setDate(QDate.currentDate())
         passaggio_form_layout.addRow(
             "Data Variazione (*):", self.pp_data_variazione_edit)
-        self.pp_tipo_contratto_edit = QLineEdit()
-        self.pp_tipo_contratto_edit.setPlaceholderText(
-            "Es. Atto Notarile, Denuncia Successione")
+        
+        # --- MODIFICA QUI: SOSTITUISCI QLineEdit con QComboBox ---
+        self.pp_tipo_contratto_combo = QComboBox() # CAMBIATO IN COMBOBOX
+        # Lista dei tipi di atto/contratto comuni
+        tipi_atto_validi = [
+            "Atto di Compravendita",
+            "Dichiarazione di Successione",
+            "Atto di Donazione",
+            "Sentenza Giudiziale",
+            "Atto di Divisione",
+            "Verbale di Asta Pubblica",
+            "Permuta",
+            "Usucapione",
+            "Altro Atto Pubblico",
+            "Scrittura Privata"
+        ]
+        self.pp_tipo_contratto_combo.addItems(tipi_atto_validi)
+        # Se vuoi un valore iniziale diverso o "Seleziona tipo..." puoi aggiungerlo
+        self.pp_tipo_contratto_combo.insertItem(0, "Seleziona Tipo...") # Aggiunge un placeholder
+        self.pp_tipo_contratto_combo.setCurrentIndex(0) # Seleziona il placeholder inizialmente
+        
         passaggio_form_layout.addRow(
-            "Tipo Atto/Contratto (*):", self.pp_tipo_contratto_edit)
+            "Tipo Atto/Contratto (*):", self.pp_tipo_contratto_combo) # USATO IL NUOVO WIDGET
+        # --- FINE MODIFICA ---
+
         self.pp_data_contratto_edit = QDateEdit(calendarPopup=True)
         self.pp_data_contratto_edit.setDisplayFormat("yyyy-MM-dd")
         self.pp_data_contratto_edit.setDate(QDate.currentDate())
@@ -2995,135 +3015,188 @@ class OperazioniPartitaWidget(QWidget):
             # Chiamata per pulire le label e le tabelle
             self._aggiorna_info_partita_sorgente()
 
+    # --- MODIFICA IN _esegui_passaggio_proprieta PER LEGGERE DA COMBOBOX ---
     def _esegui_passaggio_proprieta(self):
-        logging.getLogger("CatastoGUI").info(
-            "Avvio _esegui_passaggio_proprieta.")
+        self.logger.info("Avvio _esegui_passaggio_proprieta.")
+
+        # --- 1. Validazione Dati Partita Sorgente ---
         if self.selected_partita_id_source is None or self.selected_partita_comune_id_source is None:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Selezionare una partita sorgente valida.")
+            QMessageBox.warning(self, "Selezione Mancante", "Selezionare una partita sorgente valida prima di procedere.")
             return
 
+        # --- 2. Validazione Dati Nuova Partita ---
         nuova_part_num = self.pp_nuova_partita_numero_spinbox.value()
         if nuova_part_num <= 0:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Numero nuova partita non valido.")
+            QMessageBox.warning(self, "Dati Mancanti", "Il 'Numero Nuova Partita' non può essere zero o negativo.")
             self.pp_nuova_partita_numero_spinbox.setFocus()
+            self.pp_nuova_partita_numero_spinbox.selectAll()
             return
 
         try:
+            # Verifica se il numero di partita è già in uso nel comune di riferimento
             existing_partita_check = self.db_manager.search_partite(
-                comune_id=self.selected_partita_comune_id_source, numero_partita=nuova_part_num)
+                comune_id=self.selected_partita_comune_id_source,
+                numero_partita=nuova_part_num
+            )
             if existing_partita_check:
                 QMessageBox.warning(self, "Errore Creazione Partita",
-                                    f"Partita N.{nuova_part_num} già esistente nel comune '{self.selected_partita_comune_nome_source}'.")
+                                    f"Esiste già una partita con il numero {nuova_part_num} "
+                                    f"nel comune '{self.selected_partita_comune_nome_source}'. Scegliere un numero diverso.")
                 self.pp_nuova_partita_numero_spinbox.setFocus()
+                self.pp_nuova_partita_numero_spinbox.selectAll()
                 return
         except DBMError as e:
+            self.logger.error(f"Errore DB durante la verifica di esistenza della nuova partita: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Verifica Partita",
-                                 f"Errore verifica partita esistente:\n{str(e)}")
+                                 f"Errore durante la verifica di disponibilità del numero partita:\n{str(e)}")
+            return
+        except Exception as e:
+            self.logger.critical(f"Errore imprevisto durante la verifica di esistenza della nuova partita: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore inatteso durante la verifica del numero partita:\n{str(e)}")
             return
 
-        tipo_variazione = self.pp_tipo_variazione_combo.currentText()
-        data_variazione_q = self.pp_data_variazione_edit.date()
-        tipo_contratto = self.pp_tipo_contratto_edit.text().strip()
-        data_contratto_q = self.pp_data_contratto_edit.date()
 
-        if not tipo_variazione:
-            QMessageBox.warning(self, "Dati Atto Mancanti",
-                                "Selezionare un Tipo Variazione.")
+        # --- 3. Validazione Dati Atto/Contratto ---
+        tipo_variazione = self.pp_tipo_variazione_combo.currentText()
+        if not tipo_variazione or tipo_variazione.strip() == "Seleziona Tipo...": # Assicurati che non sia il placeholder
+            QMessageBox.warning(self, "Dati Atto Mancanti", "Selezionare un 'Tipo Variazione' valido.")
             self.pp_tipo_variazione_combo.setFocus()
             return
-        if data_variazione_q.isNull() or not tipo_contratto or data_contratto_q.isNull():
-            QMessageBox.warning(self, "Dati Atto Mancanti",
-                                "Data Variazione, Tipo Atto/Contratto e Data Atto/Contratto sono obbligatori.")
-            return
 
+        data_variazione_q = self.pp_data_variazione_edit.date()
+        if not data_variazione_q.isValid():
+            QMessageBox.warning(self, "Dati Atto Mancanti", "La 'Data Variazione' è obbligatoria e deve essere valida.")
+            self.pp_data_variazione_edit.setFocus()
+            return
         data_variazione = data_variazione_q.toPyDate()
+
+        # Leggi il tipo di contratto dalla QComboBox e validalo
+        tipo_contratto = self.pp_tipo_contratto_combo.currentText()
+        if tipo_contratto == "Seleziona Tipo..." or not tipo_contratto.strip():
+            QMessageBox.warning(self, "Dati Atto Mancanti", "Selezionare un 'Tipo Atto/Contratto' valido.")
+            self.pp_tipo_contratto_combo.setFocus()
+            return
+        
+        data_contratto_q = self.pp_data_contratto_edit.date()
+        if not data_contratto_q.isValid():
+            QMessageBox.warning(self, "Dati Atto Mancanti", "La 'Data Atto/Contratto' è obbligatoria e deve essere valida.")
+            self.pp_data_contratto_edit.setFocus()
+            return
         data_contratto = data_contratto_q.toPyDate()
+
+        # Altri campi opzionali
         notaio = self.pp_notaio_edit.text().strip() or None
         repertorio = self.pp_repertorio_edit.text().strip() or None
         note_v = self.pp_note_variazione_edit.toPlainText().strip() or None
 
+        # --- 4. Validazione Nuovi Possessori ---
         if not self._pp_temp_nuovi_possessori:
-            QMessageBox.warning(self, "Possessori Mancanti",
-                                "Aggiungere almeno un nuovo possessore.")
+            QMessageBox.warning(self, "Possessori Mancanti", "Aggiungere almeno un nuovo possessore per la nuova partita.")
+            # Puoi anche impostare il focus al pulsante "Aggiungi Possessore" qui
             return
-
-        imm_ids_trasf: List[int] = []
-        if self.pp_trasferisci_tutti_immobili_check.isChecked():
-            source_table_immobili = self.immobili_partita_sorgente_table
-            for r in range(source_table_immobili.rowCount()):
-                id_itm_widget = source_table_immobili.item(r, 0)
-                if id_itm_widget and id_itm_widget.text().isdigit():
-                    imm_ids_trasf.append(int(id_itm_widget.text()))
-        else:
-            sel_tbl_imm = self.pp_immobili_da_selezionare_table
-            for r in range(sel_tbl_imm.rowCount()):
-                chk_widget = sel_tbl_imm.cellWidget(r, 0)
-                if isinstance(chk_widget, QCheckBox) and chk_widget.isChecked():
-                    id_itm_widget = sel_tbl_imm.item(r, 1)
-                    if id_itm_widget and id_itm_widget.text().isdigit():
-                        imm_ids_trasf.append(int(id_itm_widget.text()))
-            if not imm_ids_trasf:
-                QMessageBox.warning(self, "Immobili Mancanti",
-                                    "Selezionare immobili da trasferire.")
-                return
-
+        
+        # Prepara la lista di possessori per il DB, includendo i dettagli del legame
         lista_possessori_per_db = []
         for poss_data_ui in self._pp_temp_nuovi_possessori:
-            dati_per_json = {
+            # Assicurati che tutte le chiavi necessarie alla procedura SQL siano presenti nel dizionario
+            lista_possessori_per_db.append({
                 "possessore_id": poss_data_ui.get("possessore_id"),
                 "nome_completo": poss_data_ui.get("nome_completo"),
-                "cognome_nome": poss_data_ui.get("cognome_nome"),
-                "paternita": poss_data_ui.get("paternita"),
-                "comune_id": poss_data_ui.get("comune_riferimento_id"),
+                "cognome_nome": poss_data_ui.get("cognome_nome"), # Potrebbe non essere sempre presente o obbligatorio
+                "paternita": poss_data_ui.get("paternita"),       # Potrebbe non essere sempre presente o obbligatorio
+                "comune_id": poss_data_ui.get("comune_riferimento_id"), # ID del comune di riferimento del possessore
                 "attivo": poss_data_ui.get("attivo", True),
                 "titolo": poss_data_ui.get("titolo"),
                 "quota": poss_data_ui.get("quota")
-            }
-            lista_possessori_per_db.append(dati_per_json)
-        logging.getLogger("CatastoGUI").debug(
-            f"PP: Lista possessori inviata al DBManager: {lista_possessori_per_db}")
+            })
+        self.logger.debug(f"PP: Lista possessori inviata al DBManager: {lista_possessori_per_db}")
 
+
+        # --- 5. Validazione e Selezione Immobili da Trasferire ---
+        imm_ids_trasf: List[int] = []
+        if self.pp_trasferisci_tutti_immobili_check.isChecked():
+            # Se la checkbox "Includi TUTTI" è spuntata, raccogli tutti gli ID immobili dal table model
+            source_table_immobili = self.immobili_partita_sorgente_table # Questa tabella è popolata con gli immobili della sorgente
+            for r in range(source_table_immobili.rowCount()):
+                id_itm_widget = source_table_immobili.item(r, 0) # Assumendo ID Imm. è nella prima colonna
+                if id_itm_widget and id_itm_widget.text().isdigit():
+                    imm_ids_trasf.append(int(id_itm_widget.text()))
+            
+            if not imm_ids_trasf:
+                QMessageBox.warning(self, "Immobili Mancanti", "La partita sorgente non contiene immobili da trasferire, ma 'Includi TUTTI' è selezionato.")
+                return
+
+        else:
+            # Altrimenti, raccogli solo gli ID degli immobili selezionati individualmente nella tabella
+            sel_tbl_imm = self.pp_immobili_da_selezionare_table
+            for r in range(sel_tbl_imm.rowCount()):
+                chk_widget = sel_tbl_imm.cellWidget(r, 0) # La checkbox è nella colonna 0
+                if isinstance(chk_widget, QCheckBox) and chk_widget.isChecked():
+                    id_itm_widget = sel_tbl_imm.item(r, 1) # L'ID immobile è nella colonna 1 (dopo la checkbox)
+                    if id_itm_widget and id_itm_widget.text().isdigit():
+                        imm_ids_trasf.append(int(id_itm_widget.text()))
+            
+            if not imm_ids_trasf:
+                QMessageBox.warning(self, "Immobili Mancanti", "Nessun immobile è stato selezionato per il trasferimento. Selezionare almeno un immobile o spuntare 'Includi TUTTI'.")
+                return
+
+        self.logger.debug(f"PP: Immobili da trasferire IDs: {imm_ids_trasf}")
+
+        # --- 6. Esecuzione della Procedura nel DBManager ---
         try:
             success = self.db_manager.registra_passaggio_proprieta(
                 partita_origine_id=self.selected_partita_id_source,
                 comune_id_nuova_partita=self.selected_partita_comune_id_source,
                 numero_nuova_partita=nuova_part_num,
-                tipo_variazione=tipo_variazione, data_variazione=data_variazione,
-                tipo_contratto=tipo_contratto, data_contratto=data_contratto,
-                notaio=notaio, repertorio=repertorio,
+                tipo_variazione=tipo_variazione,
+                data_variazione=data_variazione,
+                tipo_contratto=tipo_contratto,
+                data_contratto=data_contratto,
+                notaio=notaio,
+                repertorio=repertorio,
                 nuovi_possessori_list=lista_possessori_per_db,
-                immobili_da_trasferire_ids=imm_ids_trasf if imm_ids_trasf else None,
+                immobili_da_trasferire_ids=imm_ids_trasf if imm_ids_trasf else None, # Passa None se lista vuota
                 note_variazione=note_v
             )
+
+            # --- 7. Gestione del Successo o Fallimento ---
             if success:
                 QMessageBox.information(
-                    self, "Successo", "Passaggio di proprietà registrato con successo.")
-                self.pp_nuova_partita_numero_spinbox.setValue(
-                    self.pp_nuova_partita_numero_spinbox.minimum())
-                if self.pp_tipo_variazione_combo.count() > 0:
-                    self.pp_tipo_variazione_combo.setCurrentIndex(0)
-                self.pp_data_variazione_edit.setDate(QDate.currentDate())
-                self.pp_tipo_contratto_edit.clear()
-                self.pp_data_contratto_edit.setDate(QDate.currentDate())
-                self.pp_notaio_edit.clear()
-                self.pp_repertorio_edit.clear()
-                self.pp_note_variazione_edit.clear()
-                self.pp_trasferisci_tutti_immobili_check.setChecked(True)
-                self._pp_temp_nuovi_possessori.clear()
-                self._pp_aggiorna_tabella_nuovi_possessori()
+                    self, "Successo", "Passaggio di proprietà registrato con successo. La nuova partita è stata creata e gli immobili trasferiti.")
+                self.logger.info("Passaggio di proprietà eseguito con successo.")
+                self._pulisci_campi_passaggio_proprieta() # Chiama un metodo per pulire i campi
+                # Ricarica i dati della partita sorgente per riflettere i cambiamenti (es. immobili rimossi)
                 self._aggiorna_info_partita_sorgente()
+            else:
+                # Questo blocco else dovrebbe essere raggiunto solo se il db_manager restituisce False
+                # senza sollevare eccezioni, ma le eccezioni sono preferibili.
+                self.logger.error("registra_passaggio_proprieta ha restituito False senza eccezioni.")
+                QMessageBox.critical(self, "Errore Operazione", "Il passaggio di proprietà non è stato completato (errore sconosciuto). Controllare i log.")
+
         except (DBUniqueConstraintError, DBDataError, DBMError) as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante la registrazione del passaggio di proprietà: {str(e)}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Operazione", f"Impossibile registrare il passaggio di proprietà:\n{str(e)}")
+            self.logger.error(f"Errore DB durante la registrazione del passaggio di proprietà: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Operazione",
+                                 f"Impossibile registrare il passaggio di proprietà a causa di un errore nel database:\n{str(e)}")
         except Exception as e_gen:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto passaggio proprietà: {e_gen}", exc_info=True)
+            self.logger.critical(f"Errore imprevisto durante l'esecuzione del passaggio di proprietà: {e_gen}", exc_info=True)
             QMessageBox.critical(self, "Errore Critico Imprevisto",
-                                 f"Errore imprevisto:\n{type(e_gen).__name__}: {str(e_gen)}")
+                                 f"Si è verificato un errore di sistema inatteso durante l'operazione:\n{type(e_gen).__name__}: {str(e_gen)}")
+
+    # --- NUOVO METODO: Per pulire i campi del tab Passaggio Proprietà dopo il successo ---
+    def _pulisci_campi_passaggio_proprieta(self):
+        self.pp_nuova_partita_numero_spinbox.setValue(self.pp_nuova_partita_numero_spinbox.minimum())
+        self.pp_tipo_variazione_combo.setCurrentIndex(0)
+        self.pp_data_variazione_edit.setDate(QDate.currentDate())
+        self.pp_tipo_contratto_combo.setCurrentIndex(0) # Resetta la ComboBox
+        self.pp_data_contratto_edit.setDate(QDate.currentDate())
+        self.pp_notaio_edit.clear()
+        self.pp_repertorio_edit.clear()
+        self.pp_note_variazione_edit.clear()
+        self.pp_trasferisci_tutti_immobili_check.setChecked(True) # Reimposta a default
+        self._pp_temp_nuovi_possessori.clear() # Pulisci la lista interna
+        self._pp_aggiorna_tabella_nuovi_possessori() # Aggiorna la tabella visualizzata
+        self.logger.info("Campi del form Passaggio Proprietà puliti.")
+
 
     def seleziona_e_carica_partita_sorgente(self, partita_id: int):
         """Imposta l'ID della partita sorgente e carica i suoi dettagli."""
@@ -5494,13 +5567,15 @@ class AdminDBOperationsWidget(QWidget):
 
         config_scripts = [  # Script da 02 in poi
             "02_creazione-schema-tabelle.sql", "03_funzioni-procedure.sql",
-            "07_user-management.sql", "11_advanced-cadastral-features.sql",
-            "12_procedure_crud.sql", "16_advanced_search.sql",
-            "17_funzione_ricerca_immobili.sql", "08_advanced-reporting.sql",
-            "14_report_functions.sql", "13_workflow_integrati.sql",
-            "10_performance-optimization.sql", "09_backup-system.sql",
-            "18_funzioni_trigger_audit.sql", "19_creazione_tabella_sessioni.sql",
-            "15_integration_audit_users.sql"
+            "07_user-management.sql", "19_creazione_tabella_sessioni.sql",
+            "18_funzioni_trigger_audit.sql",
+            "08_advanced-reporting.sql","09_backup-system.sql",
+            "10_performance-optimization.sql","11_advanced-cadastral-features.sql",
+            "12_procedure_crud.sql","13_workflow_integrati.sql",
+            "14_report_functions.sql", "16_advanced_search.sql",
+            "17_funzione_ricerca_immobili.sql", "15_integration_audit_users.sql",
+            "05_query-test.sql"
+            
         ]
         reply = QMessageBox.question(self, "Conferma Configurazione Struttura",
                                      "Stai per eseguire gli script per definire tabelle, funzioni, viste, ecc. nel database.\n"
@@ -8796,7 +8871,7 @@ class LandingPageWidget(QWidget):
     apri_registra_proprieta_signal = pyqtSignal()
     apri_registra_possessore_signal = pyqtSignal()
     apri_registra_consultazione_signal = pyqtSignal()
-    apri_certificato_proprieta_signal = pyqtSignal() # Questo era mancante
+    apri_report_proprieta_signal = pyqtSignal() # Questo era mancante
     apri_report_genealogico_signal = pyqtSignal()    # Questo era mancante
 
     def __init__(self, parent=None):
@@ -8934,8 +9009,8 @@ class LandingPageWidget(QWidget):
         report_layout = QVBoxLayout(report_group)
         report_layout.setSpacing(10)
 
-        btn_cert_proprieta = QPushButton("Genera Certificato Proprietà")
-        btn_cert_proprieta.clicked.connect(self.apri_certificato_proprieta_signal.emit) # <--- COLLEGAMENTO
+        btn_cert_proprieta = QPushButton("Genera Report Proprietà")
+        btn_cert_proprieta.clicked.connect(self.apri_report_proprieta_signal.emit) # <--- COLLEGAMENTO
         report_layout.addWidget(btn_cert_proprieta)
 
         btn_rep_genealogico = QPushButton("Genera Report Genealogico")

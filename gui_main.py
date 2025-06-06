@@ -291,32 +291,36 @@ if not gui_logger.hasHandlers():
 client_ip_address_gui: str = "127.0.0.1"
 
 
-class DBConfigDialog(QDialog):  # Definizione del Dialogo (come fornito precedentemente)
-    def __init__(self, parent=None, initial_config: Optional[Dict[str, Any]] = None):
+class DBConfigDialog(QDialog):
+    # AGGIUNTO UN SEGNALE per comunicare la password al chiamante (run_gui_app)
+    # in modo da non salvarla permanentemente e passarla solo quando serve.
+    # Non verrà usato in questo caso, perché il dialogo ora la gestisce internamente.
+    # config_accepted_with_password = pyqtSignal(dict, str) # Questo segnale non è più necessario così com'è
+    def __init__(self, parent=None, initial_config: Optional[Dict[str, Any]] = None, allow_test_connection: bool = True):
         super().__init__(parent)
         self.setWindowTitle("Configurazione Connessione Database")
         self.setModal(True)
-        self.setMinimumWidth(450)  # Leggermente più largo
+        self.setMinimumWidth(500)
 
         self.settings = QSettings(QSettings.IniFormat, QSettings.UserScope,
                                   "ArchivioDiStatoSavona", "CatastoStoricoApp")
-        logging.getLogger("CatastoGUI").debug(
-            f"DBConfigDialog usa QSettings file: {self.settings.fileName()}")
+        logging.getLogger("CatastoGUI").debug(f"DBConfigDialog usa QSettings file: {self.settings.fileName()}")
+
+        self.db_manager_test: Optional[CatastoDBManager] = None
+        self.allow_test_connection = allow_test_connection
 
         layout = QFormLayout(self)
         layout.setSpacing(10)
-        layout.setLabelAlignment(Qt.AlignRight)  # Allinea etichette a destra
+        layout.setLabelAlignment(Qt.AlignRight)
 
         self.db_type_combo = QComboBox()
-        self.db_type_combo.addItems(
-            ["Locale (localhost)", "Remoto (Server Specifico)"])
+        self.db_type_combo.addItems(["Locale (localhost)", "Remoto (Server Specifico)"])
         self.db_type_combo.currentIndexChanged.connect(self._db_type_changed)
         layout.addRow("Tipo di Server Database:", self.db_type_combo)
 
-        self.host_label = QLabel("Indirizzo Server Host (*):")  # Aggiunto (*)
+        self.host_label = QLabel("Indirizzo Server Host (*):")
         self.host_edit = QLineEdit()
-        self.host_edit.setPlaceholderText(
-            "Es. 192.168.1.100 o nomeserver.locale")
+        self.host_edit.setPlaceholderText("Es. 192.168.1.100 o nomeserver.locale")
         layout.addRow(self.host_label, self.host_edit)
 
         self.port_spinbox = QSpinBox()
@@ -325,152 +329,250 @@ class DBConfigDialog(QDialog):  # Definizione del Dialogo (come fornito preceden
         layout.addRow("Porta Server (*):", self.port_spinbox)
 
         self.dbname_edit = QLineEdit()
+        self.dbname_edit.setPlaceholderText("Es. catasto_storico")
         layout.addRow("Nome Database (*):", self.dbname_edit)
 
         self.user_edit = QLineEdit()
+        self.user_edit.setPlaceholderText("Es. postgres o utente_app")
         layout.addRow("Utente Database (*):", self.user_edit)
 
+        self.password_edit = QPasswordLineEdit()
+        self.password_edit.setPlaceholderText("Password dell'utente database")
+        layout.addRow("Password Database (*):", self.password_edit)
+
         self.schema_edit = QLineEdit()
-        layout.addRow("Schema Database (es. catasto):", self.schema_edit)
+        self.schema_edit.setPlaceholderText("Es. catasto")
+        layout.addRow("Schema Database (opz.):", self.schema_edit)
+
+        bottom_buttons_layout = QHBoxLayout()
+
+        self.test_connection_button = QPushButton("Test Connessione")
+        self.test_connection_button.clicked.connect(self._test_connection)
+        self.test_connection_button.setEnabled(self.allow_test_connection)
+        bottom_buttons_layout.addWidget(self.test_connection_button)
+
+        bottom_buttons_layout.addStretch()
 
         self.button_box = QDialogButtonBox()
-        btn_save = self.button_box.addButton(
-            "Salva e Procedi", QDialogButtonBox.AcceptRole)
-        btn_cancel = self.button_box.addButton(
-            QDialogButtonBox.Cancel)  # Qt si occuperà del testo
+        self.button_box.addButton("Salva e Connetti", QDialogButtonBox.AcceptRole)
+        self.button_box.addButton(QDialogButtonBox.Cancel)
+        
+        self.button_box.accepted.connect(self._handle_save_and_connect)
+        self.button_box.rejected.connect(self._handle_cancel)
+        
+        bottom_buttons_layout.addWidget(self.button_box)
+        layout.addRow(bottom_buttons_layout)
 
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addRow(self.button_box)
+        # --- MODIFICA CHIAVE QUI: Flusso di inizializzazione dei campi ---
+        # Definisci i valori di default DESIDERATI per il PRIMO avvio o se si cancella il .ini
+        self.default_preset_config = {
+            SETTINGS_DB_TYPE: "Remoto (Server Specifico)",
+            SETTINGS_DB_HOST: "10.99.80.131",
+            SETTINGS_DB_PORT: 5432,
+            SETTINGS_DB_NAME: "catasto_storico",
+            SETTINGS_DB_USER: "postgres",
+            SETTINGS_DB_SCHEMA: "catasto",
+            "password": "" # La password non sarà precompilata qui, ma dal "LastPassword"
+        }
 
-        # Popola i campi e imposta visibilità iniziale
+        # Carica le impostazioni. Se initial_config è fornito da run_gui_app, ha la precedenza.
+        # Altrimenti, carichiamo da QSettings, usando i preset come default se non salvato.
         if initial_config:
             self._populate_from_config(initial_config)
         else:
-            self._load_settings()
+            self._load_settings() # Questo metodo ora carica da QSettings usando i default_preset_config
+
+        # Questa chiamata è cruciale per impostare lo stato iniziale dei campi host/label
+        # basandosi sul currentIndex che _populate_from_config ha impostato.
         self._db_type_changed(self.db_type_combo.currentIndex())
+        
+        # La password viene popolata qui da "Database/LastPassword", che ha la precedenza.
+        self.password_edit.setText(self.settings.value("Database/LastPassword", "", type=str))
 
-    def _db_type_changed(self, index):
-        is_remoto = (index == 1)
-        self.host_label.setVisible(is_remoto)
-        self.host_edit.setVisible(is_remoto)
-        if not is_remoto:  # Se selezionato "Locale"
-            # Imposta default e rendilo non visibile ma il valore è lì
-            self.host_edit.setText("localhost")
-            # Rendi localhost non modificabile per "Locale"
-            self.host_edit.setReadOnly(True)
-        else:  # Se selezionato "Remoto"
-            self.host_edit.setReadOnly(False)
-            if self.host_edit.text() == "localhost":  # Se prima era locale, pulisci per input utente
-                self.host_edit.clear()
+    # --- MODIFICA CRUCIALE A _load_settings ---
+    def _load_settings(self):
+        """Carica le impostazioni da QSettings, usando self.default_preset_config come fallback."""
+        config_to_load = {}
+        config_to_load[SETTINGS_DB_TYPE] = self.settings.value(SETTINGS_DB_TYPE, self.default_preset_config[SETTINGS_DB_TYPE], type=str)
+        config_to_load[SETTINGS_DB_HOST] = self.settings.value(SETTINGS_DB_HOST, self.default_preset_config[SETTINGS_DB_HOST], type=str)
+        config_to_load[SETTINGS_DB_PORT] = self.settings.value(SETTINGS_DB_PORT, self.default_preset_config[SETTINGS_DB_PORT], type=int)
+        config_to_load[SETTINGS_DB_NAME] = self.settings.value(SETTINGS_DB_NAME, self.default_preset_config[SETTINGS_DB_NAME], type=str)
+        config_to_load[SETTINGS_DB_USER] = self.settings.value(SETTINGS_DB_USER, self.default_preset_config[SETTINGS_DB_USER], type=str)
+        config_to_load[SETTINGS_DB_SCHEMA] = self.settings.value(SETTINGS_DB_SCHEMA, self.default_preset_config[SETTINGS_DB_SCHEMA], type=str)
+        
+        # La password non è parte di questo "caricamento per i campi", ma da "LastPassword"
+        # self.password_edit.setText(...) verrà fatto nel __init__ dopo _load_settings
+        
+        self._populate_from_config(config_to_load)
+        # Non è necessario chiamare _db_type_changed qui, sarà chiamato alla fine di __init__
 
+    # --- MODIFICA A _populate_from_config per riflettere i tipi ---
     def _populate_from_config(self, config: Dict[str, Any]):
-        db_type_str = config.get(SETTINGS_DB_TYPE, "Locale (localhost)")
-        # Imposta l'indice della combobox in base al testo, con fallback
-        type_index = self.db_type_combo.findText(
-            db_type_str, Qt.MatchFixedString)
+        """
+        Popola i campi del dialogo con i valori di configurazione forniti.
+        """
+        # Aggiunto log per debug interno
+        logging.getLogger("CatastoGUI").debug(f"Popolando DBConfigDialog con: { {k:v for k,v in config.items() if k != 'password'} }")
+
+        db_type_str = config.get(SETTINGS_DB_TYPE, self.default_preset_config[SETTINGS_DB_TYPE])
+        type_index = self.db_type_combo.findText(db_type_str, Qt.MatchFixedString)
         if type_index >= 0:
             self.db_type_combo.setCurrentIndex(type_index)
-        elif "Remoto" in db_type_str:  # Fallback se il testo non matcha esattamente
-            self.db_type_combo.setCurrentIndex(1)
         else:
-            self.db_type_combo.setCurrentIndex(0)
+            # Fallback se il testo non matcha (dovrebbe essere raro se i valori sono coerenti)
+            self.db_type_combo.setCurrentIndex(0) 
 
-        self.host_edit.setText(config.get(SETTINGS_DB_HOST, "localhost"))
+        self.host_edit.setText(config.get(SETTINGS_DB_HOST, self.default_preset_config[SETTINGS_DB_HOST]))
+        
+        # Recupera la porta in modo robusto
+        port_value = config.get(SETTINGS_DB_PORT, self.default_preset_config[SETTINGS_DB_PORT])
+        try:
+            self.port_spinbox.setValue(int(port_value))
+        except (ValueError, TypeError):
+            self.port_spinbox.setValue(self.default_preset_config[SETTINGS_DB_PORT])
+            logging.getLogger("CatastoGUI").warning(f"Valore porta non valido '{port_value}' in config, usando default {self.default_preset_config[SETTINGS_DB_PORT]}.")
 
-        # --- CORREZIONE PER LA PORTA ---
-        # Potrebbe essere None, stringa, o int
-        port_value_from_config = config.get(SETTINGS_DB_PORT)
-        default_port = 5432
+        self.dbname_edit.setText(config.get(SETTINGS_DB_NAME, self.default_preset_config[SETTINGS_DB_NAME]))
+        self.user_edit.setText(config.get(SETTINGS_DB_USER, self.default_preset_config[SETTINGS_DB_USER]))
+        self.schema_edit.setText(config.get(SETTINGS_DB_SCHEMA, self.default_preset_config[SETTINGS_DB_SCHEMA]))
+        
+        # La password viene gestita da "LastPassword" nel __init__
 
-        current_port_value = default_port  # Inizia con il default
-        if port_value_from_config is not None:
-            try:
-                current_port_value = int(port_value_from_config)
-            except (ValueError, TypeError):
-                # Se logging.getLogger("CatastoGUI") non è definito qui, usa print o logging standard
-                # logging.getLogger("CatastoGUI").warning(f"Valore porta non valido '{port_value_from_config}' dalla configurazione, usando default {default_port}.")
-                print(
-                    f"ATTENZIONE: Valore porta non valido '{port_value_from_config}' dalla configurazione, usando default {default_port}.")
-                # Ripristina il default in caso di errore di conversione
-                current_port_value = default_port
 
-        self.port_spinbox.setValue(current_port_value)
-        # --- FINE CORREZIONE ---
+    # --- NUOVI METODI WRAPPER PER accepted() e rejected() ---
+    def _handle_save_and_connect(self):
+        """Gestisce il click su 'Salva e Connetti', include validazione e poi accetta il dialogo."""
+        config_values = self.get_config_values(include_password=True)
 
-        self.dbname_edit.setText(config.get(
-            SETTINGS_DB_NAME, "catasto_storico"))
-        self.user_edit.setText(config.get(SETTINGS_DB_USER, "postgres"))
-        self.schema_edit.setText(config.get(SETTINGS_DB_SCHEMA, "catasto"))
-
-        # Assicura che la visibilità di host_edit sia corretta
-        self._db_type_changed(self.db_type_combo.currentIndex())
-
-    def _load_settings(self):
-        """Carica le impostazioni da QSettings e popola i campi."""
-        config = {}
-        config[SETTINGS_DB_TYPE] = self.settings.value(
-            SETTINGS_DB_TYPE, "Locale (localhost)")
-        config[SETTINGS_DB_HOST] = self.settings.value(
-            SETTINGS_DB_HOST, "localhost")
-        config[SETTINGS_DB_PORT] = self.settings.value(
-            SETTINGS_DB_PORT, 5432, type=int)
-        config[SETTINGS_DB_NAME] = self.settings.value(
-            SETTINGS_DB_NAME, "catasto_storico")
-        config[SETTINGS_DB_USER] = self.settings.value(
-            SETTINGS_DB_USER, "postgres")
-        config[SETTINGS_DB_SCHEMA] = self.settings.value(
-            SETTINGS_DB_SCHEMA, "catasto")
-        self._populate_from_config(config)
-
-    def accept(self):
-        if not self.dbname_edit.text().strip():
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Il nome del database è obbligatorio.")
-            return
-        if not self.user_edit.text().strip():
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "L'utente del database è obbligatorio.")
+        if not all([config_values["dbname"], config_values["user"], config_values["password"]]):
+            QMessageBox.warning(self, "Dati Mancanti", "Compilare tutti i campi obbligatori (Nome DB, Utente DB, Password DB).")
             return
 
         is_remoto = (self.db_type_combo.currentIndex() == 1)
-        host_val = self.host_edit.text().strip()
-        if is_remoto and not host_val:
-            QMessageBox.warning(
-                self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto.")
+        if is_remoto and not config_values["host"]:
+            QMessageBox.warning(self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto.")
             return
 
-        self._save_settings()
+        # Se la validazione passa, salva le impostazioni (senza password permanente)
+        self._save_settings() 
+        # Chiudi il dialogo con QDialog.Accepted.
+        # Questa chiamata è fondamentale per far sì che config_dialog.exec_() restituisca Accepted.
+        super().accept() 
+
+    def _handle_cancel(self):
+        """Gestisce il click su 'Annulla'."""
+        # Non è necessaria alcuna logica di salvataggio qui
+        # Chiudi il dialogo con QDialog.Rejected.
+        super().reject()
+    # --- FINE NUOVI METODI WRAPPER ---
+    
+    def _db_type_changed(self, index: int):
+        """
+        Gestisce il cambio del tipo di server DB (locale/remoto) per mostrare/nascondere il campo host.
+        """
+        is_remoto = (index == 1) # 0 è "Locale", 1 è "Remoto"
+        self.host_label.setVisible(is_remoto)
+        self.host_edit.setVisible(is_remoto)
+        
+        if not is_remoto:
+            self.host_edit.setText("localhost")
+            self.host_edit.setReadOnly(True)
+        else:
+            self.host_edit.setReadOnly(False)
+            # Pulisce il campo host se prima era "localhost"
+            if self.host_edit.text() == "localhost":
+                self.host_edit.clear()
+    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
+
+    # --- NUOVO METODO PER IL TEST DI CONNESSIONE ---
+    def _test_connection(self):
+        config_values = self.get_config_values(include_password=True) # Ottieni anche la password
+        
+        # Validazione minima prima del test
+        if not all([config_values["dbname"], config_values["user"], config_values["password"]]):
+            QMessageBox.warning(self, "Dati Mancanti", "Compilare tutti i campi obbligatori (Nome DB, Utente DB, Password DB) prima di testare la connessione.")
+            return
+
+        # Chiudi un eventuale db_manager_test precedente
+        if self.db_manager_test:
+            self.db_manager_test.close_pool()
+
+        # Istanzia un nuovo DBManager per il test
+        try:
+            self.db_manager_test = CatastoDBManager(
+                dbname=config_values["dbname"],
+                user=config_values["user"],
+                password=config_values["password"],
+                host=config_values["host"],
+                port=config_values["port"],
+                schema=config_values["schema"],
+                application_name="CatastoAppGUI_TestConnessione"
+            )
+            
+            if self.db_manager_test.initialize_main_pool():
+                QMessageBox.information(self, "Test Connessione", "Connessione al database riuscita con successo!")
+                # Chiudi il pool di test subito dopo il successo
+                self.db_manager_test.close_pool() 
+                self.db_manager_test = None
+            else:
+                QMessageBox.warning(self, "Test Connessione", "Connessione al database fallita. Verificare i parametri e la password.")
+                # Il logger di db_manager_test ha già registrato i dettagli dell'errore
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Test", f"Si è verificato un errore durante il test di connessione: {e}")
+            self.logger.error(f"Errore imprevisto durante il test di connessione: {e}", exc_info=True)
+        finally:
+            if self.db_manager_test: # Assicurati che sia chiuso anche in caso di eccezione
+                self.db_manager_test.close_pool()
+                self.db_manager_test = None
+
+    # Modifica il metodo accept per salvare la password usata (temporaneamente)
+    def accept(self):
+        config_values = self.get_config_values(include_password=True) # Ottieni anche la password
+        # Validazione completa prima di salvare e accettare
+        if not all([config_values["dbname"], config_values["user"], config_values["password"]]):
+            QMessageBox.warning(self, "Dati Mancanti", "Compilare tutti i campi obbligatori (Nome DB, Utente DB, Password DB).")
+            return
+        is_remoto = (self.db_type_combo.currentIndex() == 1)
+        if is_remoto and not config_values["host"]:
+            QMessageBox.warning(self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto.")
+            return
+
+        # Salva la password nel QSettings in una chiave temporanea per la sessione o l'ultimo uso.
+        # NON la salvare permanentemente in SETTINGS_DB_PASSWORD.
+        self.settings.setValue("Database/LastPassword", config_values["password"])
+        self.settings.sync() # Forza la scrittura
+
+        self._save_settings() # Questo salva le altre impostazioni (senza password)
         super().accept()
+    
 
     def _save_settings(self):
-        self.settings.setValue(
-            SETTINGS_DB_TYPE, self.db_type_combo.currentText())
-        host_to_save = "localhost" if self.db_type_combo.currentIndex(
-        ) == 0 else self.host_edit.text().strip()
+        self.settings.setValue(SETTINGS_DB_TYPE, self.db_type_combo.currentText())
+        host_to_save = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
         self.settings.setValue(SETTINGS_DB_HOST, host_to_save)
         self.settings.setValue(SETTINGS_DB_PORT, self.port_spinbox.value())
-        self.settings.setValue(
-            SETTINGS_DB_NAME, self.dbname_edit.text().strip())
+        self.settings.setValue(SETTINGS_DB_NAME, self.dbname_edit.text().strip())
         self.settings.setValue(SETTINGS_DB_USER, self.user_edit.text().strip())
-        self.settings.setValue(
-            SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
-        self.settings.sync()
-        logging.getLogger("CatastoGUI").info(
-            f"Impostazioni di connessione al database salvate in: {self.settings.fileName()}")
+        self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
+        
+        # AGGIUNGI UN LOG PER VERIFICARE COSA VIENE SALVATO
+        logging.getLogger("CatastoGUI").info(f"Salvando impostazioni: Type={self.db_type_combo.currentText()}, Host={host_to_save}, Port={self.port_spinbox.value()}, DBName={self.dbname_edit.text().strip()}, User={self.user_edit.text().strip()}, Schema={self.schema_edit.text().strip() or 'catasto'}")
 
-    def get_config_values(self) -> Dict[str, Any]:
-        host_val = "localhost" if self.db_type_combo.currentIndex(
-        ) == 0 else self.host_edit.text().strip()
-        return {
+        self.settings.sync() # Forza la scrittura su disco
+        logging.getLogger("CatastoGUI").info(f"Impostazioni di connessione al database salvate (senza password) in: {self.settings.fileName()}")
+    # Metodo getter modificato per includere la password (opzionale)
+    def get_config_values(self, include_password: bool = False) -> Dict[str, Any]:
+        host_val = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
+        config = {
             "host": host_val,
             "port": self.port_spinbox.value(),
             "dbname": self.dbname_edit.text().strip(),
             "user": self.user_edit.text().strip(),
             "schema": self.schema_edit.text().strip() or "catasto",
-            # "type" è implicito da host localhost vs altro
         }
-
+        if include_password:
+            config["password"] = self.password_edit.text()
+        return config
 
 class LoginDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -947,7 +1049,7 @@ class CatastoMainWindow(QMainWindow):
             self.landing_page_widget.apri_registra_consultazione_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione"))
             # Correggi i nomi dei segnali per Reportistica, usando i nomi che hai dichiarato in gui_widgets.py
-            self.landing_page_widget.apri_certificato_proprieta_signal.connect(
+            self.landing_page_widget.apri_report_proprieta_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Reportistica", "Report Proprietà", activate_report_sub_tab=True))
             self.landing_page_widget.apri_report_genealogico_signal.connect(lambda: self.activate_tab_and_sub_tab(
                 "Reportistica", "Report Genealogico", activate_report_sub_tab=True))
@@ -1533,8 +1635,7 @@ class CatastoMainWindow(QMainWindow):
         event.accept()
 
 # --- Fine Classe CatastoMainWindow ---
-# --- Funzione run_gui_app (con le correzioni) ---
-# --- Funzione run_gui_app (CON LE CORREZIONI AGGIORNATE) ---
+
 
 
 def run_gui_app():
@@ -1549,198 +1650,184 @@ def run_gui_app():
     db_manager_gui: Optional[CatastoDBManager] = None
     main_window_instance = CatastoMainWindow()
 
-    # Definire il percorso del logo e dell'URL di aiuto per la WelcomeScreen
     base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
-    logo_path_for_welcome = os.path.join(
-        base_dir_app, "resources", "logo_meridiana.png")
-    help_manual_url = "https://www.google.com/search?q=manuale+catasto+storico+online"
+    logo_path_for_welcome = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
+    help_manual_url = "https://www.google.com/search?q=manuale+catasto_storico+online"
 
-    # --- Inizio del flusso di avvio riorganizzato e corretto ---
-    while True:  # Loop esterno per la gestione della configurazione/connessione DB
-        active_db_config: Optional[Dict[str, Any]] = None
-        db_password: str = ""
+    # --- Nuovo Flusso di Avvio Semplificato ---
+    while True: # Loop esterno che si ripete finché la connessione al DB principale non ha successo O l'utente esce/va in Admin Offline
+        gui_logger.info("Avvio nuovo ciclo di connessione DB.")
+        
+        # 1. Apri il dialogo di configurazione DB. Questo dialogo è ora l'unico punto per modificare le impostazioni.
+        # I valori iniziali del dialogo verranno caricati da QSettings, usando i default_preset_config se non salvati.
+        config_dialog = DBConfigDialog(parent=None, allow_test_connection=True)
+        
+        if config_dialog.exec_() != QDialog.Accepted:
+            # Se l'utente annulla la configurazione DB, esci dall'applicazione.
+            gui_logger.info("Configurazione Database annullata dall'utente. Uscita dall'applicazione.")
+            sys.exit(0)
+        
+        # L'utente ha cliccato "Salva e Connetti" nel dialogo.
+        # Recupera i valori CORRENTI dal dialogo, inclusa la password che è stata inserita.
+        current_db_config_values = config_dialog.get_config_values(include_password=True)
 
-        # 1. Carica configurazione DB da settings o chiedila all'utente
-        if settings.contains(SETTINGS_DB_NAME) and settings.value(SETTINGS_DB_NAME, type=str).strip():
-            gui_logger.info(
-                f"Caricamento configurazione DB da QSettings: {settings.fileName()}")
-            active_db_config = {
-                "type": settings.value(SETTINGS_DB_TYPE, "Locale (localhost)"),
-                "host": settings.value(SETTINGS_DB_HOST, "localhost"),
-                "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
-                "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico"),
-                "user": settings.value(SETTINGS_DB_USER, "postgres"),
-                "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto")
-            }
-        else:
-            gui_logger.info(
-                "Nessuna configurazione DB valida. Apertura dialogo di configurazione iniziale.")
-            config_dialog = DBConfigDialog(parent=None, initial_config=None)
-            if config_dialog.exec_() == QDialog.Accepted:
-                active_db_config = config_dialog.get_config_values()
-                if not active_db_config or not active_db_config.get("dbname"):
-                    QMessageBox.critical(
-                        None, "Errore Critico", "Configurazione DB non valida. L'applicazione si chiuderà.")
-                    # Uscita immediata se la configurazione è invalida
-                    sys.exit(1)
-            else:
-                gui_logger.info(
-                    "Configurazione DB iniziale annullata dall'utente. Uscita.")
-                sys.exit(0)  # Uscita pulita
+        # 2. Istanzia/Re-istanzia DBManager e tenta inizializzazione pool con i valori ottenuti.
+        if db_manager_gui: # Chiudi il pool precedente se esiste
+            db_manager_gui.close_pool()
+        
+        db_manager_gui = CatastoDBManager(
+            dbname=current_db_config_values["dbname"],
+            user=current_db_config_values["user"],
+            password=current_db_config_values["password"],
+            host=current_db_config_values["host"],
+            port=current_db_config_values["port"],
+            schema=current_db_config_values["schema"],
+            application_name=f"CatastoAppGUI_{current_db_config_values['dbname']}",
+            log_level=gui_logger.level
+        )
+        main_window_instance.db_manager = db_manager_gui
+        main_window_instance.pool_initialized_successful = False # Resetta lo stato per questo tentativo
 
-        # Se la configurazione non è valida, riprova il loop esterno
-        if not active_db_config or not active_db_config.get("dbname"):
-            gui_logger.critical(
-                "Configurazione DB ottenuta è vuota o invalida. Riprovo il ciclo.")
-            continue
 
-        # 2. Richiedi la password del DB e tenta la connessione (loop interno)
-        while True:
-            db_password, ok = QInputDialog.getText(None, "Autenticazione Database",
-                                                   f"Password per utente '{active_db_config['user']}'\nDB: '{active_db_config['dbname']}'@{active_db_config['host']}:{active_db_config['port']}",
-                                                   QLineEdit.Password)
-            if not ok:
-                gui_logger.info(
-                    "Inserimento password DB annullato dall'utente. Uscita.")
-                sys.exit(0)  # Uscita pulita
+        # 3. Tentativo di inizializzare il pool principale
+        if db_manager_gui.initialize_main_pool():
+            main_window_instance.pool_initialized_successful = True
+            gui_logger.info(f"Pool per DB '{current_db_config_values['dbname']}' inizializzato con successo.")
+            
+            # --- CONNESSO CON SUCCESSO: PROCEDI AL LOGIN UTENTE ---
+            login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
+            if login_dialog.exec_() == QDialog.Accepted:
+                if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
+                    # Login riuscito, mostra Welcome Screen
+                    welcome_screen = WelcomeScreen(
+                        parent=None,
+                        logo_path=logo_path_for_welcome,
+                        help_url=help_manual_url
+                    )
+                    welcome_screen_result = welcome_screen.exec_()
 
-            if db_manager_gui:  # Se db_manager_gui esiste già, chiudi il suo pool prima di ricrearlo
-                db_manager_gui.close_pool()
+                    if welcome_screen_result == QDialog.Accepted:
+                        gui_logger.info("Welcome Screen chiusa (Accepted).")
+                        main_window_instance.perform_initial_setup(
+                            db_manager_gui,
+                            login_dialog.logged_in_user_id,
+                            login_dialog.logged_in_user_info,
+                            login_dialog.current_session_id_from_dialog
+                        )
+                        break # Esci dal loop esterno (setup completo e successo)
 
-            db_manager_gui = CatastoDBManager(
-                dbname=active_db_config["dbname"], user=active_db_config["user"], password=db_password,
-                host=active_db_config["host"], port=active_db_config["port"], schema=active_db_config["schema"],
-                application_name=f"CatastoAppGUI_{active_db_config['dbname']}",
-                log_level=gui_logger.level
-            )
-            main_window_instance.db_manager = db_manager_gui
-            # Resetta per ogni tentativo di connessione
+                    else: # Welcome Screen chiusa non "Accepted" (es. utente chiude X)
+                        gui_logger.info("Welcome Screen chiusa (non Accepted). Uscita dall'applicazione.")
+                        sys.exit(0)
+                else: # Errore interno di LoginDialog (dati mancanti dopo accettazione)
+                    QMessageBox.critical(None, "Errore Login Interno", "Dati di login non validi dopo l'autenticazione. Riprovare.")
+                    continue # Torna all'inizio del loop esterno per riaprire DBConfigDialog e riprovare
+            else: # LoginDialog annullato
+                gui_logger.info("Login utente annullato. Uscita dall'applicazione.")
+                sys.exit(0)
+        
+        else: # Inizializzazione pool fallita: Gestisci errori di connessione/autenticazione
             main_window_instance.pool_initialized_successful = False
+            db_target_name_failed = current_db_config_values.get("dbname", "N/D")
+            host_failed = current_db_config_values.get("host", "N/D")
+            gui_logger.error(f"FALLIMENTO inizializzazione pool principale per DB '{db_target_name_failed}' su host '{host_failed}'.")
 
-            if db_manager_gui.initialize_main_pool():
-                main_window_instance.pool_initialized_successful = True
-                gui_logger.info(
-                    f"Pool per DB '{active_db_config['dbname']}' inizializzato con successo.")
-                break  # Esci dal loop di richiesta password DB, connessione riuscita
-            else:  # Inizializzazione pool fallita
-                main_window_instance.pool_initialized_successful = False
-                db_target_name_failed = active_db_config.get("dbname", "N/D")
-                host_failed = active_db_config.get("host", "N/D")
-                gui_logger.error(
-                    f"Fallimento inizializzazione pool principale per DB '{db_target_name_failed}' su host '{host_failed}'.")
+            # Analizza il tipo di errore per dare un feedback preciso all'utente
+            last_db_error_message = ""
+            # Questo approccio è solo una sicurezza; la funzione initialize_main_pool dovrebbe già loggare l'errore dettagliato.
+            # Se vuoi un messaggio più specifico, puoi aggiungere un attributo per l'ultimo errore in CatastoDBManager.
+            
+            # Possibile miglioramento: CatastoDBManager potrebbe esporre l'ultimo errore di connessione.
+            # Per ora, usiamo un messaggio generico o tentiamo di estrarre dal log, ma è meno robusto.
+            
+            # Per avere un messaggio più preciso qui, initialize_main_pool dovrebbe sollevare un'eccezione custom (DBConnectionError, DBAuthError)
+            # o passare l'errore Psycopg2 specifico. Per ora, ci basiamo sulla stringa del messaggio.
+            
+            # Aggiunto log dettagliato per l'errore del pool in CatastoDBManager.initialize_main_pool()
+            # La logica qui sotto analizza il messaggio di errore per presentare un QMessageBox più specifico.
 
-                db_exists_on_server = db_manager_gui.check_database_exists(
-                    db_target_name_failed, active_db_config.get(
-                        "user"), db_password
-                )
+            # Esempio di come potresti aver modificato initialize_main_pool per esporre l'errore:
+            # try:
+            #     conn_test = self.pool.getconn()
+            #     # ... successo
+            # except psycopg2.Error as pool_get_err:
+            #     self._last_connect_error = pool_get_err # Salva l'errore nell'istanza
+            #     # ... fallimento
+            # Poi qui: last_db_error = db_manager_gui._last_connect_error
+
+            # Poiché _last_connect_error non è standard, cerchiamo nel messaggio dell'errore (dal log)
+            # O, meglio, db_manager_gui.initialize_main_pool() potrebbe catturare e passare l'errore Psycopg2.
+            
+            error_details_from_db_manager = db_manager_gui.get_last_connect_error_details() if hasattr(db_manager_gui, 'get_last_connect_error_details') else {}
+            pgcode = error_details_from_db_manager.get('pgcode')
+            pgerror_msg = error_details_from_db_manager.get('pgerror')
+
+            if pgcode == '28P01' or ("password fallita" in str(pgerror_msg).lower() if pgerror_msg else False): # Codice per password sbagliata
+                QMessageBox.critical(None, "Errore Autenticazione Database",
+                                     "La password fornita per l'utente del database è sbagliata. "
+                                     "Verificare la password e riprovare.",
+                                     QMessageBox.Ok)
+            elif pgcode == '08001' or ("timed out" in str(pgerror_msg).lower() if pgerror_msg else False) or ("connessione rifiutata" in str(pgerror_msg).lower() if pgerror_msg else False): # Codici per problemi di connessione
+                 QMessageBox.critical(None, "Errore Connessione Database",
+                                     f"Impossibile connettersi al database '{db_target_name_failed}' su '{host_failed}'. "
+                                     "Il server potrebbe non essere in esecuzione, il firewall potrebbe bloccare la connessione, o l'indirizzo/porta sono errati. "
+                                     "Verificare la configurazione del server PostgreSQL e del firewall.",
+                                     QMessageBox.Ok)
+            else:
+                # Caso di fallback per errori generici o "DB non trovato"
+                db_exists_on_server = False
+                try:
+                    db_exists_on_server = db_manager_gui.check_database_exists(
+                        db_target_name_failed, current_db_config_values.get("user"), current_db_config_values.get("password")
+                    )
+                except Exception as e:
+                    gui_logger.warning(f"Errore durante la verifica esistenza DB per modalità Admin Offline: {e}", exc_info=True)
+                    db_exists_on_server = False # Se la verifica fallisce, assumi non esista o sia inaccessibile
 
                 if not db_exists_on_server and host_failed.lower() in ["localhost", "127.0.0.1"]:
-                    # Modalità Admin Offline
-                    gui_logger.warning(
-                        f"DB '{db_target_name_failed}' non trovato su server locale. Avvio in modalità setup limitata (admin_offline).")
+                    gui_logger.warning(f"DB '{db_target_name_failed}' non trovato su server locale. Avvio in modalità setup limitata (admin_offline).")
                     QMessageBox.information(None, "Database Non Trovato",
                                             f"Il database '{db_target_name_failed}' non sembra esistere sul server locale.\n"
                                             "L'applicazione verrà avviata in modalità limitata per permettere la creazione e configurazione del database tramite il tab 'Sistema -> Amministrazione DB'.")
 
-                    main_window_instance.logged_in_user_info = {
-                        'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
+                    main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
                     main_window_instance.logged_in_user_id = 0
                     main_window_instance.current_session_id = str(uuid.uuid4())
-
+                    
                     main_window_instance.perform_initial_setup(
                         db_manager_gui,
                         main_window_instance.logged_in_user_id,
                         main_window_instance.logged_in_user_info,
                         main_window_instance.current_session_id
                     )
-                    app.exec_()  # Avvia il loop degli eventi per la modalità offline
-                    # Se l'utente chiude la finestra in modalità offline, l'app si chiude
-                    sys.exit(0)  # Uscita dopo l'esecuzione in modalità offline
-                else:  # DB esiste ma non accessibile, o server remoto, o password errata
-                    error_msg_detail = f"Impossibile connettersi al database: '{db_target_name_failed}' su '{host_failed}'.\n"
-                    if db_exists_on_server:
-                        error_msg_detail += "Il database sembra esistere, ma la connessione è fallita (verificare password, privilegi, stato server).\n"
-                    else:
-                        error_msg_detail += "Il database potrebbe non esistere o il server non è raggiungibile.\n"
-                    error_msg_detail += "\nControllare i file di log per dettagli specifici sull'errore di connessione.\nVuoi modificare la configurazione e riprovare?"
+                    app.exec_() # Avvia il loop degli eventi per la modalità offline
+                    sys.exit(0)
+                else: # Errore generico di connessione o DB remoto non raggiungibile
+                    QMessageBox.critical(None, "Errore Connessione Database",
+                                         f"Errore generico di connessione al database. "
+                                         "Verificare che il server sia raggiungibile, che le credenziali siano corrette e che il database esista.",
+                                         QMessageBox.Ok)
+            
+            continue # Torna all'inizio del loop esterno per riaprire il DBConfigDialog con gli ultimi valori inseriti/salvati
 
-                    reply = QMessageBox.critical(None, "Errore Connessione Database",
-                                                 error_msg_detail,
-                                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-                    if reply == QMessageBox.Yes:
-                        # Torna al loop esterno per riconfigurare o riprovare
-                        break  # Esce dal loop interno, continua nel loop esterno
-                    else:
-                        gui_logger.info(
-                            "Uscita scelta dall'utente dopo fallimento connessione DB e nessuna riconfigurazione.")
-                        sys.exit(0)  # Uscita pulita
-
-        # --- A questo punto, il pool è stato inizializzato con successo in modalità normale ---
-
-        # 3. Login Utente normale
-        login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
-        if login_dialog.exec_() == QDialog.Accepted:
-            if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
-                # Mostra la Welcome Screen
-                welcome_screen = WelcomeScreen(
-                    parent=None,  # La WelcomeScreen non ha parent, così non si chiude con main_window
-                    logo_path=logo_path_for_welcome,
-                    help_url=help_manual_url
-                )
-                welcome_screen_result = welcome_screen.exec_()
-
-                if welcome_screen_result == QDialog.Accepted:
-                    gui_logger.info("Welcome Screen chiusa (Accepted).")
-                    main_window_instance.perform_initial_setup(
-                        db_manager_gui,
-                        login_dialog.logged_in_user_id,
-                        login_dialog.logged_in_user_info,
-                        login_dialog.current_session_id_from_dialog
-                    )
-                    break  # Setup completato con successo, esci dal loop principale
-
-                # Welcome Screen chiusa non "Accepted" (es. utente chiude x sulla barra del titolo)
-                else:
-                    gui_logger.info(
-                        "Welcome Screen chiusa (non Accepted). Uscita dall'applicazione.")
-                    sys.exit(0)  # Uscita pulita
-
-            # Errore interno di LoginDialog (dati mancanti dopo accettazione)
-            else:
-                QMessageBox.critical(
-                    None, "Errore Login Interno", "Dati di login non validi dopo l'autenticazione. Riprovare.")
-                # Riprova il ciclo principale (richiederà password DB, poi login)
-                continue
-
-        else:  # Utente ha annullato il LoginDialog
-            gui_logger.info(
-                "Login utente annullato. Uscita dall'applicazione.")
-            sys.exit(0)  # Uscita pulita
-
-    # --- Fine del flusso di avvio riorganizzato ---
+    # --- Fine del flusso di avvio ---
 
     # Se l'applicazione è arrivata qui, significa che il setup è stato completato e la main_window_instance è stata mostrata.
-    gui_logger.info(
-        "Setup iniziale completato. Avvio loop eventi dell'applicazione...")
+    gui_logger.info("Setup iniziale completato. Avvio loop eventi dell'applicazione...")
     try:
         exit_code = app.exec_()
-        gui_logger.info(
-            f"Loop eventi applicazione terminato con codice: {exit_code}")
+        gui_logger.info(f"Loop eventi applicazione terminato con codice: {exit_code}")
     except Exception as e_exec:
-        gui_logger.critical(
-            f"Errore imprevisto durante app.exec_(): {e_exec}", exc_info=True)
-        # Assicura chiusura pool anche in caso di crash del loop eventi
+        gui_logger.critical(f"Errore imprevisto durante app.exec_(): {e_exec}", exc_info=True)
         if db_manager_gui:
             db_manager_gui.close_pool()
         sys.exit(1)
 
-    # La chiusura finale del pool dovrebbe essere gestita da CatastoMainWindow.closeEvent
-    # ma questa è una sicurezza per casi non standard.
     if db_manager_gui:
         db_manager_gui.close_pool()
+    
+    sys.exit(getattr(app, 'returnCode', 0) if hasattr(app, 'returnCode') else 0)
 
-    sys.exit(getattr(app, 'returnCode', 0)
-             if hasattr(app, 'returnCode') else 0)
 
 
 if __name__ == "__main__":

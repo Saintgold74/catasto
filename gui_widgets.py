@@ -1766,6 +1766,15 @@ class RegistrazioneProprietaWidget(QWidget):
         self.num_partita_edit.setMaximum(9999999)
         form_layout.addWidget(num_partita_label, 1, 0)
         form_layout.addWidget(self.num_partita_edit, 1, 1, 1, 2)  # Span
+        
+        # --- NUOVO CAMPO: Suffisso Partita ---
+        suffisso_label = QLabel("Suffisso Partita (opz.):")
+        self.suffisso_partita_edit = QLineEdit()
+        self.suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B")
+        self.suffisso_partita_edit.setMaxLength(20) # Limita la lunghezza
+        form_layout.addWidget(suffisso_label, 3, 0) # Assicurati che l'indice di riga sia corretto
+        form_layout.addWidget(self.suffisso_partita_edit, 3, 1, 1, 2)
+        # --- FINE NUOVO CAMPO ---
 
         # Data impianto
         data_label = QLabel("Data Impianto (*):")
@@ -1987,6 +1996,7 @@ class RegistrazioneProprietaWidget(QWidget):
             return
 
         numero_partita = self.num_partita_edit.value()
+        suffisso_partita = self.suffisso_partita_edit.text().strip() or None # Leggi il valore
         # Converte QDate in datetime.date
         data_impianto_dt = self.data_edit.date().toPyDate()
 
@@ -2176,6 +2186,12 @@ class OperazioniPartitaWidget(QWidget):
         self.nuovo_numero_partita_spinbox.setRange(1, 9999999)
         duplica_form_layout.addRow(
             "Nuovo Numero Partita (*):", self.nuovo_numero_partita_spinbox)
+        # NUOVO CAMPO: Suffisso Partita per Duplicazione
+        self.duplica_suffisso_partita_edit = QLineEdit()
+        self.duplica_suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
+        self.duplica_suffisso_partita_edit.setMaxLength(20)
+        duplica_form_layout.addRow("Suffisso Nuova Partita (opz.):", self.duplica_suffisso_partita_edit) # AGGIUNTO
+
         self.duplica_mantieni_poss_check = QCheckBox(
             "Mantieni Possessori Originali nella Nuova Partita")
         self.duplica_mantieni_poss_check.setChecked(True)
@@ -2299,6 +2315,7 @@ class OperazioniPartitaWidget(QWidget):
             passaggio_scroll_content_widget)
         passaggio_main_layout_scroll.setSpacing(15)
 
+        
         dati_atto_group = QGroupBox(
             "Dati Nuova Partita e Atto di Trasferimento")
         passaggio_form_layout = QFormLayout(dati_atto_group)
@@ -2313,6 +2330,12 @@ class OperazioniPartitaWidget(QWidget):
             "Il comune sarà lo stesso della partita sorgente.")
         passaggio_form_layout.addRow(
             "Comune Nuova Partita:", self.pp_nuova_partita_comune_label)
+         # NUOVO CAMPO: Suffisso Partita per Passaggio Proprietà
+        self.pp_suffisso_nuova_partita_edit = QLineEdit()
+        self.pp_suffisso_nuova_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
+        self.pp_suffisso_nuova_partita_edit.setMaxLength(20)
+        passaggio_form_layout.addRow("Suffisso Nuova Partita (opz.):", self.pp_suffisso_nuova_partita_edit) # AGGIUNTO
+            
 
         self.pp_tipo_variazione_combo = QComboBox()
         tipi_variazione_validi = ['Vendita', 'Acquisto', 'Successione',
@@ -2696,6 +2719,9 @@ class OperazioniPartitaWidget(QWidget):
         # Aggiungere chiamate simili per aggiornare lo stato dei pulsanti negli altri sotto-tab se necessario
 
     def _esegui_duplicazione_partita(self):
+        self.logger.info("Avvio _esegui_duplicazione_partita.")
+
+        # --- 1. Validazione Dati Partita Sorgente ---
         if self.selected_partita_id_source is None:
             QMessageBox.warning(self, "Selezione Mancante",
                                 "Selezionare una partita sorgente prima di duplicare.")
@@ -2705,52 +2731,96 @@ class OperazioniPartitaWidget(QWidget):
                 self, "Errore Interno", "Comune della partita sorgente non determinato. Caricare la partita sorgente.")
             return
 
+        # --- 2. Raccogli e Valida Dati Nuova Partita Duplicata ---
         nuovo_numero = self.nuovo_numero_partita_spinbox.value()
+        nuovo_suffisso = self.duplica_suffisso_partita_edit.text().strip() or None # Leggi il suffisso
+
         if nuovo_numero <= 0:
             QMessageBox.warning(
                 self, "Dati Non Validi", "Il nuovo numero di partita deve essere un valore positivo.")
             self.nuovo_numero_partita_spinbox.setFocus()
+            self.nuovo_numero_partita_spinbox.selectAll()
             return
 
+        # --- 3. Verifica Unicità della Nuova Partita ---
         try:
+            # La ricerca di esistenza deve ora usare anche il suffisso
             existing_partita = self.db_manager.search_partite(
                 comune_id=self.selected_partita_comune_id_source,
-                numero_partita=nuovo_numero
+                numero_partita=nuovo_numero,
+                suffisso_partita=nuovo_suffisso # PASSA IL SUFFISSO ALLA RICERCA
             )
             if existing_partita:
+                # Costruisci un messaggio chiaro se la partita duplicata esiste già
+                suffisso_display = f" ({nuovo_suffisso})" if nuovo_suffisso else ""
                 QMessageBox.warning(self, "Errore Duplicazione",
-                                    f"Esiste già una partita con il numero {nuovo_numero} "
-                                    f"nel comune '{self.selected_partita_comune_nome_source}'. Scegliere un numero diverso.")
+                                    f"Esiste già una partita con il numero {nuovo_numero}{suffisso_display} "
+                                    f"nel comune '{self.selected_partita_comune_nome_source}'. "
+                                    "Scegliere un numero o un suffisso diverso per la nuova partita.")
                 self.nuovo_numero_partita_spinbox.setFocus()
                 return
         except DBMError as e:
+            self.logger.error(f"Errore DB durante la verifica di esistenza della partita duplicata: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Verifica Partita",
-                                 f"Errore durante la verifica della partita esistente:\n{str(e)}")
+                                 f"Errore durante la verifica di disponibilità del numero/suffisso partita:\n{str(e)}")
+            return
+        except Exception as e:
+            self.logger.critical(f"Errore imprevisto durante la verifica di esistenza della partita duplicata: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore inatteso durante la verifica del numero partita:\n{str(e)}")
             return
 
+        # --- 4. Raccogli Opzioni di Duplicazione ---
         mant_poss = self.duplica_mantieni_poss_check.isChecked()
         mant_imm = self.duplica_mantieni_imm_check.isChecked()
-
+        
+        # --- 5. Esegui la Duplicazione Tramite DBManager ---
         try:
+            # La chiamata al metodo db_manager.duplicate_partita deve essere corretta
+            # e includere il nuovo suffisso.
             success = self.db_manager.duplicate_partita(
-                self.selected_partita_id_source, nuovo_numero, mant_poss, mant_imm
+                partita_id_originale=self.selected_partita_id_source,
+                nuovo_numero_partita=nuovo_numero,
+                mantenere_possessori=mant_poss,
+                mantenere_immobili=mant_imm,
+                nuovo_suffisso=nuovo_suffisso # PASSA IL NUOVO PARAMETRO SUFFISSO
             )
+            
+            # --- 6. Gestione del Successo o Fallimento ---
             if success:
+                # Costruisci un messaggio di successo completo
+                suffisso_display = f" ({nuovo_suffisso})" if nuovo_suffisso else ""
                 QMessageBox.information(self, "Successo",
                                         f"Partita ID {self.selected_partita_id_source} duplicata con successo "
-                                        f"con nuovo numero partita {nuovo_numero}.")
-                self.nuovo_numero_partita_spinbox.setValue(
-                    self.nuovo_numero_partita_spinbox.minimum())
-                self.duplica_mantieni_poss_check.setChecked(True)
-                self.duplica_mantieni_imm_check.setChecked(False)
-        except DBMError as e:
+                                        f"in una nuova partita N. {nuovo_numero}{suffisso_display}."
+                                        "\nRicordarsi di aggiornare le altre informazioni della nuova partita se necessario.")
+                self.logger.info(f"Partita ID {self.selected_partita_id_source} duplicata con successo in N. {nuovo_numero}{suffisso_display}.")
+                
+                # Pulisci i campi del form di duplicazione
+                self.nuovo_numero_partita_spinbox.setValue(self.nuovo_numero_partita_spinbox.minimum())
+                self.duplica_suffisso_partita_edit.clear() # Pulisci anche il suffisso
+                self.duplica_mantieni_poss_check.setChecked(True) # Resetta al default
+                self.duplica_mantieni_imm_check.setChecked(False) # Resetta al default
+
+                # Potresti voler aggiornare la lista delle partite nel comune di riferimento
+                # se l'utente è tornato alla schermata dell'elenco comuni.
+                # Questo potrebbe essere fatto emettendo un segnale o ricaricando le liste
+                # quando l'utente torna alla schermata principale di gestione/consultazione.
+                
+            else:
+                # Questo blocco else dovrebbe essere raggiunto solo se duplicate_partita restituisce False
+                # senza sollevare eccezioni, ma le eccezioni sono preferibili.
+                self.logger.error("db_manager.duplicate_partita ha restituito False senza eccezioni.")
+                QMessageBox.critical(self, "Errore Operazione", "La duplicazione della partita non è stata completata (errore sconosciuto). Controllare i log.")
+
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
+            self.logger.error(f"Errore DB durante la duplicazione della partita: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Duplicazione",
-                                 f"Errore durante la duplicazione:\n{str(e)}")
+                                 f"Impossibile duplicare la partita a causa di un errore nel database:\n{str(e)}")
         except Exception as e_gen:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto duplicazione: {e_gen}", exc_info=True)
+            self.logger.critical(f"Errore imprevisto durante l'esecuzione della duplicazione: {e_gen}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Errore:\n{type(e_gen).__name__}: {str(e_gen)}")
+                                 f"Si è verificato un errore di sistema inatteso durante l'operazione:\n{type(e_gen).__name__}: {str(e_gen)}")
+
 
     def _carica_immobili_partita_sorgente(self, immobili_data: List[Dict[str, Any]]):
         table = self.immobili_partita_sorgente_table
@@ -3027,6 +3097,7 @@ class OperazioniPartitaWidget(QWidget):
 
         # --- 2. Validazione Dati Nuova Partita ---
         nuova_part_num = self.pp_nuova_partita_numero_spinbox.value()
+        suffisso_nuova_partita = self.pp_suffisso_nuova_partita_edit.text().strip() or None # Leggi il suffisso
         if nuova_part_num <= 0:
             QMessageBox.warning(self, "Dati Mancanti", "Il 'Numero Nuova Partita' non può essere zero o negativo.")
             self.pp_nuova_partita_numero_spinbox.setFocus()
@@ -3034,18 +3105,19 @@ class OperazioniPartitaWidget(QWidget):
             return
 
         try:
-            # Verifica se il numero di partita è già in uso nel comune di riferimento
-            existing_partita_check = self.db_manager.search_partite(
-                comune_id=self.selected_partita_comune_id_source,
-                numero_partita=nuova_part_num
-            )
-            if existing_partita_check:
-                QMessageBox.warning(self, "Errore Creazione Partita",
-                                    f"Esiste già una partita con il numero {nuova_part_num} "
-                                    f"nel comune '{self.selected_partita_comune_nome_source}'. Scegliere un numero diverso.")
-                self.pp_nuova_partita_numero_spinbox.setFocus()
-                self.pp_nuova_partita_numero_spinbox.selectAll()
-                return
+                # La ricerca di esistenza deve ora usare anche il suffisso
+                existing_partita_check = self.db_manager.search_partite(
+                    comune_id=self.selected_partita_comune_id_source,
+                    numero_partita=nuova_part_num,
+                    suffisso_partita=suffisso_nuova_partita # PASSA IL SUFFISSO ALLA RICERCA
+                )
+                if existing_partita_check:
+                    QMessageBox.warning(self, "Errore Creazione Partita",
+                                        f"Esiste già una partita con il numero {nuova_part_num} "
+                                        f"{('('+suffisso_nuova_partita+')' if suffisso_nuova_partita else '')} "
+                                        f"nel comune '{self.selected_partita_comune_nome_source}'. Scegliere un numero/suffisso diverso.")
+                    self.pp_nuova_partita_numero_spinbox.setFocus()
+                    return
         except DBMError as e:
             self.logger.error(f"Errore DB durante la verifica di esistenza della nuova partita: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Verifica Partita",
@@ -3089,6 +3161,7 @@ class OperazioniPartitaWidget(QWidget):
         notaio = self.pp_notaio_edit.text().strip() or None
         repertorio = self.pp_repertorio_edit.text().strip() or None
         note_v = self.pp_note_variazione_edit.toPlainText().strip() or None
+        suffisso_nuova_partita=suffisso_nuova_partita # AGGIUNTO
 
         # --- 4. Validazione Nuovi Possessori ---
         if not self._pp_temp_nuovi_possessori:
@@ -6031,6 +6104,7 @@ class RegistraConsultazioneWidget(QWidget):
         self.update_possessori_table()
         self.update_immobili_table()
         self.num_partita_edit.setFocus()  # Focus sul primo campo utile
+        self.suffisso_partita_edit.clear() # Pulisci il suffisso
 
     def _pulisci_campi(self):
         self.data_consultazione_edit.setDate(QDate.currentDate())
@@ -6120,24 +6194,32 @@ class PartitaDetailsDialog(QDialog):
         header_layout.addWidget(title_label)
         layout.addLayout(header_layout)
 
+        # Informazioni generali
         info_group = QGroupBox("Informazioni Generali")
         info_layout = QGridLayout()
+
         info_layout.addWidget(QLabel("<b>ID:</b>"), 0, 0)
         info_layout.addWidget(QLabel(str(self.partita['id'])), 0, 1)
+
         info_layout.addWidget(QLabel("<b>Tipo:</b>"), 0, 2)
         info_layout.addWidget(QLabel(self.partita['tipo']), 0, 3)
+
         info_layout.addWidget(QLabel("<b>Stato:</b>"), 1, 0)
         info_layout.addWidget(QLabel(self.partita['stato']), 1, 1)
+
         info_layout.addWidget(QLabel("<b>Data Impianto:</b>"), 1, 2)
         info_layout.addWidget(QLabel(str(self.partita['data_impianto'])), 1, 3)
+
+        # NUOVA RIGA: Suffisso Partita
+        info_layout.addWidget(QLabel("<b>Suffisso:</b>"), 2, 2) # Adatta la riga/colonna
+        info_layout.addWidget(QLabel(self.partita.get('suffisso_partita', 'N/A')), 2, 3)
+
         if self.partita.get('data_chiusura'):
-            info_layout.addWidget(QLabel("<b>Data Chiusura:</b>"), 2, 0)
+            info_layout.addWidget(QLabel("<b>Data Chiusura:</b>"), 2, 0) # Adatta la riga
             info_layout.addWidget(QLabel(str(self.partita['data_chiusura'])), 2, 1)
+        
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
-
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs)
 
         # Tabs per possessori, immobili, variazioni, documenti
         self.tabs = QTabWidget() # Rinomina a self.tabs per coerenza
@@ -6398,113 +6480,158 @@ class PartitaDetailsDialog(QDialog):
                 QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
 
     def _generate_partita_text_report(self) -> str:
-        """Genera un report testuale formattato con tutti i dettagli della partita."""
+        """
+        Genera un report testuale formattato con tutti i dettagli della partita,
+        inclusi i possessori, immobili, variazioni e documenti allegati.
+        """
         report_lines = []
-        partita = self.partita
+        partita = self.partita # self.partita contiene tutti i dati recuperati da get_partita_details
 
-        report_lines.append("\n" + "="*50)
-        report_lines.append("VARIAZIONI")
-        report_lines.append("="*50)
-        if self.partita.get('variazioni'):
-            for var in self.partita['variazioni']:
-                report_lines.append(f"  - ID Variazione: {var.get('id')}")
-                report_lines.append(f"    Tipo: {var.get('tipo')}, Data: {var.get('data_variazione')}")
+        # --- SEZIONE 1: INTESTAZIONE E DATI GENERALI PARTITA ---
+        report_lines.append("=" * 70)
+        # Includi il suffisso nel titolo, se presente
+        numero_partita_display = f"N. {partita.get('numero_partita', 'N/D')}"
+        if partita.get('suffisso_partita'):
+            numero_partita_display += f" ({partita['suffisso_partita']})"
+
+        report_lines.append(f"DETTAGLIO PARTITA {numero_partita_display}")
+        report_lines.append(f"Comune: {partita.get('comune_nome', 'N/D')}")
+        report_lines.append(f"ID Partita: {partita.get('id', 'N/D')}")
+        report_lines.append("=" * 70)
+
+        report_lines.append(f"Tipo Partita: {partita.get('tipo', 'N/D')}")
+        report_lines.append(f"Stato: {partita.get('stato', 'N/D')}")
+        report_lines.append(f"Data Impianto: {partita.get('data_impianto', 'N/D')}")
+        data_chiusura = partita.get('data_chiusura')
+        report_lines.append(f"Data Chiusura: {data_chiusura if data_chiusura else 'N/A'}")
+        numero_provenienza = partita.get('numero_provenienza')
+        report_lines.append(f"Numero Provenienza: {numero_provenienza if numero_provenienza else 'N/A'}")
+        report_lines.append("\n") # Linea vuota per separazione
+
+        # --- SEZIONE 2: POSSESSORI ---
+        report_lines.append("=" * 70)
+        report_lines.append("POSSESSORI ASSOCIATI")
+        report_lines.append("=" * 70)
+        if partita.get('possessori'):
+            for i, poss in enumerate(partita['possessori']):
+                report_lines.append(f"  - Possessore {i+1} (ID: {poss.get('id', 'N/D')}): {poss.get('nome_completo', 'N/D')}")
+                report_lines.append(f"    Titolo di Possesso: {poss.get('titolo', 'N/A')}")
+                report_lines.append(f"    Quota: {poss.get('quota', 'N/A')}")
+                if i < len(partita['possessori']) - 1:
+                    report_lines.append("  " + "-" * 60) # Separatore tra possessori
+        else:
+            report_lines.append("  Nessun possessore associato a questa partita.")
+        report_lines.append("\n") # Linea vuota per separazione
+
+        # --- SEZIONE 3: IMMOBILI ---
+        report_lines.append("=" * 70)
+        report_lines.append("IMMOBILI CENSITI")
+        report_lines.append("=" * 70)
+        if partita.get('immobili'):
+            for i, imm in enumerate(partita['immobili']):
+                report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
+                localita_info = f"{imm.get('localita_nome', '')}"
+                if imm.get('civico') is not None and str(imm.get('civico')).strip() != '':
+                    localita_info += f", civ. {imm.get('civico')}"
+                if imm.get('localita_tipo'):
+                    localita_info += f" ({imm.get('localita_tipo')})"
+                report_lines.append(f"    Località: {localita_info.strip() if localita_info.strip() else 'N/A'}")
+                report_lines.append(f"    Classificazione: {imm.get('classificazione', 'N/A')}")
+                report_lines.append(f"    Consistenza: {imm.get('consistenza', 'N/A')}")
+                piani_vani_info = []
+                if imm.get('numero_piani') is not None and imm.get('numero_piani') > 0:
+                    piani_vani_info.append(f"Piani: {imm.get('numero_piani')}")
+                if imm.get('numero_vani') is not None and imm.get('numero_vani') > 0:
+                    piani_vani_info.append(f"Vani: {imm.get('numero_vani')}")
+                if piani_vani_info:
+                    report_lines.append(f"    Dettagli: {' | '.join(piani_vani_info)}")
                 
-                # Informazioni Partita Origine
-                orig_id = var.get('partita_origine_id', 'N/A')
-                orig_num = var.get('origine_numero_partita', 'N/A')
-                orig_com = var.get('origine_comune_nome', 'N/A')
-                if orig_id != 'N/A': # Se l'ID esiste
-                    report_lines.append(f"    Partita Origine: N.{orig_num} (Comune: {orig_com}) [ID: {orig_id}]")
-                else:
-                    report_lines.append(f"    Partita Origine: N/A")
+                if i < len(partita['immobili']) - 1:
+                    report_lines.append("  " + "-" * 60) # Separatore tra immobili
+        else:
+            report_lines.append("  Nessun immobile associato a questa partita.")
+        report_lines.append("\n") # Linea vuota per separazione
 
-                # Informazioni Partita Destinazione
-                dest_id = var.get('partita_destinazione_id', 'N/A')
-                dest_num = var.get('destinazione_numero_partita', 'N/A')
-                dest_com = var.get('destinazione_comune_nome', 'N/A')
-                if dest_id != 'N/A': # Se l'ID esiste
-                    report_lines.append(f"    Partita Destinazione: N.{dest_num} (Comune: {dest_com}) [ID: {dest_id}]")
+        # --- SEZIONE 4: VARIAZIONI ---
+        report_lines.append("=" * 70)
+        report_lines.append("VARIAZIONI STORICHE")
+        report_lines.append("=" * 70)
+        if partita.get('variazioni'):
+            for i, var in enumerate(partita['variazioni']):
+                report_lines.append(f"  - Variazione {i+1} (ID: {var.get('id', 'N/D')}): {var.get('tipo', 'N/D')}")
+                report_lines.append(f"    Data Variazione: {var.get('data_variazione', 'N/D')}")
+                
+                # Dettagli Partita Origine
+                orig_part_id = var.get('partita_origine_id')
+                orig_num = var.get('origine_numero_partita', 'N/D')
+                orig_com = var.get('origine_comune_nome', 'N/D')
+                if orig_part_id:
+                    report_lines.append(f"    Partita Origine: N.{orig_num} (Comune: {orig_com}) [ID: {orig_part_id}]")
                 else:
-                    report_lines.append(f"    Partita Destinazione: N/A")
+                    report_lines.append("    Partita Origine: N/A")
 
-                contr_info = []
-                if var.get('tipo_contratto'): contr_info.append(f"Tipo Contratto: {var.get('tipo_contratto')}")
-                if var.get('data_contratto'): contr_info.append(f"Data Contratto: {var.get('data_contratto')}")
-                if var.get('notaio'): contr_info.append(f"Notaio: {var.get('notaio')}")
-                if var.get('repertorio'): contr_info.append(f"Repertorio: {var.get('repertorio')}")
-                if contr_info: report_lines.append(f"    Contratto: {' | '.join(contr_info)}")
+                # Dettagli Partita Destinazione
+                dest_part_id = var.get('partita_destinazione_id')
+                dest_num = var.get('destinazione_numero_partita', 'N/D')
+                dest_com = var.get('destinazione_comune_nome', 'N/D')
+                if dest_part_id:
+                    report_lines.append(f"    Partita Destinazione: N.{dest_num} (Comune: {dest_com}) [ID: {dest_part_id}]")
+                else:
+                    report_lines.append("    Partita Destinazione: N/A")
+
+                # Dettagli Contratto
+                contr_info_parts = []
+                if var.get('tipo_contratto'): contr_info_parts.append(f"Tipo: {var.get('tipo_contratto')}")
+                if var.get('data_contratto'): contr_info_parts.append(f"Data: {var.get('data_contratto')}")
+                if var.get('notaio'): contr_info_parts.append(f"Notaio: {var.get('notaio')}")
+                if var.get('repertorio'): contr_info_parts.append(f"Repertorio: {var.get('repertorio')}")
+                if contr_info_parts:
+                    report_lines.append(f"    Contratto: {' | '.join(contr_info_parts)}")
+                
+                if var.get('note_variazione') : report_lines.append(f"    Note Variazione: {var.get('note_variazione')}") # Se c'è una colonna note per la variazione
                 if var.get('contratto_note') : report_lines.append(f"    Note Contratto: {var.get('contratto_note')}") # Se c'è una colonna note nel contratto
 
+                if i < len(partita['variazioni']) - 1:
+                    report_lines.append("  " + "-" * 60) # Separatore tra variazioni
         else:
-            report_lines.append("  Nessuna variazione registrata.")
-        report_lines.append("POSSESSORI")
-        report_lines.append("="*50)
-        if partita.get('possessori'):
-            for poss in partita['possessori']:
-                report_lines.append(f"  - ID: {poss.get('id')}, Nome: {poss.get('nome_completo')}")
-                report_lines.append(f"    Titolo: {poss.get('titolo')}, Quota: {poss.get('quota', 'N/A')}")
-        else:
-            report_lines.append("  Nessun possessore associato.")
+            report_lines.append("  Nessuna variazione registrata per questa partita.")
+        report_lines.append("\n") # Linea vuota per separazione
 
-        report_lines.append("\n" + "="*50)
-        report_lines.append("IMMOBILI")
-        report_lines.append("="*50)
-        if partita.get('immobili'):
-            for imm in partita['immobili']:
-                report_lines.append(f"  - ID: {imm.get('id')}, Natura: {imm.get('natura')}")
-                localita_info = f"{imm.get('localita_nome', '')}"
-                if imm.get('civico'): localita_info += f", civ. {imm.get('civico')}"
-                if imm.get('localita_tipo'): localita_info += f" ({imm.get('localita_tipo')})"
-                report_lines.append(f"    Località: {localita_info.strip()}")
-                report_lines.append(f"    Classificazione: {imm.get('classificazione', 'N/A')}, Consistenza: {imm.get('consistenza', 'N/A')}")
-                piani_vani_info = []
-                if imm.get('numero_piani') is not None: piani_vani_info.append(f"Piani: {imm.get('numero_piani')}")
-                if imm.get('numero_vani') is not None: piani_vani_info.append(f"Vani: {imm.get('numero_vani')}")
-                if piani_vani_info: report_lines.append(f"    {' | '.join(piani_vani_info)}")
-        else:
-            report_lines.append("  Nessun immobile associato.")
-
-        report_lines.append("\n" + "="*50)
-        report_lines.append("VARIAZIONI")
-        report_lines.append("="*50)
-        if partita.get('variazioni'):
-            for var in partita['variazioni']:
-                report_lines.append(f"  - ID Variazione: {var.get('id')}")
-                report_lines.append(f"    Tipo: {var.get('tipo')}, Data: {var.get('data_variazione')}")
-                report_lines.append(f"    Partita Origine: {var.get('partita_origine_id', 'N/A')}, Partita Destinazione: {var.get('partita_destinazione_id', 'N/A')}")
-                contr_info = []
-                if var.get('tipo_contratto'): contr_info.append(f"Tipo Contratto: {var.get('tipo_contratto')}")
-                if var.get('data_contratto'): contr_info.append(f"Data Contratto: {var.get('data_contratto')}")
-                if var.get('notaio'): contr_info.append(f"Notaio: {var.get('notaio')}")
-                if var.get('repertorio'): contr_info.append(f"Repertorio: {var.get('repertorio')}")
-                if contr_info: report_lines.append(f"    Contratto: {' | '.join(contr_info)}")
-                if var.get('note') : report_lines.append(f"    Note: {var.get('note')}")
-        else:
-            report_lines.append("  Nessuna variazione registrata.")
-
-        report_lines.append("\n" + "="*50)
-        report_lines.append(f"DOCUMENTI ALLEGATI ({self.documents_table.rowCount() if self.documents_table.item(0,0) and 'Nessun documento' not in self.documents_table.item(0,0).text() else 0})")
-        report_lines.append("="*50)
-        # Assicurati che self.documents_table.rowCount() sia preciso
-        if self.documents_table.rowCount() > 0 and self.documents_table.item(0,0) and "Nessun documento" not in self.documents_table.item(0,0).text():
+        # --- SEZIONE 5: DOCUMENTI ALLEGATI ---
+        report_lines.append("=" * 70)
+        # Assicurati che self.documents_table sia popolata correttamente
+        num_docs = self.documents_table.rowCount()
+        # Se la tabella ha una sola riga e contiene il messaggio "Nessun documento..."
+        if num_docs == 1 and self.documents_table.item(0,0) and "Nessun documento" in self.documents_table.item(0,0).text():
+            num_docs = 0
+        report_lines.append(f"DOCUMENTI ALLEGATI ({num_docs})")
+        report_lines.append("=" * 70)
+        
+        if num_docs > 0:
             for r in range(self.documents_table.rowCount()):
-                doc_id = self.documents_table.item(r,0).text()
+                # Assicurati che gli item non siano None (se la tabella è vuota eccetto il placeholder)
+                doc_id_item = self.documents_table.item(r,0)
+                if not doc_id_item: continue # Salta se la riga è vuota (es. riga placeholder)
+
+                doc_id = doc_id_item.text()
                 titolo = self.documents_table.item(r,1).text()
                 tipo_doc = self.documents_table.item(r,2).text()
                 anno = self.documents_table.item(r,3).text()
                 rilevanza = self.documents_table.item(r,4).text()
                 percorso_short = self.documents_table.item(r,5).text()
-                report_lines.append(f"  - ID: {doc_id}, Titolo: {titolo}")
+
+                report_lines.append(f"  - Documento {r+1} (ID: {doc_id}): {titolo}")
                 report_lines.append(f"    Tipo: {tipo_doc}, Anno: {anno}, Rilevanza: {rilevanza}")
                 report_lines.append(f"    Percorso (locale): {percorso_short}")
+                if r < num_docs - 1:
+                    report_lines.append("  " + "-" * 60) # Separatore tra documenti
         else:
             report_lines.append("  Nessun documento allegato.")
 
-
-        report_lines.append("\n" + "="*50)
+        # --- SEZIONE FINALE ---
+        report_lines.append("\n" + "=" * 70)
         report_lines.append("FINE DETTAGLIO PARTITA")
-        report_lines.append("="*50)
+        report_lines.append("=" * 70)
 
         return "\n".join(report_lines)
     def _update_document_tab_title(self):
@@ -6590,6 +6717,12 @@ class ModificaPartitaDialog(QDialog):
         self.numero_partita_spinbox.setRange(1, 999999)
         form_layout_generali.addRow(
             "Numero Partita (*):", self.numero_partita_spinbox)
+
+        # NUOVO CAMPO: Suffisso Partita
+        self.suffisso_partita_edit = QLineEdit()
+        self.suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
+        self.suffisso_partita_edit.setMaxLength(20)
+        form_layout_generali.addRow("Suffisso Partita (opz.):", self.suffisso_partita_edit) # AGGIUNTO
 
         self.tipo_combo = QComboBox()
         # Assicurati che questi siano i valori corretti
@@ -6736,8 +6869,9 @@ class ModificaPartitaDialog(QDialog):
 
         self.comune_label.setText(
             self.partita_data_originale.get('comune_nome', "N/D"))
-        self.numero_partita_spinbox.setValue(
-            self.partita_data_originale.get('numero_partita', 0))
+        self.numero_partita_spinbox.setValue(self.partita_data_originale.get('numero_partita', 0))
+        self.suffisso_partita_edit.setText(self.partita_data_originale.get('suffisso_partita', '')) # Popola
+        
 
         tipo_idx = self.tipo_combo.findText(
             self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
@@ -6773,50 +6907,13 @@ class ModificaPartitaDialog(QDialog):
         else:
             self.numero_provenienza_spinbox.setValue(
                 self.numero_provenienza_spinbox.minimum())
-    """"
-    def _load_partita_data(self):
-        # ... (come prima, popola i campi del tab "Dati Generali") ...
-        self.partita_data_originale = self.db_manager.get_partita_details(
-            self.partita_id)
-        if not self.partita_data_originale:
-            QMessageBox.critical(
-                self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
-            from PyQt5.QtCore import QTimer  # Importazione locale
-            QTimer.singleShot(0, self.reject)
-            return
-
-        self.comune_label.setText(
-            self.partita_data_originale.get('comune_nome', "N/D"))
-        self.numero_partita_spinbox.setValue(
-            self.partita_data_originale.get('numero_partita', 0))
-        tipo_idx = self.tipo_combo.findText(
-            self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
-        if tipo_idx >= 0:
-            self.tipo_combo.setCurrentIndex(tipo_idx)
-        data_impianto = self.partita_data_originale.get('data_impianto')
-        if data_impianto:
-            self.data_impianto_edit.setDate(
-                QDate(data_impianto.year, data_impianto.month, data_impianto.day))
-        else:
-            self.data_impianto_edit.setDate(QDate())
-        data_chiusura = self.partita_data_originale.get('data_chiusura')
-        if data_chiusura:
-            self.data_chiusura_edit.setDate(
-                QDate(data_chiusura.year, data_chiusura.month, data_chiusura.day))
-        else:
-            self.data_chiusura_edit.setDate(QDate())
-        self.numero_provenienza_spinbox.setValue(
-            self.partita_data_originale.get('numero_provenienza') or 0)
-        stato_idx = self.stato_combo.findText(
-            self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
-        if stato_idx >= 0:
-            self.stato_combo.setCurrentIndex(stato_idx)
-"""
+   
 
     def _save_changes(self):
         # Raccogli i dati dai campi del form
         dati_modificati = {
             "numero_partita": self.numero_partita_spinbox.value(),
+            "suffisso_partita": self.suffisso_partita_edit.text().strip() or None, # Salva il suffisso
             "tipo": self.tipo_combo.currentText(),
             "stato": self.stato_combo.currentText(),
             # Inizializza le date a None, verranno popolate se valide
@@ -8324,11 +8421,10 @@ class PartiteComuneDialog(QDialog):
 
         self.partite_table = QTableWidget()
         # AUMENTA IL NUMERO DI COLONNE A 8
-        self.partite_table.setColumnCount(8) 
-        # AGGIUNGI L'ETICHETTA ALL'HEADER
+        self.partite_table.setColumnCount(9) # Aumenta a 9 colonne
         self.partite_table.setHorizontalHeaderLabels([
-            "ID Partita", "Numero", "Tipo", "Stato",
-            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili", "Num. Documenti" # NUOVA ETICHETTA
+            "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", # AGGIUNTO "Suffisso"
+            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili", "Num. Documenti"
         ])
         self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -8387,34 +8483,19 @@ class PartiteComuneDialog(QDialog):
                 self.partite_table.setRowCount(len(partite_list))
                 for row_idx, partita in enumerate(partite_list):
                     col = 0
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(partita.get('id', ''))))
-                    col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(partita.get('numero_partita', ''))))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('tipo', '')))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('stato', '')))
-                    col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', ''))); col += 1 # NUOVA COLONNA POPOLATA
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
                     data_imp = partita.get('data_impianto')
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(data_imp) if data_imp else ''))
-                    col += 1
-                    self.partite_table.setItem(
-                        row_idx, col, QTableWidgetItem(partita.get('possessori', '')))
-                    col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(partita.get('num_immobili', '0'))))
-                    col += 1
-                    # NUOVA RIGA: Popola la colonna dei documenti allegati
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(partita.get('num_documenti_allegati', '0')))) # NUOVA COLONNA POPOLATA
-                    col += 1 # Incrementa col per la prossima iterazione
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else ''))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
+                    
 
-                self.partite_table.resizeColumnsToContents()
+                    self.partite_table.resizeColumnsToContents()
             else:
                 self.logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id} con filtro '{filter_text}'.")
                 self.partite_table.setRowCount(1)

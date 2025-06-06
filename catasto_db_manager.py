@@ -1231,8 +1231,9 @@ class CatastoDBManager:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 # Info base partita
+                # AGGIUNTO p.suffisso_partita alla SELECT
                 query_partita = f"""
-                    SELECT p.*, c.nome as comune_nome, c.id as comune_id
+                    SELECT p.*, c.nome as comune_nome, c.id as comune_id, p.suffisso_partita 
                     FROM {self.schema}.partita p
                     JOIN {self.schema}.comune c ON p.comune_id = c.id
                     WHERE p.id = %s;
@@ -1346,13 +1347,11 @@ class CatastoDBManager:
 
         # Mappa dei campi permessi e se possono essere NULL
         # (nome_campo_dict, nome_colonna_db, is_nullable)
+        # Aggiunto 'suffisso_partita' alla mappa dei campi permessi
         allowed_fields = {
             "numero_partita": ("numero_partita", False),
+            "suffisso_partita": ("suffisso_partita", True), # Può essere NULL
             "tipo": ("tipo", False),
-            "data_impianto": ("data_impianto", True),
-            "data_chiusura": ("data_chiusura", True),
-            "numero_provenienza": ("numero_provenienza", True),
-            "stato": ("stato", False),
         }
 
         for key_dict, (col_db, _) in allowed_fields.items():
@@ -1391,6 +1390,12 @@ class CatastoDBManager:
         # Aggiungi partita_id alla fine della lista dei parametri per la clausola WHERE
         params.append(partita_id)
         params_tuple = tuple(params)
+        # La logica esistente dovrebbe già gestire l'aggiunta alla clausola SET se la chiave è in dati_modificati.
+        # Assicurati che se dati_modificati["suffisso_partita"] è una stringa vuota, diventi None.
+        if "suffisso_partita" in dati_modificati:
+            set_clauses.append("suffisso_partita = %s")
+            # Se è una stringa vuota, salvala come NULL nel DB
+            params.append(dati_modificati["suffisso_partita"].strip() or None)
 
         try:
             conn = self._get_connection() # Ottieni la connessione
@@ -1677,19 +1682,23 @@ class CatastoDBManager:
     # All'interno della classe CatastoDBManager in catasto_db_manager.py
 
     def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None,
-                      possessore: Optional[str] = None, immobile_natura: Optional[str] = None) -> List[Dict[str, Any]]:
+                       possessore: Optional[str] = None, immobile_natura: Optional[str] = None,
+                       suffisso_partita: Optional[str] = None) -> List[Dict[str, Any]]: # NUOVO PARAMETRO
         """
         Ricerca partite con filtri multipli.
         Utilizza il pool di connessioni e formatta i risultati come lista di dizionari.
         """
         conn = None  # Inizializza la variabile di connessione
+        # AGGIUNTO p.suffisso_partita alla SELECT
+         
         try:
             conditions = []
             params = []
             current_joins_str = "" # Stringa per accumulare i JOIN necessari
 
             # Colonne selezionate e tabella base (partita SEMPRE joinata con comune)
-            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.stato"
+            # AGGIUNTO p.suffisso_partita alla SELECT
+            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.suffisso_partita, p.tipo, p.stato" 
             query_base = f"SELECT DISTINCT {select_cols} FROM {self.schema}.partita p JOIN {self.schema}.comune c ON p.comune_id = c.id"
 
             if possessore:
@@ -1713,6 +1722,13 @@ class CatastoDBManager:
             if numero_partita is not None:
                 conditions.append("p.numero_partita = %s")
                 params.append(numero_partita)
+            # Aggiunto il filtro per suffisso_partita
+            if suffisso_partita is not None: # Se l'utente ha fornito un suffisso (anche vuoto per cercare NULL)
+                if suffisso_partita.strip() == "": # Cerca quelli con suffisso NULL
+                    conditions.append("p.suffisso_partita IS NULL")
+                else: # Cerca un suffisso specifico
+                    conditions.append("p.suffisso_partita ILIKE %s")
+                    params.append(f"%{suffisso_partita.strip()}%")
 
             # Costruzione finale della query
             query = query_base + current_joins_str # Aggiunge tutti i join necessari
@@ -1956,9 +1972,10 @@ class CatastoDBManager:
         
         return new_consultazione_id
     def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
-                                 possessori_json_str: str, # Stringa JSON
-                                 immobili_json_str: str    # Stringa JSON
-                                ) -> Optional[int]: # Restituisce l'ID della nuova partita o None
+                                 possessori_json_str: str,
+                                 immobili_json_str: str,
+                                 suffisso_partita: Optional[str] = None # NUOVO PARAMETRO
+                                ) -> Optional[int]:# Restituisce l'ID della nuova partita o None
         """
         Chiama la procedura SQL catasto.registra_nuova_proprieta 
         (che accetta 5 parametri: comune_id, numero_partita, data_impianto, possessori_json, immobili_json)
@@ -1980,13 +1997,20 @@ class CatastoDBManager:
             raise DBDataError(msg) from je
 
         conn = None
-        new_partita_id: Optional[int] = None
+        nuova_partita_id = self.db_manager.registra_nuova_proprieta(
+            comune_id=self.comune_id,
+            numero_partita=numero_partita,
+            data_impianto=data_impianto_dt,
+            possessori_json_str=possessori_json_str,
+            immobili_json_str=immobili_json_str,
+            suffisso_partita=suffisso_partita # PASSA IL NUOVO PARAMETRO
+        )
+        # ... (logica di successo e pulizia) ...
+        self._pulisci_form_registrazione() # Modifica questo metodo per pulire anche il suffisso
         
-        # --- CORREZIONE NOME PROCEDURA E PARAMETRI ---
-        # Chiama la procedura esistente nel DB 'catasto.registra_nuova_proprieta' con 5 argomenti
-        # I cast a ::json assicurano che PostgreSQL interpreti correttamente le stringhe come JSON.
-        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json);"
-        params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str)
+        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json, %s);"
+        params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str, suffisso_partita)
+        
         # --- FINE CORREZIONE ---
         
         # Query per recuperare l'ID della partita dopo che la procedura l'ha creata.
@@ -1994,9 +2018,12 @@ class CatastoDBManager:
         # perché è NOT NULL e non ha default. Assumiamo qui che inserisca 'principale'.
         query_select_id = f"""
             SELECT id FROM {self.schema}.partita 
-            WHERE comune_id = %s AND numero_partita = %s AND tipo = 'principale' 
+            WHERE comune_id = %s AND numero_partita = %s AND tipo = 'principale' AND
+                 (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))
             ORDER BY data_creazione DESC, id DESC LIMIT 1; 
-        """
+        # """
+        cur.execute(query_select_id, (comune_id, numero_partita, suffisso_partita, suffisso_partita))
+
         # Se la sua procedura SQL imposta un 'tipo' diverso o lo lascia variabile, 
         # questa query SELECT potrebbe necessitare di aggiustamenti.
 
@@ -2046,63 +2073,56 @@ class CatastoDBManager:
         return new_partita_id
     
     def registra_passaggio_proprieta(self, 
-                                     partita_origine_id: int, 
-                                     comune_id_nuova_partita: int, 
-                                     numero_nuova_partita: int,    
-                                     tipo_variazione: str, 
-                                     data_variazione: date, 
-                                     tipo_contratto: str, 
-                                     data_contratto: date,
-                                     notaio: Optional[str] = None, 
-                                     repertorio: Optional[str] = None,
-                                     nuovi_possessori_list: Optional[List[Dict[str, Any]]] = None, 
-                                     immobili_da_trasferire_ids: Optional[List[int]] = None, 
-                                     note_variazione: Optional[str] = None
-                                    ) -> bool: # Restituisce True o solleva eccezione
+                                         partita_origine_id: int, 
+                                         comune_id_nuova_partita: int, 
+                                         numero_nuova_partita: int,    
+                                         tipo_variazione: str, 
+                                         data_variazione: date, 
+                                         tipo_contratto: str, 
+                                         data_contratto: date,
+                                         notaio: Optional[str] = None, 
+                                         repertorio: Optional[str] = None,
+                                         nuovi_possessori_list: Optional[List[Dict[str, Any]]] = None, 
+                                         immobili_da_trasferire_ids: Optional[List[int]] = None, 
+                                         note_variazione: Optional[str] = None,
+                                         suffisso_nuova_partita: Optional[str] = None # NUOVO PARAMETRO
+                                        ) -> bool:
         """
-        Chiama la procedura SQL catasto.registra_passaggio_proprieta per registrare un passaggio 
-        di proprietà, che implica la creazione di una nuova partita, il trasferimento di immobili (opzionale)
-        e l'assegnazione di nuovi possessori alla nuova partita.
-        Utilizza il pool di connessioni e gestisce commit/rollback.
+        Chiama la procedura SQL catasto.registra_passaggio_proprieta.
+        La procedura SQL dovrà essere aggiornata per accettare un suffisso per la nuova partita.
         """
         conn = None
         try:
-            # Serializza i nuovi possessori in JSONB.
-            # Ogni dict in nuovi_possessori_list dovrebbe contenere almeno:
-            # {'possessore_id': int, 'titolo': str, 'quota': Optional[str]}
-            # Adatta le chiavi se la tua procedura SQL si aspetta nomi diversi.
             nuovi_possessori_jsonb = json.dumps(nuovi_possessori_list) if nuovi_possessori_list else None
             
-            # immobili_da_trasferire_ids è una lista di ID interi.
-            # psycopg2 può convertirla in un ARRAY PostgreSQL se il tipo del parametro
-            # nella procedura SQL è integer[] (o _int4).
-
             # Assicurati che il nome della procedura e dello schema siano corretti.
+            # La procedura SQL dovrà accettare questo parametro aggiuntivo.
             call_proc_str = f"CALL {self.schema}.registra_passaggio_proprieta(" \
-                            f"%s, %s, %s, " \
+                            f"%s, %s, %s, %s, " \
                             f"%s::TEXT, %s::DATE, " \
                             f"%s::TEXT, %s::DATE, " \
                             f"%s::TEXT, %s::TEXT, " \
                             f"%s::JSON, %s::INTEGER[], " \
-                            f"%s::TEXT);"
-            #     ^part_orig     ^com_nuova    ^num_nuova
+                            f"%s::TEXT, %s::TEXT);" # AGGIUNTO UN %s PER IL SUFFISSO E SUO TIPO
+            #     ^part_orig     ^com_nuova    ^num_nuova    ^suffisso_nuova_partita (NUOVO)
             #                  ^tipo_var    ^data_var
             #                               ^tipo_contr  ^data_contr
             #                                            ^notaio      ^repertorio
             #                                                         ^nuovi_poss (ORA ::JSON)  ^imm_da_trasf (INTEGER[])
-            #                                                                                     ^note_var
-            
+            #                                                                                     ^note_var (TEXT)
+
             params = (
                 partita_origine_id,
                 comune_id_nuova_partita,
                 numero_nuova_partita,
+                suffisso_nuova_partita, # AGGIUNTO
                 tipo_variazione,
                 data_variazione,
                 tipo_contratto,
                 data_contratto,
                 notaio,
                 repertorio,
-                nuovi_possessori_jsonb, # La variabile Python può rimanere chiamata _jsonb, ma il cast SQL è ::JSON
+                nuovi_possessori_jsonb,
                 immobili_da_trasferire_ids,
                 note_variazione
             )
@@ -2144,15 +2164,16 @@ class CatastoDBManager:
         except Exception as e: logger.error(f"Errore Python registrazione consultazione: {e}"); self.rollback(); return False
 
     def duplicate_partita(self, partita_id_originale: int, nuovo_numero_partita: int,
-                          mantenere_possessori: bool = True, mantenere_immobili: bool = False) -> bool:
+                              mantenere_possessori: bool = True, mantenere_immobili: bool = False,
+                              nuovo_suffisso: Optional[str] = None # NUOVO PARAMETRO
+                             ) -> bool:
         """
         Chiama la procedura SQL per duplicare una partita (es. catasto.duplica_partita).
-        Utilizza il pool di connessioni e gestisce commit/rollback.
-        Restituisce True in caso di successo, altrimenti solleva un'eccezione.
+        La procedura SQL dovrà essere aggiornata per accettare un suffisso per la nuova partita.
         """
-        call_proc_str = f"CALL {self.schema}.duplica_partita(%s, %s, %s, %s);"
-        params = (partita_id_originale, nuovo_numero_partita, mantenere_possessori, mantenere_immobili)
-        
+        # Assumiamo che la procedura SQL catasto.duplica_partita accetti un suffisso
+        call_proc_str = f"CALL {self.schema}.duplica_partita(%s, %s, %s, %s, %s);" # AGGIUNTO %s
+        params = (partita_id_originale, nuovo_numero_partita, mantenere_possessori, mantenere_immobili, nuovo_suffisso) # AGGIUNTO nuovo_suffisso
         conn = None
         try:
             conn = self._get_connection()

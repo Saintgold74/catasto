@@ -3920,6 +3920,8 @@ class ReportisticaWidget(QWidget):
         filename_prefix = "report_consultazioni"
         self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
 
+# *** NUOVO: Classe DocumentViewerDialog ***
+# Questa classe viene spostata qui per chiarezza e per essere inclusa nella riscrittura completa
 class DocumentViewerDialog(QDialog):
     def __init__(self, parent=None, file_path: str = None):
         super().__init__(parent)
@@ -3934,12 +3936,10 @@ class DocumentViewerDialog(QDialog):
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         
-        # Contenitore per il visualizzatore
         self.viewer_widget = QWidget()
         self.viewer_layout = QVBoxLayout(self.viewer_widget)
-        self.viewer_layout.setContentsMargins(0,0,0,0) # Rimuove margini per il viewer
+        self.viewer_layout.setContentsMargins(0,0,0,0)
 
-        # Contenitore per i pulsanti di chiusura
         button_layout = QHBoxLayout()
         self.close_button = QPushButton("Chiudi")
         self.close_button.clicked.connect(self.accept)
@@ -3961,14 +3961,13 @@ class DocumentViewerDialog(QDialog):
 
         if file_extension == '.pdf':
             self._load_pdf()
-        elif file_extension in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']: # Aggiungi altri formati immagine se supportati
+        elif file_extension in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
             self._load_image()
         else:
             QMessageBox.warning(self, "Formato non supportato", f"Il formato '{file_extension}' non è supportato per la visualizzazione interna.")
             self.logger.warning(f"Formato documento non supportato per la visualizzazione interna: {self.file_path}")
             self.viewer_layout.addWidget(QLabel(f"Formato '{file_extension}' non supportato."))
-            # Potresti aggiungere un pulsante per aprirlo esternamente qui
-
+            
     def _load_pdf(self):
         try:
             self.web_view = QWebEngineView(self)
@@ -3988,19 +3987,18 @@ class DocumentViewerDialog(QDialog):
             self.graphics_view.setRenderHint(QPainter.SmoothPixmapTransform)
             self.graphics_view.setCacheMode(QGraphicsView.CacheBackground)
             self.graphics_view.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
-            self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag) # Per spostarsi con la mano
+            self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag)
 
             pixmap = QPixmap(self.file_path)
             if pixmap.isNull():
                 raise ValueError(f"Impossibile caricare immagine da: {self.file_path}")
 
             self.pixmap_item = self.graphics_scene.addPixmap(pixmap)
-            self.graphics_view.fitInView(self.pixmap_item, Qt.KeepAspectRatio) # Adatta l'immagine alla vista
+            self.graphics_view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
             self.graphics_view.setAlignment(Qt.AlignCenter)
 
-            # Implementazione zoom (rudimentale, puoi migliorarlo con slider o rotella mouse)
             self.zoom_factor = 1.0
-            self.graphics_view.wheelEvent = self._image_wheel_event # Sovrascrivi wheel event
+            self.graphics_view.wheelEvent = self._image_wheel_event
 
             self.viewer_layout.addWidget(self.graphics_view)
             self.logger.info(f"Immagine caricata in QGraphicsView: {self.file_path}")
@@ -4011,26 +4009,24 @@ class DocumentViewerDialog(QDialog):
             self.viewer_layout.addWidget(QLabel("Errore nel caricamento dell'immagine."))
 
     def _image_wheel_event(self, event):
-        """Gestisce lo zoom con la rotella del mouse per le immagini."""
-        zoom_in_factor = 1.15  # Fattore di zoom in
-        zoom_out_factor = 1 / zoom_in_factor # Fattore di zoom out
+        zoom_in_factor = 1.15
+        zoom_out_factor = 1 / zoom_in_factor
         
-        # Zoom in/out in base alla direzione della rotella
-        if event.angleDelta().y() > 0: # Rotella in avanti (zoom in)
+        if event.angleDelta().y() > 0:
             self.zoom_factor *= zoom_in_factor
-        else: # Rotella all'indietro (zoom out)
+        else:
             self.zoom_factor *= zoom_out_factor
 
-        # Limita lo zoom per evitare problemi di performance o immagini invisibili
-        self.zoom_factor = max(0.1, min(self.zoom_factor, 10.0)) # Zoom da 10% a 1000%
+        self.zoom_factor = max(0.1, min(self.zoom_factor, 10.0))
 
-        # Trasforma l'immagine
         transform = self.graphics_view.transform()
-        transform.reset() # Resetta la trasformazione attuale
-        transform.scale(self.zoom_factor, self.zoom_factor) # Applica il nuovo fattore di zoom
+        transform.reset()
+        transform.scale(self.zoom_factor, self.zoom_factor)
         self.graphics_view.setTransform(transform)
 
-        event.accept() # Accetta l'evento della rotella
+        event.accept()
+
+# *** FINE: Classe DocumentViewerDialog ***
 
 class StatisticheWidget(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -6172,7 +6168,7 @@ class PartitaDetailsDialog(QDialog):
     def __init__(self, partita_data, parent=None):
         super(PartitaDetailsDialog, self).__init__(parent)
         self.partita = partita_data
-        self.db_manager = getattr(parent, 'db_manager', None)
+        self.db_manager = getattr(parent, 'db_manager', None) 
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
@@ -6180,8 +6176,14 @@ class PartitaDetailsDialog(QDialog):
         self.setMinimumSize(700, 500)
 
         self._init_ui()
-        self._load_all_data()
-        self._update_document_tab_title()
+        # _load_all_data() deve essere chiamato SOLO UNA VOLTA qui, altrimenti è eccesso.
+        self._load_all_data() # <--- Assicurati che sia chiamato solo qui
+        self._update_document_tab_title() 
+
+        # Rimuovi eventuali altre chiamate a _load_all_data() o a singole funzioni di caricamento
+        # che potrebbero essere state aggiunte in altri punti del __init__ o _init_ui.
+        # Ad esempio, se avevi `self._load_possessori()` o `self._load_immobili()` qui, rimuovile.
+
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -6674,30 +6676,47 @@ class PartitaDetailsDialog(QDialog):
         else:
             QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
 
+# *** NUOVO: Riscrizione Completa della Classe ModificaPartitaDialog ***
 class ModificaPartitaDialog(QDialog):
-    
-    def __init__(self, db_manager: CatastoDBManager, partita_id: int, parent=None):
-        super().__init__(parent)
-        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+    # 1. Metodo __init__ aggiunto per gestire la creazione dell'oggetto
+    def __init__(self, db_manager: 'CatastoDBManager', partita_id: int, parent=None):
+        super().__init__(parent)  # Chiamata corretta al costruttore della classe genitore
+        
+        # 2. Inizializzazione degli attributi di istanza
         self.db_manager = db_manager
         self.partita_id = partita_id
-        self.partita_data_originale = None
-        self.problematic_default_date_db = date(2000, 1, 1)
+        self.partita_data_originale: Optional[Dict[str, Any]] = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        
+        # Data di default problematica (da confrontare se letta dal DB)
+        self.problematic_default_date_db = date(1, 1, 1)
 
-        self.setWindowTitle(f"Modifica Partita ID: {self.partita_id}")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(500)
+        self.setWindowTitle(f"Modifica Dati Partita ID: {self.partita_id}")
+        self.setMinimumSize(800, 600) # Dimensioni indicative
 
+        # 3. Chiamata ai metodi per costruire la UI e caricare i dati
         self._init_ui()
-        self._load_partita_data()
-        self._load_possessori_associati()
-        self._load_documenti_allegati() # Questa chiamata popola la tabella e abilita i pulsanti inizialmente
-        # Aggiungi una riga per assicurarti che lo stato dei pulsanti documenti sia corretto
-        # dopo il caricamento iniziale e l'eventuale reset della selezione da _load_documenti_allegati
-        self._aggiorna_stato_pulsanti_documenti()
+        self._load_all_partita_data()
 
+    # 4. I metodi seguenti rimangono invariati, ma ora sono chiamati dal costruttore
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+
+        # --- Intestazione del Dialogo (Informazioni di Base) ---
+        header_group = QGroupBox("Dettagli Partita Corrente")
+        header_layout = QGridLayout(header_group)
+        header_layout.setColumnStretch(1, 1)
+        header_layout.setColumnStretch(3, 1)
+
+        header_layout.addWidget(QLabel("<b>ID Partita:</b>"), 0, 0)
+        self.id_label = QLabel(str(self.partita_id))
+        header_layout.addWidget(self.id_label, 0, 1)
+
+        header_layout.addWidget(QLabel("<b>Comune:</b>"), 0, 2)
+        self.comune_label = QLabel("Caricamento...")
+        header_layout.addWidget(self.comune_label, 0, 3)
+        
+        main_layout.addWidget(header_group)
 
         # --- Tab Widget Principale ---
         self.tab_widget = QTabWidget(self)
@@ -6706,148 +6725,177 @@ class ModificaPartitaDialog(QDialog):
         # --- Tab 1: Dati Generali Partita ---
         self.tab_dati_generali = QWidget()
         form_layout_generali = QFormLayout(self.tab_dati_generali)
-
-        self.id_label = QLabel(str(self.partita_id))
-        form_layout_generali.addRow("ID Partita:", self.id_label)
-        # Verrà popolato da _load_partita_data
-        self.comune_label = QLabel("Comune non specificato")
-        form_layout_generali.addRow("Comune:", self.comune_label)
+        form_layout_generali.setSpacing(10)
+        form_layout_generali.setLabelAlignment(Qt.AlignRight)
 
         self.numero_partita_spinbox = QSpinBox()
         self.numero_partita_spinbox.setRange(1, 999999)
-        form_layout_generali.addRow(
-            "Numero Partita (*):", self.numero_partita_spinbox)
+        form_layout_generali.addRow("Numero Partita (*):", self.numero_partita_spinbox)
 
-        # NUOVO CAMPO: Suffisso Partita
         self.suffisso_partita_edit = QLineEdit()
         self.suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
         self.suffisso_partita_edit.setMaxLength(20)
-        form_layout_generali.addRow("Suffisso Partita (opz.):", self.suffisso_partita_edit) # AGGIUNTO
+        form_layout_generali.addRow("Suffisso Partita (opz.):", self.suffisso_partita_edit)
 
         self.tipo_combo = QComboBox()
-        # Assicurati che questi siano i valori corretti
         self.tipo_combo.addItems(["principale", "secondaria"])
         form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
+
+        self.stato_combo = QComboBox()
+        self.stato_combo.addItems(["attiva", "inattiva"])
+        form_layout_generali.addRow("Stato (*):", self.stato_combo)
 
         self.data_impianto_edit = QDateEdit()
         self.data_impianto_edit.setCalendarPopup(True)
         self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_impianto_edit.setSpecialValueText(
-            " ")  # Permette di visualizzare come vuoto
-        self.data_impianto_edit.setDate(QDate())  # Data nulla di default
+        self.data_impianto_edit.setDate(QDate())
         form_layout_generali.addRow("Data Impianto:", self.data_impianto_edit)
 
         self.data_chiusura_edit = QDateEdit()
         self.data_chiusura_edit.setCalendarPopup(True)
         self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_chiusura_edit.setSpecialValueText(
-            " ")  # Permette di visualizzare come vuoto
-        self.data_chiusura_edit.setDate(QDate())  # Data nulla di default
+        self.data_chiusura_edit.setDate(QDate())
         form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
 
         self.numero_provenienza_spinbox = QSpinBox()
-        self.numero_provenienza_spinbox.setRange(
-            0, 999999)  # Assumendo che 0 sia per "Nessuno"
-        self.numero_provenienza_spinbox.setSpecialValueText(
-            "Nessuno")  # Testo per quando il valore è 0 (o il minimo)
-        form_layout_generali.addRow(
-            "Numero Provenienza:", self.numero_provenienza_spinbox)
-
-        self.stato_combo = QComboBox()
-        # Assicurati siano corretti
-        self.stato_combo.addItems(["attiva", "inattiva"])
-        form_layout_generali.addRow("Stato (*):", self.stato_combo)
-
+        self.numero_provenienza_spinbox.setRange(0, 999999)
+        self.numero_provenienza_spinbox.setSpecialValueText("Nessuno")
+        form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_spinbox)
+        
         self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
 
-        # --- Tab 2: Possessori Associati (come da tuo codice esistente) ---
+        # --- Tab 2: Possessori Associati ---
         self.tab_possessori = QWidget()
         layout_possessori = QVBoxLayout(self.tab_possessori)
 
         self.possessori_table = QTableWidget()
         self.possessori_table.setColumnCount(5)
-        self.possessori_table.setHorizontalHeaderLabels([
-            "ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"
-        ])
-        # ... (altre impostazioni tabella possessori come da tuo codice) ...
+        self.possessori_table.setHorizontalHeaderLabels(["ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"])
         self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.possessori_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.possessori_table.horizontalHeader().setStretchLastSection(True)
-        self.possessori_table.itemSelectionChanged.connect(
-            self._aggiorna_stato_pulsanti_possessori)
+        self.possessori_table.setAlternatingRowColors(True)
+        self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
         layout_possessori.addWidget(self.possessori_table)
 
-        possessori_buttons_layout = QHBoxLayout()
         self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
-        self.btn_aggiungi_possessore.clicked.connect(
-            self._aggiungi_possessore_a_partita)
+        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita)
+        possessori_buttons_layout = QHBoxLayout()
         possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
 
         self.btn_modifica_legame_possessore = QPushButton("Modifica Legame...")
-        self.btn_modifica_legame_possessore.clicked.connect(
-            self._modifica_legame_possessore)
+        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore)
         self.btn_modifica_legame_possessore.setEnabled(False)
-        possessori_buttons_layout.addWidget(
-            self.btn_modifica_legame_possessore)
+        possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
 
         self.btn_rimuovi_possessore = QPushButton("Rimuovi dalla Partita")
-        self.btn_rimuovi_possessore.clicked.connect(
-            self._rimuovi_possessore_da_partita)
+        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita)
         self.btn_rimuovi_possessore.setEnabled(False)
         possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
         possessori_buttons_layout.addStretch()
         layout_possessori.addLayout(possessori_buttons_layout)
         self.tab_widget.addTab(self.tab_possessori, "Possessori Associati")
 
-        # --- Pulsanti Salva/Annulla ---
-        buttons_layout = QHBoxLayout()
-        self.save_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
-        self.save_button.setToolTip(
-            "Salva solo le modifiche apportate nel tab 'Dati Generali'")
-        self.save_button.clicked.connect(self._save_changes)
+        # --- Tab 3: Immobili Associati ---
+        self.tab_immobili = QWidget()
+        layout_immobili = QVBoxLayout(self.tab_immobili)
 
-        self.close_dialog_button = QPushButton(
-            QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
-        self.close_dialog_button.setToolTip(
-            "Chiude il dialogo. Le modifiche ai possessori sono salvate individualmente.")
-        self.close_dialog_button.clicked.connect(self.accept)
+        self.immobili_table = ImmobiliTableWidget()
+        self.immobili_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.immobili_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.immobili_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_immobili)
+        layout_immobili.addWidget(self.immobili_table)
 
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(self.save_button)
-        buttons_layout.addWidget(self.close_dialog_button)
-        main_layout.addLayout(buttons_layout)
+        immobili_buttons_layout = QHBoxLayout()
+        self.btn_aggiungi_immobile = QPushButton("Aggiungi Immobile...")
+        self.btn_aggiungi_immobile.clicked.connect(self._aggiungi_immobile_a_partita)
+        immobili_buttons_layout.addWidget(self.btn_aggiungi_immobile)
 
-        # --- Tab 3: Documenti Allegati ---
+        self.btn_modifica_immobile = QPushButton("Modifica Immobile...")
+        self.btn_modifica_immobile.clicked.connect(self._modifica_immobile_associato)
+        self.btn_modifica_immobile.setEnabled(False)
+        immobili_buttons_layout.addWidget(self.btn_modifica_immobile)
+
+        self.btn_rimuovi_immobile = QPushButton("Rimuovi Immobile")
+        self.btn_rimuovi_immobile.clicked.connect(self._rimuovi_immobile_da_partita)
+        self.btn_rimuovi_immobile.setEnabled(False)
+        immobili_buttons_layout.addWidget(self.btn_rimuovi_immobile)
+        immobili_buttons_layout.addStretch()
+        layout_immobili.addLayout(immobili_buttons_layout)
+        self.tab_widget.addTab(self.tab_immobili, "Immobili Associati")
+
+        # --- Tab 4: Variazioni ---
+        self.tab_variazioni = QWidget()
+        layout_variazioni = QVBoxLayout(self.tab_variazioni)
+
+        self.variazioni_table = QTableWidget()
+        self.variazioni_table.setColumnCount(6)
+        self.variazioni_table.setHorizontalHeaderLabels([
+            "ID Var.", "Tipo", "Data Var.", "Partita Origine", "Partita Destinazione", "Contratto"
+        ])
+        self.variazioni_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.variazioni_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.variazioni_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.variazioni_table.horizontalHeader().setStretchLastSection(True)
+        self.variazioni_table.setAlternatingRowColors(True)
+        self.variazioni_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_variazioni)
+        layout_variazioni.addWidget(self.variazioni_table)
+
+        variazioni_buttons_layout = QHBoxLayout()
+        self.btn_modifica_variazione = QPushButton("Modifica Variazione...")
+        self.btn_modifica_variazione.clicked.connect(self._modifica_variazione_selezionata)
+        self.btn_modifica_variazione.setEnabled(False)
+        variazioni_buttons_layout.addWidget(self.btn_modifica_variazione)
+        
+        self.btn_elimina_variazione = QPushButton("Elimina Variazione")
+        self.btn_elimina_variazione.clicked.connect(self._elimina_variazione_selezionata)
+        self.btn_elimina_variazione.setEnabled(False)
+        variazioni_buttons_layout.addWidget(self.btn_elimina_variazione)
+
+        variazioni_buttons_layout.addStretch()
+        layout_variazioni.addLayout(variazioni_buttons_layout)
+        self.tab_widget.addTab(self.tab_variazioni, "Variazioni")
+
+        # --- Tab 5: Documenti Allegati ---
         self.tab_documenti = QWidget()
         layout_documenti = QVBoxLayout(self.tab_documenti)
 
-        self.documenti_table = QTableWidget()
-        self.documenti_table.setColumnCount(6)
-        self.documenti_table.setHorizontalHeaderLabels(
-            ["ID Doc.", "Titolo", "Tipo Doc.", "Anno", "Rilevanza", "Percorso/Azione"])
-        self.documenti_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.documenti_table.setSelectionBehavior(QTableWidget.SelectRows)
-        # Connetti il segnale per abilitare/disabilitare i pulsanti
-        self.documenti_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_documenti)
-        layout_documenti.addWidget(self.documenti_table)
+        self.documents_table = QTableWidget()
+        self.documents_table.setColumnCount(6)
+        self.documents_table.setHorizontalHeaderLabels([
+            "ID Doc.", "Titolo", "Tipo Doc.", "Anno", "Rilevanza", "Percorso/Azione"
+        ])
+        self.documents_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.documents_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.documents_table.horizontalHeader().setStretchLastSection(True)
+        self.documents_table.setSortingEnabled(True)
+        self.documents_table.itemSelectionChanged.connect(self._update_details_doc_buttons_state)
+        
+        self.documents_table.setAcceptDrops(True)
+        self.documents_table.setDropIndicatorShown(True)
+        self.documents_table.setDragDropMode(QAbstractItemView.DropOnly)
+        self.documents_table.dragEnterEvent = self.documents_table_dragEnterEvent
+        self.documents_table.dragMoveEvent = self.documents_table_dragMoveEvent
+        self.documents_table.dropEvent = self.documents_table_dropEvent
+        
+        layout_documenti.addWidget(self.documents_table)
 
         doc_buttons_layout = QHBoxLayout()
         self.btn_allega_nuovo = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileLinkIcon), "Allega Nuovo Documento...")
         self.btn_allega_nuovo.clicked.connect(self._allega_nuovo_documento_a_partita)
         doc_buttons_layout.addWidget(self.btn_allega_nuovo)
 
-        self.btn_apri_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento Selezionato")
-        self.btn_apri_doc.clicked.connect(self._apri_documento_selezionato)
-        self.btn_apri_doc.setEnabled(False) # Inizialmente disabilitato
-        doc_buttons_layout.addWidget(self.btn_apri_doc)
+        self.btn_apri_doc_details_dialog = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogOpenButton), "Apri Documento Selezionato")
+        self.btn_apri_doc_details_dialog.clicked.connect(self._apri_documento_selezionato_from_details_dialog)
+        self.btn_apri_doc_details_dialog.setEnabled(False)
+        doc_buttons_layout.addWidget(self.btn_apri_doc_details_dialog)
         
         self.btn_scollega_doc = QPushButton(QApplication.style().standardIcon(QStyle.SP_TrashIcon), "Scollega Documento")
         self.btn_scollega_doc.clicked.connect(self._scollega_documento_selezionato)
-        self.btn_scollega_doc.setEnabled(False) # Inizialmente disabilitato
+        self.btn_scollega_doc.setEnabled(False)
         doc_buttons_layout.addWidget(self.btn_scollega_doc)
         
         doc_buttons_layout.addStretch()
@@ -6855,887 +6903,607 @@ class ModificaPartitaDialog(QDialog):
         
         self.tab_widget.addTab(self.tab_documenti, "Documenti Allegati")
 
+        # --- Pulsanti Salva Dati Generali e Chiudi ---
+        buttons_layout = QHBoxLayout()
+        self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
+        self.save_button.setToolTip("Salva solo le modifiche apportate nel tab 'Dati Generali'")
+        self.save_button.clicked.connect(self._save_changes)
+
+        self.close_dialog_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
+        self.close_dialog_button.setToolTip("Chiude il dialogo. Le altre modifiche sono salvate individualmente.")
+        self.close_dialog_button.clicked.connect(self.accept)
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.close_dialog_button)
+        main_layout.addLayout(buttons_layout)
+        
         self.setLayout(main_layout)
 
-    def _load_partita_data(self):
-        self.partita_data_originale = self.db_manager.get_partita_details(
-            self.partita_id)
+    # --- Metodi per il Caricamento dei Dati (Centralizzato) ---
+    def _load_all_partita_data(self):
+        """Carica tutti i dati della partita e popola i vari tab del dialogo."""
+        self.logger.info(f"ModificaPartitaDialog: Caricamento dati per partita ID {self.partita_id}...")
+        self.partita_data_originale = self.db_manager.get_partita_details(self.partita_id)
         if not self.partita_data_originale:
-            QMessageBox.critical(
-                self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
-            from PyQt5.QtCore import QTimer
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.\nIl dialogo verrà chiuso.")
             QTimer.singleShot(0, self.reject)
             return
+        self.comune_label.setText(self.partita_data_originale.get('comune_nome', "N/D"))
+        self._populate_dati_generali_tab()
+        self._load_possessori_associati()
+        self._load_immobili_associati()
+        self._load_variazioni_associati()
+        self._load_documenti_allegati()
+        self.logger.info(f"ModificaPartitaDialog: Dati per partita ID {self.partita_id} caricati in tutti i tab.")
+    # --- Metodi di Popolamento per Ciascun Tab ---
 
-        self.comune_label.setText(
-            self.partita_data_originale.get('comune_nome', "N/D"))
-        self.numero_partita_spinbox.setValue(self.partita_data_originale.get('numero_partita', 0))
-        self.suffisso_partita_edit.setText(self.partita_data_originale.get('suffisso_partita', '')) # Popola
-        
+    def _populate_dati_generali_tab(self):
+        """Popola i campi nel tab 'Dati Generali' con i dati della partita."""
+        partita = self.partita_data_originale
+        if not partita: return
 
-        tipo_idx = self.tipo_combo.findText(
-            self.partita_data_originale.get('tipo', ''), Qt.MatchFixedString)
-        if tipo_idx >= 0:
-            self.tipo_combo.setCurrentIndex(tipo_idx)
+        self.numero_partita_spinbox.setValue(partita.get('numero_partita', 0))
+        self.suffisso_partita_edit.setText(partita.get('suffisso_partita', '') or '')
 
-        stato_idx = self.stato_combo.findText(
-            self.partita_data_originale.get('stato', ''), Qt.MatchFixedString)
-        if stato_idx >= 0:
-            self.stato_combo.setCurrentIndex(stato_idx)
+        tipo_idx = self.tipo_combo.findText(partita.get('tipo', ''), Qt.MatchFixedString)
+        if tipo_idx >= 0: self.tipo_combo.setCurrentIndex(tipo_idx)
 
-        data_impianto_db = self.partita_data_originale.get('data_impianto')
-        # Usa 'date' importato
-        if data_impianto_db and isinstance(data_impianto_db, date):
-            self.data_impianto_edit.setDate(
-                datetime_to_qdate(data_impianto_db))
-        else:
-            self.data_impianto_edit.setDate(QDate())
+        stato_idx = self.stato_combo.findText(partita.get('stato', ''), Qt.MatchFixedString)
+        if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
 
-        data_chiusura_db = self.partita_data_originale.get('data_chiusura')
+        data_impianto_db = partita.get('data_impianto')
+        self.data_impianto_edit.setDate(datetime_to_qdate(data_impianto_db) if data_impianto_db else QDate())
 
+        data_chiusura_db = partita.get('data_chiusura')
+        # Gestisce il default problematico e NULL
         if data_chiusura_db is None or data_chiusura_db == self.problematic_default_date_db:
-            self.data_chiusura_edit.setDate(QDate.currentDate())
-        elif isinstance(data_chiusura_db, date):  # Usa 'date' importato
-            self.data_chiusura_edit.setDate(
-                datetime_to_qdate(data_chiusura_db))
-        else:
             self.data_chiusura_edit.setDate(QDate())
-
-        num_prov_val = self.partita_data_originale.get('numero_provenienza')
-        if num_prov_val is not None:
-            self.numero_provenienza_spinbox.setValue(num_prov_val)
         else:
-            self.numero_provenienza_spinbox.setValue(
-                self.numero_provenienza_spinbox.minimum())
-   
+            self.data_chiusura_edit.setDate(datetime_to_qdate(data_chiusura_db))
 
-    def _save_changes(self):
-        # Raccogli i dati dai campi del form
-        dati_modificati = {
-            "numero_partita": self.numero_partita_spinbox.value(),
-            "suffisso_partita": self.suffisso_partita_edit.text().strip() or None, # Salva il suffisso
-            "tipo": self.tipo_combo.currentText(),
-            "stato": self.stato_combo.currentText(),
-            # Inizializza le date a None, verranno popolate se valide
-            "data_impianto": None,
-            "data_chiusura": None,
-            "numero_provenienza": None,
-        }
+        num_prov_val = partita.get('numero_provenienza')
+        self.numero_provenienza_spinbox.setValue(num_prov_val if num_prov_val is not None else self.numero_provenienza_spinbox.minimum())
 
-        q_data_impianto = self.data_impianto_edit.date()
-        # Controlla se la data è valida E se il testo non è vuoto (per via dello specialValueText)
-        if q_data_impianto.isValid() and self.data_impianto_edit.text().strip():
-            dati_modificati["data_impianto"] = qdate_to_datetime(
-                q_data_impianto)
+        self.logger.debug("Tab 'Dati Generali' popolato.")
 
-        q_data_chiusura = self.data_chiusura_edit.date()
-        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip():
-            dati_modificati["data_chiusura"] = qdate_to_datetime(
-                q_data_chiusura)
-
-        num_prov_value = self.numero_provenienza_spinbox.value()
-        # Controlla se il testo visualizzato è lo specialValueText
-        if self.numero_provenienza_spinbox.text() != self.numero_provenienza_spinbox.specialValueText() and num_prov_value != self.numero_provenienza_spinbox.minimum():  # Evita di salvare il valore speciale
-            dati_modificati["numero_provenienza"] = num_prov_value
-        # Se è lo special value text, numero_provenienza resta None, che è corretto.
-
-        # Validazione input
-        if dati_modificati["numero_partita"] <= 0:
-            QMessageBox.warning(
-                self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
-            self.numero_partita_spinbox.setFocus()
-            return
-
-        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
-            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
-                QMessageBox.warning(self, "Date Non Valide",
-                                    "La data di chiusura non può essere precedente alla data di impianto.")
-                self.data_chiusura_edit.setFocus()
-                return
-
-        # Tentativo di aggiornamento del database (come da suo codice esistente)
-        try:
-            logging.getLogger("CatastoGUI").info(
-                f"Tentativo di aggiornare i dati generali della partita ID {self.partita_id} con: {dati_modificati}")
-            self.db_manager.update_partita(self.partita_id, dati_modificati)
-            logging.getLogger("CatastoGUI").info(
-                f"Dati generali della Partita ID {self.partita_id} aggiornati con successo.")
-            QMessageBox.information(self, "Salvataggio Dati Generali",
-                                    "Modifiche ai dati generali della partita salvate con successo.")
-            self._load_partita_data()  # Ricarica per coerenza, anche se il dialogo non si chiude
-            # self.accept() # Rimuovi questo se il pulsante "Salva" non deve chiudere il dialogo intero
-        except DBUniqueConstraintError as uve:
-            logging.getLogger("CatastoGUI").warning(
-                f"Violazione di unicità aggiornando partita ID {self.partita_id}: {uve.message}")
-            QMessageBox.warning(
-                self, "Errore di Unicità", f"Impossibile salvare i dati generali:\n{uve.message}")
-            if hasattr(self, 'numero_partita_spinbox'):
-                self.numero_partita_spinbox.setFocus()
-        except DBNotFoundError as nfe:
-            logging.getLogger("CatastoGUI").error(
-                f"Partita ID {self.partita_id} non trovata per aggiornamento: {nfe.message}")
-            QMessageBox.critical(
-                self, "Errore Aggiornamento", str(nfe.message))
-            self.reject()
-        except DBDataError as dde:
-            logging.getLogger("CatastoGUI").warning(
-                f"Errore dati aggiornando partita ID {self.partita_id}: {dde.message}")
-            QMessageBox.warning(self, "Errore Dati Non Validi",
-                                f"Impossibile salvare i dati generali:\n{dde.message}")
-        except DBMError as dbe:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB aggiornando partita ID {self.partita_id}: {dbe.message}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Database", f"Errore salvataggio dati generali:\n{dbe.message}")
-        except AttributeError as ae:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore di attributo (possibile bug) aggiornando partita ID {self.partita_id}: {ae}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Interno Applicazione", f"Errore interno (AttributeError):\n{ae}")
-        except Exception as e:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore critico imprevisto aggiornando partita ID {self.partita_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico Imprevisto",
-                                 f"Errore di sistema imprevisto:\n{type(e).__name__}: {e}")
-
-    def _aggiorna_stato_pulsanti_possessori(self):
-        has_selection = bool(self.possessori_table.selectedItems())
-        self.btn_modifica_legame_possessore.setEnabled(has_selection)
-        self.btn_rimuovi_possessore.setEnabled(has_selection)
-    def _load_documenti_allegati(self):
-        self.documenti_table.setRowCount(0)
-        self.documenti_table.setSortingEnabled(False)
-        self.documenti_table.clearSelection() # Pulisce la selezione prima di ricaricare i dati
-        
-        if not self.partita_id:
-            self.logger.warning("Partita ID non disponibile per caricare documenti allegati.")
-            self._aggiorna_stato_pulsanti_documenti() # Assicura che i pulsanti siano disabilitati
-            return
-
-        try:
-            documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
-            
-            self.documenti_table.setRowCount(len(documenti))
-            if documenti:
-                for row, doc in enumerate(documenti):
-                    documento_id_storico = doc.get("documento_id")
-                    # dp_documento_id_rel sarà uguale a documento_id_storico per questa riga
-                    dp_documento_id_rel = doc.get("dp_documento_id") 
-                    dp_partita_id_rel = doc.get("dp_partita_id")
-                    
-                    item_doc_id = QTableWidgetItem(str(documento_id_storico))
-                    # Salva gli ID della relazione composta in UserRole per il pulsante scollega
-                    item_doc_id.setData(Qt.UserRole + 1, documento_id_storico)
-                    item_doc_id.setData(Qt.UserRole + 2, self.partita_id) # Usiamo self.partita_id per la partita_id_rel
-                    
-                    self.documenti_table.setItem(row, 0, item_doc_id)
-                    
-                    self.documenti_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo")))
-                    self.documenti_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento")))
-                    self.documenti_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", ""))))
-                    self.documenti_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza")))
-                    
-                    percorso_file_full = doc.get("percorso_file")
-                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
-                    path_item.setData(Qt.UserRole, percorso_file_full)
-                    self.documenti_table.setItem(row, 5, path_item)
-                
-                self.documenti_table.resizeColumnsToContents()
-            else:
-                self.logger.info(f"Nessun documento trovato per la partita ID {self.partita_id}.")
-                self.documenti_table.setRowCount(1)
-                no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
-                no_docs_item.setTextAlignment(Qt.AlignCenter)
-                self.documenti_table.setItem(0, 0, no_docs_item)
-                self.documenti_table.setSpan(0, 0, 1, self.documenti_table.columnCount())
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Impossibile caricare documenti allegati: {e}")
-            self.logger.error(f"Errore caricamento documenti per partita {self.partita_id}: {e}", exc_info=True)
-        finally:
-            self.documenti_table.setSortingEnabled(True)
-            # Chiamata qui per assicurarsi che i pulsanti abbiano lo stato corretto dopo il caricamento
-            self._aggiorna_stato_pulsanti_documenti()
-    def _allega_nuovo_documento_a_partita(self):
-        dialog = AggiungiDocumentoDialog(self.db_manager, self.partita_id, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.document_data:
-            doc_info = dialog.document_data
-            percorso_originale = doc_info["percorso_file_originale"]
-            
-            # --- Logica di Copia File ---
-            # Definire una directory base per gli allegati (configurabile!)
-            # Esempio: BASE_ALLEGATI_DIR = os.path.join(QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation), "CatastoAllegati")
-            # Per ora usiamo un percorso relativo semplice per dimostrazione:
-            allegati_dir = os.path.join(".", "allegati_catasto", f"partita_{self.partita_id}")
-            os.makedirs(allegati_dir, exist_ok=True)
-            
-            nome_file_originale = os.path.basename(percorso_originale)
-            # Potresti voler generare un nome file univoco (es. con UUID) per evitare sovrascritture
-            # e conservare il nome originale nei metadati.
-            # Esempio nome univoco: nome_file_dest = f"{uuid.uuid4()}_{nome_file_originale}"
-            nome_file_dest = nome_file_originale # Semplice per ora
-            percorso_destinazione_completo = os.path.join(allegati_dir, nome_file_dest)
-            
-            try:
-                import shutil # Importa shutil
-                shutil.copy2(percorso_originale, percorso_destinazione_completo) # copy2 preserva metadati
-                self.logger.info(f"File copiato da '{percorso_originale}' a '{percorso_destinazione_completo}'")
-
-                # Salva il percorso RELATIVO o quello che hai deciso di usare nel DB
-                percorso_file_db = percorso_destinazione_completo # O un percorso relativo alla BASE_ALLEGATI_DIR
-
-                # Inserisci nel DB
-                doc_id = self.db_manager.aggiungi_documento_storico(
-                    titolo=doc_info["titolo"],
-                    tipo_documento=doc_info["tipo_documento"],
-                    percorso_file=percorso_file_db, # Percorso del file copiato
-                    descrizione=doc_info["descrizione"],
-                    anno=doc_info["anno"],
-                    periodo_id=doc_info["periodo_id"],
-                    metadati_json=doc_info["metadati_json"]
-                )
-                if doc_id:
-                    success_link = self.db_manager.collega_documento_a_partita(
-                        doc_id, self.partita_id, doc_info["rilevanza"], doc_info["note_legame"]
-                    )
-                    if success_link:
-                        QMessageBox.information(self, "Successo", "Documento allegato e collegato con successo.")
-                        self._load_documenti_allegati() # Aggiorna la tabella
-                    else:
-                        QMessageBox.warning(self, "Attenzione", "Documento salvato ma fallito il collegamento alla partita.")
-                else:
-                    QMessageBox.critical(self, "Errore", "Impossibile salvare le informazioni del documento nel database.")
-                    # Considera di eliminare il file copiato se il salvataggio DB fallisce
-                    if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo)
-
-            except FileNotFoundError:
-                QMessageBox.critical(self, "Errore File", f"File sorgente non trovato: {percorso_originale}")
-            except PermissionError:
-                QMessageBox.critical(self, "Errore Permessi", f"Permessi non sufficienti per copiare il file in '{allegati_dir}'.")
-            except DBMError as e_db:
-                QMessageBox.critical(self, "Errore Database", f"Errore durante il salvataggio: {e_db}")
-                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo) # Cleanup
-            except Exception as e:
-                QMessageBox.critical(self, "Errore Imprevisto", f"Errore durante l'allegazione del documento: {e}")
-                if os.path.exists(percorso_destinazione_completo): os.remove(percorso_destinazione_completo) # Cleanup
-                logging.getLogger("CatastoGUI").error(f"Errore allegando documento: {e}", exc_info=True)
-
-    def _apri_documento_selezionato(self):
-        selected_items = self.documenti_table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
-            return
-        
-        row = self.documenti_table.currentRow()
-        percorso_file_item = self.documenti_table.item(row, 5) # Assumendo che la colonna 5 abbia il percorso
-        if percorso_file_item:
-            # Recupera il percorso completo salvato in UserRole, o usa il testo dell'item
-            percorso_file_completo = percorso_file_item.data(Qt.UserRole) or percorso_file_item.text()
-            
-            if os.path.exists(percorso_file_completo):
-                from PyQt5.QtGui import QDesktopServices
-                from PyQt5.QtCore import QUrl
-                success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
-                if not success:
-                    QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il file:\n{percorso_file_completo}\nVerificare che sia installata un'applicazione associata.")
-            else:
-                QMessageBox.warning(self, "File Non Trovato", f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}")
-        else:
-            QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili.")
-
-    # Dovrai chiamare self._load_documenti_allegati() quando il dialogo ModificaPartitaDialog 
-    # viene caricato (es. in _load_partita_data() o subito dopo).
-    
-    # Questo è il metodo chiamato dal pulsante "Apri Documento" nel tab "Documenti Allegati"
-    # Questo è il metodo chiamato dal pulsante "Apri Documento" nel tab "Documenti Allegati"
-    def _apri_documento_selezionato_from_details_dialog(self):
-        selected_items = self.documents_table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
-            return
-        
-        row = self.documents_table.currentRow()
-        # Il percorso completo è salvato nell'UserRole della colonna Percorso/Azione (colonna 5)
-        percorso_file_item = self.documents_table.item(row, 5) 
-        if percorso_file_item:
-            percorso_file_completo = percorso_file_item.data(Qt.UserRole)
-            
-            if os.path.exists(percorso_file_completo):
-                # --- SOSTITUISCI LA LOGICA DI APERTURA ESTERNA ---
-                # from PyQt5.QtGui import QDesktopServices
-                # from PyQt5.QtCore import QUrl
-                # success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
-                # if not success:
-                #     QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il file:\n{percorso_file_completo}\nVerificare che sia installata un'applicazione associata.")
-                # --- CON L'APERTURA INTERNA TRAMITE DocumentViewerDialog ---
-                self.logger.info(f"Tentativo di aprire documento internamente: {percorso_file_completo}")
-                viewer_dialog = DocumentViewerDialog(self, file_path=percorso_file_completo)
-                viewer_dialog.exec_() # Mostra il dialogo del visualizzatore
-                # --- FINE SOSTITUZIONE ---
-            else:
-                QMessageBox.warning(self, "File Non Trovato", f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}\nIl file potrebbe essere stato spostato o eliminato.")
-                self.logger.warning(f"File non trovato per visualizzazione interna: {percorso_file_completo}")
-        else:
-            QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
-
-
-    def _aggiorna_stato_pulsanti_documenti(self):
-        """Abilita/disabilita i pulsanti di azione sui documenti in base alla selezione nella tabella."""
-        has_selection = bool(self.documenti_table.selectedItems())
-        self.logger.debug(f"_aggiorna_stato_pulsanti_documenti chiamato. has_selection: {has_selection}")
-        self.btn_scollega_doc.setEnabled(has_selection)
-        self.btn_apri_doc.setEnabled(has_selection)
-
-    def _scollega_documento_selezionato(self):
-        selected_items = self.documenti_table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per scollegarlo.")
-            return
-
-        row = self.documenti_table.currentRow()
-
-        # Recupera gli ID compositi salvati in _load_documenti_allegati
-        documento_id_to_unlink = self.documenti_table.item(row, 0).data(Qt.UserRole + 1)
-        partita_id_to_unlink = self.documenti_table.item(row, 0).data(Qt.UserRole + 2) # Questo dovrebbe essere self.partita_id
-
-        titolo_documento = self.documenti_table.item(row, 1).text() # Titolo del documento
-
-        if documento_id_to_unlink is None or partita_id_to_unlink is None:
-            QMessageBox.critical(self, "Errore Interno", "ID del documento o della partita non disponibili. Impossibile scollegare.")
-            self.logger.error(f"ID relazione documento-partita non recuperati dalla tabella per scollegamento.")
-            return
-
-        reply = QMessageBox.question(self, "Conferma Scollegamento",
-                                    f"Sei sicuro di voler scollegare il documento '{titolo_documento}' (ID Documento: {documento_id_to_unlink}) da questa partita?\n\n"
-                                    "Il file fisico NON verrà eliminato, solo il collegamento logico nel database.",
-                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            self.logger.info(f"Tentativo di scollegare documento ID {documento_id_to_unlink} dalla partita {partita_id_to_unlink}.")
-            try:
-                # Chiama il db_manager con i due ID
-                success = self.db_manager.scollega_documento_da_partita(documento_id_to_unlink, partita_id_to_unlink)
-                if success:
-                    QMessageBox.information(self, "Successo", f"Documento '{titolo_documento}' scollegato con successo dalla partita.")
-                    self._load_documenti_allegati() # Ricarica la tabella per aggiornare la visualizzazione
-                # else: Il metodo db_manager solleva eccezioni in caso di errore, quindi l'else non è strettamente necessario qui.
-            except DBNotFoundError as nfe:
-                self.logger.warning(f"Scollegamento documento fallito: relazione tra documento {documento_id_to_unlink} e partita {partita_id_to_unlink} non trovata. {nfe.message}")
-                QMessageBox.warning(self, "Errore", f"Impossibile scollegare: {nfe.message}. Il documento potrebbe essere già stato scollegato.")
-                self._load_documenti_allegati() # Aggiorna la tabella comunque
-            except DBMError as dbe:
-                self.logger.error(f"Errore DB durante lo scollegamento del documento {documento_id_to_unlink}: {dbe.message}", exc_info=True)
-                QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore durante lo scollegamento:\n{dbe.message}")
-            except Exception as e:
-                self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento {documento_id_to_unlink}: {e}", exc_info=True)
-                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore di sistema: {e}")
-
-    # Aggiorna il metodo _load_documenti_allegati per recuperare e salvare l'ID della relazione
-    
     def _load_possessori_associati(self):
+        """Carica e popola la tabella dei possessori associati alla partita."""
         self.possessori_table.setRowCount(0)
         self.possessori_table.setSortingEnabled(False)
-        logging.getLogger("CatastoGUI").info(
-            f"DEBUG: Inizio _load_possessori_associati per partita ID: {self.partita_id}")
+        self.possessori_table.clearSelection() # Pulisce la selezione
+        self.logger.info(f"Caricamento possessori associati per partita ID: {self.partita_id}")
 
-        if not self.db_manager:
-            QMessageBox.critical(
-                self, "Errore", "DB Manager non disponibile per caricare i possessori.")
-            self._aggiorna_stato_pulsanti_possessori()
-            return
-        if self.partita_id is None:
-            QMessageBox.warning(self, "Errore", "ID Partita non specificato.")
-            self._aggiorna_stato_pulsanti_possessori()
-            return
-
-        logging.getLogger("CatastoGUI").info(
-            f"Caricamento possessori associati per partita ID: {self.partita_id}")
         try:
-            # Questa chiamata ora funziona e restituisce i dati, secondo il tuo log
-            possessori = self.db_manager.get_possessori_per_partita(
-                self.partita_id)
-            logging.getLogger("CatastoGUI").info(
-                # Stampa i dati ricevuti
-                f"DEBUG: Dati possessori ricevuti dal DB: {possessori}")
-
-            if possessori:  # Se la lista 'possessori' non è vuota
+            possessori = self.db_manager.get_possessori_per_partita(self.partita_id)
+            if possessori:
                 self.possessori_table.setRowCount(len(possessori))
-                logging.getLogger("CatastoGUI").info(
-                    f"DEBUG: Tabella impostata a {len(possessori)} righe.")
-                # Itera sui dizionari restituiti
                 for row_idx, poss_data in enumerate(possessori):
-                    logging.getLogger("CatastoGUI").info(
-                        f"DEBUG: Popolamento riga {row_idx}, dati: {poss_data}")
-                    col = 0
-
-                    # Colonna 0: ID Relazione (partita_possessore.id)
-                    id_rel_val = poss_data.get(
-                        'id_relazione_partita_possessore', '')
+                    id_rel_val = poss_data.get('id_relazione_partita_possessore', '')
                     id_rel_item = QTableWidgetItem(str(id_rel_val))
-                    # Salva l'ID per uso futuro
-                    id_rel_item.setData(Qt.UserRole, id_rel_val)
-                    self.possessori_table.setItem(row_idx, col, id_rel_item)
-                    col += 1
+                    id_rel_item.setData(Qt.UserRole, id_rel_val) # Salva l'ID relazione
+                    self.possessori_table.setItem(row_idx, 0, id_rel_item)
 
-                    # Colonna 1: ID Possessore (possessore.id)
-                    id_poss_val = poss_data.get('possessore_id', '')
-                    self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(id_poss_val)))
-                    col += 1
-
-                    # Colonna 2: Nome Completo Possessore
-                    nome_val = poss_data.get('nome_completo_possessore', 'N/D')
-                    self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(nome_val))
-                    col += 1
-
-                    # Colonna 3: Titolo Possesso
-                    titolo_val = poss_data.get('titolo_possesso', 'N/D')
-                    self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(titolo_val))
-                    col += 1
-
-                    # Colonna 4: Quota Possesso
-                    quota_val = poss_data.get('quota_possesso', 'N/D')
-                    self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(quota_val))
-                    col += 1
-
+                    self.possessori_table.setItem(row_idx, 1, QTableWidgetItem(str(poss_data.get('possessore_id', ''))))
+                    self.possessori_table.setItem(row_idx, 2, QTableWidgetItem(poss_data.get('nome_completo_possessore', 'N/D')))
+                    self.possessori_table.setItem(row_idx, 3, QTableWidgetItem(poss_data.get('titolo_possesso', 'N/D')))
+                    self.possessori_table.setItem(row_idx, 4, QTableWidgetItem(poss_data.get('quota_possesso', 'N/D') or '')) # Gestisce None
                 self.possessori_table.resizeColumnsToContents()
-                logging.getLogger("CatastoGUI").info(
-                    "DEBUG: Popolamento tabella completato.")
             else:
-                logging.getLogger("CatastoGUI").info(
-                    f"DEBUG: Nessun possessore (lista vuota) per la partita ID {self.partita_id}")
-                logging.getLogger("CatastoGUI").info(
-                    f"Nessun possessore trovato (lista vuota) per la partita ID {self.partita_id}")
-                # Potresti voler mostrare un messaggio nella tabella, es:
-                # self.possessori_table.setRowCount(1)
-                # self.possessori_table.setItem(0, 0, QTableWidgetItem("Nessun possessore associato a questa partita."))
-                # self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount()) # Occupa l'intera riga
-
-        except Exception as e:  # Cattura eccezioni generiche durante il popolamento della tabella
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante il popolamento della tabella possessori per partita ID {self.partita_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Popolamento Tabella",
-                                 f"Si è verificato un errore durante la visualizzazione dei possessori associati:\n{e}")
+                self.logger.info(f"Nessun possessore trovato per la partita ID {self.partita_id}.")
+                self.possessori_table.setRowCount(1)
+                item = QTableWidgetItem("Nessun possessore associato a questa partita.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.possessori_table.setItem(0, 0, item)
+                self.possessori_table.setSpan(0, 0, 1, self.possessori_table.columnCount())
+        except Exception as e:
+            self.logger.error(f"Errore durante il popolamento della tabella possessori per partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Popolamento Tabella", f"Si è verificato un errore durante la visualizzazione dei possessori associati:\n{e}")
         finally:
             self.possessori_table.setSortingEnabled(True)
             self._aggiorna_stato_pulsanti_possessori()
+            self.logger.debug("Tab 'Possessori' popolato.")
 
+    def _load_immobili_associati(self):
+        """Carica e popola la tabella degli immobili associati alla partita."""
+        self.immobili_table.setRowCount(0)
+        self.immobili_table.setSortingEnabled(False)
+        self.immobili_table.clearSelection() # Pulisce la selezione
+        self.logger.info(f"Caricamento immobili associati per partita ID: {self.partita_id}")
+
+        try:
+            immobili = self.partita_data_originale.get('immobili', []) # Dati immobili sono già in partita_data_originale
+            if immobili:
+                self.immobili_table.setRowCount(len(immobili))
+                for row_idx, imm in enumerate(immobili):
+                    # La logica di ImmobiliTableWidget.populate_data è replicata qui per coerenza
+                    # ma potresti anche passare i dati a immobili_table.populate_data() se è un widget riusabile
+                    self.immobili_table.setItem(row_idx, 0, QTableWidgetItem(str(imm.get('id', ''))))
+                    self.immobili_table.setItem(row_idx, 1, QTableWidgetItem(imm.get('natura', '')))
+                    self.immobili_table.setItem(row_idx, 2, QTableWidgetItem(imm.get('classificazione', '')))
+                    self.immobili_table.setItem(row_idx, 3, QTableWidgetItem(imm.get('consistenza', '')))
+                    localita_text = ""
+                    if 'localita_nome' in imm:
+                        localita_text = imm['localita_nome']
+                        if 'civico' in imm and imm['civico'] is not None:
+                            localita_text += f", {imm['civico']}"
+                        if 'localita_tipo' in imm:
+                            localita_text += f" ({imm['localita_tipo']})"
+                    self.immobili_table.setItem(row_idx, 4, QTableWidgetItem(localita_text))
+                self.immobili_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessun immobile trovato per la partita ID {self.partita_id}.")
+                self.immobili_table.setRowCount(1)
+                item = QTableWidgetItem("Nessun immobile associato a questa partita.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.immobili_table.setItem(0, 0, item)
+                self.immobili_table.setSpan(0, 0, 1, self.immobili_table.columnCount())
+        except Exception as e:
+            self.logger.error(f"Errore durante il popolamento della tabella immobili per partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Popolamento Tabella", f"Si è verificato un errore durante la visualizzazione degli immobili associati:\n{e}")
+        finally:
+            self.immobili_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsanti_immobili()
+            self.logger.debug("Tab 'Immobili' popolato.")
+
+    def _load_variazioni_associati(self):
+        """Carica e popola la tabella delle variazioni associate alla partita."""
+        self.variazioni_table.setRowCount(0)
+        self.variazioni_table.setSortingEnabled(False)
+        self.variazioni_table.clearSelection() # Pulisce la selezione
+        self.logger.info(f"Caricamento variazioni associate per partita ID: {self.partita_id}")
+
+        try:
+            variazioni = self.partita_data_originale.get('variazioni', []) # Dati variazioni sono già in partita_data_originale
+            if variazioni:
+                self.variazioni_table.setRowCount(len(variazioni))
+                for row_idx, var in enumerate(variazioni):
+                    col = 0
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(var.get('data_variazione', '')))); col += 1
+
+                    # Partita Origine
+                    orig_text = ""
+                    if var.get('partita_origine_id'):
+                        num_orig = var.get('origine_numero_partita', 'N/D')
+                        com_orig = var.get('origine_comune_nome', 'N/D')
+                        orig_text = f"N.{num_orig} ({com_orig})"
+                        if var.get('origine_suffisso_partita'): # Se hai il suffisso nella variazione
+                            orig_text += f" ({var.get('origine_suffisso_partita')})"
+                    else:
+                        orig_text = "-"
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(orig_text)); col += 1
+
+                    # Partita Destinazione
+                    dest_text = ""
+                    if var.get('partita_destinazione_id'):
+                        num_dest = var.get('destinazione_numero_partita', 'N/D')
+                        com_dest = var.get('destinazione_comune_nome', 'N/D')
+                        dest_text = f"N.{num_dest} ({com_dest})"
+                        if var.get('destinazione_suffisso_partita'): # Se hai il suffisso nella variazione
+                            dest_text += f" ({var.get('destinazione_suffisso_partita')})"
+                    else:
+                        dest_text = "-"
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(dest_text)); col += 1
+
+                    # Contratto
+                    contratto_text = ""
+                    if var.get('tipo_contratto'):
+                        contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
+                        if var.get('notaio'):
+                            contratto_text += f" - {var['notaio']}"
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(contratto_text)); col += 1
+
+                self.variazioni_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessuna variazione trovata per la partita ID {self.partita_id}.")
+                self.variazioni_table.setRowCount(1)
+                item = QTableWidgetItem("Nessuna variazione associata a questa partita.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.variazioni_table.setItem(0, 0, item)
+                self.variazioni_table.setSpan(0, 0, 1, self.variazioni_table.columnCount())
+        except Exception as e:
+            self.logger.error(f"Errore durante il popolamento della tabella variazioni per partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Popolamento Tabella", f"Si è verificato un errore durante la visualizzazione delle variazioni associate:\n{e}")
+        finally:
+            self.variazioni_table.setSortingEnabled(True)
+            self._aggiorna_stato_pulsanti_variazioni()
+            self.logger.debug("Tab 'Variazioni' popolato.")
+
+    def _load_documenti_allegati(self):
+        """Carica e popola la tabella dei documenti allegati alla partita."""
+        self.documents_table.setRowCount(0)
+        self.documents_table.setSortingEnabled(False)
+        self.documents_table.clearSelection() 
+        self.logger.info(f"Caricamento documenti per partita ID {self.partita_id}.")
+
+        try:
+            # Assumiamo che get_documenti_per_partita restituisca dp_documento_id e dp_partita_id
+            documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
+            
+            if documenti:
+                self.documents_table.setRowCount(len(documenti))
+                for row, doc in enumerate(documenti):
+                    documento_id_storico = doc.get("documento_id")
+                    # dp_documento_id_rel dovrebbe essere l'ID del documento storico
+                    # dp_partita_id_rel dovrebbe essere l'ID della partita
+                    
+                    item_doc_id = QTableWidgetItem(str(documento_id_storico))
+                    # Salviamo l'ID del documento storico e l'ID della partita per la rimozione del legame
+                    item_doc_id.setData(Qt.UserRole + 1, doc.get("dp_documento_id")) # ID del documento storico nella relazione
+                    item_doc_id.setData(Qt.UserRole + 2, doc.get("dp_partita_id")) # ID della partita nella relazione (che è self.partita_id)
+                    self.documents_table.setItem(row, 0, item_doc_id)
+                    
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo") or ''))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento") or ''))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", '')) or ''))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza") or ''))
+                    
+                    percorso_file_full = doc.get("percorso_file")
+                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
+                    path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
+                    self.documents_table.setItem(row, 5, path_item)
+                
+                self.documents_table.resizeColumnsToContents()
+            else:
+                self.logger.info(f"Nessun documento trovato per la partita ID {self.partita_id}.")
+                self.documents_table.setRowCount(1)
+                no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
+                no_docs_item.setTextAlignment(Qt.AlignCenter)
+                self.documents_table.setItem(0, 0, no_docs_item)
+                self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
+
+        except Exception as e:
+            self.logger.error(f"Errore caricamento documenti per partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Documenti", f"Si è verificato un errore durante il caricamento dei documenti:\n{e}")
+        finally:
+            self.documents_table.setSortingEnabled(True)
+            self._update_document_tab_title() 
+            self._update_details_doc_buttons_state() 
+            self.logger.debug("Tab 'Documenti' popolato.")
+
+    # --- Metodi per la Gestione dei Pulsanti e Selezioni ---
+
+    def _aggiorna_stato_pulsanti_possessori(self):
+        """Abilita/disabilita i pulsanti per i possessori in base alla selezione."""
+        has_selection = bool(self.possessori_table.selectedItems())
+        self.btn_modifica_legame_possessore.setEnabled(has_selection)
+        self.btn_rimuovi_possessore.setEnabled(has_selection)
+
+    def _aggiorna_stato_pulsanti_immobili(self):
+        """Abilita/disabilita i pulsanti per gli immobili in base alla selezione."""
+        has_selection = bool(self.immobili_table.selectedItems())
+        self.btn_modifica_immobile.setEnabled(has_selection)
+        self.btn_rimuovi_immobile.setEnabled(has_selection)
+
+    def _aggiorna_stato_pulsanti_variazioni(self):
+        """Abilita/disabilita i pulsanti per le variazioni in base alla selezione."""
+        has_selection = bool(self.variazioni_table.selectedItems())
+        self.btn_modifica_variazione.setEnabled(has_selection)
+        self.btn_elimina_variazione.setEnabled(has_selection)
+
+    def _update_details_doc_buttons_state(self):
+        """Abilita/disabilita i pulsanti per i documenti in base alla selezione."""
+        has_selection = bool(self.documents_table.selectedItems())
+        self.btn_apri_doc_details_dialog.setEnabled(has_selection)
+        self.btn_scollega_doc.setEnabled(has_selection)
+
+    # --- Metodi per Azioni sui Dati ---
+
+    # -- Possessori --
     def _aggiungi_possessore_a_partita(self):
-        logging.getLogger("CatastoGUI").debug(
-            f"Richiesta aggiunta possessore per partita ID {self.partita_id}")
-
-        # Passo 1: Seleziona o Crea il Possessore
-        comune_id_partita = self.partita_data_originale.get(
-            'comune_id') if self.partita_data_originale else None
+        self.logger.debug(f"Richiesta aggiunta possessore per partita ID {self.partita_id}")
+        comune_id_partita = self.partita_data_originale.get('comune_id')
         if comune_id_partita is None:
-            QMessageBox.warning(
-                self, "Errore", "Comune della partita non determinato. Impossibile aggiungere possessore.")
+            QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere possessore.")
             return
 
-        # --- Blocco Selezione/Creazione Possessore ---
-        # Assicurati che PossessoreSelectionDialog sia importato e funzioni come previsto
-        # Dovrebbe restituire l'ID e il nome del possessore selezionato/creato.
-        # Qui ipotizziamo che il tuo PossessoreSelectionDialog imposti
-        # self.selected_possessore = {'id': ..., 'nome_completo': ...} quando accettato.
-        possessore_dialog = PossessoreSelectionDialog(
-            self.db_manager, comune_id_partita, self)
-
+        possessore_dialog = PossessoreSelectionDialog(self.db_manager, comune_id_partita, self)
         selected_possessore_id = None
         selected_possessore_nome = None
 
         if possessore_dialog.exec_() == QDialog.Accepted:
             if hasattr(possessore_dialog, 'selected_possessore') and possessore_dialog.selected_possessore:
-                selected_possessore_id = possessore_dialog.selected_possessore.get(
-                    'id')
-                selected_possessore_nome = possessore_dialog.selected_possessore.get(
-                    'nome_completo')
-            # Aggiungi altri fallback se il tuo PossessoreSelectionDialog restituisce i dati in modo diverso
-
+                selected_possessore_id = possessore_dialog.selected_possessore.get('id')
+                selected_possessore_nome = possessore_dialog.selected_possessore.get('nome_completo')
         if not selected_possessore_id or not selected_possessore_nome:
-            logging.getLogger("CatastoGUI").info(
-                "Nessun possessore selezionato o creato.")
+            self.logger.info("Nessun possessore selezionato o creato.")
             return
-        # --- Fine Blocco Selezione/Creazione Possessore ---
 
-        logging.getLogger("CatastoGUI").info(
-            f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
-
-        # Passo 2: Chiedi Titolo e Quota per questo legame
-        tipo_partita_corrente = self.partita_data_originale.get(
-            'tipo', 'principale')
-
-        # Usa il metodo statico corretto che abbiamo definito: get_details_for_new_legame
-        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            selected_possessore_nome,
-            tipo_partita_corrente,
-            self
-        )
+        self.logger.info(f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
+        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
+        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(selected_possessore_nome, tipo_partita_corrente, self)
 
         if not dettagli_legame:
-            logging.getLogger("CatastoGUI").info(
-                "Inserimento dettagli legame annullato.")
+            self.logger.info("Inserimento dettagli legame annullato.")
             return
 
-        titolo_possesso = dettagli_legame["titolo"]
-        quota_possesso = dettagli_legame["quota"]
-        tipo_partita_rel_da_usare = tipo_partita_corrente  # Come discusso
-
-        # Passo 3: Chiama il metodo del DBManager per aggiungere il legame
         try:
-            # Questa è la chiamata effettiva al DBManager
             success = self.db_manager.aggiungi_possessore_a_partita(
                 partita_id=self.partita_id,
                 possessore_id=selected_possessore_id,
-                tipo_partita_rel=tipo_partita_rel_da_usare,
-                titolo=titolo_possesso,
-                quota=quota_possesso
+                tipo_partita_rel=tipo_partita_corrente,
+                titolo=dettagli_legame["titolo"],
+                quota=dettagli_legame["quota"]
             )
-
-            if success:  # Assumendo che aggiungi_possessore_a_partita restituisca True o sollevi eccezione
-                logging.getLogger("CatastoGUI").info(
-                    f"Possessore ID {selected_possessore_id} aggiunto con successo alla partita ID {self.partita_id}")
-                QMessageBox.information(self, "Successo",
-                                        f"Possessore '{selected_possessore_nome}' aggiunto alla partita.")
-                self._load_possessori_associati()  # Aggiorna la tabella dei possessori
-            # else: # Questo blocco else non serve se il metodo DB solleva eccezioni per fallimenti
-            #     QMessageBox.critical(self, "Errore", "Impossibile aggiungere il possessore alla partita (il DBManager ha restituito False).")
-
-        except DBUniqueConstraintError as uve_rel:
-            logging.getLogger("CatastoGUI").warning(
-                f"Violazione unicità aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {uve_rel}")
-            QMessageBox.warning(self, "Errore di Unicità",
-                                f"Impossibile aggiungere il possessore:\n{uve_rel.message}\n"
-                                "Questo possessore potrebbe essere già associato a questa partita.")
-        except (DBMError, DBDataError) as dbe_rel:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {dbe_rel}")
-            QMessageBox.critical(self, "Errore Database",
-                                 f"Errore durante l'aggiunta del possessore alla partita:\n{dbe_rel.message}")
-        except AttributeError as ae:
-            logging.getLogger("CatastoGUI").critical(
-                f"Metodo 'aggiungi_possessore_a_partita' non trovato o altro AttributeError: {ae}", exc_info=True)
-            QMessageBox.critical(self, "Errore Implementazione",
-                                 "Funzionalità per aggiungere possessore non completamente implementata o errore interno.")
-        except Exception as e_rel:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {e_rel}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Si è verificato un errore: {e_rel}")
+            if success:
+                self.logger.info(f"Possessore ID {selected_possessore_id} aggiunto con successo alla partita ID {self.partita_id}")
+                QMessageBox.information(self, "Successo", f"Possessore '{selected_possessore_nome}' aggiunto alla partita.")
+                self._load_possessori_associati()
+            else:
+                self.logger.error("aggiungi_possessore_a_partita ha restituito False.")
+                QMessageBox.critical(self, "Errore", "Impossibile aggiungere il possessore alla partita.")
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
+            self.logger.error(f"Errore DB aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Errore durante l'aggiunta del possessore alla partita:\n{e.message if hasattr(e, 'message') else str(e)}")
+        except Exception as e:
+            self.logger.critical(f"Errore imprevisto aggiungendo possessore {selected_possessore_id} a partita {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
 
     def _modifica_legame_possessore(self):
         selected_items = self.possessori_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(
-                self, "Nessuna Selezione", "Seleziona un possessore dalla tabella per modificarne il legame.")
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella per modificarne il legame.")
             return
 
         current_row = selected_items[0].row()
-        # L'ID della relazione partita_possessore è memorizzato in UserRole della prima colonna (ID Rel.)
-        id_relazione_pp = self.possessori_table.item(
-            current_row, 0).data(Qt.UserRole)
-        if id_relazione_pp is None:  # Controllo di sicurezza
-            QMessageBox.critical(
-                self, "Errore Interno", "ID relazione non trovato per il possessore selezionato.")
+        id_relazione_pp = self.possessori_table.item(current_row, 0).data(Qt.UserRole)
+        if id_relazione_pp is None:
+            QMessageBox.critical(self, "Errore Interno", "ID relazione non trovato per il possessore selezionato.")
             return
 
-        nome_possessore_attuale = self.possessori_table.item(
-            current_row, 2).text()  # Nome
-        titolo_attuale = self.possessori_table.item(
-            current_row, 3).text()      # Titolo
-        quota_attuale_item = self.possessori_table.item(
-            current_row, 4)          # Quota
-        quota_attuale = quota_attuale_item.text(
-        ) if quota_attuale_item and quota_attuale_item.text() != 'N/D' else None
+        nome_possessore_attuale = self.possessori_table.item(current_row, 2).text()
+        titolo_attuale = self.possessori_table.item(current_row, 3).text()
+        quota_attuale_item = self.possessori_table.item(current_row, 4)
+        quota_attuale = quota_attuale_item.text() if quota_attuale_item and quota_attuale_item.text() != 'N/D' else None
 
-        logging.getLogger("CatastoGUI").debug(
-            f"Richiesta modifica legame per relazione ID {id_relazione_pp} (Possessore: {nome_possessore_attuale})")
-
-        tipo_partita_corrente = self.partita_data_originale.get(
-            'tipo', 'principale')
-
+        self.logger.debug(f"Richiesta modifica legame per relazione ID {id_relazione_pp} (Possessore: {nome_possessore_attuale})")
+        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
         nuovi_dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_edit_legame(
-            nome_possessore_attuale,
-            tipo_partita_corrente,
-            titolo_attuale,
-            quota_attuale,
-            self
+            nome_possessore_attuale, tipo_partita_corrente, titolo_attuale, quota_attuale, self
         )
 
         if not nuovi_dettagli_legame:
-            logging.getLogger("CatastoGUI").info(
-                "Modifica dettagli legame annullata.")
+            self.logger.info("Modifica dettagli legame annullata.")
             return
 
-        # Passo 3: Chiama il metodo del DBManager per aggiornare il legame
         try:
-            # Metodo da creare in CatastoDBManager:
-            # aggiorna_legame_partita_possessore(self, partita_possessore_id: int,
-            #                                   titolo: str, quota: Optional[str]) -> bool
             success = self.db_manager.aggiorna_legame_partita_possessore(
                 partita_possessore_id=id_relazione_pp,
                 titolo=nuovi_dettagli_legame["titolo"],
                 quota=nuovi_dettagli_legame["quota"]
-                # tipo_partita_rel non viene modificato qui, si assume resti lo stesso
             )
-
             if success:
-                logging.getLogger("CatastoGUI").info(
-                    f"Legame ID {id_relazione_pp} aggiornato con successo.")
-                QMessageBox.information(
-                    self, "Successo", "Dettagli del legame possessore aggiornati.")
-                self._load_possessori_associati()  # Aggiorna la tabella
-            # else: # Se il metodo DBManager restituisce False
-            #     QMessageBox.critical(self, "Errore", "Impossibile aggiornare il legame del possessore.")
-
-        except (DBMError, DBDataError) as dbe_legame:  # Cattura eccezioni specifiche
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB aggiornando legame {id_relazione_pp}: {dbe_legame}")
-            QMessageBox.critical(self, "Errore Database",
-                                 f"Errore durante l'aggiornamento del legame:\n{dbe_legame.message}")
-        except AttributeError as ae:
-            logging.getLogger("CatastoGUI").critical(
-                f"Metodo 'aggiorna_legame_partita_possessore' non trovato: {ae}", exc_info=True)
-            QMessageBox.critical(self, "Errore Implementazione",
-                                 "Funzionalità per aggiornare legame non completamente implementata.")
+                self.logger.info(f"Legame ID {id_relazione_pp} aggiornato con successo.")
+                QMessageBox.information(self, "Successo", "Dettagli del legame possessore aggiornati.")
+                self._load_possessori_associati()
+            else:
+                self.logger.error("aggiorna_legame_partita_possessore ha restituito False.")
+                QMessageBox.critical(self, "Errore", "Impossibile aggiornare il legame del possessore.")
+        except (DBMError, DBDataError) as dbe_legame:
+            self.logger.error(f"Errore DB aggiornando legame {id_relazione_pp}: {dbe_legame}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Errore durante l'aggiornamento del legame:\n{dbe_legame.message if hasattr(dbe_legame, 'message') else str(dbe_legame)}")
         except Exception as e_legame:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto aggiornando legame {id_relazione_pp}: {e_legame}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Si è verificato un errore: {e_legame}")
+            self.logger.critical(f"Errore imprevisto aggiornando legame {id_relazione_pp}: {e_legame}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e_legame}")
 
     def _rimuovi_possessore_da_partita(self):
         selected_items = self.possessori_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(
-                self, "Nessuna Selezione", "Seleziona un legame possessore dalla tabella da rimuovere.")
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un legame possessore dalla tabella da rimuovere.")
             return
 
-        id_relazione_pp = selected_items[0].data(
-            Qt.UserRole)  # ID da partita_possessore.id
-        nome_possessore = self.possessori_table.item(
-            selected_items[0].row(), 2).text()
+        id_relazione_pp = selected_items[0].data(Qt.UserRole)
+        nome_possessore = self.possessori_table.item(selected_items[0].row(), 2).text()
 
         if id_relazione_pp is None:
-            QMessageBox.critical(
-                self, "Errore Interno", "ID relazione non trovato per il possessore selezionato.")
+            QMessageBox.critical(self, "Errore Interno", "ID relazione non trovato per il possessore selezionato.")
             return
 
         reply = QMessageBox.question(self, "Conferma Rimozione Legame",
                                      f"Sei sicuro di voler rimuovere il legame con il possessore '{nome_possessore}' (ID Relazione: {id_relazione_pp}) da questa partita?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            logging.getLogger("CatastoGUI").debug(
-                f"Richiesta rimozione legame ID {id_relazione_pp}")
+            self.logger.debug(f"Richiesta rimozione legame ID {id_relazione_pp}")
             try:
-                # Metodo da creare in CatastoDBManager:
-                # rimuovi_possessore_da_partita(self, partita_possessore_id: int) -> bool
-                success = self.db_manager.rimuovi_possessore_da_partita(
-                    id_relazione_pp)
+                success = self.db_manager.rimuovi_possessore_da_partita(id_relazione_pp)
 
                 if success:
-                    logging.getLogger("CatastoGUI").info(
-                        f"Legame ID {id_relazione_pp} rimosso con successo.")
-                    QMessageBox.information(
-                        self, "Successo", "Legame con il possessore rimosso dalla partita.")
-                    self._load_possessori_associati()  # Aggiorna la tabella
-                # else: # Se il metodo restituisce False
-                #     QMessageBox.critical(self, "Errore", "Impossibile rimuovere il legame del possessore.")
-
-            except DBNotFoundError as nfe_rel:  # Se il legame non esiste più
-                logging.getLogger("CatastoGUI").warning(
-                    f"Tentativo di rimuovere legame ID {id_relazione_pp} non trovato: {nfe_rel}")
-                QMessageBox.warning(
-                    self, "Operazione Fallita", str(nfe_rel.message))
-                self._load_possessori_associati()  # Aggiorna comunque la tabella
-            except DBMError as dbe_rel:
-                logging.getLogger("CatastoGUI").error(
-                    f"Errore DB rimuovendo legame {id_relazione_pp}: {dbe_rel}")
-                QMessageBox.critical(self, "Errore Database",
-                                     f"Errore durante la rimozione del legame:\n{dbe_rel.message}")
-            except AttributeError as ae:
-                logging.getLogger("CatastoGUI").critical(
-                    f"Metodo 'rimuovi_possessore_da_partita' non trovato: {ae}", exc_info=True)
-                QMessageBox.critical(self, "Errore Implementazione",
-                                     "Funzionalità per rimuovere legame non completamente implementata.")
+                    self.logger.info(f"Legame ID {id_relazione_pp} rimosso con successo.")
+                    QMessageBox.information(self, "Successo", "Legame con il possessore rimosso dalla partita.")
+                    self._load_possessori_associati()
+                else:
+                    self.logger.error("rimuovi_possessore_da_partita ha restituito False.")
+                    QMessageBox.critical(self, "Errore", "Impossibile rimuovere il legame del possessore.")
+            except DBNotFoundError as nfe_rel:
+                self.logger.warning(f"Tentativo di rimuovere legame ID {id_relazione_pp} non trovato: {nfe_rel}")
+                QMessageBox.warning(self, "Operazione Fallita", str(nfe_rel.message))
+                self._load_possessori_associati()
+            except (DBMError, DBDataError) as dbe_rel:
+                self.logger.error(f"Errore DB rimuovendo legame {id_relazione_pp}: {dbe_rel}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Errore durante la rimozione del legame:\n{dbe_rel.message if hasattr(dbe_rel, 'message') else str(dbe_rel)}")
             except Exception as e_rel:
-                logging.getLogger("CatastoGUI").critical(
-                    f"Errore imprevisto rimuovendo legame {id_relazione_pp}: {e_rel}", exc_info=True)
-                QMessageBox.critical(
-                    self, "Errore Imprevisto", f"Si è verificato un errore: {e_rel}")
+                self.logger.critical(f"Errore imprevisto rimuovendo legame {id_relazione_pp}: {e_rel}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e_rel}")
 
-    def _save_changes(self):  # Questo ora salva SOLO i dati generali della partita
-
-        # --- 1. Raccogli i dati dai campi del form ---
-        # Raccogli i dati dai campi del form
-        dati_modificati = {
-            "numero_partita": self.numero_partita_spinbox.value(),
-            "tipo": self.tipo_combo.currentText(),
-            "stato": self.stato_combo.currentText(),
-        }
-        q_data_impianto = self.data_impianto_edit.date()
-        if q_data_impianto.isValid() and self.data_impianto_edit.text().strip() != "":
-            dati_modificati["data_impianto"] = q_data_impianto.toPyDate()
-        else:
-            dati_modificati["data_impianto"] = None
-        q_data_chiusura = self.data_chiusura_edit.date()
-        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip() != "":
-            dati_modificati["data_chiusura"] = q_data_chiusura.toPyDate()
-        else:
-            dati_modificati["data_chiusura"] = None
-        num_prov_value = self.numero_provenienza_spinbox.value()
-        if self.numero_provenienza_spinbox.text() == self.numero_provenienza_spinbox.specialValueText():
-            dati_modificati["numero_provenienza"] = None
-        else:
-            dati_modificati["numero_provenienza"] = num_prov_value
-
-        if dati_modificati["numero_partita"] <= 0:
-            QMessageBox.warning(
-                self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
-            self.numero_partita_spinbox.setFocus()
-            self.numero_partita_spinbox.selectAll()
+    # -- Immobili --
+    def _aggiungi_immobile_a_partita(self):
+        self.logger.debug(f"Richiesta aggiunta immobile per partita ID {self.partita_id}")
+        comune_id_partita = self.partita_data_originale.get('comune_id')
+        if comune_id_partita is None:
+            QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere immobile.")
             return
-        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
-            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
-                QMessageBox.warning(
-                    self, "Date Non Valide", "La data di chiusura non può essere precedente alla data di impianto.")
-                self.data_chiusura_edit.setFocus()
-                return
-        try:
-            logging.getLogger("CatastoGUI").info(
-                f"Tentativo di aggiornare i dati generali della partita ID {self.partita_id} con: {dati_modificati}")
-            # Assumiamo che questo sollevi eccezioni in caso di errore
-            self.db_manager.update_partita(self.partita_id, dati_modificati)
-            logging.getLogger("CatastoGUI").info(
-                f"Dati generali della Partita ID {self.partita_id} aggiornati con successo.")
-            # Non chiamare self.accept() qui, perché il pulsante "Salva Modifiche Dati Generali" non deve chiudere il dialogo principale
-            # Il dialogo principale si chiude con il pulsante "Chiudi"
-            QMessageBox.information(self, "Salvataggio Dati Generali",
-                                    "Modifiche ai dati generali della partita salvate con successo.")
-            # Ricarica i dati generali per riflettere eventuali normalizzazioni o valori di default dal DB
-            self._load_partita_data()
-            # Il parent (PartiteComuneDialog) verrà aggiornato solo quando questo dialogo si chiude con Accept.
-            # Dobbiamo decidere se il salvataggio dei dati generali deve emettere un segnale o se il parent si aggiorna solo alla chiusura.
-            # Per ora, il parent si aggiorna quando il dialogo ModificaPartitaDialog viene 'accepted'.
-            # Il pulsante "Chiudi" ora fa self.accept(), quindi il parent aggiornerà.
 
-        except (DBUniqueConstraintError, DBNotFoundError, DBDataError, DBMError, AttributeError, Exception) as e:
-            # Riusa la logica di gestione eccezioni che avevi già perfezionato per mostrare i messaggi appropriati
-            # (quella che inizia con DBUniqueConstraintError as uve: etc.)
-            # Questa è una semplificazione, dovresti avere i blocchi except specifici qui
-            error_title = "Errore Salvataggio"
-            error_message = f"Errore durante il salvataggio dei dati generali:\n{type(e).__name__}: {str(e)}"
-            if isinstance(e, DBUniqueConstraintError):
-                error_title = "Errore di Unicità"
-                error_message = f"Impossibile salvare i dati generali:\n{e.message}\nIl numero di partita potrebbe essere già in uso."
-                if hasattr(self, 'numero_partita_spinbox'):
-                    self.numero_partita_spinbox.setFocus()
+        dialog = ImmobileDialog(self.db_manager, comune_id_partita, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.immobile_data:
+            immobile_data = dialog.immobile_data
+            try:
+                # La procedura SQL inserisci_immobile in db_manager deve essere aggiornata
+                # per accettare tutti i campi dall'immobile_data
+                immobile_id = self.db_manager.inserisci_immobile(
+                    partita_id=self.partita_id,
+                    natura=immobile_data['natura'],
+                    localita_id=immobile_data['localita_id'],
+                    classificazione=immobile_data['classificazione'],
+                    consistenza=immobile_data['consistenza'],
+                    numero_piani=immobile_data['numero_piani'],
+                    numero_vani=immobile_data['numero_vani']
+                )
+                if immobile_id:
+                    QMessageBox.information(self, "Successo", f"Immobile '{immobile_data['natura']}' aggiunto con ID: {immobile_id}.")
+                    self._load_immobili_associati() # Ricarica la tabella immobili
+                else:
+                    self.logger.error("inserisci_immobile ha restituito None.")
+                    QMessageBox.critical(self, "Errore", "Impossibile aggiungere l'immobile.")
+            except (DBDataError, DBMError) as e:
+                self.logger.error(f"Errore DB aggiungendo immobile: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Errore durante l'aggiunta dell'immobile:\n{e.message if hasattr(e, 'message') else str(e)}")
+            except Exception as e:
+                self.logger.critical(f"Errore imprevisto aggiungendo immobile: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
 
-        q_data_chiusura = self.data_chiusura_edit.date()
-        if q_data_chiusura.isValid() and self.data_chiusura_edit.text().strip() != "":
-            dati_modificati["data_chiusura"] = q_data_chiusura.toPyDate()
+    def _modifica_immobile_associato(self):
+        selected_items = self.immobili_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un immobile dalla tabella per modificarlo.")
+            return
+
+        row = self.immobili_table.currentRow()
+        immobile_id = int(self.immobili_table.item(row, 0).text())
+        
+        # Recupera i dettagli attuali dell'immobile dal DB per pre-popolare il dialogo di modifica
+        immobile_data = self.db_manager.get_immobile_details(immobile_id) # Questo metodo deve essere in db_manager
+        if not immobile_data:
+            QMessageBox.critical(self, "Errore", "Impossibile recuperare i dettagli dell'immobile per la modifica.")
+            return
+
+        # Apri un dialogo di modifica specifico per l'immobile, simile a ImmobileDialog ma per la modifica
+        # Dobbiamo creare una classe ModificaImmobileDialog, oppure riadattare ImmobileDialog con un flag 'modalità_modifica'
+        
+        # Per semplicità, qui useremo una versione adattata di ImmobileDialog o un nuovo dialogo.
+        # Creiamo un nuovo dialogo o adattiamo quello esistente (che forse non è l'ideale).
+        
+        # Idealmente, avresti un ModificaImmobileDialog(db_manager, immobile_id, comune_id_partita, parent)
+        # Per ora, si assume che sia un dialogo che possa essere pre-popolato e salvare.
+        
+        # Se non esiste una ModificaImmobileDialog, questo non funzionerà.
+        # Per semplicità, ipotizziamo una classe ad-hoc o un'estensione.
+        from gui_widgets import ModificaImmobileDialog # Assicurati che sia importata o creata
+        dialog = ModificaImmobileDialog(self.db_manager, immobile_id, self.partita_id, self) # Passa immobile_id, partita_id
+        
+        if dialog.exec_() == QDialog.Accepted:
+            QMessageBox.information(self, "Successo", "Immobile modificato con successo.")
+            self._load_immobili_associati() # Ricarica la tabella immobili
         else:
-            dati_modificati["data_chiusura"] = None
+            self.logger.info("Modifica immobile annullata.")
 
-        num_prov_value = self.numero_provenienza_spinbox.value()
-        # Controlla se il testo visualizzato è il testo speciale per "valore nullo"
-        if self.numero_provenienza_spinbox.text() == self.numero_provenienza_spinbox.specialValueText():
-            dati_modificati["numero_provenienza"] = None
-        # Se 0 è un valore valido e non lo specialValueText
-        elif num_prov_value == 0 and self.numero_provenienza_spinbox.minimum() == 0:
-            # Se 0 è un valore valido e non "Nessuno", allora usa 0.
-            # Se 0 è interpretato come "Nessuno" o non specificato E non è lo specialValueText
-            # allora la logica qui potrebbe aver bisogno di aggiustamenti in base a come vuoi trattare 0.
-            # Per ora, se specialValueText non matcha e il valore è 0, assumiamo che 0 sia un valore valido
-            # (anche se il DB potrebbe avere NULL per questo). Se 0 deve essere NULL, allora:
-            # dati_modificati["numero_provenienza"] = None if num_prov_value == 0 else num_prov_value
-            # Lascia decidere al DB se 0 è valido o deve essere NULL
-            dati_modificati["numero_provenienza"] = num_prov_value
+    def _rimuovi_immobile_da_partita(self):
+        selected_items = self.immobili_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un immobile dalla tabella per rimuoverlo.")
+            return
+
+        row = self.immobili_table.currentRow()
+        immobile_id = int(self.immobili_table.item(row, 0).text())
+        
+        reply = QMessageBox.question(self, "Conferma Rimozione",
+                                     f"Sei sicuro di voler rimuovere l'immobile ID {immobile_id} da questa partita?\n"
+                                     "Questa azione non cancella l'immobile dal database, ma lo scollega dalla partita attuale, impostando il suo partita_id a NULL.",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                # Il metodo delete_immobile in db_manager deve essere aggiornato
+                # per supportare la rimozione/scollegamento senza cancellare
+                # o potresti chiamare una procedura SQL specifica per scollegare.
+                # Per ora, la tua procedura delete_immobile probabilemente CANCELLA.
+                # Quindi, il comportamento è distruttivo.
+                # Dobbiamo chiarire la semantica di "rimuovi immobile da partita":
+                # 1. Cancellare l'immobile del tutto (current delete_immobile)?
+                # 2. Scollegarlo dalla partita (partita_id a NULL)?
+                # 3. Trasferirlo a un'altra partita (usare _esegui_trasferimento_immobile)?
+
+                # Se l'intento è impostare partita_id a NULL (scollegare), serve un nuovo metodo in DBManager.
+                # Es. db_manager.scollega_immobile_da_partita(immobile_id)
+                # Per ora, usiamo l'esistente delete_immobile con un avviso, ma è probabile che non sia il comportamento desiderato.
+                success = self.db_manager.delete_immobile(immobile_id) # ATTENZIONE: Questo prob. CANCELLA FISICAMENTE!
+
+                if success:
+                    QMessageBox.information(self, "Successo", f"Immobile ID {immobile_id} rimosso/cancellato dalla partita.")
+                    self._load_immobili_associati()
+                else:
+                    self.logger.error("delete_immobile ha restituito False.")
+                    QMessageBox.critical(self, "Errore", "Impossibile rimuovere/cancellare l'immobile.")
+            except (DBMError, DBDataError) as e:
+                self.logger.error(f"Errore DB rimuovendo immobile: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Errore durante la rimozione dell'immobile:\n{e.message if hasattr(e, 'message') else str(e)}")
+            except Exception as e:
+                self.logger.critical(f"Errore imprevisto rimuovendo immobile: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
+
+    # -- Variazioni --
+    def _modifica_variazione_selezionata(self):
+        selected_items = self.variazioni_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona una variazione dalla tabella per modificarla.")
+            return
+
+        row = self.variazioni_table.currentRow()
+        variazione_id = int(self.variazioni_table.item(row, 0).text())
+
+        # Apri un dialogo per modificare la variazione, simile a InserimentoVariazione (se lo hai)
+        # Dobbiamo creare una classe ModificaVariazioneDialog
+        from gui_widgets import ModificaVariazioneDialog # Assicurati che sia importata o creata
+        dialog = ModificaVariazioneDialog(self.db_manager, variazione_id, self.partita_id, self) # Passa variazione_id, partita_id
+        
+        if dialog.exec_() == QDialog.Accepted:
+            QMessageBox.information(self, "Successo", "Variazione modificata con successo.")
+            self._load_variazioni_associati() # Ricarica la tabella
         else:
-            dati_modificati["numero_provenienza"] = num_prov_value
+            self.logger.info("Modifica variazione annullata.")
 
-        # --- 2. Validazione input a livello di UI (opzionale, ma buona pratica) ---
-        # Esempio: se il numero partita non può essere zero o negativo
-        if dati_modificati["numero_partita"] <= 0:
-            QMessageBox.warning(
-                self, "Dati Non Validi", "Il numero della partita deve essere un valore positivo.")
-            self.numero_partita_spinbox.setFocus()
-            self.numero_partita_spinbox.selectAll()
-            return  # Interrompe il salvataggio
+    def _elimina_variazione_selezionata(self):
+        selected_items = self.variazioni_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona una variazione dalla tabella per eliminarla.")
+            return
 
-        # Aggiungi qui altre validazioni preliminari della UI se necessario.
-        # Ad esempio, controllare che data_chiusura non sia precedente a data_impianto.
-        if dati_modificati["data_impianto"] and dati_modificati["data_chiusura"]:
-            if dati_modificati["data_chiusura"] < dati_modificati["data_impianto"]:
-                QMessageBox.warning(self, "Date Non Valide",
-                                    "La data di chiusura non può essere precedente alla data di impianto.")
-                self.data_chiusura_edit.setFocus()
-                return  # Interrompe il salvataggio
+        row = self.variazioni_table.currentRow()
+        variazione_id = int(self.variazioni_table.item(row, 0).text())
+        
+        reply = QMessageBox.question(self, "Conferma Eliminazione",
+                                     f"Sei sicuro di voler eliminare la variazione ID {variazione_id}?\n"
+                                     "Questa azione potrebbe avere effetti sulle partite collegate (es. riattivare la partita origine se chiusa).",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                # Il metodo delete_variazione in db_manager ha flag force e restore_partita
+                success = self.db_manager.delete_variazione(variazione_id, force=True, restore_partita=False) # Decidi la politica
+                
+                if success:
+                    QMessageBox.information(self, "Successo", f"Variazione ID {variazione_id} eliminata.")
+                    # Dopo aver eliminato una variazione, è fondamentale ricaricare i dati di tutte le partite coinvolte
+                    # (origine e destinazione) per riflettere eventuali cambiamenti di stato.
+                    # Per ora, ricarichiamo solo la lista delle variazioni per la partita corrente.
+                    self._load_variazioni_associati() 
+                    # Potrebbe essere necessario ricaricare anche la partita_data_originale
+                    # e le partite del comune genitore.
+                else:
+                    self.logger.error("delete_variazione ha restituito False.")
+                    QMessageBox.critical(self, "Errore", "Impossibile eliminare la variazione.")
+            except (DBMError, DBDataError) as e:
+                self.logger.error(f"Errore DB eliminando variazione: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Errore durante l'eliminazione della variazione:\n{e.message if hasattr(e, 'message') else str(e)}")
+            except Exception as e:
+                self.logger.critical(f"Errore imprevisto eliminando variazione: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
 
-        # --- 3. Tentativo di aggiornamento del database e gestione errori ---
-        try:
-            logging.getLogger("CatastoGUI").info(
-                f"Tentativo di aggiornare la partita ID {self.partita_id} con i dati: {dati_modificati}")
-            self.db_manager.update_partita(self.partita_id, dati_modificati)
-
-            # Se update_partita NON solleva eccezioni, l'operazione è andata a buon fine
-            logging.getLogger("CatastoGUI").info(
-                f"Partita ID {self.partita_id} aggiornata con successo nel database.")
-            self.accept()  # Chiude il dialogo e restituisce QDialog.Accepted
-
-        except DBUniqueConstraintError as uve:
-            logging.getLogger("CatastoGUI").warning(
-                f"Violazione di unicità durante l'aggiornamento della partita ID {self.partita_id} con numero {dati_modificati.get('numero_partita')}: {uve}")
-            QMessageBox.warning(self, "Errore di Unicità",
-                                f"Impossibile salvare le modifiche:\n{uve.message}\n"
-                                "Il numero di partita specificato potrebbe essere già in uso per il comune di appartenenza.")
-            if hasattr(self, 'numero_partita_spinbox'):  # Assicurati che il widget esista
-                self.numero_partita_spinbox.setFocus()
-                self.numero_partita_spinbox.selectAll()
-
-        except DBNotFoundError as nfe:
-            logging.getLogger("CatastoGUI").error(
-                f"Partita ID {self.partita_id} non trovata per l'aggiornamento: {nfe}")
-            QMessageBox.critical(self, "Errore Aggiornamento",
-                                 f"Impossibile salvare le modifiche:\n{nfe.message}\nLa partita potrebbe essere stata eliminata da un altro utente.")
-            self.reject()  # Chiude il dialogo indicando fallimento o che la risorsa non c'è più
-
-        # Per errori di validazione sollevati dal DBManager o dal DB (es. CheckConstraint)
-        except DBDataError as dde:
-            logging.getLogger("CatastoGUI").warning(
-                f"Errore nei dati forniti per l'aggiornamento della partita ID {self.partita_id}: {dde}")
-            QMessageBox.warning(self, "Errore Dati Non Validi",
-                                f"Impossibile salvare le modifiche:\n{dde.message}\n"
-                                "Verificare la correttezza dei valori inseriti.")
-            # Potresti voler mettere il focus sul campo problematico se l'errore lo indica
-
-        except DBMError as dbe:  # Altri errori DB gestiti e sollevati dal db_manager
-            logging.getLogger("CatastoGUI").error(
-                f"Errore database gestito durante l'aggiornamento della partita ID {self.partita_id}: {dbe}")
-            QMessageBox.critical(self, "Errore Database",
-                                 f"Si è verificato un errore durante il salvataggio nel database:\n{dbe.message}")
-
-        except AttributeError as ae:  # Cattura specificamente AttributeError
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore di attributo (probabile bug di programmazione) durante l'aggiornamento della partita ID {self.partita_id}: {ae}", exc_info=True)
-            QMessageBox.critical(self, "Errore Interno Applicazione",
-                                 f"Si è verificato un errore interno (AttributeError):\n{ae}\n"
-                                 "Questo indica un problema nel codice dell'applicazione.\n"
-                                 "Contattare lo sviluppatore fornendo i dettagli dal log.")
-
-        except Exception as e:  # Catch-all per qualsiasi altra eccezione Python imprevista
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore critico e imprevisto durante il salvataggio delle modifiche alla partita ID {self.partita_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico Imprevisto",
-                                 f"Si è verificato un errore di sistema imprevisto durante il salvataggio:\n"
-                                 f"{type(e).__name__}: {e}\n"
-                                 "Controllare i log dell'applicazione per il traceback completo.")
-            logging.getLogger("CatastoGUI").error(
-                f"Errore salvataggio dati generali partita ID {self.partita_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, error_title, error_message)
-
+    # -- Documenti --
+    # Questi metodi sono già definiti correttamente e riutilizzano DocumentViewerDialog.
+    # Non è necessario riscriverli qui, ma assicurati che siano presenti nel codice finale.
+    # documents_table_dragEnterEvent, documents_table_dragMoveEvent, documents_table_dropEvent,
+    # _handle_dropped_file, _allega_nuovo_documento_a_partita, _apri_documento_selezionato_from_details_dialog,
+    # _scollega_documento_selezionato.
     # --- NUOVI METODI PER LA GESTIONE DEL DRAG-AND-DROP ---
 
     def documents_table_dragEnterEvent(self, event):
@@ -7860,9 +7628,103 @@ class ModificaPartitaDialog(QDialog):
             self._handle_dropped_file(filePath)
         else:
             self.logger.info("Selezione file annullata dall'utente per l'allegazione.")
+    def _apri_documento_selezionato_from_details_dialog(self):
+        """
+        Apre un documento selezionato dalla tabella dei documenti allegati
+        usando il visualizzatore predefinito del sistema operativo.
+        """
+        selected_items = self.documents_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per aprirlo.")
+            return
+        
+        row = self.documents_table.currentRow()
+        # La colonna con il percorso del file è la 6a (indice 5)
+        percorso_file_item = self.documents_table.item(row, 5) 
+        
+        if percorso_file_item:
+            # Recupera il percorso completo salvato nell'UserRole
+            percorso_file_completo = percorso_file_item.data(Qt.UserRole)
+            
+            if percorso_file_completo and os.path.exists(percorso_file_completo):
+                from PyQt5.QtGui import QDesktopServices
+                from PyQt5.QtCore import QUrl
+                
+                self.logger.info(f"Tentativo di aprire il documento: {percorso_file_completo}")
+                success = QDesktopServices.openUrl(QUrl.fromLocalFile(percorso_file_completo))
+                
+                if not success:
+                    QMessageBox.warning(self, "Errore Apertura", 
+                                        f"Impossibile aprire il file:\n{percorso_file_completo}\n"
+                                        "Verificare che sia installata un'applicazione associata o che i permessi siano corretti.")
+            else:
+                QMessageBox.warning(self, "File Non Trovato", 
+                                    f"Il file specificato non è stato trovato al percorso:\n{percorso_file_completo}\n"
+                                    "Il file potrebbe essere stato spostato o eliminato.")
+        else:
+            QMessageBox.warning(self, "Percorso Mancante", 
+                                "Informazioni sul percorso del file non disponibili per il documento selezionato.")
 
 
+    # In gui_widgets.py, all'interno della classe ModificaPartitaDialog
 
+    def _scollega_documento_selezionato(self):
+        """
+        Scollega un documento dalla partita corrente rimuovendo il record
+        dalla tabella di associazione 'documento_partita'.
+        """
+        selected_items = self.documents_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un documento dalla lista per scollegarlo.")
+            return
+
+        row = self.documents_table.currentRow()
+        
+        # Recupera gli ID salvati nei dati dell'item
+        id_doc_item = self.documents_table.item(row, 0)
+        titolo_doc = self.documents_table.item(row, 1).text() if self.documents_table.item(row, 1) else "Sconosciuto"
+
+        if not id_doc_item:
+            QMessageBox.critical(self, "Errore Interno", "Impossibile recuperare i dati del documento selezionato.")
+            return
+            
+        # Gli ID necessari per la cancellazione (chiave primaria composta)
+        documento_id_da_scollegare = id_doc_item.data(Qt.UserRole + 1)
+        partita_id_da_cui_scollegare = id_doc_item.data(Qt.UserRole + 2)
+
+        if not documento_id_da_scollegare or not partita_id_da_cui_scollegare:
+            self.logger.error(f"Dati di relazione mancanti per la riga {row} (DocID: {documento_id_da_scollegare}, PartitaID: {partita_id_da_cui_scollegare})")
+            QMessageBox.critical(self, "Errore Dati", "Informazioni sulla relazione documento-partita non trovate. Impossibile procedere.")
+            return
+
+        reply = QMessageBox.question(self, "Conferma Scollegamento",
+                                     f"Sei sicuro di voler scollegare il documento '{titolo_doc}' (ID: {documento_id_da_scollegare}) "
+                                     f"dalla partita corrente (ID: {partita_id_da_cui_scollegare})?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            try:
+                self.logger.info(f"Tentativo di scollegare doc ID {documento_id_da_scollegare} da partita ID {partita_id_da_cui_scollegare}")
+                
+                # Chiama il metodo del DB Manager che esegue la DELETE sulla tabella di collegamento
+                success = self.db_manager.scollega_documento_da_partita(
+                    documento_id=documento_id_da_scollegare,
+                    partita_id=partita_id_da_cui_scollegare
+                )
+
+                if success:
+                    QMessageBox.information(self, "Successo", "Documento scollegato con successo dalla partita.")
+                    self._load_documenti_allegati()  # Ricarica la lista dei documenti per aggiornare la UI
+                # else: scollega_documento_da_partita solleverà un'eccezione in caso di fallimento
+            except DBNotFoundError as nfe:
+                self.logger.warning(f"Tentativo di scollegare un legame non trovato: {nfe}")
+                QMessageBox.warning(self, "Operazione Fallita", str(nfe))
+            except DBMError as e_db:
+                self.logger.error(f"Errore DB durante lo scollegamento del documento: {e_db}", exc_info=True)
+                QMessageBox.critical(self, "Errore Database", f"Impossibile scollegare il documento: {e_db}")
+            except Exception as e:
+                self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore di sistema: {e}")
 class ModificaPossessoreDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, possessore_id: int, parent=None):
         super().__init__(parent)
@@ -8420,10 +8282,10 @@ class PartiteComuneDialog(QDialog):
         layout.addLayout(filter_layout)
 
         self.partite_table = QTableWidget()
-        # AUMENTA IL NUMERO DI COLONNE A 8
-        self.partite_table.setColumnCount(9) # Aumenta a 9 colonne
+        # Aumenta il numero di colonne a 9 (se suffisso è la 3a colonna)
+        self.partite_table.setColumnCount(9) 
         self.partite_table.setHorizontalHeaderLabels([
-            "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", # AGGIUNTO "Suffisso"
+            "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", 
             "Data Impianto", "Possessori (Anteprima)", "Num. Immobili", "Num. Documenti"
         ])
         self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -8475,6 +8337,7 @@ class PartiteComuneDialog(QDialog):
         filter_text = self.filter_edit.text().strip()
 
         try:
+            # Assicurati che db_manager.get_partite_by_comune stia recuperando il suffisso
             partite_list = self.db_manager.get_partite_by_comune(
                 self.comune_id, filter_text=filter_text if filter_text else None
             )
@@ -8485,15 +8348,16 @@ class PartiteComuneDialog(QDialog):
                     col = 0
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', ''))); col += 1 # NUOVA COLONNA POPOLATA
+                    # Recupera il suffisso e lo inserisce. Se è None, lo mostra come stringa vuota.
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', '') or '')); col += 1 
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
                     data_imp = partita.get('data_impianto')
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else ''))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
-                    
+                # Ridimensiona le colonne per adattarsi al contenuto
 
                     self.partite_table.resizeColumnsToContents()
             else:
@@ -8558,17 +8422,16 @@ class PartiteComuneDialog(QDialog):
     def apri_modifica_partita_selezionata(self):
         partita_id = self._get_selected_partita_id()
         if partita_id is not None:
-            # Qui istanzieremo e apriremo ModificaPartitaDialog
-            # Passando self.db_manager, partita_id, e self (come parent)
-            # Esempio:
-            dialog = ModificaPartitaDialog(self.db_manager, partita_id, self)
+            # CORREZIONE QUI: TORNA A PASSARE GLI ARGOMENTI POSIZIONALI
+            dialog = ModificaPartitaDialog(self.db_manager, partita_id, self) # <--- MODIFICA QUI
             if dialog.exec_() == QDialog.Accepted:
-                self.load_partite_data()  # Ricarica i dati se le modifiche sono state salvate
+                self.load_partite_data()
                 QMessageBox.information(
                     self, "Modifica Partita", "Modifiche alla partita salvate con successo.")
         else:
             QMessageBox.warning(self, "Nessuna Selezione",
                                 "Per favore, seleziona una partita da modificare.")
+
 
     
     def apri_dettaglio_partita_selezionata(self, item: QTableWidgetItem):

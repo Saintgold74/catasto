@@ -137,7 +137,7 @@ BEGIN
 
                  -- Crea il contratto associato
                  INSERT INTO contratto (variazione_id, tipo, data_contratto, notaio)
-                 VALUES (v_variazione_id, 'Vendita', NOW()::date - interval '1 day' * floor(random()*100 + 1), 'Notaio Stress Test');
+                 VALUES (v_variazione_id, 'Atto di Compravendita', NOW()::date - interval '1 day' * floor(random()*100 + 1), 'Notaio Stress Test');
 
                  -- Chiudi la partita di origine
                  UPDATE partita SET stato = 'inattiva', data_chiusura = (SELECT data_variazione FROM variazione WHERE id = v_variazione_id)

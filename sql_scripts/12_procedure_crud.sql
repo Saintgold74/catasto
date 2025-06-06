@@ -420,93 +420,64 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Correzione della procedura duplica_partita
-CREATE OR REPLACE PROCEDURE duplica_partita(
-    p_partita_id INTEGER,
+-- Adatta la firma per includere p_nuovo_suffisso
+CREATE OR REPLACE PROCEDURE catasto.duplica_partita(
+    p_partita_id_originale INTEGER,
     p_nuovo_numero_partita INTEGER,
-    p_mantenere_possessori BOOLEAN DEFAULT TRUE,
-    p_mantenere_immobili BOOLEAN DEFAULT FALSE
+    p_mantenere_possessori BOOLEAN,
+    p_mantenere_immobili BOOLEAN,
+    p_nuovo_suffisso VARCHAR(20) DEFAULT NULL -- AGGIUNTO QUI
 )
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_partita_record partita%ROWTYPE;
-    v_comune_nome VARCHAR; -- Variabile per il nome del comune
+    v_vecchia_partita_data catasto.partita;
     v_nuova_partita_id INTEGER;
-    v_possessore_record RECORD;
-    v_immobile_record RECORD;
+    v_old_poss_rec RECORD;
+    v_old_imm_rec RECORD;
 BEGIN
-    -- Recupera la partita originale nel record
-    SELECT * INTO v_partita_record FROM partita WHERE id = p_partita_id;
+    SELECT * INTO v_vecchia_partita_data FROM catasto.partita WHERE id = p_partita_id_originale;
 
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Partita con ID % non trovata', p_partita_id;
+    IF v_vecchia_partita_data IS NULL THEN
+        RAISE EXCEPTION 'Partita originale con ID % non trovata.', p_partita_id_originale;
     END IF;
 
-    -- Recupera il nome del comune separatamente
-    SELECT nome INTO v_comune_nome FROM comune WHERE id = v_partita_record.comune_id;
-
-    -- Verifica che il nuovo numero partita non esista già nello stesso comune
-    IF EXISTS (
-        SELECT 1 FROM partita
-        WHERE comune_id = v_partita_record.comune_id
-          AND numero_partita = p_nuovo_numero_partita
-    ) THEN
-        RAISE EXCEPTION 'Esiste già una partita con numero % nel comune % (ID: %)',
-                        p_nuovo_numero_partita, v_comune_nome, v_partita_record.comune_id;
+    -- Valida che la nuova partita non esista già
+    IF EXISTS (SELECT 1 FROM catasto.partita
+               WHERE comune_id = v_vecchia_partita_data.comune_id
+                 AND numero_partita = p_nuovo_numero_partita
+                 AND (suffisso_partita = p_nuovo_suffisso OR (suffisso_partita IS NULL AND p_nuovo_suffisso IS NULL))) THEN
+        RAISE EXCEPTION 'Esiste già una partita con il numero %s e suffisso %s nel comune %s.',
+                       p_nuovo_numero_partita, COALESCE(p_nuovo_suffisso, 'NULL'), v_vecchia_partita_data.comune_id;
     END IF;
 
-    -- Crea la nuova partita usando comune_id dal record
-    INSERT INTO partita(
-        comune_id, numero_partita, tipo, data_impianto, numero_provenienza, stato
-    ) VALUES (
-        v_partita_record.comune_id,
-        p_nuovo_numero_partita,
-        v_partita_record.tipo,
-        CURRENT_DATE,
-        v_partita_record.numero_partita,
-        'attiva'
-    )
+    -- Inserisci la nuova partita, includendo il suffisso
+    INSERT INTO catasto.partita (comune_id, numero_partita, data_impianto, stato, tipo,
+                                 numero_provenienza, data_chiusura, suffisso_partita)
+    VALUES (v_vecchia_partita_data.comune_id, p_nuovo_numero_partita, v_vecchia_partita_data.data_impianto,
+            v_vecchia_partita_data.stato, v_vecchia_partita_data.tipo,
+            v_vecchia_partita_data.numero_provenienza, v_vecchia_partita_data.data_chiusura,
+            p_nuovo_suffisso)
     RETURNING id INTO v_nuova_partita_id;
 
-    -- Duplica i possessori se richiesto (Logica invariata)
+    -- Copia possessori (se richiesto)
     IF p_mantenere_possessori THEN
-        FOR v_possessore_record IN
-            SELECT * FROM partita_possessore WHERE partita_id = p_partita_id
-        LOOP
-            INSERT INTO partita_possessore(
-                partita_id, possessore_id, tipo_partita, titolo, quota
-            ) VALUES (
-                v_nuova_partita_id,
-                v_possessore_record.possessore_id,
-                v_possessore_record.tipo_partita,
-                v_possessore_record.titolo,
-                v_possessore_record.quota
-            );
-        END LOOP;
+        INSERT INTO catasto.partita_possessore (partita_id, possessore_id, tipo_partita, titolo, quota)
+        SELECT v_nuova_partita_id, possessore_id, tipo_partita, titolo, quota
+        FROM catasto.partita_possessore
+        WHERE partita_id = p_partita_id_originale;
     END IF;
 
-    -- Duplica gli immobili se richiesto (Logica invariata)
+    -- Copia immobili (se richiesto)
     IF p_mantenere_immobili THEN
-        FOR v_immobile_record IN
-            SELECT * FROM immobile WHERE partita_id = p_partita_id
-        LOOP
-            INSERT INTO immobile(
-                partita_id, localita_id, natura, numero_piani, numero_vani, consistenza, classificazione
-            ) VALUES (
-                v_nuova_partita_id,
-                v_immobile_record.localita_id,
-                v_immobile_record.natura,
-                v_immobile_record.numero_piani,
-                v_immobile_record.numero_vani,
-                v_immobile_record.consistenza,
-                v_immobile_record.classificazione
-            );
-        END LOOP;
+        INSERT INTO catasto.immobile (
+            partita_id, natura, localita_id, classificazione, consistenza, numero_piani, numero_vani
+        )
+        SELECT
+            v_nuova_partita_id, natura, localita_id, classificazione, consistenza, numero_piani, numero_vani
+        FROM catasto.immobile
+        WHERE partita_id = p_partita_id_originale;
     END IF;
-
-    RAISE NOTICE 'Partita % (Comune: %) duplicata con successo. Nuova partita numero % con ID %',
-                v_partita_record.numero_partita, v_comune_nome, p_nuovo_numero_partita, v_nuova_partita_id;
 END;
 $$;
 

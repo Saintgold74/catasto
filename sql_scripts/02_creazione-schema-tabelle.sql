@@ -52,20 +52,45 @@ CREATE TABLE registro_matricole (
 COMMENT ON TABLE registro_matricole IS 'Registro delle matricole (possessori) per comune (referenzia comune.id).';
 
 -- Tabella PARTITA (Modificata per usare comune_id)
-CREATE TABLE partita (
+CREATE TABLE catasto.partita (
     id SERIAL PRIMARY KEY,
-    comune_id INTEGER NOT NULL REFERENCES comune(id) ON UPDATE CASCADE ON DELETE RESTRICT, -- FK su ID
+    comune_id INTEGER NOT NULL REFERENCES catasto.comune(id) ON DELETE RESTRICT,
     numero_partita INTEGER NOT NULL,
-    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('principale', 'secondaria')),
-    data_impianto DATE,
+    -- NUOVA COLONNA: suffisso_partita
+    suffisso_partita VARCHAR(20) DEFAULT NULL,
+    data_impianto DATE NOT NULL,
     data_chiusura DATE,
-    numero_provenienza INTEGER,
-    stato VARCHAR(20) NOT NULL DEFAULT 'attiva' CHECK (stato IN ('attiva', 'inattiva')),
+    numero_provenienza VARCHAR(50), -- O INTEGER, a seconda del formato previsto
+    stato VARCHAR(20) NOT NULL CHECK (stato IN ('attiva', 'inattiva')),
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('principale', 'secondaria')),
     data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(comune_id, numero_partita) -- UNIQUE su ID + numero_partita
+    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE partita IS 'Partite catastali (referenzia comune.id).';
+
+-- Aggiorna il vincolo di unicità:
+-- Vecchio: UNIQUE (comune_id, numero_partita)
+-- Nuovo:   UNIQUE (comune_id, numero_partita, suffisso_partita)
+-- PostgreSQL tratta NULL come valori distinti per UNIQUE.
+-- Questo significa che puoi avere (1, 10, NULL) e (1, 10, NULL) solo se usi NULLS NOT DISTINCT (PG 15+).
+-- Per versioni precedenti (o default), (1, 10, NULL) sarà unico.
+-- Se hai bisogno di UNA SOLA partita con suffisso NULL per ogni (comune_id, numero_partita)
+-- e le altre devono avere un suffisso, questa UNIQUE va bene.
+ALTER TABLE catasto.partita
+ADD CONSTRAINT partita_unique_numero_suffisso_comune UNIQUE (comune_id, numero_partita, suffisso_partita);
+
+-- COMMENTI (per documentazione nel DB)
+COMMENT ON TABLE catasto.partita IS 'Tabelle per la gestione delle partite catastali storiche.';
+COMMENT ON COLUMN catasto.partita.id IS 'Identificatore univoco della partita.';
+COMMENT ON COLUMN catasto.partita.comune_id IS 'Chiave esterna al comune di riferimento.';
+COMMENT ON COLUMN catasto.partita.numero_partita IS 'Numero identificativo della partita.';
+COMMENT ON COLUMN catasto.partita.suffisso_partita IS 'Suffisso aggiuntivo per identificare partite duplicate con lo stesso numero (es. bis, ter, A, B).'; -- NUOVO COMMENTO
+COMMENT ON COLUMN catasto.partita.data_impianto IS 'Data di creazione/impianto della partita.';
+COMMENT ON COLUMN catasto.partita.data_chiusura IS 'Data di chiusura della partita.';
+COMMENT ON COLUMN catasto.partita.numero_provenienza IS 'Numero di riferimento da cui proviene la partita (es. altra partita).';
+COMMENT ON COLUMN catasto.partita.stato IS 'Stato attuale della partita (attiva, inattiva).';
+COMMENT ON COLUMN catasto.partita.tipo IS 'Tipo di partita (principale, secondaria).';
+COMMENT ON COLUMN catasto.partita.data_creazione IS 'Timestamp di creazione del record.';
+COMMENT ON COLUMN catasto.partita.data_modifica IS 'Timestamp dell''ultima modifica del record.';
 
 -- Tabella POSSESSORE (Modificata per usare comune_id)
 CREATE TABLE possessore (

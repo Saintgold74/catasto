@@ -1971,106 +1971,127 @@ class CatastoDBManager:
                 self._release_connection(conn)
         
         return new_consultazione_id
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
+
     def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
-                                 possessori_json_str: str,
-                                 immobili_json_str: str,
+                                 possessori_json_str: str, # Stringa JSON
+                                 immobili_json_str: str,    # Stringa JSON
                                  suffisso_partita: Optional[str] = None # NUOVO PARAMETRO
-                                ) -> Optional[int]:# Restituisce l'ID della nuova partita o None
+                                ) -> Optional[int]:
         """
-        Chiama la procedura SQL catasto.registra_nuova_proprieta 
-        (che accetta 5 parametri: comune_id, numero_partita, data_impianto, possessori_json, immobili_json)
+        Chiama la procedura SQL catasto.registra_nuova_proprieta per registrare una nuova proprietà.
+        Accetta 6 parametri (comune_id, numero_partita, data_impianto, possessori_json, immobili_json, suffisso_partita)
         e restituisce l'ID della nuova partita.
+        Solleva eccezioni specifiche in caso di errore (es. unicità violata, dati non validi).
         """
         # Validazioni input base
-        if not all([isinstance(comune_id, int) and comune_id > 0,
-                    isinstance(numero_partita, int) and numero_partita > 0,
-                    isinstance(data_impianto, date)]):
-            msg = "Parametri comune_id, numero_partita o data_impianto non validi."
+        if not (isinstance(comune_id, int) and comune_id > 0):
+            msg = "Parametro 'comune_id' non valido."
             self.logger.error(f"registra_nuova_proprieta: {msg}")
             raise DBDataError(msg)
+        if not (isinstance(numero_partita, int) and numero_partita > 0):
+            msg = "Parametro 'numero_partita' non valido."
+            self.logger.error(f"registra_nuova_proprieta: {msg}")
+            raise DBDataError(msg)
+        if not isinstance(data_impianto, date):
+            msg = "Parametro 'data_impianto' non valido (deve essere un oggetto date)."
+            self.logger.error(f"registra_nuova_proprieta: {msg}")
+            raise DBDataError(msg)
+        
+        # Validazione JSON strings
         try:
-            json.loads(possessori_json_str) # Testa se è JSON valido
-            json.loads(immobili_json_str)   # Testa se è JSON valido
+            # Controllo solo la validità del JSON, il contenuto verrà processato dalla procedura SQL
+            json.loads(possessori_json_str) 
+            json.loads(immobili_json_str)   
         except json.JSONDecodeError as je:
             msg = f"Dati possessori o immobili non sono in formato JSON valido: {je}"
             self.logger.error(f"registra_nuova_proprieta: {msg}")
             raise DBDataError(msg) from je
+        
+        # Normalizza suffisso_partita: stringa vuota o solo spazi diventano None (NULL nel DB)
+        actual_suffisso_partita = suffisso_partita.strip() if isinstance(suffisso_partita, str) and suffisso_partita.strip() else None
 
         conn = None
-        nuova_partita_id = self.db_manager.registra_nuova_proprieta(
-            comune_id=self.comune_id,
-            numero_partita=numero_partita,
-            data_impianto=data_impianto_dt,
-            possessori_json_str=possessori_json_str,
-            immobili_json_str=immobili_json_str,
-            suffisso_partita=suffisso_partita # PASSA IL NUOVO PARAMETRO
-        )
-        # ... (logica di successo e pulizia) ...
-        self._pulisci_form_registrazione() # Modifica questo metodo per pulire anche il suffisso
+        new_partita_id: Optional[int] = None
         
-        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::json, %s::json, %s);"
-        params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str, suffisso_partita)
+        # --- Chiamata alla Procedura SQL aggiornata ---
+        # La procedura SQL 'catasto.registra_nuova_proprieta' deve accettare 6 parametri
+        # (comune_id, numero_partita, data_impianto, possessori_json, immobili_json, suffisso_partita)
+        # La procedura stessa gestirà la validazione di unicità e l'inserimento.
+        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::jsonb, %s::jsonb, %s);"
+        params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str, actual_suffisso_partita)
         
-        # --- FINE CORREZIONE ---
-        
-        # Query per recuperare l'ID della partita dopo che la procedura l'ha creata.
-        # La procedura SQL DEVE inserire un valore per la colonna 'tipo' (es. 'principale')
-        # perché è NOT NULL e non ha default. Assumiamo qui che inserisca 'principale'.
-        query_select_id = f"""
-            SELECT id FROM {self.schema}.partita 
-            WHERE comune_id = %s AND numero_partita = %s AND tipo = 'principale' AND
-                 (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))
-            ORDER BY data_creazione DESC, id DESC LIMIT 1; 
-        # """
-        cur.execute(query_select_id, (comune_id, numero_partita, suffisso_partita, suffisso_partita))
-
-        # Se la sua procedura SQL imposta un 'tipo' diverso o lo lascia variabile, 
-        # questa query SELECT potrebbe necessitare di aggiustamenti.
-
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                self.logger.debug(f"Chiamata procedura {self.schema}.registra_nuova_proprieta per C:{comune_id}, N:{numero_partita}")
+                self.logger.debug(f"Chiamata procedura {self.schema}.registra_nuova_proprieta per C:{comune_id}, N:{numero_partita}, Suffisso:'{actual_suffisso_partita}'")
                 self.logger.debug(f"SQL CALL: {cur.mogrify(call_proc, params).decode('utf-8','ignore')}")
                 cur.execute(call_proc, params)
                 
-                # Poiché CALL non restituisce un valore, dobbiamo selezionare l'ID.
-                self.logger.debug(f"Esecuzione SELECT per ID nuova partita: C:{comune_id}, N:{numero_partita}, Tipo:'principale'")
-                cur.execute(query_select_id, (comune_id, numero_partita)) # Aggiungere 'principale' se la procedura lo imposta
+                # Le procedure (CALL) in PostgreSQL non restituiscono direttamente un valore
+                # in Python come farebbe una funzione SELECT.
+                # Se la procedura SQL non ha un parametro OUT per l'ID (p_out_id INTEGER OUT),
+                # dobbiamo recuperare l'ID con una SELECT dopo la CALL.
+                # Il modo più robusto è usare la logica di ricerca che hai già.
+                
+                # Recupera l'ID della partita appena creata.
+                # Nota: Questo richiede che la procedura SQL abbia effettivamente creato la partita
+                # e che la combinazione di comune_id, numero_partita e suffisso_partita sia unica.
+                # La procedura SQL deve già avere la validazione UNIQUE integrata.
+                
+                # Se la procedura ha restituito un errore di unicità, verrà catturato sotto.
+                
+                # Recupera l'ID della partita che dovrebbe essere stata creata
+                # Questa SELECT deve corrispondere esattamente ai criteri usati per la creazione
+                # per trovare la riga corretta in modo affidabile.
+                query_select_id = f"""
+                    SELECT id FROM {self.schema}.partita 
+                    WHERE comune_id = %s 
+                      AND numero_partita = %s 
+                      AND (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))
+                    ORDER BY data_creazione DESC, id DESC LIMIT 1; 
+                """
+                cur.execute(query_select_id, (comune_id, numero_partita, actual_suffisso_partita, actual_suffisso_partita))
                 result = cur.fetchone()
 
                 if result and result['id']:
                     new_partita_id = result['id']
-                    conn.commit() 
-                    self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id} (Comune: {comune_id}, Numero: {numero_partita}).")
+                    conn.commit() # Esegui il commit dopo che l'operazione è completa e l'ID è stato recuperato
+                    self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id} (Comune: {comune_id}, Numero: {numero_partita}, Suffisso: '{actual_suffisso_partita}').")
                 else:
-                    conn.rollback()
-                    self.logger.error(f"Fallimento nel recuperare l'ID della nuova partita dopo registrazione (C:{comune_id}, N:{numero_partita}). La procedura SQL potrebbe non aver inserito la partita, non ha impostato il tipo a 'principale', o la query SELECT non è corretta.")
-                    raise DBMError("Registrazione partita completata, ma impossibile recuperare l'ID della nuova partita.")
+                    conn.rollback() # Rollback se l'ID non può essere recuperato (indica un problema logico)
+                    self.logger.error(f"Fallimento nel recuperare l'ID della nuova partita dopo registrazione (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'). La procedura SQL potrebbe non aver inserito la partita o la query SELECT non è corretta.")
+                    raise DBMError("Registrazione partita completata, ma impossibile recuperare l'ID della nuova partita. Controllare la logica.")
         
-        except psycopg2.errors.UndefinedFunction as udf_err: # Se il nome o la firma non corrispondono ANCORA
+            return new_partita_id
+
+        except psycopg2.errors.UndefinedFunction as udf_err:
             if conn: conn.rollback()
-            self.logger.error(f"La procedura SQL '{self.schema}.registra_nuova_proprieta' con i parametri forniti non esiste: {getattr(udf_err, 'pgerror', str(udf_err))}", exc_info=True)
-            raise DBMError(f"Procedura SQL '{self.schema}.registra_nuova_proprieta' non trovata o firma errata. Dettagli: {getattr(udf_err, 'pgerror', str(udf_err))}") from udf_err
+            self.logger.error(f"La procedura SQL '{self.schema}.registra_nuova_proprieta' con la firma fornita non esiste: {getattr(udf_err.diag, 'message', str(udf_err))}", exc_info=True)
+            raise DBMError(f"Procedura SQL '{self.schema}.registra_nuova_proprieta' non trovata o firma errata. Dettagli: {getattr(udf_err.diag, 'message', str(udf_err))}") from udf_err
+        
         except psycopg2.errors.UniqueViolation as uve:
             if conn: conn.rollback()
             constraint_name = getattr(uve.diag, 'constraint_name', 'N/D')
-            msg = f"Una partita con numero {numero_partita} esiste già nel comune selezionato (vincolo: {constraint_name})."
-            self.logger.warning(f"registra_nuova_proprieta: {msg} Dettagli: {getattr(uve, 'pgerror', str(uve))}")
-            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=getattr(uve, 'pgerror', str(uve))) from uve
+            pgerror_msg = getattr(uve.diag, 'message', str(uve))
+            msg = f"Una partita con numero {numero_partita} e suffisso '{actual_suffisso_partita if actual_suffisso_partita else 'N/A'}' esiste già nel comune selezionato (vincolo: {constraint_name})."
+            self.logger.warning(f"registra_nuova_proprieta: {msg} Dettagli: {pgerror_msg}")
+            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=pgerror_msg) from uve
+        
         except psycopg2.Error as db_err:
             if conn: conn.rollback()
-            self.logger.error(f"Errore DB in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}): {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
-            raise DBMError(f"Errore database: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
+            pgerror_msg = getattr(db_err.diag, 'message', str(db_err))
+            self.logger.error(f"Errore DB in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'): {pgerror_msg}", exc_info=True)
+            raise DBMError(f"Errore database durante la registrazione della nuova proprietà: {pgerror_msg}") from db_err
+        
         except Exception as e:
             if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore Python in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}): {e}", exc_info=True)
-            raise DBMError(f"Errore di sistema: {e}") from e
+            self.logger.critical(f"Errore Python in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'): {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e}") from e
+        
         finally:
             if conn:
                 self._release_connection(conn)
-        
-        return new_partita_id
     
     def registra_passaggio_proprieta(self, 
                                          partita_origine_id: int, 

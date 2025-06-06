@@ -2102,6 +2102,7 @@ class OperazioniPartitaWidget(QWidget):
     # Aggiungi questo __init__ se non c'è
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}") # AGGIUNGI QUESTA RIGA
         self.db_manager = db_manager
         self.selected_partita_id_source: Optional[int] = None
         self.selected_partita_comune_id_source: Optional[int] = None
@@ -2109,7 +2110,7 @@ class OperazioniPartitaWidget(QWidget):
         self.selected_immobile_id_transfer: Optional[int] = None
         self._pp_temp_nuovi_possessori: List[Dict[str, Any]] = []
 
-        self.partita_destinazione_valida: bool = False  # NUOVO FLAG
+        self.partita_destinazione_valida: bool = False
 
         self._initUI()
 
@@ -2191,7 +2192,7 @@ class OperazioniPartitaWidget(QWidget):
 
         duplica_main_layout.addWidget(duplica_group)
         duplica_main_layout.addStretch(1)
-        self.operazioni_tabs.addTab(duplica_widget, "Duplica Partita")
+        self.operazioni_tabs.addTab(duplica_widget, "Copia Partita")
 
     def _crea_tab_trasferisci_immobile(self):
         transfer_widget = QWidget()
@@ -7049,6 +7050,7 @@ class ModificaPartitaDialog(QDialog):
     # viene caricato (es. in _load_partita_data() o subito dopo).
     
     # Questo è il metodo chiamato dal pulsante "Apri Documento" nel tab "Documenti Allegati"
+    # Questo è il metodo chiamato dal pulsante "Apri Documento" nel tab "Documenti Allegati"
     def _apri_documento_selezionato_from_details_dialog(self):
         selected_items = self.documents_table.selectedItems()
         if not selected_items:
@@ -7078,6 +7080,7 @@ class ModificaPartitaDialog(QDialog):
                 self.logger.warning(f"File non trovato per visualizzazione interna: {percorso_file_completo}")
         else:
             QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
+
 
     def _aggiorna_stato_pulsanti_documenti(self):
         """Abilita/disabilita i pulsanti di azione sui documenti in base alla selezione nella tabella."""

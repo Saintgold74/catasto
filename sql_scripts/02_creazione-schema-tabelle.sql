@@ -140,7 +140,7 @@ CREATE TABLE variazione (
     id SERIAL PRIMARY KEY,
     partita_origine_id INTEGER NOT NULL REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     partita_destinazione_id INTEGER REFERENCES partita(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Vendita','Acquisto', 'Successione', 'Variazione', 'Frazionamento', 'Divisione', 'Trasferimento','Altro')), -- Aggiunto Trasferimento
+    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Vendita', 'Acquisto', 'Successione','Variazione', 'Frazionamento', 'Divisione', 'Trasferimento', 'Altro')),
     data_variazione DATE NOT NULL,
     numero_riferimento VARCHAR(50),
     nominativo_riferimento VARCHAR(255),
@@ -153,7 +153,9 @@ COMMENT ON TABLE variazione IS 'Variazioni di proprietà o modifiche alle partit
 CREATE TABLE contratto (
     id SERIAL PRIMARY KEY,
     variazione_id INTEGER NOT NULL REFERENCES variazione(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Vendita','Acquisto', 'Successione', 'Variazione', 'Frazionamento', 'Divisione', 'Trasferimento','Altro')),
+    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Atto di Compravendita',
+            'Dichiarazione di Successione','Atto di Donazione','Sentenza Giudiziale','Atto di Divisione','Verbale di Asta Pubblica',
+            'Permuta','Usucapione','Altro Atto Pubblico','Scrittura Privata')),
     data_contratto DATE NOT NULL,
     notaio VARCHAR(255),
     repertorio VARCHAR(100),

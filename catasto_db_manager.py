@@ -1164,59 +1164,53 @@ class CatastoDBManager:
         conn = None
         partite_list = []
         
-        # Inizia con la query base
+        # Query ottimizzata che usa sotto-query correlate (o LEFT JOIN con COUNT),
+        # molto più performante di string_agg per una lista.
         query_base = f"""
             SELECT
-                p.id, c.nome as comune_nome, p.numero_partita, p.tipo, p.data_impianto,
-                p.data_chiusura, p.stato,
-                string_agg(DISTINCT pos.nome_completo, ', ') as possessori,
-                COUNT(DISTINCT i.id) as num_immobili,
-                COUNT(DISTINCT dp.documento_id) AS num_documenti_allegati -- NUOVA COLONNA
+                p.id,
+                p.numero_partita,
+                p.suffisso_partita,
+                p.tipo,
+                p.stato,
+                p.data_impianto,
+                (SELECT COUNT(*) FROM {self.schema}.partita_possessore pp WHERE pp.partita_id = p.id) as num_possessori,
+                (SELECT COUNT(*) FROM {self.schema}.immobile i WHERE i.partita_id = p.id) as num_immobili,
+                (SELECT COUNT(*) FROM {self.schema}.documento_partita dp WHERE dp.partita_id = p.id) as num_documenti_allegati
             FROM {self.schema}.partita p
-            JOIN {self.schema}.comune c ON p.comune_id = c.id
-            LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
-            LEFT JOIN {self.schema}.possessore pos ON pp.possessore_id = pos.id
-            LEFT JOIN {self.schema}.immobile i ON p.id = i.partita_id
-            LEFT JOIN {self.schema}.documento_partita dp ON p.id = dp.partita_id -- NUOVO JOIN
             WHERE p.comune_id = %s
         """
-        params = [comune_id] # Inizializza i parametri con comune_id
+        params = [comune_id]
 
-        # Aggiungi la clausola di filtro se filter_text è fornito
+        # La logica di filtro va applicata con attenzione.
+        # Filtrare su un campo aggregato (come il nome del possessore) richiederebbe di nuovo un JOIN.
+        # Per ora, semplifichiamo il filtro ai soli campi della tabella 'partita'.
         if filter_text:
             query_base += """
                 AND (
                     CAST(p.numero_partita AS TEXT) ILIKE %s OR
                     p.tipo ILIKE %s OR
                     p.stato ILIKE %s OR
-                    pos.nome_completo ILIKE %s OR
-                    pos.cognome_nome ILIKE %s OR
-                    pos.paternita ILIKE %s
+                    p.suffisso_partita ILIKE %s
                 )
             """
             filter_like = f"%{filter_text}%"
-            params.extend([filter_like, filter_like, filter_like, filter_like, filter_like, filter_like])
+            params.extend([filter_like, filter_like, filter_like, filter_like])
 
-        # Aggiungi GROUP BY e ORDER BY
-        # Devi includere tutte le colonne non aggregate nel GROUP BY
-        query = query_base + """
-            GROUP BY p.id, c.nome, p.numero_partita, p.tipo, p.data_impianto, p.data_chiusura, p.stato
-            ORDER BY p.numero_partita;
-        """
+        query = query_base + " ORDER BY p.numero_partita, p.suffisso_partita;"
 
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                self.logger.debug(f"Esecuzione get_partite_by_comune per comune_id {comune_id} con filtro '{filter_text}': {cur.mogrify(query, tuple(params)).decode('utf-8', 'ignore')}")
+                self.logger.debug(f"Esecuzione get_partite_by_comune (ottimizzata) per comune_id {comune_id} con filtro '{filter_text}'")
                 cur.execute(query, tuple(params))
-                results = cur.fetchall()
-                partite_list = [dict(row) for row in results] if results else []
-                self.logger.info(f"Recuperate {len(partite_list)} partite per comune ID {comune_id} (filtro: '{filter_text}').")
+                partite_list = [dict(row) for row in cur.fetchall()]
+                self.logger.info(f"Recuperate {len(partite_list)} partite (query ottimizzata).")
         except psycopg2.Error as db_err:
-            self.logger.error(f"Errore DB in get_partite_by_comune (comune_id: {comune_id}, filtro: '{filter_text}'): {db_err}", exc_info=True)
+            self.logger.error(f"Errore DB in get_partite_by_comune (ottimizzata): {db_err}", exc_info=True)
             raise DBMError(f"Errore database durante il recupero delle partite: {getattr(db_err, 'pgerror', str(db_err))}") from db_err
         except Exception as e:
-            self.logger.error(f"Errore Python in get_partite_by_comune (comune_id: {comune_id}, filtro: '{filter_text}'): {e}", exc_info=True)
+            self.logger.error(f"Errore Python in get_partite_by_comune (ottimizzata): {e}", exc_info=True)
             raise DBMError(f"Errore di sistema durante il recupero delle partite: {e}") from e
         finally:
             if conn:

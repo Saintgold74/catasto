@@ -7725,6 +7725,78 @@ class ModificaPartitaDialog(QDialog):
             except Exception as e:
                 self.logger.critical(f"Errore imprevisto durante lo scollegamento del documento: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore di sistema: {e}")
+    def _update_document_tab_title(self):
+        """Aggiorna il titolo del tab dei documenti con il conteggio corrente."""
+        try:
+            # Assicurati che self.documents_table esista prima di contarne le righe
+            if hasattr(self, 'documents_table'):
+                count = self.documents_table.rowCount()
+                
+                # Se la tabella ha solo una riga placeholder "Nessun documento...", il conteggio è 0
+                if count == 1 and self.documents_table.item(0, 0) and "Nessun documento" in self.documents_table.item(0, 0).text():
+                    count = 0
+                
+                # Trova l'indice del tab dei documenti nel QTabWidget principale
+                tab_index = self.tab_widget.indexOf(self.tab_documenti)
+                if tab_index != -1:
+                    self.tab_widget.setTabText(tab_index, f"Documenti Allegati ({count})")
+            else:
+                self.logger.warning("Attributo 'documents_table' non trovato in _update_document_tab_title.")
+
+        except Exception as e:
+            self.logger.error(f"Errore imprevisto durante l'aggiornamento del titolo del tab documenti: {e}", exc_info=True)
+
+    def _save_changes(self):
+        """
+        Raccoglie i dati dal tab 'Dati Generali', li valida e chiama il db_manager
+        per salvare le modifiche sulla tabella 'partita'.
+        """
+        self.logger.info(f"Tentativo di salvare le modifiche per la partita ID: {self.partita_id}")
+
+        # 1. Raccoglie i dati dai widget della UI
+        dati_da_salvare = {
+            "numero_partita": self.numero_partita_spinbox.value(),
+            "suffisso_partita": self.suffisso_partita_edit.text().strip() or None, # Salva None se la stringa è vuota
+            "tipo": self.tipo_combo.currentText(),
+            "stato": self.stato_combo.currentText(),
+            "data_impianto": qdate_to_datetime(self.data_impianto_edit.date()), # Usa la funzione di utilità
+            "data_chiusura": qdate_to_datetime(self.data_chiusura_edit.date()), # Gestisce date nulle
+            "numero_provenienza": self.numero_provenienza_spinbox.value() if self.numero_provenienza_spinbox.value() != 0 else None
+        }
+
+        # 2. Validazione dei dati
+        if dati_da_salvare["numero_partita"] <= 0:
+            QMessageBox.warning(self, "Dati Non Validi", "Il numero di partita deve essere un valore positivo.")
+            self.numero_partita_spinbox.setFocus()
+            return
+            
+        # Potresti aggiungere altri controlli qui, ad esempio sulla data di chiusura rispetto a quella di impianto.
+        if dati_da_salvare["data_impianto"] and dati_da_salvare["data_chiusura"]:
+            if dati_da_salvare["data_chiusura"] < dati_da_salvare["data_impianto"]:
+                QMessageBox.warning(self, "Date Non Valide", "La data di chiusura non può essere precedente alla data di impianto.")
+                return
+
+        try:
+            # 3. Chiama il DB Manager per aggiornare
+            self.db_manager.update_partita(self.partita_id, dati_da_salvare)
+            
+            # 4. Gestione del successo
+            self.logger.info(f"Dati generali della partita ID {self.partita_id} aggiornati con successo.")
+            QMessageBox.information(self, "Salvataggio Riuscito", "Le modifiche ai dati generali della partita sono state salvate.")
+            
+            # Dopo aver salvato, ricarica i dati per mantenere la UI sincronizzata
+            self._load_all_partita_data() 
+            
+            # Non chiudiamo il dialogo, l'utente potrebbe voler fare altre modifiche
+            # self.accept() # Rimuovere questa riga per non chiudere il dialogo al salvataggio
+
+        except (DBUniqueConstraintError, DBDataError, DBNotFoundError, DBMError) as e:
+            self.logger.error(f"Errore durante il salvataggio dei dati generali per la partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare le modifiche:\n{e}")
+        except Exception as e_gen:
+            self.logger.critical(f"Errore imprevisto durante il salvataggio della partita ID {self.partita_id}: {e_gen}", exc_info=True)
+            QMessageBox.critical(self, "Errore Critico", f"Si è verificato un errore di sistema imprevisto: {e_gen}")
+
 class ModificaPossessoreDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, possessore_id: int, parent=None):
         super().__init__(parent)
@@ -8334,10 +8406,16 @@ class PartiteComuneDialog(QDialog):
         self.partite_table.setRowCount(0)
         self.partite_table.setSortingEnabled(False)
         
+        # Le intestazioni devono corrispondere ai nuovi dati
+        self.partite_table.setColumnCount(8) 
+        self.partite_table.setHorizontalHeaderLabels([
+            "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", 
+            "Data Impianto", "Num. Possessori", "Num. Immobili" // Rimosso "Num. Documenti" per semplicità
+        ])
+
         filter_text = self.filter_edit.text().strip()
 
         try:
-            # Assicurati che db_manager.get_partite_by_comune stia recuperando il suffisso
             partite_list = self.db_manager.get_partite_by_comune(
                 self.comune_id, filter_text=filter_text if filter_text else None
             )
@@ -8348,18 +8426,17 @@ class PartiteComuneDialog(QDialog):
                     col = 0
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-                    # Recupera il suffisso e lo inserisce. Se è None, lo mostra come stringa vuota.
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', '') or '')); col += 1 
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
                     data_imp = partita.get('data_impianto')
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('possessori', ''))); col += 1
+                    # Nuove colonne con i conteggi
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_possessori', '0')))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
-                # Ridimensiona le colonne per adattarsi al contenuto
+                    // self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
 
-                    self.partite_table.resizeColumnsToContents()
+                self.partite_table.resizeColumnsToContents()
             else:
                 self.logger.info(f"Nessuna partita trovata per il comune ID: {self.comune_id} con filtro '{filter_text}'.")
                 self.partite_table.setRowCount(1)

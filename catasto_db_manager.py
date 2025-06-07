@@ -1158,8 +1158,7 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
 
-    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
-
+    
     def get_partite_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = None
         partite_list = []
@@ -1315,148 +1314,68 @@ class CatastoDBManager:
         """
         Aggiorna i dati di una partita esistente nel database.
         Solleva eccezioni specifiche in caso di errore.
-
-        Args:
-            partita_id: L'ID della partita da aggiornare.
-            dati_modificati: Un dizionario contenente i campi della partita da aggiornare.
-                             Campi attesi e gestiti: 'numero_partita', 'tipo', 
-                             'data_impianto', 'data_chiusura', 'numero_provenienza', 'stato'.
-
-        Raises:
-            DBDataError: Se partita_id o dati_modificati non sono validi.
-            DBNotFoundError: Se la partita con l'ID specificato non viene trovata.
-            DBUniqueConstraintError: Se l'aggiornamento viola un vincolo di unicità (es. numero_partita duplicato nel comune).
-            DBMError: Per altri errori generici del database.
         """
         if not isinstance(partita_id, int) or partita_id <= 0:
-            self.logger.error(f"update_partita: partita_id non valido: {partita_id}")
             raise DBDataError(f"ID partita non valido: {partita_id}")
         if not isinstance(dati_modificati, dict):
-            self.logger.error(f"update_partita: dati_modificati non è un dizionario per partita ID {partita_id}.")
             raise DBDataError("Formato dati per l'aggiornamento non valido.")
 
         set_clauses = []
         params = []
-        conn = None # Inizializza conn a None per il blocco finally
+        conn = None
 
-        # Mappa dei campi permessi e se possono essere NULL
-        # (nome_campo_dict, nome_colonna_db, is_nullable)
-        # Aggiunto 'suffisso_partita' alla mappa dei campi permessi
-        allowed_fields = {
-            "numero_partita": ("numero_partita", False),
-            "suffisso_partita": ("suffisso_partita", True), # Può essere NULL
-            "tipo": ("tipo", False),
-        }
+        # Mappa dei campi permessi dalla UI (esclusi quelli che non vogliamo siano modificabili da qui)
+        allowed_fields = [
+            "numero_partita", "tipo", "stato", 
+            "data_impianto", "data_chiusura", "numero_provenienza"
+        ]
 
-        for key_dict, (col_db, _) in allowed_fields.items():
-            if key_dict in dati_modificati:
-                set_clauses.append(f"{col_db} = %s")
-                params.append(dati_modificati[key_dict])
-            # Se un campo NOT NULL non è in dati_modificati, causerà un errore se si tenta di impostarlo a NULL
-            # La logica della UI dovrebbe garantire che i campi NOT NULL abbiano sempre un valore.
+        for field in allowed_fields:
+            if field in dati_modificati:
+                set_clauses.append(f"{field} = %s")
+                params.append(dati_modificati[field])
 
-        # Verifica che i campi obbligatori (se li consideriamo tali per un UPDATE) siano presenti.
-        # La tabella ha già i suoi vincoli NOT NULL che verranno applicati dal DB.
-        # Qui ci assicuriamo solo che l'UPDATE abbia senso.
-        if "numero_partita" not in dati_modificati or dati_modificati.get("numero_partita") is None:
-            raise DBDataError("Il campo 'numero_partita' è obbligatorio e non può essere nullo per l'aggiornamento.")
-        if "tipo" not in dati_modificati or dati_modificati.get("tipo") is None:
-            raise DBDataError("Il campo 'tipo' è obbligatorio e non può essere nullo per l'aggiornamento.")
-        if "stato" not in dati_modificati or dati_modificati.get("stato") is None:
-            raise DBDataError("Il campo 'stato' è obbligatorio e non può essere nullo per l'aggiornamento.")
-
-
-        if not set_clauses:
-            self.logger.info(f"update_partita: Nessun campo valido fornito per l'aggiornamento della partita ID {partita_id} (esclusa data_modifica).")
-            # Decidi se questo è un errore o un "no-op" che consideri successo.
-            # Aggiorniamo comunque data_modifica.
-            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
-            # Se solo data_modifica, params è vuoto fino all'aggiunta di partita_id
-        else:
-            set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
-
-
-        query = f"""
-            UPDATE {self.schema}.partita
-            SET {', '.join(set_clauses)}
-            WHERE id = %s;
-        """
-        # Aggiungi partita_id alla fine della lista dei parametri per la clausola WHERE
-        params.append(partita_id)
-        params_tuple = tuple(params)
-        # La logica esistente dovrebbe già gestire l'aggiunta alla clausola SET se la chiave è in dati_modificati.
-        # Assicurati che se dati_modificati["suffisso_partita"] è una stringa vuota, diventi None.
+        # Gestione specifica e corretta per il suffisso
         if "suffisso_partita" in dati_modificati:
             set_clauses.append("suffisso_partita = %s")
-            # Se è una stringa vuota, salvala come NULL nel DB
-            params.append(dati_modificati["suffisso_partita"].strip() or None)
+            suffisso_val = dati_modificati.get("suffisso_partita")
+            # Controlla se è una stringa prima di usare .strip(), altrimenti passa None
+            params.append(suffisso_val.strip() if isinstance(suffisso_val, str) else None)
+        
+        if not set_clauses:
+            self.logger.info(f"update_partita: Nessun campo valido fornito per l'aggiornamento.")
+            return # Nessuna modifica da fare
+
+        set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
+        params.append(partita_id)
+        query = f"UPDATE {self.schema}.partita SET {', '.join(set_clauses)} WHERE id = %s;"
+        params_tuple = tuple(params)
 
         try:
-            conn = self._get_connection() # Ottieni la connessione
+            conn = self._get_connection()
             with conn.cursor() as cur:
                 self.logger.debug(f"Esecuzione query UPDATE partita ID {partita_id}: {cur.mogrify(query, params_tuple).decode('utf-8', 'ignore')}")
                 cur.execute(query, params_tuple)
-
                 if cur.rowcount == 0:
-                    # Se rowcount è 0, la riga con l'ID specificato non esiste.
-                    # (Con data_modifica = CURRENT_TIMESTAMP, se la riga esistesse, rowcount dovrebbe essere 1)
-                    conn.rollback() # Annulla la transazione (anche se probabilmente non ha fatto nulla)
-                    self.logger.warning(f"Tentativo di aggiornare partita ID {partita_id} che non è stata trovata.")
+                    conn.rollback()
                     raise DBNotFoundError(f"Nessuna partita trovata con ID {partita_id} per l'aggiornamento.")
-                
                 conn.commit()
-                self.logger.info(f"Partita ID {partita_id} aggiornata con successo. Righe modificate: {cur.rowcount}")
-
-        except psycopg2.errors.UniqueViolation as uve:
+                self.logger.info(f"Partita ID {partita_id} aggiornata con successo.")
+        except (DBUniqueConstraintError, DBDataError, DBNotFoundError, DBMError) as e:
             if conn: conn.rollback()
-            constraint_name = getattr(uve.diag, 'constraint_name', "N/D")
-            error_detail = getattr(uve, 'pgerror', str(uve))
-            self.logger.error(f"Errore di violazione di unicità (vincolo: {constraint_name}) durante l'aggiornamento della partita ID {partita_id}: {error_detail}")
-            # Messaggio più specifico per il vincolo comune_id, numero_partita
-            if constraint_name == "partita_comune_id_numero_partita_key": # Assumendo sia questo il nome del tuo vincolo UNIQUE
-                msg = "Il numero di partita specificato è già in uso per il comune associato."
-            else:
-                msg = f"Violazione di un vincolo di unicità (vincolo: {constraint_name}). I dati inseriti sono duplicati."
-            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=error_detail) from uve
-        
-        except psycopg2.errors.CheckViolation as cve:
+            self.logger.error(f"Errore DB gestito aggiornando partita ID {partita_id}: {e}", exc_info=True)
+            raise  # Rilancia l'eccezione specifica
+        except psycopg2.Error as e_psql:
             if conn: conn.rollback()
-            constraint_name = getattr(cve.diag, 'constraint_name', "N/D")
-            error_detail = getattr(cve, 'pgerror', str(cve))
-            self.logger.error(f"Errore di violazione di CHECK constraint (vincolo: {constraint_name}) per partita ID {partita_id}: {error_detail}")
-            msg = f"I dati forniti violano una regola di validazione del database (vincolo: {constraint_name})."
-            # Esempi: tipo partita non valido, stato non valido
-            if constraint_name == "partita_tipo_check":
-                msg = "Il 'tipo' di partita specificato non è valido (ammessi: 'principale', 'secondaria')."
-            elif constraint_name == "partita_stato_check":
-                msg = "Lo 'stato' della partita specificato non è valido (ammessi: 'attiva', 'inattiva')."
-            raise DBDataError(msg) from cve
-
-        except psycopg2.Error as e: # Altri errori specifici di psycopg2/DB
+            self.logger.error(f"Errore psycopg2 non gestito aggiornando partita ID {partita_id}: {e_psql}", exc_info=True)
+            raise DBMError(f"Errore database: {getattr(e_psql, 'pgerror', str(e_psql))}") from e_psql
+        except Exception as e_gen:
             if conn: conn.rollback()
-            error_detail = getattr(e, 'pgerror', str(e))
-            self.logger.error(f"Errore DB generico durante l'aggiornamento della partita ID {partita_id}: {error_detail}", exc_info=True)
-            raise DBMError(f"Errore database durante l'aggiornamento della partita: {error_detail}") from e
-        
-        except Exception as e: # Catch-all per altri errori Python imprevisti
-            if conn and not conn.closed: conn.rollback() # Controlla se conn è definita e non chiusa
-            self.logger.error(f"Errore imprevisto Python durante l'aggiornamento della partita ID {partita_id}: {e}", exc_info=True)
-            raise DBMError(f"Errore di sistema imprevisto durante l'aggiornamento: {e}") from e
-        
+            self.logger.error(f"Errore generico aggiornando partita ID {partita_id}: {e_gen}", exc_info=True)
+            raise DBMError(f"Errore di sistema imprevisto: {e_gen}") from e_gen
         finally:
             if conn:
-                self._release_connection(conn) # Rilascia la connessione al pool
-
-    # Assicurati di avere il metodo release_connection se usi un pool
-    # def release_connection(self, conn):
-    #     if self.conn_pool and conn:
-    #         self.conn_pool.putconn(conn)
-    #         self.logger.debug("Connessione rilasciata al pool.")
-    # O se non usi un pool esplicito ma chiudi le connessioni:
-    # def release_connection(self, conn):
-    #     if conn:
-    #         conn.close()
-    #         self.logger.debug("Connessione chiusa.")
+                self._release_connection(conn)
 
     def update_comune(self, comune_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """
@@ -1968,25 +1887,19 @@ class CatastoDBManager:
     # In catasto_db_manager.py, all'interno della classe CatastoDBManager
 
     def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
-                                 possessori_json_str: str, # Stringa JSON
-                                 immobili_json_str: str,    # Stringa JSON
-                                 suffisso_partita: Optional[str] = None # NUOVO PARAMETRO
+                                 possessori_json_str: str,
+                                 immobili_json_str: str,
+                                 suffisso_partita: Optional[str] = None
                                 ) -> Optional[int]:
         """
         Chiama la procedura SQL catasto.registra_nuova_proprieta per registrare una nuova proprietà.
-        Accetta 6 parametri (comune_id, numero_partita, data_impianto, possessori_json, immobili_json, suffisso_partita)
-        e restituisce l'ID della nuova partita.
-        Solleva eccezioni specifiche in caso di errore (es. unicità violata, dati non validi).
         """
         # Validazioni input base
+        # ... (le validazioni iniziali restano invariate) ...
         if not (isinstance(comune_id, int) and comune_id > 0):
-            msg = "Parametro 'comune_id' non valido."
-            self.logger.error(f"registra_nuova_proprieta: {msg}")
-            raise DBDataError(msg)
+            raise DBDataError("Parametro 'comune_id' non valido.")
         if not (isinstance(numero_partita, int) and numero_partita > 0):
-            msg = "Parametro 'numero_partita' non valido."
-            self.logger.error(f"registra_nuova_proprieta: {msg}")
-            raise DBDataError(msg)
+            raise DBDataError("Parametro 'numero_partita' non valido.")
         if not isinstance(data_impianto, date):
             msg = "Parametro 'data_impianto' non valido (deve essere un oggetto date)."
             self.logger.error(f"registra_nuova_proprieta: {msg}")
@@ -2012,9 +1925,11 @@ class CatastoDBManager:
         # La procedura SQL 'catasto.registra_nuova_proprieta' deve accettare 6 parametri
         # (comune_id, numero_partita, data_impianto, possessori_json, immobili_json, suffisso_partita)
         # La procedura stessa gestirà la validazione di unicità e l'inserimento.
-        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::jsonb, %s::jsonb, %s);"
+         # --- MODIFICA CHIAVE QUI ---
+        # Aggiungiamo il cast esplicito ::TEXT al sesto parametro
+        call_proc = f"CALL {self.schema}.registra_nuova_proprieta(%s, %s, %s, %s::jsonb, %s::jsonb, %s::TEXT);"
         params = (comune_id, numero_partita, data_impianto, possessori_json_str, immobili_json_str, actual_suffisso_partita)
-        
+       
         try:
             conn = self._get_connection()
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -2022,22 +1937,7 @@ class CatastoDBManager:
                 self.logger.debug(f"SQL CALL: {cur.mogrify(call_proc, params).decode('utf-8','ignore')}")
                 cur.execute(call_proc, params)
                 
-                # Le procedure (CALL) in PostgreSQL non restituiscono direttamente un valore
-                # in Python come farebbe una funzione SELECT.
-                # Se la procedura SQL non ha un parametro OUT per l'ID (p_out_id INTEGER OUT),
-                # dobbiamo recuperare l'ID con una SELECT dopo la CALL.
-                # Il modo più robusto è usare la logica di ricerca che hai già.
-                
-                # Recupera l'ID della partita appena creata.
-                # Nota: Questo richiede che la procedura SQL abbia effettivamente creato la partita
-                # e che la combinazione di comune_id, numero_partita e suffisso_partita sia unica.
-                # La procedura SQL deve già avere la validazione UNIQUE integrata.
-                
-                # Se la procedura ha restituito un errore di unicità, verrà catturato sotto.
-                
-                # Recupera l'ID della partita che dovrebbe essere stata creata
-                # Questa SELECT deve corrispondere esattamente ai criteri usati per la creazione
-                # per trovare la riga corretta in modo affidabile.
+                # La logica per recuperare l'ID della nuova partita dopo la CALL rimane invariata
                 query_select_id = f"""
                     SELECT id FROM {self.schema}.partita 
                     WHERE comune_id = %s 
@@ -2050,37 +1950,28 @@ class CatastoDBManager:
 
                 if result and result['id']:
                     new_partita_id = result['id']
-                    conn.commit() # Esegui il commit dopo che l'operazione è completa e l'ID è stato recuperato
-                    self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id} (Comune: {comune_id}, Numero: {numero_partita}, Suffisso: '{actual_suffisso_partita}').")
+                    conn.commit()
+                    self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id}.")
                 else:
-                    conn.rollback() # Rollback se l'ID non può essere recuperato (indica un problema logico)
-                    self.logger.error(f"Fallimento nel recuperare l'ID della nuova partita dopo registrazione (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'). La procedura SQL potrebbe non aver inserito la partita o la query SELECT non è corretta.")
-                    raise DBMError("Registrazione partita completata, ma impossibile recuperare l'ID della nuova partita. Controllare la logica.")
+                    conn.rollback()
+                    self.logger.error(f"Fallimento nel recuperare l'ID della nuova partita dopo la registrazione (C:{comune_id}, N:{numero_partita}).")
+                    raise DBMError("Registrazione partita completata, ma impossibile recuperare l'ID della nuova partita.")
         
             return new_partita_id
 
+        # La gestione delle eccezioni rimane invariata
         except psycopg2.errors.UndefinedFunction as udf_err:
             if conn: conn.rollback()
-            self.logger.error(f"La procedura SQL '{self.schema}.registra_nuova_proprieta' con la firma fornita non esiste: {getattr(udf_err.diag, 'message', str(udf_err))}", exc_info=True)
-            raise DBMError(f"Procedura SQL '{self.schema}.registra_nuova_proprieta' non trovata o firma errata. Dettagli: {getattr(udf_err.diag, 'message', str(udf_err))}") from udf_err
+            self.logger.error(f"La procedura SQL '{self.schema}.registra_nuova_proprieta' non esiste: {getattr(udf_err.diag, 'message', str(udf_err))}", exc_info=True)
+            raise DBMError(f"Procedura SQL non trovata o firma errata: {getattr(udf_err.diag, 'message', str(udf_err))}") from udf_err
         
-        except psycopg2.errors.UniqueViolation as uve:
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
             if conn: conn.rollback()
-            constraint_name = getattr(uve.diag, 'constraint_name', 'N/D')
-            pgerror_msg = getattr(uve.diag, 'message', str(uve))
-            msg = f"Una partita con numero {numero_partita} e suffisso '{actual_suffisso_partita if actual_suffisso_partita else 'N/A'}' esiste già nel comune selezionato (vincolo: {constraint_name})."
-            self.logger.warning(f"registra_nuova_proprieta: {msg} Dettagli: {pgerror_msg}")
-            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=pgerror_msg) from uve
-        
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback()
-            pgerror_msg = getattr(db_err.diag, 'message', str(db_err))
-            self.logger.error(f"Errore DB in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'): {pgerror_msg}", exc_info=True)
-            raise DBMError(f"Errore database durante la registrazione della nuova proprietà: {pgerror_msg}") from db_err
+            raise e
         
         except Exception as e:
             if conn and not conn.closed: conn.rollback()
-            self.logger.critical(f"Errore Python in registra_nuova_proprieta (C:{comune_id}, N:{numero_partita}, S:'{actual_suffisso_partita}'): {e}", exc_info=True)
+            self.logger.critical(f"Errore Python in registra_nuova_proprieta: {e}", exc_info=True)
             raise DBMError(f"Errore di sistema imprevisto: {e}") from e
         
         finally:
@@ -2389,6 +2280,55 @@ class CatastoDBManager:
                 self._release_connection(conn)
         return stats_list
 
+    def get_immobile_details(self, immobile_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Recupera i dettagli completi di un singolo immobile, inclusi i dati correlati.
+        """
+        if not isinstance(immobile_id, int) or immobile_id <= 0:
+            self.logger.error(f"get_immobile_details: immobile_id non valido: {immobile_id}")
+            return None
+
+        query = f"""
+            SELECT
+                i.id, i.partita_id, i.localita_id, i.natura, i.classificazione, i.consistenza,
+                i.numero_piani, i.numero_vani,
+                p.numero_partita, p.suffisso_partita,
+                c.nome AS comune_nome,
+                l.nome AS localita_nome, l.tipo AS localita_tipo, l.civico
+            FROM
+                {self.schema}.immobile i
+            JOIN
+                {self.schema}.partita p ON i.partita_id = p.id
+            JOIN
+                {self.schema}.comune c ON p.comune_id = c.id
+            JOIN
+                {self.schema}.localita l ON i.localita_id = l.id
+            WHERE
+                i.id = %s;
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione get_immobile_details per immobile_id {immobile_id}")
+                cur.execute(query, (immobile_id,))
+                immobile_data = cur.fetchone()
+                
+                if immobile_data:
+                    self.logger.info(f"Dettagli recuperati per immobile ID {immobile_id}.")
+                    return dict(immobile_data)
+                else:
+                    self.logger.warning(f"Nessun immobile trovato con ID {immobile_id}.")
+                    return None
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB durante il recupero dei dettagli dell'immobile ID {immobile_id}: {db_err}", exc_info=True)
+            return None
+        except Exception as e:
+            self.logger.error(f"Errore generico durante il recupero dei dettagli dell'immobile ID {immobile_id}: {e}", exc_info=True)
+            return None
+        finally:
+            if conn:
+                self._release_connection(conn)
     def get_immobili_per_tipologia(self, comune_id: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
         conn = None
         immobili_list = []

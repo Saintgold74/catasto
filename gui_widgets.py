@@ -1733,6 +1733,8 @@ class RegistrazioneProprietaWidget(QWidget):
         super().__init__(parent)
         self.db_manager = db_manager
         self.comune_id: Optional[int] = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+
         # Salva anche il nome per la UI
         self.comune_display_name: Optional[str] = None
         self.possessori_data: List[Dict[str, Any]] = []
@@ -1741,61 +1743,62 @@ class RegistrazioneProprietaWidget(QWidget):
         self._initUI()  # Ora questo chiamerà il metodo definito sotto
 
     def _initUI(self):
-        # TUTTA LA LOGICA PER CREARE I WIDGET DI QUESTO TAB VA QUI:
-        # Imposta il layout principale per questo widget
         layout = QVBoxLayout(self)
 
-        # Esempio (basato sulla struttura precedente del suo widget):
+        # --- GRUPPO DATI NUOVA PROPRIETÀ (CON LAYOUT MIGLIORATO) ---
         form_group = QGroupBox("Dati Nuova Proprietà")
-        form_layout = QGridLayout()  # O QFormLayout
+        # Usiamo un QGridLayout per un controllo preciso sulla disposizione
+        form_layout = QGridLayout(form_group)
+        form_layout.setSpacing(10)
 
-        # Comune
+        # Riga 0: Selezione Comune
         comune_label = QLabel("Comune (*):")
         self.comune_display = QLabel("Nessun comune selezionato.")
         self.comune_button = QPushButton("Seleziona Comune...")
-        # Assumendo che select_comune esista
         self.comune_button.clicked.connect(self.select_comune)
         form_layout.addWidget(comune_label, 0, 0)
-        form_layout.addWidget(self.comune_display, 0, 1)
-        form_layout.addWidget(self.comune_button, 0, 2)
+        form_layout.addWidget(self.comune_display, 0, 1, 1, 3) # Occupa 3 colonne
+        form_layout.addWidget(self.comune_button, 0, 4)
 
-        # Numero partita
+        # Riga 1: Numero e Suffisso Partita sulla stessa linea
         num_partita_label = QLabel("Numero Partita (*):")
         self.num_partita_edit = QSpinBox()
-        self.num_partita_edit.setMinimum(1)
-        self.num_partita_edit.setMaximum(9999999)
-        form_layout.addWidget(num_partita_label, 1, 0)
-        form_layout.addWidget(self.num_partita_edit, 1, 1, 1, 2)  # Span
-        
-        # --- NUOVO CAMPO: Suffisso Partita ---
+        self.num_partita_edit.setRange(1, 9999999)
+        self.num_partita_edit.setMaximumWidth(150) # Dimensione fissa per un aspetto migliore
+
         suffisso_label = QLabel("Suffisso Partita (opz.):")
         self.suffisso_partita_edit = QLineEdit()
-        self.suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B")
-        self.suffisso_partita_edit.setMaxLength(20) # Limita la lunghezza
-        form_layout.addWidget(suffisso_label, 3, 0) # Assicurati che l'indice di riga sia corretto
-        form_layout.addWidget(self.suffisso_partita_edit, 3, 1, 1, 2)
-        # --- FINE NUOVO CAMPO ---
+        self.suffisso_partita_edit.setPlaceholderText("Es. bis, A")
+        self.suffisso_partita_edit.setMaxLength(20)
+        self.suffisso_partita_edit.setMaximumWidth(150) # Dimensione fissa
 
-        # Data impianto
+        form_layout.addWidget(num_partita_label, 1, 0)
+        form_layout.addWidget(self.num_partita_edit, 1, 1)
+        form_layout.addWidget(suffisso_label, 1, 2, Qt.AlignRight) # Allinea a destra
+        form_layout.addWidget(self.suffisso_partita_edit, 1, 3)
+
+        # Riga 2: Data Impianto
         data_label = QLabel("Data Impianto (*):")
         self.data_edit = QDateEdit(calendarPopup=True)
         self.data_edit.setDate(QDate.currentDate())
         self.data_edit.setDisplayFormat("yyyy-MM-dd")
-        form_layout.addWidget(data_label, 2, 0)
-        form_layout.addWidget(self.data_edit, 2, 1, 1, 2)  # Span
+        self.data_edit.setMaximumWidth(150) # Dimensione fissa
 
-        form_group.setLayout(form_layout)
+        form_layout.addWidget(data_label, 2, 0)
+        form_layout.addWidget(self.data_edit, 2, 1)
+
+        # Aggiungiamo una colonna "elastica" che assorba lo spazio extra
+        form_layout.setColumnStretch(5, 1)
+        
         layout.addWidget(form_group)
 
+        # --- SEZIONI POSSESSORI E IMMOBILI (INVARIATE) ---
         # Sezione Possessori
         possessori_group = QGroupBox("Possessori Associati")
         possessori_layout = QVBoxLayout(possessori_group)
         self.possessori_table = QTableWidget()
-        # ... (configurazione possessori_table) ...
-        # Esempio: ID, Nome, Titolo, Quota
         self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels(
-            ["ID Poss.", "Nome Completo", "Titolo", "Quota"])
+        self.possessori_table.setHorizontalHeaderLabels(["ID Poss.", "Nome Completo", "Titolo", "Quota"])
         possessori_layout.addWidget(self.possessori_table)
         btn_add_poss = QPushButton("Aggiungi Possessore")
         btn_add_poss.clicked.connect(self.add_possessore)
@@ -1812,10 +1815,8 @@ class RegistrazioneProprietaWidget(QWidget):
         immobili_group = QGroupBox("Immobili Associati")
         immobili_layout = QVBoxLayout(immobili_group)
         self.immobili_table = QTableWidget()
-        # ... (configurazione immobili_table) ...
-        self.immobili_table.setColumnCount(5)  # Esempio
-        self.immobili_table.setHorizontalHeaderLabels(
-            ["ID", "Natura", "Località", "Class.", "Consist."])
+        self.immobili_table.setColumnCount(5)
+        self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Class.", "Consist.", "Piani/Vani"]) # Aggiornato header per chiarezza
         immobili_layout.addWidget(self.immobili_table)
         btn_add_imm = QPushButton("Aggiungi Immobile")
         btn_add_imm.clicked.connect(self.add_immobile)
@@ -1831,13 +1832,10 @@ class RegistrazioneProprietaWidget(QWidget):
         # Pulsante Registra Proprietà
         self.btn_registra_proprieta = QPushButton(QApplication.style().standardIcon(
             QStyle.SP_DialogSaveButton), " Registra Nuova Proprietà")
-        self.btn_registra_proprieta.clicked.connect(
-            self._salva_proprieta)  # Collegato al metodo corretto
+        self.btn_registra_proprieta.clicked.connect(self._salva_proprieta)
         layout.addWidget(self.btn_registra_proprieta)
 
         layout.addStretch(1)
-        # Non serve self.setLayout(layout) qui se il layout è già stato passato a QWidget nel costruttore del layout
-
     def select_comune(self):
         """Apre il selettore di comuni."""
         dialog = ComuneSelectionDialog(self.db_manager, self)
@@ -1848,14 +1846,44 @@ class RegistrazioneProprietaWidget(QWidget):
             self.comune_display.setText(dialog.selected_comune_name)
 
     def add_possessore(self):
-        """Aggiunge un possessore alla lista."""
-        dialog = PossessoreSelectionDialog(
-            self.db_manager, self.comune_id, self)
-        result = dialog.exec_()
+        """
+        Apre un dialogo per selezionare/creare un possessore e, in caso di successo,
+        un secondo dialogo per definire i dettagli del legame (titolo e quota).
+        """
+        if not self.comune_id:
+            QMessageBox.warning(self, "Comune Mancante", "Selezionare un comune per la partita prima di aggiungere un possessore.")
+            return
 
-        if result == QDialog.Accepted and dialog.selected_possessore:
-            self.possessori_data.append(dialog.selected_possessore)
-            self.update_possessori_table()
+        # 1. Dialogo per selezionare la PERSONA
+        dialog_sel_poss = PossessoreSelectionDialog(self.db_manager, self.comune_id, self)
+        if dialog_sel_poss.exec_() != QDialog.Accepted or not dialog_sel_poss.selected_possessore:
+            self.logger.info("Aggiunta possessore annullata o nessun possessore selezionato.")
+            return
+            
+        selected_possessore_info = dialog_sel_poss.selected_possessore
+        
+        # 2. Dialogo per chiedere i dettagli del LEGAME (Titolo, Quota)
+        # Usiamo il metodo statico che abbiamo già preparato
+        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(
+            nome_possessore=selected_possessore_info.get('nome_completo', 'N/D'),
+            tipo_partita_attuale='principale', # Per una nuova proprietà, è 'principale'
+            parent=self
+        )
+
+        if not dettagli_legame:
+            self.logger.info("Definizione dettagli del legame annullata.")
+            return
+
+        # 3. Combina le informazioni e aggiungile alla lista dati
+        dati_completi_possessore = {
+            "id": selected_possessore_info.get('id'),
+            "nome_completo": selected_possessore_info.get('nome_completo'),
+            "titolo": dettagli_legame.get('titolo'), # Obbligatorio
+            "quota": dettagli_legame.get('quota')   # Opzionale
+        }
+        
+        self.possessori_data.append(dati_completi_possessore)
+        self.update_possessori_table()
 
     def remove_possessore(self):
         """Rimuove il possessore selezionato dalla lista."""
@@ -1871,63 +1899,24 @@ class RegistrazioneProprietaWidget(QWidget):
             self.update_possessori_table()
 
     def update_possessori_table(self):
-        """Aggiorna la tabella dei possessori."""
-        if not hasattr(self, 'possessori_data') or self.possessori_data is None:
-            self.possessori_data = []  # Assicura che sia una lista se non definito
+        """
+        Aggiorna la tabella dei possessori in modo corretto e robusto.
+        """
+        self.possessori_table.setRowCount(0) # Pulisce la tabella
+        if not hasattr(self, 'possessori_data'):
+            return
 
         self.possessori_table.setRowCount(len(self.possessori_data))
+        
+        # Imposta le intestazioni corrette
+        self.possessori_table.setColumnCount(4)
+        self.possessori_table.setHorizontalHeaderLabels(["ID Poss.", "Nome Completo", "Titolo", "Quota"])
 
-        # Assicurati che NUOVE_ETICHETTE_POSSESSORI sia definito globalmente,
-        # come attributo di classe/istanza, o passato al metodo se necessario.
-        # Esempio: NUOVE_ETICHETTE_POSSESSORI = ["cognome_nome", "paternita_dettaglio", ...]
-        # Se non è definito, il controllo 'in NUOVE_ETICHETTE_POSSESSORI' causerà un NameError.
-        # Per ora, assumiamo che sia definito da qualche parte accessibile.
-        # Se non lo è, dovrà definirlo o rimuovere il blocco condizionale se le colonne sono fisse.
-
-        # Usa 'i' e 'dati_possessore'
         for i, dati_possessore in enumerate(self.possessori_data):
-            current_col = 0  # Inizializza l'indice di colonna per ogni riga
-
-            # Colonna 0: Nome Completo (come da sua logica originale)
-            self.possessori_table.setItem(i, current_col, QTableWidgetItem(
-                str(dati_possessore.get('nome_completo', ''))))
-            current_col += 1
-
-            # Colonna 1: Cognome e Nome (come da sua logica originale)
-            # Questa potrebbe essere la stessa del blocco "NUOVE COLONNE" o una versione diversa.
-            # Se 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI è per una visualizzazione speciale, gestiscila qui.
-            if 'cognome_nome' in NUOVE_ETICHETTE_POSSESSORI:  # Assumendo NUOVE_ETICHETTE_POSSESSORI sia definito
-                # Usa il valore da dati_possessore.get('cognome_nome', 'N/D')
-                # Questa era la colonna che causava l'errore usando 'row_idx' e 'col' non definite.
-                self.possessori_table.setItem(i, current_col, QTableWidgetItem(
-                    str(dati_possessore.get('cognome_nome', 'N/D'))))
-            else:
-                # Fallback o gestione se 'cognome_nome' non è in NUOVE_ETICHETTE_POSSESSORI ma è una colonna fissa
-                self.possessori_table.setItem(i, current_col, QTableWidgetItem(
-                    str(dati_possessore.get('cognome_nome', ''))))
-            current_col += 1
-
-            # Colonna 2: Paternità
-            # Il blocco "NUOVE COLONNE" aveva anche una 'paternita'. Chiarire quale usare.
-            # Se il blocco if precedente gestiva una 'paternita' condizionale:
-            # if 'paternita_speciale' in NUOVE_ETICHETTE_POSSESSORI:
-            #     self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('paternita_speciale', 'N/D'))))
-            # else:
-            #     self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('paternita', ''))))
-            # current_col += 1
-            # Oppure, se è sempre la stessa 'paternita':
-            self.possessori_table.setItem(i, current_col, QTableWidgetItem(
-                str(dati_possessore.get('paternita', ''))))
-            current_col += 1
-
-            # Colonna 3: Quota
-            self.possessori_table.setItem(i, current_col, QTableWidgetItem(
-                str(dati_possessore.get('quota', ''))))
-            current_col += 1
-
-            # Aggiungere altre colonne se necessario, seguendo il pattern:
-            # self.possessori_table.setItem(i, current_col, QTableWidgetItem(str(dati_possessore.get('nome_campo', ''))))
-            # current_col += 1
+            self.possessori_table.setItem(i, 0, QTableWidgetItem(str(dati_possessore.get('id', 'N/D'))))
+            self.possessori_table.setItem(i, 1, QTableWidgetItem(dati_possessore.get('nome_completo', '')))
+            self.possessori_table.setItem(i, 2, QTableWidgetItem(dati_possessore.get('titolo', ''))) # Ora questo valore esiste
+            self.possessori_table.setItem(i, 3, QTableWidgetItem(dati_possessore.get('quota', '') or '')) # Gestisce None
 
         self.possessori_table.resizeColumnsToContents()
 
@@ -1980,85 +1969,62 @@ class RegistrazioneProprietaWidget(QWidget):
     # All'interno della classe RegistrazioneProprietaWidget in prova.py
 
     def _salva_proprieta(self):
-        logging.getLogger("CatastoGUI").info(
-            "Avvio registrazione nuova proprietà...")
+        self.logger.info("Avvio registrazione nuova proprietà...")
         if not self.comune_id:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Selezionare un comune.")
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune.")
             return
         if not self.possessori_data:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Aggiungere almeno un possessore.")
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un possessore.")
             return
         if not self.immobili_data:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Aggiungere almeno un immobile.")
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un immobile.")
             return
 
         numero_partita = self.num_partita_edit.value()
-        suffisso_partita = self.suffisso_partita_edit.text().strip() or None # Leggi il valore
-        # Converte QDate in datetime.date
+        # Legge correttamente il valore del suffisso dalla UI
+        suffisso_partita = self.suffisso_partita_edit.text().strip() or None 
         data_impianto_dt = self.data_edit.date().toPyDate()
 
-        # Prepara i dati JSON per possessori e immobili
-        # La procedura SQL si aspetta JSONB, quindi serializziamo qui.
-        # Assicurati che json_serial gestisca le date se presenti nei dati
-        def json_serial(obj):
-            if isinstance(obj, (datetime, date)):
-                return obj.isoformat()
-            raise TypeError(f"Tipo {type(obj)} non serializzabile JSON")
-
         try:
-            possessori_json_str = json.dumps(
-                self.possessori_data, default=json_serial)
-            immobili_json_str = json.dumps(
-                self.immobili_data, default=json_serial)
+            possessori_json_str = json.dumps(self.possessori_data)
+            immobili_json_str = json.dumps(self.immobili_data)
         except TypeError as te:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore serializzazione JSON per nuova proprietà: {te}")
-            QMessageBox.critical(
-                self, "Errore Dati", f"Errore nella preparazione dei dati per il database: {te}")
+            self.logger.error(f"Errore serializzazione JSON per nuova proprietà: {te}")
+            QMessageBox.critical(self, "Errore Dati", f"Errore nella preparazione dei dati per il database: {te}")
             return
 
-        # Assumendo che il suo metodo in DBManager sia stato aggiornato e si chiami,
-        # ad esempio, registra_nuova_proprieta_completa e accetti JSON.
-        # E che restituisca l'ID della nuova partita o sollevi eccezione.
         try:
-            # Chiamata aggiornata con i 5 argomenti che la procedura SQL catasto.registra_nuova_proprieta si aspetta
+            # Chiamata al DB Manager, ora completa con tutti gli argomenti
             nuova_partita_id = self.db_manager.registra_nuova_proprieta(
                 comune_id=self.comune_id,
                 numero_partita=numero_partita,
                 data_impianto=data_impianto_dt,
                 possessori_json_str=possessori_json_str,
-                immobili_json_str=immobili_json_str
+                immobili_json_str=immobili_json_str,
+                suffisso_partita=suffisso_partita  # <<< QUESTA È LA RIGA MANCANTE, ORA AGGIUNTA
             )
 
-            if nuova_partita_id is not None and self.comune_id is not None:  # Controlla anche comune_id
-                msg_success = f"Nuova proprietà (Partita N.{numero_partita}, ID: {nuova_partita_id}) registrata con successo per il comune ID {self.comune_id}."
-                logging.getLogger("CatastoGUI").info(msg_success)
+            if nuova_partita_id is not None and self.comune_id is not None:
+                suffisso_display = f" (Suffisso: {suffisso_partita})" if suffisso_partita else ""
+                msg_success = f"Nuova proprietà (Partita N.{numero_partita}{suffisso_display}, ID: {nuova_partita_id}) registrata con successo."
+                self.logger.info(msg_success)
 
                 reply = QMessageBox.question(self, "Registrazione Completata",
-                                             f"{msg_success}\n\nVuoi procedere con operazioni collegate (es. Duplicazione, Trasferimento Immobili) su questa o un'altra partita?",
+                                             f"{msg_success}\n\nVuoi procedere con operazioni collegate (es. Duplicazione) su questa o un'altra partita?",
                                              QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
                 if reply == QMessageBox.Yes:
-                    # Emetti il segnale con l'ID della nuova partita e il suo comune_id
-                    self.partita_creata_per_operazioni_collegate.emit(
-                        nuova_partita_id, self.comune_id)  # Assicurati che self.comune_id sia corretto
+                    self.partita_creata_per_operazioni_collegate.emit(nuova_partita_id, self.comune_id)
 
                 self._pulisci_form_registrazione()
-            # else: Se nuova_partita_id è None, il DBManager dovrebbe aver sollevato un'eccezione
-            # che viene catturata sotto.
 
         except (DBUniqueConstraintError, DBDataError, DBMError) as e_db:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB registrazione proprietà: {e_db}")
+            self.logger.error(f"Errore DB registrazione proprietà: {e_db}")
             QMessageBox.critical(self, "Errore Database", str(e_db))
         except Exception as e_gen:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Errore: {type(e_gen).__name__}: {e_gen}")
+            self.logger.critical(f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
+        self.logger.info("Registrazione proprietà completata.")
 
     def _pulisci_form_registrazione(self):
         """Pulisce tutti i campi del form di registrazione proprietà."""
@@ -8343,7 +8309,7 @@ class PartiteComuneDialog(QDialog):
         filter_layout = QHBoxLayout()
         filter_label = QLabel("Filtra partite:")
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Digita per filtrare (numero, tipo, stato, possessore)...")
+        self.filter_edit.setPlaceholderText("Digita per filtrare (numero, tipo, stato, suffisso)...")
         
         self.filter_button = QPushButton("Applica Filtro")
         self.filter_button.clicked.connect(self.load_partite_data)
@@ -8354,40 +8320,35 @@ class PartiteComuneDialog(QDialog):
         layout.addLayout(filter_layout)
 
         self.partite_table = QTableWidget()
-        # Aumenta il numero di colonne a 9 (se suffisso è la 3a colonna)
+        
+        # MODIFICA QUI: Imposta le intestazioni corrette una sola volta
         self.partite_table.setColumnCount(9) 
         self.partite_table.setHorizontalHeaderLabels([
             "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", 
-            "Data Impianto", "Possessori (Anteprima)", "Num. Immobili", "Num. Documenti"
+            "Data Impianto", "Num. Possessori", "Num. Immobili", "Num. Documenti"
         ])
+
         self.partite_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.partite_table.setSelectionMode(QTableWidget.SingleSelection)
         self.partite_table.setAlternatingRowColors(True)
-        self.partite_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch)
+        self.partite_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.partite_table.setSortingEnabled(True)
-        self.partite_table.itemDoubleClicked.connect(
-            self.apri_dettaglio_partita_selezionata)
-        self.partite_table.itemSelectionChanged.connect(
-            self._aggiorna_stato_pulsante_modifica)
+        self.partite_table.itemDoubleClicked.connect(self.apri_dettaglio_partita_selezionata)
+        self.partite_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsante_modifica)
 
         layout.addWidget(self.partite_table)
 
         action_buttons_layout = QHBoxLayout()
         self.btn_apri_dettaglio = QPushButton(QApplication.style().standardIcon(
             QStyle.SP_FileDialogInfoView), "Vedi Dettagli")
-        self.btn_apri_dettaglio.clicked.connect(
-            self.apri_dettaglio_partita_selezionata_da_pulsante)
+        self.btn_apri_dettaglio.clicked.connect(self.apri_dettaglio_partita_selezionata_da_pulsante)
         self.btn_apri_dettaglio.setEnabled(False)
         action_buttons_layout.addWidget(self.btn_apri_dettaglio)
 
-        self.btn_modifica_partita = QPushButton(
-            "Modifica Partita")
-        self.btn_modifica_partita.setToolTip(
-            "Modifica i dati della partita selezionata")
-        self.btn_modifica_partita.clicked.connect(
-            self.apri_modifica_partita_selezionata)
+        self.btn_modifica_partita = QPushButton("Modifica Partita")
+        self.btn_modifica_partita.setToolTip("Modifica i dati della partita selezionata")
+        self.btn_modifica_partita.clicked.connect(self.apri_modifica_partita_selezionata)
         self.btn_modifica_partita.setEnabled(False)
         action_buttons_layout.addWidget(self.btn_modifica_partita)
 
@@ -8406,12 +8367,8 @@ class PartiteComuneDialog(QDialog):
         self.partite_table.setRowCount(0)
         self.partite_table.setSortingEnabled(False)
         
-        # Le intestazioni devono corrispondere ai nuovi dati
-        self.partite_table.setColumnCount(8) 
-        self.partite_table.setHorizontalHeaderLabels([
-            "ID Partita", "Numero", "Suffisso", "Tipo", "Stato", 
-            "Data Impianto", "Num. Possessori", "Num. Immobili" // Rimosso "Num. Documenti" per semplicità
-        ])
+        # Le intestazioni sono già state impostate nell'__init__
+        # Non è necessario reimpostarle qui.
 
         filter_text = self.filter_edit.text().strip()
 
@@ -8431,10 +8388,11 @@ class PartiteComuneDialog(QDialog):
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
                     data_imp = partita.get('data_impianto')
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
-                    # Nuove colonne con i conteggi
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_possessori', '0')))); col += 1
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
-                    // self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
+                    
+                    # --- NUOVA RIGA PER IL NUMERO DEI DOCUMENTI ---
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
 
                 self.partite_table.resizeColumnsToContents()
             else:
@@ -8457,74 +8415,56 @@ class PartiteComuneDialog(QDialog):
             self.partite_table.setSortingEnabled(True)
             self._aggiorna_stato_pulsante_modifica()
 
-
     def _aggiorna_stato_pulsante_modifica(self):
-        """Abilita/disabilita il pulsante modifica in base alla selezione."""
         has_selection = bool(self.partite_table.selectedItems())
         self.btn_modifica_partita.setEnabled(has_selection)
         self.btn_apri_dettaglio.setEnabled(has_selection)
 
     def _get_selected_partita_id(self) -> Optional[int]:
-        """Restituisce l'ID della partita attualmente selezionata nella tabella."""
         selected_items = self.partite_table.selectedItems()
         if not selected_items:
             return None
-
         row = self.partite_table.currentRow()
         if row < 0:
             return None
-
-        partita_id_item = self.partite_table.item(row, 0)  # Colonna ID Partita
+        partita_id_item = self.partite_table.item(row, 0)
         if partita_id_item and partita_id_item.text().isdigit():
             return int(partita_id_item.text())
         return None
 
     def apri_dettaglio_partita_selezionata_da_pulsante(self):
-        """Azione per il pulsante 'Vedi Dettagli'."""
         partita_id = self._get_selected_partita_id()
         if partita_id is not None:
-            partita_details_data = self.db_manager.get_partita_details(
-                partita_id)
+            partita_details_data = self.db_manager.get_partita_details(partita_id)
             if partita_details_data:
-                details_dialog = PartitaDetailsDialog(
-                    partita_details_data, self)
+                details_dialog = PartitaDetailsDialog(partita_details_data, self)
                 details_dialog.exec_()
             else:
-                QMessageBox.warning(
-                    self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
         else:
-            QMessageBox.information(
-                self, "Nessuna Selezione", "Seleziona una partita dalla tabella per vederne i dettagli.")
+            QMessageBox.information(self, "Nessuna Selezione", "Seleziona una partita dalla tabella per vederne i dettagli.")
 
-    def apri_modifica_partita_selezionata(self):
+    def apri_modifica_partita_selezionata(self, item: Optional[QTableWidgetItem] = None):
         partita_id = self._get_selected_partita_id()
         if partita_id is not None:
-            # CORREZIONE QUI: TORNA A PASSARE GLI ARGOMENTI POSIZIONALI
-            dialog = ModificaPartitaDialog(self.db_manager, partita_id, self) # <--- MODIFICA QUI
+            dialog = ModificaPartitaDialog(self.db_manager, partita_id, self)
             if dialog.exec_() == QDialog.Accepted:
                 self.load_partite_data()
-                QMessageBox.information(
-                    self, "Modifica Partita", "Modifiche alla partita salvate con successo.")
+                QMessageBox.information(self, "Modifica Partita", "Modifiche alla partita salvate con successo.")
         else:
-            QMessageBox.warning(self, "Nessuna Selezione",
-                                "Per favore, seleziona una partita da modificare.")
-
-
+            QMessageBox.warning(self, "Nessuna Selezione", "Per favore, seleziona una partita da modificare.")
     
     def apri_dettaglio_partita_selezionata(self, item: QTableWidgetItem):
         if not item:
             return
-        partita_id = self._get_selected_partita_id()  # Usa l'helper
+        partita_id = self._get_selected_partita_id()
         if partita_id is not None:
-            partita_details_data = self.db_manager.get_partita_details(
-                partita_id)
+            partita_details_data = self.db_manager.get_partita_details(partita_id)
             if partita_details_data:
-                details_dialog = PartitaDetailsDialog(
-                    partita_details_data, self)
+                details_dialog = PartitaDetailsDialog(partita_details_data, self)
                 details_dialog.exec_()
             else:
-                QMessageBox.warning(
-                    self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile recuperare i dettagli per la partita ID {partita_id}.")
 
 
 class ModificaLocalitaDialog(QDialog):

@@ -532,107 +532,113 @@ END;
 $$;
 
 -- Funzione esporta_partita_json (come da file originale, ma usa comune_id e JOIN)
-CREATE OR REPLACE FUNCTION esporta_partita_json(
-    p_partita_id INTEGER
-)
-RETURNS JSON AS $$
+CREATE OR REPLACE FUNCTION catasto.esporta_partita_json(p_partita_id integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
-    v_json JSON;
+    v_partita_details jsonb;
+    v_possessori jsonb;
+    v_immobili jsonb;
+    v_variazioni jsonb;
 BEGIN
-    SELECT json_build_object(
-        'partita', row_to_json(p_info),
-        'possessori', (
-            SELECT json_agg(row_to_json(pos_data))
-            FROM (
-                SELECT pos.*, pp.titolo, pp.quota -- Seleziona i dati del possessore
-                FROM possessore pos
-                JOIN partita_possessore pp ON pos.id = pp.possessore_id
-                WHERE pp.partita_id = p_info.id -- Usa l'ID della partita dalla CTE
-            ) pos_data
-        ),
-        'immobili', (
-            SELECT json_agg(row_to_json(imm_data))
-            FROM (
-                SELECT i.*, l.nome as localita_nome, l.tipo as localita_tipo, l.civico
-                FROM immobile i
-                JOIN localita l ON i.localita_id = l.id
-                WHERE i.partita_id = p_info.id -- Usa l'ID della partita dalla CTE
-            ) imm_data
-        ),
-        'variazioni', (
-            SELECT json_agg(row_to_json(var_data))
-            FROM (
-                SELECT v.*, con.tipo as contratto_tipo, con.data_contratto, con.notaio, con.repertorio
-                FROM variazione v
-                LEFT JOIN contratto con ON v.id = con.variazione_id
-                WHERE v.partita_origine_id = p_info.id OR v.partita_destinazione_id = p_info.id -- Usa l'ID dalla CTE
-            ) var_data
-        )
-    ) INTO v_json
-    FROM ( -- Sottoquery per ottenere i dettagli della partita incluso il nome del comune
-        SELECT p.*, c.nome as comune_nome
-        FROM partita p
-        JOIN comune c ON p.comune_id = c.id
-        WHERE p.id = p_partita_id
-    ) p_info; -- Alias per la sottoquery
+    -- Dettagli Partita (con suffisso)
+    SELECT to_jsonb(p.*) || jsonb_build_object('comune_nome', c.nome)
+    INTO v_partita_details
+    FROM catasto.partita p
+    JOIN catasto.comune c ON p.comune_id = c.id
+    WHERE p.id = p_partita_id;
 
-    IF v_json IS NULL THEN
-        RAISE NOTICE 'Partita con ID % non trovata', p_partita_id;
-        RETURN NULL; -- Ritorna NULL invece di EXCEPTION se preferito
-    END IF;
+    -- Possessori
+    SELECT jsonb_agg(to_jsonb(poss_data))
+    INTO v_possessori
+    FROM (
+        SELECT pos.id, pos.nome_completo, pp.titolo, pp.quota
+        FROM catasto.possessore pos
+        JOIN catasto.partita_possessore pp ON pos.id = pp.possessore_id
+        WHERE pp.partita_id = p_partita_id
+        ORDER BY pos.nome_completo
+    ) AS poss_data;
 
-    RETURN v_json;
+    -- Immobili
+    SELECT jsonb_agg(to_jsonb(imm_data))
+    INTO v_immobili
+    FROM (
+        SELECT i.id, i.natura, l.nome as localita_nome, i.classificazione, i.consistenza, l.civico
+        FROM catasto.immobile i
+        JOIN catasto.localita l ON i.localita_id = l.id
+        WHERE i.partita_id = p_partita_id
+    ) AS imm_data;
+
+    -- Variazioni
+    SELECT jsonb_agg(to_jsonb(var_data))
+    INTO v_variazioni
+    FROM (
+        SELECT v.*, con.tipo as contratto_tipo, con.data_contratto, con.notaio
+        FROM catasto.variazione v
+        LEFT JOIN catasto.contratto con ON v.id = con.variazione_id
+        WHERE v.partita_origine_id = p_partita_id OR v.partita_destinazione_id = p_partita_id
+        ORDER BY v.data_variazione
+    ) AS var_data;
+
+    -- Costruzione JSON finale
+    RETURN jsonb_build_object(
+        'partita', COALESCE(v_partita_details, '{}'::jsonb),
+        'possessori', COALESCE(v_possessori, '[]'::jsonb),
+        'immobili', COALESCE(v_immobili, '[]'::jsonb),
+        'variazioni', COALESCE(v_variazioni, '[]'::jsonb)
+    );
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 -- Funzione esporta_possessore_json (come da file originale, ma usa comune_id e JOIN)
-CREATE OR REPLACE FUNCTION esporta_possessore_json(
-    p_possessore_id INTEGER
-)
-RETURNS JSON AS $$
+CREATE OR REPLACE FUNCTION catasto.esporta_possessore_json(p_possessore_id integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
-    v_json JSON;
+    v_possessore_details jsonb;
+    v_partite jsonb;
+    v_immobili jsonb;
 BEGIN
-    SELECT json_build_object(
-        'possessore', row_to_json(pos_info),
-        'partite', (
-            SELECT json_agg(row_to_json(part_data))
-            FROM (
-                SELECT p.*, c.nome as comune_nome, pp.titolo, pp.quota -- Include nome comune
-                FROM partita p
-                JOIN partita_possessore pp ON p.id = pp.partita_id
-                JOIN comune c ON p.comune_id = c.id -- Join con comune
-                WHERE pp.possessore_id = pos_info.id -- Usa ID dalla CTE
-            ) part_data
-        ),
-        'immobili', (
-            SELECT json_agg(row_to_json(imm_data))
-            FROM (
-                SELECT i.*, l.nome as localita_nome, p.numero_partita, c.nome as comune_nome -- Include nome comune
-                FROM immobile i
-                JOIN partita p ON i.partita_id = p.id
-                JOIN localita l ON i.localita_id = l.id
-                JOIN comune c ON p.comune_id = c.id -- Join con comune
-                JOIN partita_possessore pp ON p.id = pp.partita_id
-                WHERE pp.possessore_id = pos_info.id -- Usa ID dalla CTE
-            ) imm_data
-        )
-    ) INTO v_json
-    FROM ( -- Sottoquery per ottenere i dettagli del possessore incluso il nome del comune
-        SELECT pos.*, c.nome as comune_nome
-        FROM possessore pos
-        JOIN comune c ON pos.comune_id = c.id
-        WHERE pos.id = p_possessore_id
-    ) pos_info; -- Alias per la sottoquery
+    -- Dettagli Possessore
+    SELECT to_jsonb(p.*) || jsonb_build_object('comune_nome', c.nome)
+    INTO v_possessore_details
+    FROM catasto.possessore p
+    JOIN catasto.comune c ON p.comune_id = c.id
+    WHERE p.id = p_possessore_id;
 
-    IF v_json IS NULL THEN
-        RAISE NOTICE 'Possessore con ID % non trovato', p_possessore_id;
-        RETURN NULL; -- Ritorna NULL invece di EXCEPTION se preferito
-    END IF;
+    -- Partite associate (con suffisso)
+    SELECT jsonb_agg(to_jsonb(part_data))
+    INTO v_partite
+    FROM (
+        SELECT p.id, p.numero_partita, p.suffisso_partita, c.nome as comune_nome, p.tipo, pp.quota, pp.titolo
+        FROM catasto.partita p
+        JOIN catasto.partita_possessore pp ON p.id = pp.partita_id
+        JOIN catasto.comune c ON p.comune_id = c.id
+        WHERE pp.possessore_id = p_possessore_id
+        ORDER BY c.nome, p.numero_partita
+    ) AS part_data;
 
-    RETURN v_json;
+    -- Immobili associati indirettamente
+    SELECT jsonb_agg(to_jsonb(imm_data))
+    INTO v_immobili
+    FROM (
+        SELECT i.id, i.natura, l.nome as localita_nome, p.numero_partita, c.nome as comune_nome
+        FROM catasto.immobile i
+        JOIN catasto.localita l ON i.localita_id = l.id
+        JOIN catasto.partita p ON i.partita_id = p.id
+        JOIN catasto.comune c ON p.comune_id = c.id
+        WHERE p.id IN (SELECT partita_id FROM catasto.partita_possessore WHERE possessore_id = p_possessore_id)
+    ) AS imm_data;
+
+    RETURN jsonb_build_object(
+        'possessore', COALESCE(v_possessore_details, '{}'::jsonb),
+        'partite', COALESCE(v_partite, '[]'::jsonb),
+        'immobili', COALESCE(v_immobili, '[]'::jsonb)
+    );
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 -- Funzione genera_report_comune (CORRETTA)
 CREATE OR REPLACE FUNCTION genera_report_comune(

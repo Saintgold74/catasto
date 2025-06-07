@@ -537,8 +537,14 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
 
         p = partita_data['partita']
         pdf.chapter_title('Dettagli Partita')
-        pdf.chapter_body({k: p.get(k) for k in ['id', 'comune_nome', 'numero_partita',
-                         'tipo', 'data_impianto', 'stato', 'data_chiusura', 'numero_provenienza']})
+        # --- MODIFICA QUI ---
+        # Aggiungiamo 'suffisso_partita' all'elenco dei campi da visualizzare
+        campi_da_visualizzare = [
+            'id', 'comune_nome', 'numero_partita', 'suffisso_partita', 
+            'tipo', 'data_impianto', 'stato', 'data_chiusura', 'numero_provenienza'
+        ]
+        pdf.chapter_body({k: p.get(k) for k in campi_da_visualizzare})
+        # --- FINE MODIFICA ---
 
         if partita_data.get('possessori'):
             pdf.chapter_title('Possessori')
@@ -596,12 +602,47 @@ def gui_esporta_possessore_json(parent_widget, db_manager: CatastoDBManager, pos
                             f"Possessore con ID {possessore_id} non trovato o errore recupero dati.")
 
 
+# In app_utils.py
+
 def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, possessore_id: int):
     possessore_data = db_manager.get_possessore_data_for_export(possessore_id)
     if not possessore_data or 'possessore' not in possessore_data:
         QMessageBox.warning(parent_widget, "Errore Dati",
                             "Dati possessore non validi per l'esportazione CSV.")
         return
+
+    # --- NUOVA SEZIONE: Logica di Anteprima per CSV ---
+    preview_headers = ["Sezione", "Campo", "Valore"]
+    preview_data_rows = []
+    MAX_ROWS_PREVIEW_SECTION = 3 # Mostra solo le prime N righe per sezione nell'anteprima
+
+    # Dettagli Possessore
+    p_details = possessore_data.get('possessore', {})
+    for k, v in p_details.items():
+        preview_data_rows.append(["Possessore", k.replace('_', ' ').title(), v])
+
+    # Partite Associate (prime N)
+    if possessore_data.get('partite'):
+        preview_data_rows.append(["---", "--- Partite Associate ---", "---"])
+        partite_headers = list(possessore_data['partite'][0].keys()) if possessore_data['partite'] else []
+        preview_data_rows.append(["Partite", "Intestazioni", ", ".join([h.replace('_', ' ').title() for h in partite_headers])])
+        
+        for i, partita in enumerate(possessore_data['partite']):
+            if i >= MAX_ROWS_PREVIEW_SECTION:
+                preview_data_rows.append(["Partite", f"...e altre {len(possessore_data['partite']) - MAX_ROWS_PREVIEW_SECTION}...", ""])
+                break
+            # Crea una stringa riassuntiva per la riga di anteprima
+            row_summary = f"N.{partita.get('numero_partita', '?')} ({partita.get('comune_nome', '?')}), Titolo: {partita.get('titolo', 'N/D')}"
+            preview_data_rows.append(["Partite", f"Partita {i+1}", row_summary])
+    
+    # Aggiungere qui una logica simile per gli immobili, se necessario
+
+    preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
+                                       title=f"Anteprima CSV - Possessore ID {possessore_id}")
+    if preview_dialog.exec_() != QDialog.Accepted:
+        logging.getLogger("CatastoGUI").info(f"Esportazione CSV per possessore ID {possessore_id} annullata dall'utente.")
+        return
+    # --- FINE Logica di Anteprima ---
 
     default_filename = f"possessore_{possessore_id}_{date.today()}.csv"
     filename, _ = QFileDialog.getSaveFileName(
@@ -618,26 +659,20 @@ def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, poss
                 writer.writerow([key.replace('_', ' ').title(), value])
             writer.writerow([])
 
-            # La chiave è 'partite' dal JSON, non 'partite_associate'
             if possessore_data.get('partite'):
                 writer.writerow(['--- PARTITE ASSOCIATE ---'])
-                headers = list(possessore_data['partite'][0].keys(
-                )) if possessore_data['partite'] else []
+                headers = list(possessore_data['partite'][0].keys()) if possessore_data['partite'] else []
                 if headers:
-                    writer.writerow([h.replace('_', ' ').title()
-                                    for h in headers])
+                    writer.writerow([h.replace('_', ' ').title() for h in headers])
                 for part in possessore_data['partite']:
                     writer.writerow([part.get(h) for h in headers])
                 writer.writerow([])
 
             if possessore_data.get('immobili'):
-                writer.writerow(
-                    ['--- IMMOBILI ASSOCIATI (TRAMITE PARTITE) ---'])
-                headers = list(possessore_data['immobili'][0].keys(
-                )) if possessore_data['immobili'] else []
+                writer.writerow(['--- IMMOBILI ASSOCIATI (TRAMITE PARTITE) ---'])
+                headers = list(possessore_data['immobili'][0].keys()) if possessore_data['immobili'] else []
                 if headers:
-                    writer.writerow([h.replace('_', ' ').title()
-                                    for h in headers])
+                    writer.writerow([h.replace('_', ' ').title() for h in headers])
                 for imm in possessore_data['immobili']:
                     writer.writerow([imm.get(h) for h in headers])
 
@@ -660,6 +695,35 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
                             "Dati possessore non validi per l'esportazione PDF.")
         return
 
+    # --- NUOVA SEZIONE: Logica di Anteprima per PDF ---
+    preview_text_content = f"ANTEPRIMA PDF - Possessore ID: {possessore_id}\n"
+    preview_text_content += "========================================\n\n"
+    
+    p_details = possessore_data.get('possessore', {})
+    preview_text_content += "Dettagli Possessore:\n"
+    for key, value in p_details.items():
+        preview_text_content += f"  {key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}\n"
+    preview_text_content += "\n"
+
+    if possessore_data.get('partite'):
+        preview_text_content += "Partite Associate (prime 3):\n"
+        for i, partita in enumerate(possessore_data['partite'][:3]):
+            preview_text_content += (f"  - Partita N.{partita.get('numero_partita', '?')} "
+                                     f"({partita.get('comune_nome', '?')}) - "
+                                     f"Titolo: {partita.get('titolo', 'N/D')}, Quota: {partita.get('quota', 'N/D')}\n")
+        if len(possessore_data['partite']) > 3:
+            preview_text_content += "  ...e altre.\n"
+    preview_text_content += "\n"
+
+    # Aggiungere qui una sezione simile per gli immobili, se si desidera
+    
+    preview_dialog = PDFApreviewDialog(preview_text_content, parent_widget,
+                                       title=f"Anteprima PDF - Possessore ID {possessore_id}")
+    if preview_dialog.exec_() != QDialog.Accepted:
+        logging.getLogger("CatastoGUI").info(f"Esportazione PDF per possessore ID {possessore_id} annullata dall'utente.")
+        return
+    # --- FINE Logica di Anteprima ---
+
     default_filename = f"possessore_{possessore_id}_{date.today()}.pdf"
     filename, _ = QFileDialog.getSaveFileName(
         parent_widget, "Salva PDF Possessore", default_filename, "PDF Files (*.pdf)")
@@ -677,7 +741,6 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
         pdf.chapter_title('Dettagli Possessore')
         details_poss = {
             'ID Possessore': p_info.get('id'), 'Nome Completo': p_info.get('nome_completo'),
-            # Aggiunto comune_nome
             'Comune Riferimento': p_info.get('comune_nome'),
             'Paternità': p_info.get('paternita'),
             'Stato': "Attivo" if p_info.get('attivo') else "Non Attivo",
@@ -686,23 +749,26 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
 
         if possessore_data.get('partite'):
             pdf.chapter_title('Partite Associate')
-            headers = ['ID Part.', 'Num. Partita',
-                       'Comune', 'Tipo', 'Quota', 'Titolo']
-            col_widths_percent = [10, 15, 25, 15, 15, 20]
+            # --- MODIFICA QUI ---
+            headers = ['ID Part.', 'Num. Partita', 'Suffisso', 'Comune', 'Tipo', 'Quota', 'Titolo']
+            col_widths_percent = [8, 12, 10, 20, 10, 15, 25] # Ribilanciamo le larghezze
             data_rows = []
             for part in possessore_data['partite']:
                 data_rows.append([
-                    part.get('id'), part.get(
-                        'numero_partita'), part.get('comune_nome'),
-                    part.get('tipo'), part.get('quota'), part.get('titolo')
+                    part.get('id'), 
+                    part.get('numero_partita'), 
+                    part.get('suffisso_partita', '') or '', # Aggiunto suffisso
+                    part.get('comune_nome'),
+                    part.get('tipo'), 
+                    part.get('quota'), 
+                    part.get('titolo')
                 ])
-            pdf.simple_table(headers, data_rows,
-                             col_widths_percent=col_widths_percent)
+            pdf.simple_table(headers, data_rows, col_widths_percent=col_widths_percent)
+            # --- FINE MODIFICA ---
 
         if possessore_data.get('immobili'):
             pdf.chapter_title('Immobili Associati (tramite Partite)')
-            headers = ['ID Imm.', 'Natura',
-                       'Località', 'Part. N.', 'Comune Part.']
+            headers = ['ID Imm.', 'Natura', 'Località', 'Part. N.', 'Comune Part.']
             col_widths_percent_imm = [10, 30, 25, 15, 20]
             data_rows_imm = []
             for imm in possessore_data['immobili']:
@@ -804,8 +870,6 @@ class ComuneSelectionDialog(QDialog):
         else:
             QMessageBox.warning(self, "Attenzione",
                                 "Seleziona un comune valido dalla lista.")
-
-
 class PartitaSearchDialog(QDialog):
     def __init__(self, db_manager, parent=None):
         super(PartitaSearchDialog, self).__init__(parent)
@@ -813,165 +877,131 @@ class PartitaSearchDialog(QDialog):
         self.selected_partita_id = None
 
         self.setWindowTitle("Ricerca Partita")
-        self.setMinimumSize(700, 500)
-
-        layout = QVBoxLayout()
-
-        # Form di ricerca
+        self.setMinimumSize(750, 500)
+        layout = QVBoxLayout(self)
         form_group = QGroupBox("Criteri di Ricerca")
-        form_layout = QGridLayout()
+        form_layout = QGridLayout(form_group)
 
-        # Comune
-        comune_label = QLabel("Comune:")
-        self.comune_button = QPushButton("Seleziona Comune...")
+        # Riga 0: Comune
+        form_layout.addWidget(QLabel("Comune:"), 0, 0)
+        self.comune_button = QPushButton("Seleziona...")
         self.comune_button.clicked.connect(self.select_comune)
         self.comune_id = None
         self.comune_display = QLabel("Tutti i comuni")
         self.clear_comune_button = QPushButton("Cancella")
         self.clear_comune_button.clicked.connect(self.clear_comune)
-
-        form_layout.addWidget(comune_label, 0, 0)
         form_layout.addWidget(self.comune_button, 0, 1)
-        form_layout.addWidget(self.comune_display, 0, 2)
-        form_layout.addWidget(self.clear_comune_button, 0, 3)
+        form_layout.addWidget(self.comune_display, 0, 2, 1, 2)
+        form_layout.addWidget(self.clear_comune_button, 0, 4)
 
-        # Numero partita
-        numero_label = QLabel("Numero Partita:")
+        # Riga 1: Numero e Suffisso partita
+        form_layout.addWidget(QLabel("Numero Partita:"), 1, 0)
         self.numero_edit = QSpinBox()
-        self.numero_edit.setMinimum(0)
-        self.numero_edit.setMaximum(9999)
+        self.numero_edit.setRange(0, 999999)
         self.numero_edit.setSpecialValueText("Qualsiasi")
-
-        form_layout.addWidget(numero_label, 1, 0)
         form_layout.addWidget(self.numero_edit, 1, 1)
 
-        # Possessore
-        possessore_label = QLabel("Nome Possessore:")
+        # --- CAMPO SUFFISSO AGGIUNTO ---
+        form_layout.addWidget(QLabel("Suffisso:"), 1, 2)
+        self.suffisso_edit = QLineEdit()
+        self.suffisso_edit.setPlaceholderText("Qualsiasi")
+        form_layout.addWidget(self.suffisso_edit, 1, 3, 1, 2)
+
+        # Riga 2 e 3: Possessore e Natura
+        form_layout.addWidget(QLabel("Nome Possessore:"), 2, 0)
         self.possessore_edit = QLineEdit()
-        self.possessore_edit.setPlaceholderText("Qualsiasi possessore")
-
-        form_layout.addWidget(possessore_label, 2, 0)
-        form_layout.addWidget(self.possessore_edit, 2, 1, 1, 3)
-
-        # Natura immobile
-        natura_label = QLabel("Natura Immobile:")
+        form_layout.addWidget(self.possessore_edit, 2, 1, 1, 4)
+        form_layout.addWidget(QLabel("Natura Immobile:"), 3, 0)
         self.natura_edit = QLineEdit()
-        self.natura_edit.setPlaceholderText("Qualsiasi natura immobile")
-
-        form_layout.addWidget(natura_label, 3, 0)
-        form_layout.addWidget(self.natura_edit, 3, 1, 1, 3)
-
-        form_group.setLayout(form_layout)
+        form_layout.addWidget(self.natura_edit, 3, 1, 1, 4)
+        
         layout.addWidget(form_group)
 
-        # Pulsante ricerca
         search_button = QPushButton("Cerca")
         search_button.clicked.connect(self.do_search)
         layout.addWidget(search_button)
 
-        # Tabella risultati
         results_group = QGroupBox("Risultati")
-        results_layout = QVBoxLayout()
-
+        results_layout = QVBoxLayout(results_group)
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(5)
-        self.results_table.setHorizontalHeaderLabels(
-            ["ID", "Comune", "Numero", "Tipo", "Stato"])
+        
+        # --- COLONNA SUFFISSO AGGIUNTA ALLA TABELLA ---
+        self.results_table.setColumnCount(6)
+        self.results_table.setHorizontalHeaderLabels(["ID", "Comune", "Numero", "Suffisso", "Tipo", "Stato"])
+        
         self.results_table.setAlternatingRowColors(True)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.setSelectionMode(QTableWidget.SingleSelection)
         self.results_table.itemDoubleClicked.connect(self.select_partita)
-
+        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         results_layout.addWidget(self.results_table)
-
         results_group.setLayout(results_layout)
         layout.addWidget(results_group)
 
-        # Pulsanti
         buttons_layout = QHBoxLayout()
-
         self.select_button = QPushButton("Seleziona")
         self.select_button.clicked.connect(self.select_partita)
-
         self.cancel_button = QPushButton("Annulla")
         self.cancel_button.clicked.connect(self.reject)
-
+        buttons_layout.addStretch()
         buttons_layout.addWidget(self.select_button)
         buttons_layout.addWidget(self.cancel_button)
-
         layout.addLayout(buttons_layout)
-
         self.setLayout(layout)
-
-    def select_comune(self):
-        """Apre il selettore di comuni."""
-        dialog = ComuneSelectionDialog(self.db_manager, self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted and dialog.selected_comune_id:
-            self.comune_id = dialog.selected_comune_id
-            self.comune_display.setText(dialog.selected_comune_name)
-
-    def clear_comune(self):
-        """Cancella il comune selezionato."""
-        self.comune_id = None
-        self.comune_display.setText("Tutti i comuni")
-
+        
     def do_search(self):
-        """Esegue la ricerca partite in base ai criteri."""
-        # Prepara i parametri
         comune_id = self.comune_id
         numero_partita = self.numero_edit.value() if self.numero_edit.value() > 0 else None
+        # --- LETTURA SUFFISSO DAL NUOVO CAMPO ---
+        suffisso = self.suffisso_edit.text().strip() or None
         possessore = self.possessore_edit.text().strip() or None
         natura = self.natura_edit.text().strip() or None
 
-        # Esegue la ricerca
         partite = self.db_manager.search_partite(
             comune_id=comune_id,
             numero_partita=numero_partita,
+            suffisso_partita=suffisso, # Passa il suffisso alla ricerca
             possessore=possessore,
             immobile_natura=natura
         )
 
-        # Popola la tabella risultati
         self.results_table.setRowCount(0)
-
         for partita in partite:
-            row_position = self.results_table.rowCount()
-            self.results_table.insertRow(row_position)
-
-            self.results_table.setItem(
-                row_position, 0, QTableWidgetItem(str(partita.get('id', ''))))
-            self.results_table.setItem(
-                row_position, 1, QTableWidgetItem(partita.get('comune_nome', '')))
-            self.results_table.setItem(row_position, 2, QTableWidgetItem(
-                str(partita.get('numero_partita', ''))))
-            self.results_table.setItem(
-                row_position, 3, QTableWidgetItem(partita.get('tipo', '')))
-            self.results_table.setItem(
-                row_position, 4, QTableWidgetItem(partita.get('stato', '')))
-
-        # Adatta le colonne al contenuto
+            row_pos = self.results_table.rowCount()
+            self.results_table.insertRow(row_pos)
+            col = 0
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('comune_nome', ''))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
+            # --- POPOLAMENTO COLONNA SUFFISSO ---
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('suffisso_partita', ''))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
         self.results_table.resizeColumnsToContents()
 
+    def select_comune(self):
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_comune_id:
+            self.comune_id = dialog.selected_comune_id
+            self.comune_display.setText(dialog.selected_comune_name)
+
+    def clear_comune(self):
+        self.comune_id = None
+        self.comune_display.setText("Tutti i comuni")
+
     def select_partita(self):
-        """Seleziona la partita e accetta il dialogo."""
         selected_rows = self.results_table.selectedIndexes()
         if not selected_rows:
-            QMessageBox.warning(self, "Attenzione",
-                                "Seleziona una partita dalla tabella.")
+            QMessageBox.warning(self, "Attenzione", "Seleziona una partita dalla tabella.")
             return
-
         row = selected_rows[0].row()
         partita_id_item = self.results_table.item(row, 0)
-
         if partita_id_item and partita_id_item.text().isdigit():
             self.selected_partita_id = int(partita_id_item.text())
             self.accept()
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
 # --- Dialog per la Selezione dei Possessori ---
-
 
 class PossessoreSelectionDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):

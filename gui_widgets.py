@@ -1704,8 +1704,8 @@ class InserimentoLocalitaWidget(QWidget):
                     logging.getLogger("CatastoGUI").info(
                         f"Nessuna località trovata per il comune ID: {self.comune_id} in InserimentoLocalitaWidget.")
                     # Potresti voler mostrare un messaggio nella tabella se è vuota
-                    # self.localita_table.setItem(0, 0, QTableWidgetItem("Nessuna località per questo comune."))
-                    # self.localita_table.setSpan(0, 0, 1, self.localita_table.columnCount())
+                    self.localita_table.setItem(0, 0, QTableWidgetItem("Nessuna località per questo comune."))
+                    self.localita_table.setSpan(0, 0, 1, self.localita_table.columnCount())
 
             # Se get_localita_by_comune non dovesse esistere (non dovrebbe succedere ora)
             except AttributeError as ae:
@@ -2116,10 +2116,10 @@ class OperazioniPartitaWidget(QWidget):
         source_partita_layout.addWidget(self.btn_cerca_source_partita, 0, 2)
 
         # Pulsante per caricare la partita dall'ID inserito nello SpinBox
-        # self.btn_load_source_partita_from_id = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowRight), " Carica da ID")
-        # self.btn_load_source_partita_from_id.setToolTip("Carica i dettagli della partita usando l'ID inserito")
-        # self.btn_load_source_partita_from_id.clicked.connect(self._load_partita_sorgente_from_spinbox)
-        # source_partita_layout.addWidget(self.btn_load_source_partita_from_id, 0, 3)
+        self.btn_load_source_partita_from_id = QPushButton(QApplication.style().standardIcon(QStyle.SP_ArrowRight), " Carica da ID")
+        self.btn_load_source_partita_from_id.setToolTip("Carica i dettagli della partita usando l'ID inserito")
+        self.btn_load_source_partita_from_id.clicked.connect(self._load_partita_sorgente_from_spinbox)
+        source_partita_layout.addWidget(self.btn_load_source_partita_from_id, 0, 3)
 
         self.source_partita_info_label = QLabel(
             "Nessuna partita sorgente selezionata.")
@@ -2145,36 +2145,45 @@ class OperazioniPartitaWidget(QWidget):
         duplica_widget = QWidget()
         duplica_main_layout = QVBoxLayout(duplica_widget)
         duplica_group = QGroupBox("Opzioni per la Duplicazione")
-        duplica_form_layout = QFormLayout(duplica_group)
+        
+        # Usiamo un GridLayout per un layout più pulito
+        duplica_form_layout = QGridLayout(duplica_group)
         duplica_form_layout.setSpacing(10)
 
+        # Riga 0: Nuovo Numero e Nuovo Suffisso
+        duplica_form_layout.addWidget(QLabel("Nuovo Numero Partita (*):"), 0, 0)
         self.nuovo_numero_partita_spinbox = QSpinBox()
         self.nuovo_numero_partita_spinbox.setRange(1, 9999999)
-        duplica_form_layout.addRow(
-            "Nuovo Numero Partita (*):", self.nuovo_numero_partita_spinbox)
-        # NUOVO CAMPO: Suffisso Partita per Duplicazione
-        self.duplica_suffisso_partita_edit = QLineEdit()
-        self.duplica_suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
-        self.duplica_suffisso_partita_edit.setMaxLength(20)
-        duplica_form_layout.addRow("Suffisso Nuova Partita (opz.):", self.duplica_suffisso_partita_edit) # AGGIUNTO
+        duplica_form_layout.addWidget(self.nuovo_numero_partita_spinbox, 0, 1)
 
-        self.duplica_mantieni_poss_check = QCheckBox(
-            "Mantieni Possessori Originali nella Nuova Partita")
+        # --- CAMPO SUFFISSO AGGIUNTO QUI ---
+        duplica_form_layout.addWidget(QLabel("Suffisso Nuova Partita (opz.):"), 0, 2)
+        self.duplica_suffisso_partita_edit = QLineEdit()
+        self.duplica_suffisso_partita_edit.setPlaceholderText("Es. bis, A")
+        self.duplica_suffisso_partita_edit.setMaxLength(20)
+        duplica_form_layout.addWidget(self.duplica_suffisso_partita_edit, 0, 3)
+        
+        # Colonna "elastica" per non allargare i campi
+        duplica_form_layout.setColumnStretch(4, 1)
+
+        # Riga 1 e 2: Checkbox
+        self.duplica_mantieni_poss_check = QCheckBox("Mantieni Possessori Originali nella Nuova Partita")
         self.duplica_mantieni_poss_check.setChecked(True)
-        duplica_form_layout.addRow(self.duplica_mantieni_poss_check)
-        self.duplica_mantieni_imm_check = QCheckBox(
-            "Copia gli Immobili Originali nella Nuova Partita")
+        duplica_form_layout.addWidget(self.duplica_mantieni_poss_check, 1, 0, 1, 4) # Span su 4 colonne
+
+        self.duplica_mantieni_imm_check = QCheckBox("Copia gli Immobili Originali nella Nuova Partita")
         self.duplica_mantieni_imm_check.setChecked(False)
-        duplica_form_layout.addRow(self.duplica_mantieni_imm_check)
+        duplica_form_layout.addWidget(self.duplica_mantieni_imm_check, 2, 0, 1, 4)
+
+        # Riga 3: Pulsante
         self.btn_esegui_duplicazione = QPushButton(QApplication.style().standardIcon(
             QStyle.SP_DialogApplyButton), " Esegui Duplicazione")
-        self.btn_esegui_duplicazione.clicked.connect(
-            self._esegui_duplicazione_partita)
-        duplica_form_layout.addRow(self.btn_esegui_duplicazione)
+        self.btn_esegui_duplicazione.clicked.connect(self._esegui_duplicazione_partita)
+        duplica_form_layout.addWidget(self.btn_esegui_duplicazione, 3, 0, 1, 4, Qt.AlignRight)
 
         duplica_main_layout.addWidget(duplica_group)
         duplica_main_layout.addStretch(1)
-        self.operazioni_tabs.addTab(duplica_widget, "Copia Partita")
+        self.operazioni_tabs.addTab(duplica_widget, "Duplica Partita")
 
     def _crea_tab_trasferisci_immobile(self):
         transfer_widget = QWidget()
@@ -2445,64 +2454,38 @@ class OperazioniPartitaWidget(QWidget):
 
     def _load_partita_destinazione_from_spinbox(self):
         partita_id_dest = self.dest_partita_id_spinbox.value()
-
-        # Resetta l'etichetta info e lo stato di validità prima di ogni caricamento
-        self.dest_partita_info_label.setText(
-            "Verifica ID partita destinazione...")
-        # Aggiungiamo un flag per lo stato di validità
+        self.dest_partita_info_label.setText("Verifica ID partita destinazione...")
         self.partita_destinazione_valida = False
 
         if partita_id_dest <= 0:
-            QMessageBox.warning(
-                self, "ID Non Valido", "Inserire un ID Partita Destinazione valido (maggiore di zero).")
-            self.dest_partita_info_label.setText(
-                "<font color='red'>ID partita destinazione non valido.</font>")
-            self._update_transfer_button_state_conditionally()
-            return
-
-        if self.db_manager is None:  # Controllo di sicurezza
-            QMessageBox.critical(self, "Errore", "DB Manager non disponibile.")
-            self.dest_partita_info_label.setText(
-                "<font color='red'>Errore interno: DB Manager non disponibile.</font>")
+            self.dest_partita_info_label.setText("<font color='red'>ID partita destinazione non valido.</font>")
             self._update_transfer_button_state_conditionally()
             return
 
         partita_details = self.db_manager.get_partita_details(partita_id_dest)
 
         if partita_details:
-            stato_partita_dest = partita_details.get('stato')
-            nome_comune_dest = partita_details.get('comune_nome', 'N/D')
-            num_partita_dest_val = partita_details.get('numero_partita', 'N/D')
+            stato = partita_details.get('stato')
+            comune = partita_details.get('comune_nome', 'N/D')
+            numero = partita_details.get('numero_partita', 'N/D')
+            # --- AGGIUNTA LETTURA SUFFISSO ---
+            suffisso = partita_details.get('suffisso_partita')
+            suffisso_display = f" (suffisso: {suffisso})" if suffisso else ""
 
-            # 1. Controllo se è la stessa della partita sorgente
             if self.selected_partita_id_source is not None and partita_id_dest == self.selected_partita_id_source:
-                self.dest_partita_info_label.setText(
-                    f"<font color='red'>Errore: La partita destinazione N.{num_partita_dest_val} (ID {partita_id_dest}, Comune: {nome_comune_dest}) "
-                    f"non può essere uguale alla partita sorgente.</font>"
-                )
+                self.dest_partita_info_label.setText(f"<font color='red'>Errore: La destinazione non può essere uguale alla sorgente.</font>")
                 self.partita_destinazione_valida = False
-            # 2. Controllo se la partita destinazione è attiva
-            elif stato_partita_dest != 'attiva':
-                self.dest_partita_info_label.setText(
-                    f"<font color='red'>Errore: La partita destinazione N.{num_partita_dest_val} (ID {partita_id_dest}, Comune: {nome_comune_dest}) "
-                    f"non è attiva (stato: {stato_partita_dest}). Impossibile trasferire immobili.</font>"
-                )
+            elif stato != 'attiva':
+                self.dest_partita_info_label.setText(f"<font color='red'>Errore: La partita N.{numero}{suffisso_display} non è attiva.</font>")
                 self.partita_destinazione_valida = False
             else:
-                # Partita destinazione valida e attiva
-                self.dest_partita_info_label.setText(
-                    f"Destinazione: N. {num_partita_dest_val} "
-                    f"(Comune: {nome_comune_dest}, Partita ID: {partita_id_dest}, Stato: {stato_partita_dest})"
-                )
+                self.dest_partita_info_label.setText(f"Destinazione: N. {numero}{suffisso_display} (Comune: {comune}, ID: {partita_id_dest})")
                 self.partita_destinazione_valida = True
         else:
-            self.dest_partita_info_label.setText(
-                f"<font color='red'>Partita destinazione con ID {partita_id_dest} non trovata o errore nel recupero dettagli.</font>"
-            )
+            self.dest_partita_info_label.setText(f"<font color='red'>Partita destinazione con ID {partita_id_dest} non trovata.</font>")
             self.partita_destinazione_valida = False
 
         self._update_transfer_button_state_conditionally()
-    # Modifichiamo _cerca_partita_destinazione per usare la stessa logica di aggiornamento label
 
     def _cerca_partita_destinazione(self):
         dialog = PartitaSearchDialog(self.db_manager, self)
@@ -2521,9 +2504,6 @@ class OperazioniPartitaWidget(QWidget):
         immobile_selezionato = self.selected_immobile_id_transfer is not None
         # Verifica solo che un ID sia nello spinbox
         id_partita_dest_inserito = self.dest_partita_id_spinbox.value() > 0
-
-        # Il controllo sulla validità della partita destinazione è ora nel flag self.partita_destinazione_valida
-        # che viene impostato da _load_partita_destinazione_from_spinbox
 
         partita_dest_diversa_da_sorgente = True
         if self.selected_partita_id_source is not None and id_partita_dest_inserito:
@@ -2600,10 +2580,7 @@ class OperazioniPartitaWidget(QWidget):
                 dialog.selected_partita_id)  # Imposta lo spinbox
             self.selected_partita_id_source = dialog.selected_partita_id   # Imposta l'ID
             self._aggiorna_info_partita_sorgente()  # Carica i dettagli
-        # else: non fare nulla se l'utente annulla, per mantenere una selezione precedente se c'era
-
-            # Non resettare selected_partita_id_source se l'utente annulla,
-            # potrebbe voler mantenere la selezione precedente se c'era
+        
             if not self.selected_partita_id_source:  # Resetta solo se non c'era già una selezione
                 self.source_partita_info_label.setText(
                     "Nessuna partita sorgente selezionata.")
@@ -2687,105 +2664,65 @@ class OperazioniPartitaWidget(QWidget):
     def _esegui_duplicazione_partita(self):
         self.logger.info("Avvio _esegui_duplicazione_partita.")
 
-        # --- 1. Validazione Dati Partita Sorgente ---
         if self.selected_partita_id_source is None:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Selezionare una partita sorgente prima di duplicare.")
+            QMessageBox.warning(self, "Selezione Mancante", "Selezionare una partita sorgente prima di duplicare.")
             return
         if self.selected_partita_comune_id_source is None:
-            QMessageBox.warning(
-                self, "Errore Interno", "Comune della partita sorgente non determinato. Caricare la partita sorgente.")
+            QMessageBox.warning(self, "Errore Interno", "Comune della partita sorgente non determinato.")
             return
 
-        # --- 2. Raccogli e Valida Dati Nuova Partita Duplicata ---
         nuovo_numero = self.nuovo_numero_partita_spinbox.value()
-        nuovo_suffisso = self.duplica_suffisso_partita_edit.text().strip() or None # Leggi il suffisso
+        # --- LETTURA VALORE SUFFISSO ---
+        nuovo_suffisso = self.duplica_suffisso_partita_edit.text().strip() or None
 
         if nuovo_numero <= 0:
-            QMessageBox.warning(
-                self, "Dati Non Validi", "Il nuovo numero di partita deve essere un valore positivo.")
-            self.nuovo_numero_partita_spinbox.setFocus()
-            self.nuovo_numero_partita_spinbox.selectAll()
+            QMessageBox.warning(self, "Dati Non Validi", "Il nuovo numero di partita deve essere un valore positivo.")
             return
 
-        # --- 3. Verifica Unicità della Nuova Partita ---
+        # --- VERIFICA UNICITÀ CON SUFFISSO ---
         try:
-            # La ricerca di esistenza deve ora usare anche il suffisso
             existing_partita = self.db_manager.search_partite(
                 comune_id=self.selected_partita_comune_id_source,
                 numero_partita=nuovo_numero,
-                suffisso_partita=nuovo_suffisso # PASSA IL SUFFISSO ALLA RICERCA
+                suffisso_partita=nuovo_suffisso
             )
             if existing_partita:
-                # Costruisci un messaggio chiaro se la partita duplicata esiste già
-                suffisso_display = f" ({nuovo_suffisso})" if nuovo_suffisso else ""
+                suffisso_display = f" (suffisso: {nuovo_suffisso})" if nuovo_suffisso else ""
                 QMessageBox.warning(self, "Errore Duplicazione",
                                     f"Esiste già una partita con il numero {nuovo_numero}{suffisso_display} "
-                                    f"nel comune '{self.selected_partita_comune_nome_source}'. "
-                                    "Scegliere un numero o un suffisso diverso per la nuova partita.")
-                self.nuovo_numero_partita_spinbox.setFocus()
+                                    f"nel comune '{self.selected_partita_comune_nome_source}'.")
                 return
         except DBMError as e:
-            self.logger.error(f"Errore DB durante la verifica di esistenza della partita duplicata: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Verifica Partita",
-                                 f"Errore durante la verifica di disponibilità del numero/suffisso partita:\n{str(e)}")
+            QMessageBox.critical(self, "Errore Verifica Partita", f"Errore durante la verifica del numero partita:\n{str(e)}")
             return
-        except Exception as e:
-            self.logger.critical(f"Errore imprevisto durante la verifica di esistenza della partita duplicata: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore inatteso durante la verifica del numero partita:\n{str(e)}")
-            return
-
-        # --- 4. Raccogli Opzioni di Duplicazione ---
+        
         mant_poss = self.duplica_mantieni_poss_check.isChecked()
         mant_imm = self.duplica_mantieni_imm_check.isChecked()
         
-        # --- 5. Esegui la Duplicazione Tramite DBManager ---
         try:
-            # La chiamata al metodo db_manager.duplicate_partita deve essere corretta
-            # e includere il nuovo suffisso.
+            # --- CHIAMATA AL DB MANAGER CON SUFFISSO ---
             success = self.db_manager.duplicate_partita(
                 partita_id_originale=self.selected_partita_id_source,
                 nuovo_numero_partita=nuovo_numero,
                 mantenere_possessori=mant_poss,
                 mantenere_immobili=mant_imm,
-                nuovo_suffisso=nuovo_suffisso # PASSA IL NUOVO PARAMETRO SUFFISSO
+                nuovo_suffisso=nuovo_suffisso
             )
             
-            # --- 6. Gestione del Successo o Fallimento ---
             if success:
-                # Costruisci un messaggio di successo completo
-                suffisso_display = f" ({nuovo_suffisso})" if nuovo_suffisso else ""
+                suffisso_display = f" (suffisso: {nuovo_suffisso})" if nuovo_suffisso else ""
                 QMessageBox.information(self, "Successo",
                                         f"Partita ID {self.selected_partita_id_source} duplicata con successo "
-                                        f"in una nuova partita N. {nuovo_numero}{suffisso_display}."
-                                        "\nRicordarsi di aggiornare le altre informazioni della nuova partita se necessario.")
-                self.logger.info(f"Partita ID {self.selected_partita_id_source} duplicata con successo in N. {nuovo_numero}{suffisso_display}.")
-                
-                # Pulisci i campi del form di duplicazione
-                self.nuovo_numero_partita_spinbox.setValue(self.nuovo_numero_partita_spinbox.minimum())
-                self.duplica_suffisso_partita_edit.clear() # Pulisci anche il suffisso
-                self.duplica_mantieni_poss_check.setChecked(True) # Resetta al default
-                self.duplica_mantieni_imm_check.setChecked(False) # Resetta al default
-
-                # Potresti voler aggiornare la lista delle partite nel comune di riferimento
-                # se l'utente è tornato alla schermata dell'elenco comuni.
-                # Questo potrebbe essere fatto emettendo un segnale o ricaricando le liste
-                # quando l'utente torna alla schermata principale di gestione/consultazione.
-                
+                                        f"in una nuova partita N. {nuovo_numero}{suffisso_display}.")
+                self.nuovo_numero_partita_spinbox.setValue(1)
+                self.duplica_suffisso_partita_edit.clear()
             else:
-                # Questo blocco else dovrebbe essere raggiunto solo se duplicate_partita restituisce False
-                # senza sollevare eccezioni, ma le eccezioni sono preferibili.
-                self.logger.error("db_manager.duplicate_partita ha restituito False senza eccezioni.")
-                QMessageBox.critical(self, "Errore Operazione", "La duplicazione della partita non è stata completata (errore sconosciuto). Controllare i log.")
-
-        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
-            self.logger.error(f"Errore DB durante la duplicazione della partita: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Duplicazione",
-                                 f"Impossibile duplicare la partita a causa di un errore nel database:\n{str(e)}")
+                QMessageBox.critical(self, "Errore Operazione", "La duplicazione della partita non è stata completata.")
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Duplicazione", f"Impossibile duplicare la partita:\n{str(e)}")
         except Exception as e_gen:
-            self.logger.critical(f"Errore imprevisto durante l'esecuzione della duplicazione: {e_gen}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Si è verificato un errore di sistema inatteso durante l'operazione:\n{type(e_gen).__name__}: {str(e_gen)}")
+            self.logger.critical(f"Errore imprevisto durante la duplicazione: {e_gen}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore di sistema:\n{str(e_gen)}")
 
 
     def _carica_immobili_partita_sorgente(self, immobili_data: List[Dict[str, Any]]):
@@ -6142,23 +6079,16 @@ class PartitaDetailsDialog(QDialog):
         self.setMinimumSize(700, 500)
 
         self._init_ui()
-        # _load_all_data() deve essere chiamato SOLO UNA VOLTA qui, altrimenti è eccesso.
         self._load_all_data() # <--- Assicurati che sia chiamato solo qui
         self._update_document_tab_title() 
 
-        # Rimuovi eventuali altre chiamate a _load_all_data() o a singole funzioni di caricamento
-        # che potrebbero essere state aggiunte in altri punti del __init__ o _init_ui.
-        # Ad esempio, se avevi `self._load_possessori()` o `self._load_immobili()` qui, rimuovile.
-
-
+        
     def _init_ui(self):
         layout = QVBoxLayout(self)
 
-        
-        
         # Informazioni generali (come prima)
         header_layout = QHBoxLayout()
-        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} - {self.partita['comune_nome']}</h2>")
+        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} ({self.partita['suffisso_partita']}) - {self.partita['comune_nome']}</h2>")
         header_layout.addWidget(title_label)
         layout.addLayout(header_layout)
 

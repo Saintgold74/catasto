@@ -147,6 +147,24 @@ class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
+        
+        
+def format_full_name(first_name, last_name):
+    """Formatta nome e cognome in 'Cognome Nome', gestendo input non validi."""
+    if not isinstance(first_name, str) or not isinstance(last_name, str):
+        raise TypeError("First name and last name must be strings.")
+    
+    if not first_name and not last_name:
+        return ""
+    
+    # Rimuove spazi e mette in maiuscolo la prima lettera di ogni parola
+    last_name_formatted = last_name.strip().title()
+    first_name_formatted = first_name.strip().title()
+
+    # Unisce i nomi, gestendo il caso in cui uno dei due sia vuoto
+    full_name = f"{last_name_formatted} {first_name_formatted}".strip()
+    
+    return full_name
 
 
 # --- Classi PDF (da python_example.py) ---

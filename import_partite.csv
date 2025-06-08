@@ -1,0 +1,4 @@
+numero_partita,suffisso_partita,data_impianto,data_chiusura,stato,tipo,numero_provenienza
+101,,1985-03-15,,Aperta,Ordinaria,Voltura 123
+102,A,1992-11-20,,Aperta,Speciale,
+250,,1970-01-10,2010-06-30,Soppressa,Ordinaria,Frazionamento 55

@@ -251,3 +251,44 @@ COMMENT ON TABLE catasto.audit_log IS 'Tabella per la registrazione delle modifi
 -- Inserimento primo comune come esempio (ora inserisce anche ID automaticamente)
 -- Lasciato commentato se si usa lo script 04 per i dati
 -- INSERT INTO comune (nome, provincia, regione) VALUES ('Carcare', 'Savona', 'Liguria');
+
+-- ========================================================================
+-- AGGIUNTA ALLA SEZIONE INDICI in 02_creazione-schema-tabelle.sql
+-- Aggiungi dopo gli indici esistenti, prima della sezione AUDIT_LOG
+-- ========================================================================
+
+-- ========================================================================
+-- INDICI GIN PER RICERCA FUZZY (OPZIONALI - per installazioni avanzate)
+-- Richiede estensione pg_trgm installata
+-- ========================================================================
+DO $$
+BEGIN
+    -- Verifica se pg_trgm è disponibile
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_trgm') THEN
+        -- Installa estensione se non presente
+        CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA public;
+        
+        -- Crea indici GIN per ricerca fuzzy
+        CREATE INDEX IF NOT EXISTS idx_gin_possessore_nome_completo_trgm
+        ON possessore USING gin (nome_completo gin_trgm_ops);
+        
+        CREATE INDEX IF NOT EXISTS idx_gin_possessore_cognome_nome_trgm
+        ON possessore USING gin (cognome_nome gin_trgm_ops);
+        
+        CREATE INDEX IF NOT EXISTS idx_gin_possessore_paternita_trgm
+        ON possessore USING gin (paternita gin_trgm_ops)
+        WHERE paternita IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_gin_localita_nome_trgm
+        ON localita USING gin (nome gin_trgm_ops);
+        
+        RAISE NOTICE 'Indici GIN per ricerca fuzzy creati con successo';
+    ELSE
+        RAISE NOTICE 'Estensione pg_trgm non disponibile - indici GIN saltati';
+    END IF;
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Privilegi insufficienti per pg_trgm - indici GIN saltati';
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Errore creazione indici GIN: %', SQLERRM;
+END $$;

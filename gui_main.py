@@ -13,20 +13,17 @@ import logging
 import uuid  # Se usato per session_id in modalità offline
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QApplication
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt
-
 # Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QComboBox, QTabWidget,  QMessageBox,
                              QGridLayout, QDialog,  QMainWindow,  QStyle,  QSpinBox,
                              QInputDialog,  QFrame,  QAction,
-                             QFormLayout, QDialogButtonBox, )
+                             QFormLayout, QDialogButtonBox, QFileDialog)
 # Aggiunto QCloseEvent
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot, QEvent, QObject, pyqtSignal
+from PyQt5.QtWidgets import QAction, QApplication, QStyle
 # In gui_main.py, dopo le importazioni PyQt e standard:
 # E le sue eccezioni se servono qui
 from catasto_db_manager import CatastoDBManager
@@ -719,6 +716,16 @@ class LoginDialog(QDialog):
                     f"Errore imprevisto durante il login per {username}: {str(e_gen)}", exc_info=True)
 
 
+# === IMPORT RICERCA FUZZY ===
+try:
+    from fuzzy_search_widget import add_fuzzy_search_tab_to_main_window
+    FUZZY_SEARCH_AVAILABLE = True
+    print('[INIT] Ricerca fuzzy disponibile')
+except:
+    FUZZY_SEARCH_AVAILABLE = False
+    print('[INIT] Ricerca fuzzy non disponibile')
+    def add_fuzzy_search_tab_to_main_window(window): return False
+
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
         super(CatastoMainWindow, self).__init__()
@@ -846,6 +853,7 @@ class CatastoMainWindow(QMainWindow):
     def create_menu_bar(self):
         """
         Crea e popola la barra dei menu principale dell'applicazione.
+        Versione compatibile con PyQt5.
         """
         menu_bar = self.menuBar()
 
@@ -860,6 +868,9 @@ class CatastoMainWindow(QMainWindow):
         import_action.setStatusTip("Importa una lista di possessori da un file CSV")
         import_action.triggered.connect(self._import_possessori_csv) # Assicurati che il metodo _import_possessori_csv esista nella classe
 
+        import_partite_action = QAction("Importa Partite da CSV...", self)
+        import_partite_action.setStatusTip("Importa una lista di partite da un file CSV")
+        import_partite_action.triggered.connect(self._import_partite_csv)
         # Azione per uscire
         exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
         exit_action.setStatusTip("Chiudi l'applicazione")
@@ -876,6 +887,10 @@ class CatastoMainWindow(QMainWindow):
         file_menu.addAction(import_action)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
+        file_menu.addAction(import_partite_action)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
 
         # Aggiungi azioni al menu "Impostazioni"
         settings_menu.addAction(config_db_action)
@@ -883,6 +898,7 @@ class CatastoMainWindow(QMainWindow):
         # Nota: Ho rimosso la parte relativa a "Nuovo Comune" che sembrava codice residuo
         # e poteva causare confusione o errori. Se ti serve, può essere aggiunta
         # di nuovo in modo strutturato.
+
 
     def create_status_bar_content(self):
         status_frame = QFrame()
@@ -1154,6 +1170,21 @@ class CatastoMainWindow(QMainWindow):
         self.tabs.addTab(sistema_contenitore, "Sistema")
 
         # Imposta la Landing Page come tab attivo all'avvio
+        
+        # === AGGIUNTA TAB RICERCA FUZZY ===
+        if FUZZY_SEARCH_AVAILABLE:
+            try:
+                if self.db_manager and hasattr(self.db_manager, 'pool') and self.db_manager.pool:
+                    success = add_fuzzy_search_tab_to_main_window(self)
+                    if success:
+                        self.logger.info("Tab Ricerca Fuzzy aggiunto")
+                    else:
+                        self.logger.warning("Tab Ricerca Fuzzy fallito")
+                else:
+                    self.logger.info("Tab Ricerca Fuzzy saltato: DB non pronto")
+            except Exception as e:
+                self.logger.error(f"Errore tab Ricerca Fuzzy: {e}")
+        
         self.tabs.setCurrentIndex(0)
         logging.getLogger("CatastoGUI").info(
             "Setup dei tab completato. Tab corrente impostato su 'Home'.")
@@ -1590,48 +1621,140 @@ class CatastoMainWindow(QMainWindow):
 
     def _import_possessori_csv(self):
         """
-        Apre una finestra di dialogo per selezionare un file CSV e avvia il processo di importazione.
-        'self' si riferisce all'istanza della tua finestra principale (es. MainWindow).
+        Gestisce il flusso di importazione: 1. Scegli Comune, 2. Scegli File, 3. Importa.
         """
-        # QFileDialog.getOpenFileName restituisce una tupla (percorso_file, filtro_selezionato)
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Seleziona un file CSV da importare",
-            "",  # Directory iniziale (vuota per l'ultima usata)
-            "File CSV (*.csv);;Tutti i file (*)"
-        )
-
-        if not file_path:
-            # L'utente ha chiuso la finestra di dialogo
-            return
-
         try:
-            # Mostra un cursore di attesa per l'intera applicazione
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            # --- PASSO 1: Chiedi all'utente di selezionare un comune ---
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            if not comuni:
+                QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
+                return
 
-            # Chiama il metodo del DB Manager (che non è cambiato)
-            num_imported = self.db_manager.import_possessori_from_csv(file_path)
+            # Crea una lista di nomi di comuni per il dialogo
+            nomi_comuni = [c[1] for c in comuni]
             
-            # Mostra un messaggio di successo
+            nome_comune_selezionato, ok = QInputDialog.getItem(
+                self, 
+                "Selezione Comune", 
+                "A quale comune vuoi associare i nuovi possessori?",
+                nomi_comuni, 
+                0, # Indice iniziale
+                False # Non editabile
+            )
+            
+            if not ok or not nome_comune_selezionato:
+                # L'utente ha premuto Annulla
+                return
+
+            # Trova l'ID del comune selezionato
+            comune_id_selezionato = None
+            for comun_id, comun_nome in comuni:
+                if comun_nome == nome_comune_selezionato:
+                    comune_id_selezionato = comun_id
+                    break
+            
+            if comune_id_selezionato is None:
+                # Non dovrebbe mai succedere, ma è una sicurezza
+                QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
+                return
+
+            # --- PASSO 2: Chiedi all'utente di selezionare il file CSV ---
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Seleziona il file CSV con i possessori",
+                "",
+                "File CSV (*.csv);;Tutti i file (*)"
+            )
+
+            if not file_path:
+                return
+
+            # --- PASSO 3: Avvia l'importazione ---
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            
+            num_imported = self.db_manager.import_possessori_from_csv(file_path, comune_id_selezionato)
+            
             QMessageBox.information(
                 self,
                 "Importazione Completata",
-                f"Importazione completata con successo!\n\nSono stati aggiunti {num_imported} nuovi possessori."
+                f"Operazione completata con successo!\n\nSono stati importati {num_imported} nuovi possessori nel comune di {nome_comune_selezionato}."
             )
-            
-            # Qui dovrai chiamare la tua funzione specifica per aggiornare la tabella
-            # Esempio: self.refresh_possessori_table()
+            # Qui puoi chiamare una funzione per aggiornare la vista
+            # self.refresh_view()
 
         except Exception as e:
-            # Mostra un messaggio di errore dettagliato
-            QMessageBox.critical(
-                self,
-                "Errore durante l'importazione",
-                f"Si è verificato un errore e l'operazione è stata annullata:\n\n{e}"
-            )
+            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore:\n\n{e}")
         finally:
-            # Ripristina il cursore normale, anche in caso di errore
             QApplication.restoreOverrideCursor()
+    
+    def _import_partite_csv(self):
+        """
+        Gestisce il flusso di importazione delle partite:
+        1. Scegli Comune, 2. Scegli File, 3. Importa.
+        """
+        try:
+            # Chiedi all'utente di selezionare un comune
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            if not comuni:
+                QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
+                return
+
+            nomi_comuni = [c[1] for c in comuni]
+            nome_comune_selezionato, ok = QInputDialog.getItem(
+                self, "Selezione Comune", "A quale comune vuoi associare le nuove partite?", nomi_comuni, 0, False
+            )
+            if not ok or not nome_comune_selezionato:
+                return
+
+            comune_id_selezionato = next((cid for cid, cnome in comuni if cnome == nome_comune_selezionato), None)
+            if comune_id_selezionato is None:
+                QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
+                return
+
+            # Chiedi all'utente di selezionare il file CSV
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "Seleziona il file CSV con le partite", "", "File CSV (*.csv);;Tutti i file (*)"
+            )
+            if not file_path:
+                return
+
+            # Avvia l'importazione
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            num_imported = self.db_manager.import_partite_from_csv(file_path, comune_id_selezionato)
+            
+            QMessageBox.information(
+                self, "Importazione Completata",
+                f"Operazione completata con successo!\n\nSono state importate {num_imported} nuove partite nel comune di {nome_comune_selezionato}."
+            )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore:\n\n{e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+
+    # --- PASSO 2: Modifica la funzione 'create_menu_bar' per aggiungere la nuova opzione ---
+
+    # All'interno di create_menu_bar(self), trova dove definisci le azioni del menu "File".
+
+    # Azione per importare possessori (già esistente)
+    # import_possessori_action = QAction("Importa Possessori da CSV...", self)
+    # import_possessori_action.triggered.connect(self._import_possessori_csv)
+
+    # *** NUOVA AZIONE DA AGGIUNGERE SOTTO ***
+    # Azione per importare partite
+    #import_partite_action = QAction("Importa Partite da CSV...", self)
+    #import_partite_action.setStatusTip("Importa una lista di partite da un file CSV")
+    #import_partite_action.triggered.connect(self._import_partite_csv)
+
+
+    # ... e poi, dove aggiungi le azioni al menu...
+
+    # file_menu.addAction(import_possessori_action)
+    # *** NUOVA RIGA DA AGGIUNGERE SOTTO ***
+    # file_menu.addAction(import_partite_action)
+    # file_menu.addSeparator()
+    # file_menu.addAction(exit_action)
 
 def run_gui_app():
     app = QApplication(sys.argv)

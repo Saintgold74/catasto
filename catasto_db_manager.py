@@ -16,7 +16,7 @@ import psycopg2.errors # Importa specificamente gli errori
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
 from psycopg2 import sql, extras, pool
-import sys
+import sys, csv
 import logging
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
@@ -554,100 +554,174 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
         return comuni_list
-    def import_possessori_from_csv(self, file_path):
+    def get_elenco_comuni_semplice(self):
         """
-        Importa una lista di possessori da un file CSV.
-        Il file CSV deve avere le seguenti colonne: nome, cognome, codice_fiscale, data_nascita.
-        L'operazione è transazionale: se anche una sola riga fallisce, l'intero import viene annullato.
-
-        Args:
-            file_path (str): Il percorso del file CSV da importare.
-
-        Returns:
-            int: Il numero di record importati con successo.
-        
-        Raises:
-            ValueError: Se una riga del CSV non è valida o se un codice fiscale esiste già.
-            FileNotFoundError: Se il file non viene trovato.
+        Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
+        Utilizza il pool di connessioni della classe.
         """
-        conn = self.get_connection()
+        conn = None
+        try:
+            conn = self._get_connection()  # Prende una connessione dal pool
+            with conn.cursor() as cur:
+                # --- CORREZIONE QUI ---
+                # Ho sostituito 'denominazione' con 'nome'
+                cur.execute("SELECT id, nome FROM comune ORDER BY nome")
+                return cur.fetchall()
+        except psycopg2.Error as e:
+            self.logger.error(f"Errore nel recuperare l'elenco dei comuni: {e}")
+            raise e
+        finally:
+            if conn:
+                self._release_connection(conn)  # Rilascia la connessione al pool
+
+    def import_possessori_from_csv(self, file_path, comune_id):
+        """
+        Importa una lista di possessori da un file CSV associandoli a un comune specifico.
+        Utilizza il pool di connessioni e gestisce una transazione.
+        """
         records_to_import = []
 
-        # --- FASE 1: Lettura e Validazione preliminare del file CSV ---
+        # FASE 1: Lettura e validazione del CSV (invariata)
         try:
             with open(file_path, mode='r', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
-                
-                # Controlla che le intestazioni necessarie esistano
-                required_headers = {'nome', 'cognome', 'codice_fiscale'}
+                required_headers = {'cognome_nome', 'nome_completo'}
                 if not required_headers.issubset(reader.fieldnames):
-                    raise ValueError(f"Intestazioni mancanti nel file CSV. Richieste: {', '.join(required_headers)}")
+                    raise ValueError(f"Intestazioni mancanti nel CSV. Richieste: {', '.join(required_headers)}")
 
                 for row in reader:
-                    # Validazione di base
-                    if not row.get('codice_fiscale') or not row.get('cognome') or not row.get('nome'):
-                        raise ValueError(f"Dati mancanti alla riga {reader.line_num}. 'nome', 'cognome' e 'codice_fiscale' sono obbligatori.")
-                    
+                    if not row.get('cognome_nome') or not row.get('nome_completo'):
+                        raise ValueError(f"Dati mancanti alla riga {reader.line_num}. 'cognome_nome' e 'nome_completo' sono obbligatori.")
                     records_to_import.append(row)
-
         except FileNotFoundError:
-            raise FileNotFoundError(f"Il file non è stato trovato al percorso: {file_path}")
+            raise FileNotFoundError(f"File non trovato: {file_path}")
         except Exception as e:
-            # Rilancia altre eccezioni di lettura con un messaggio più chiaro
-            raise IOError(f"Errore durante la lettura del file CSV: {e}")
+            raise IOError(f"Errore leggendo il file CSV: {e}")
 
         if not records_to_import:
-            return 0 # Nessun record da importare
+            return 0
 
-        # --- FASE 2: Inserimento transazionale nel Database ---
-        cursor = None
+        # FASE 2: Inserimento nel Database usando il pool e una transazione
+        conn = None
         try:
-            # Inizia la transazione
-            conn.autocommit = False
-            cursor = conn.cursor()
-
-            imported_count = 0
-            for i, record in enumerate(records_to_import):
-                line_num = i + 2  # +1 per l'header, +1 perché l'indice è 0-based
-                cf = record['codice_fiscale']
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                conn.autocommit = False  # Inizia la transazione
                 
-                # Controlla se il codice fiscale esiste già
-                cursor.execute("SELECT id FROM possessori WHERE codice_fiscale = %s", (cf,))
-                if cursor.fetchone():
-                    raise ValueError(f"Errore alla riga {line_num}: Il codice fiscale '{cf}' esiste già nel database.")
+                for i, record in enumerate(records_to_import):
+                    line_num = i + 2
+                    nome_completo = record['nome_completo']
+                    
+                    cur.execute("SELECT id FROM possessore WHERE nome_completo = %s AND comune_id = %s", (nome_completo, comune_id))
+                    if cur.fetchone():
+                        raise ValueError(f"Errore riga {line_num}: Il possessore '{nome_completo}' esiste già nel comune selezionato.")
 
-                # Inserisce il nuovo possessore
-                cursor.execute(
-                    """
-                    INSERT INTO possessori (nome, cognome, codice_fiscale, data_nascita)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (
-                        record['nome'],
-                        record['cognome'],
-                        cf,
-                        record.get('data_nascita') # .get() restituisce None se la chiave non esiste
+                    cur.execute(
+                        """
+                        INSERT INTO possessore (comune_id, cognome_nome, paternita, nome_completo, attivo)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            comune_id, record['cognome_nome'], record.get('paternita'),
+                            nome_completo, True
+                        )
                     )
-                )
-                imported_count += 1
             
-            # Se tutto è andato bene, conferma le modifiche
-            conn.commit()
-            return imported_count
+            conn.commit()  # Conferma la transazione se il loop si completa
+            return len(records_to_import)
 
-        except (Exception, psycopg2.DatabaseError) as error:
-            # Se si verifica un qualsiasi errore, annulla tutta la transazione
+        except (Exception, psycopg2.Error) as error:
+            if conn:
+                conn.rollback()  # Annulla la transazione in caso di qualsiasi errore
+            
+            if isinstance(error, ValueError):
+                raise error
+            else:
+                raise ValueError(f"Importazione annullata a causa di un errore del database: {error}")
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+    def import_partite_from_csv(self, file_path, comune_id):
+        """
+        Importa una lista di partite da un file CSV associandole a un comune specifico.
+        L'operazione è transazionale.
+        """
+        records_to_import = []
+
+        # FASE 1: Lettura e validazione del file CSV
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                required_headers = {'numero_partita', 'data_impianto', 'stato', 'tipo'}
+                if not required_headers.issubset(reader.fieldnames):
+                    raise ValueError(f"Intestazioni mancanti nel CSV. Richieste: {', '.join(required_headers)}")
+
+                for row in reader:
+                    # Validazione dei dati obbligatori per ogni riga
+                    if not all(row.get(key) for key in required_headers):
+                        raise ValueError(f"Dati mancanti alla riga {reader.line_num}. 'numero_partita', 'data_impianto', 'stato' e 'tipo' sono obbligatori.")
+                    records_to_import.append(row)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File non trovato: {file_path}")
+        except Exception as e:
+            raise IOError(f"Errore leggendo il file CSV: {e}")
+
+        if not records_to_import:
+            return 0
+
+        # FASE 2: Inserimento nel Database usando il pool e una transazione
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                conn.autocommit = False  # Inizia la transazione
+
+                for i, record in enumerate(records_to_import):
+                    line_num = i + 2
+                    numero_partita = record['numero_partita']
+                    suffisso_partita = record.get('suffisso_partita') or None # Gestisce stringhe vuote
+
+                    # Controlla se la partita esiste già per quel comune
+                    cur.execute(
+                        "SELECT id FROM partita WHERE comune_id = %s AND numero_partita = %s AND (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))",
+                        (comune_id, numero_partita, suffisso_partita, suffisso_partita)
+                    )
+                    if cur.fetchone():
+                        suffisso_str = f" con suffisso '{suffisso_partita}'" if suffisso_partita else ""
+                        raise ValueError(f"Errore riga {line_num}: La partita numero '{numero_partita}'{suffisso_str} esiste già nel comune selezionato.")
+
+                    cur.execute(
+                        """
+                        INSERT INTO partita (comune_id, numero_partita, suffisso_partita, data_impianto, data_chiusura, numero_provenienza, stato, tipo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            comune_id,
+                            numero_partita,
+                            suffisso_partita,
+                            record['data_impianto'],
+                            record.get('data_chiusura') or None, # Gestisce stringa vuota o chiave mancante
+                            record.get('numero_provenienza') or None,
+                            record['stato'],
+                            record['tipo']
+                        )
+                    )
+            
+            conn.commit()
+            return len(records_to_import)
+
+        except (Exception, psycopg2.Error) as error:
             if conn:
                 conn.rollback()
-            # Rilancia l'eccezione per notificare l'interfaccia utente
-            raise ValueError(f"Importazione annullata. Errore: {error}")
+            
+            if isinstance(error, ValueError):
+                raise error
+            else:
+                raise ValueError(f"Importazione annullata a causa di un errore del database: {error}")
         finally:
-            # Assicurati di chiudere sempre cursore e connessione
-            if cursor:
-                cursor.close()
             if conn:
-                self.release_connection(conn)
-
+                self._release_connection(conn)
 
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
         """Verifica se un possessore esiste (per nome completo e comune_id) e ritorna il suo ID."""

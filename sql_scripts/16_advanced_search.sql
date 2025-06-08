@@ -75,7 +75,7 @@ COMMENT ON FUNCTION catasto.ricerca_avanzata_possessori(TEXT, REAL) IS
 -- su tabelle grandi. Eseguire una sola volta dopo aver creato l'estensione.
 -- (Lasciati commentati per evitare errori se già esistenti o se l'estensione non c'è)
 -- ========================================================================
-/* -- Decommenta per creare gli indici (esegui una sola volta)
+
 
 -- Indice principale su nome_completo
 CREATE INDEX IF NOT EXISTS idx_gin_possessore_nome_completo_trgm
@@ -93,4 +93,3 @@ ON possessore
 USING gin (paternita gin_trgm_ops)
 WHERE paternita IS NOT NULL;
 
-*/

@@ -1,0 +1,60 @@
+C:\Users\saint\AppData\Local\Programs\Python\Python311\Lib\site-packages\fpdf\__init__.py:40: UserWarning: You have both PyFPDF & fpdf2 installed. Both packages cannot be installed at the same time as they share the same module namespace. To only keep fpdf2, run: pip uninstall --yes pypdf && pip install --upgrade fpdf2
+  warnings.warn(
+2025-06-09 00:25:41,801 - CatastoGUI - INFO - Avvio nuovo ciclo di connessione DB.
+2025-06-09 00:25:50,626 - CatastoGUI - INFO - Salvando impostazioni: Type=Locale (localhost), Host=localhost, Port=5432, DBName=catasto_storico, User=postgres, Schema=catasto
+2025-06-09 00:25:50,636 - CatastoGUI - INFO - Impostazioni di connessione al database salvate (senza password) in: C:/Users/saint/AppData/Roaming/ArchivioDiStatoSavona/CatastoStoricoApp.ini
+2025-06-09 00:25:50,646 - CatastoDB_catasto_storico_localhost_5432 - INFO - Inizializzato gestore DB (parametri memorizzati) per catasto_storico@localhost
+2025-06-09 00:25:50,646 - CatastoDB_catasto_storico_localhost_5432 - INFO - Tentativo di inizializzazione pool per DB 'catasto_storico' con parametri: {'minconn': 1, 'maxconn': 5, 'dbname': 'catasto_storico', 'user': 'postgres', 'host': 'localhost', 'port': 5432, 'options': "-c search_path=catasto,public -c application_name='CatastoAppGUI_catasto_storico_catasto_storico'"}
+2025-06-09 00:25:50,704 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_catasto_storico_catasto_storico' per DB 'catasto_storico' inizializzato e testato con successo.
+2025-06-09 00:25:50,705 - CatastoGUI - INFO - Pool per DB 'catasto_storico' inizializzato con successo.
+2025-06-09 00:25:54,809 - CatastoDB_catasto_storico_localhost_5432 - INFO - Credenziali recuperate per utente: admin, Ruolo: admin
+2025-06-09 00:25:55,048 - CatastoGUI - INFO - Verifica password GUI OK per utente 'admin' (ID App: 1)
+2025-06-09 00:25:55,048 - CatastoDB_catasto_storico_localhost_5432 - INFO - Nuovo ID sessione generato per login utente 1: a484bf9b-c411-4418-a282-fbb894ab3ce0
+2025-06-09 00:25:55,053 - CatastoDB_catasto_storico_localhost_5432 - INFO - Evento sessione registrato: Utente ID 1, Azione login, Esito True, Sessione/Evento ID a484bf9b...
+2025-06-09 00:25:55,053 - CatastoDB_catasto_storico_localhost_5432 - INFO - Variabili di sessione per audit impostate: app_user_id=1, session_id=a484bf9b...
+2025-06-09 00:25:55,737 - CatastoGUI.WelcomeScreen - INFO - Logo caricato e scalato a 400x400 nella Welcome Screen.
+2025-06-09 00:25:57,577 - CatastoGUI.WelcomeScreen - INFO - Welcome Screen chiusa tramite click del mouse.
+2025-06-09 00:25:57,589 - CatastoGUI - INFO - Welcome Screen chiusa (Accepted).
+2025-06-09 00:25:57,590 - CatastoGUI - INFO - >>> CatastoMainWindow: Inizio perform_initial_setup
+2025-06-09 00:25:57,590 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a setup_tabs
+2025-06-09 00:25:57,612 - CatastoGUI - INFO - ElencoComuniWidget (1528241025760): Esecuzione di load_comuni_data().
+2025-06-09 00:25:57,616 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 5 comuni per get_all_comuni_details.
+2025-06-09 00:25:57,617 - CatastoGUI - INFO - ElencoComuniWidget: Tabella comuni aggiornata con 5 elementi.
+2025-06-09 00:25:57,617 - CatastoGUI.ElencoComuniWidget - INFO - ElencoComuniWidget (1528241025760): Esecuzione di load_comuni_data().
+2025-06-09 00:25:57,617 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 5 comuni per get_all_comuni_details.
+2025-06-09 00:25:57,683 - CatastoGUI - INFO - Chiamata a db_manager.get_historical_periods()...
+2025-06-09 00:25:57,684 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 3 periodi storici.
+2025-06-09 00:25:57,684 - CatastoGUI - INFO - Elenco periodi ricevuto da DBManager (tipo: <class 'list'>): [{'id': 1, 'nome': 'Regno di Sardegna', 'anno_inizio': 1720, 'anno_fine': 1861, 'descrizione': "Periodo del Regno di Sardegna prima dell'unitÃ\xa0 d'Italia"}, {'id': 2, 'nome': "Regno d'Italia", 'anno_inizio': 1861, 'anno_fine': 1946, 'descrizione': "Periodo del Regno d'Italia"}, {'id': 3, 'nome': 'Repubblica Italiana', 'anno_inizio': 1946, 'anno_fine': None, 'descrizione': 'Periodo della Repubblica Italiana'}]
+2025-06-09 00:25:57,684 - CatastoGUI - INFO - Numero di periodi ricevuti: 3
+2025-06-09 00:25:57,691 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 5 comuni (search_term: 'None').
+2025-06-09 00:25:57,803 - CatastoGUI - INFO - Segnale 'partita_creata_per_operazioni_collegate' connesso.
+2025-06-09 00:25:57,935 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 0 righe da mv_statistiche_comune.
+2025-06-09 00:25:57,936 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 0 righe da mv_immobili_per_tipologia.
+2025-06-09 00:25:57,949 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 1 utenti.
+2025-06-09 00:25:57,973 - CatastoGUI - INFO - AuditLogViewer: Pool inizializzato, procedo con il caricamento dei log iniziali.
+2025-06-09 00:25:57,990 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperati 100 record di audit log (pagina 1 di 150). Totale filtrati: 14951
+2025-06-09 00:25:58,101 - CatastoGUI - ERROR - Errore aggiunta tab Ricerca Fuzzy: name 'FUZZY_SEARCH_AVAILABLE' is not defined
+2025-06-09 00:25:58,101 - CatastoGUI - INFO - Setup dei tab completato. Tab corrente impostato su 'Home'.
+2025-06-09 00:25:58,101 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-06-09 00:25:58,101 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a update_ui_based_on_role
+2025-06-09 00:25:58,101 - CatastoGUI - INFO - update_ui_based_on_role completato.
+2025-06-09 00:25:58,101 - CatastoGUI - INFO - >>> CatastoMainWindow: Chiamata a self.show()
+2025-06-09 00:25:58,398 - CatastoGUI - INFO - >>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup
+2025-06-09 00:25:58,398 - CatastoGUI - INFO - Setup iniziale completato. Avvio loop eventi dell'applicazione...
+2025-06-09 00:26:15,795 - CatastoDB_catasto_storico_localhost_5432 - INFO - Avvio aggiornamento viste materializzate...
+2025-06-09 00:26:16,013 - CatastoDB_catasto_storico_localhost_5432 - INFO - Aggiornamento viste materializzate completato con successo.
+2025-06-09 00:26:16,015 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 5 righe da mv_statistiche_comune.
+2025-06-09 00:26:16,016 - CatastoDB_catasto_storico_localhost_5432 - INFO - Recuperate 25 righe da mv_immobili_per_tipologia.
+2025-06-09 00:26:17,140 - CatastoDB_catasto_storico_localhost_5432 - INFO - Avvio manutenzione database (es. ANALYZE, REFRESH MV)...
+2025-06-09 00:26:17,424 - CatastoDB_catasto_storico_localhost_5432 - INFO - Manutenzione database completata con successo.
+2025-06-09 00:26:18,989 - CatastoDB_catasto_storico_localhost_5432 - INFO - Logout per utente ID 1, sessione a484bf9b... completato e variabili audit pulite.
+2025-06-09 00:26:20,199 - CatastoGUI - INFO - Logout utente ID 1, sessione a484bf9b... registrato nel DB.
+2025-06-09 00:26:20,245 - CatastoGUI - WARNING - Tentativo di logout senza una sessione utente valida o db_manager.
+2025-06-09 00:26:22,265 - CatastoGUI - INFO - Evento closeEvent intercettato in CatastoMainWindow.
+2025-06-09 00:26:22,265 - CatastoGUI - INFO - Nessun utente/sessione attiva da loggare out esplicitamente, ma il pool era attivo.
+2025-06-09 00:26:22,265 - CatastoDB_catasto_storico_localhost_5432 - INFO - Tentativo di chiusura del pool di connessioni 'CatastoAppGUI_catasto_storico' per il database 'catasto_storico'...
+2025-06-09 00:26:22,265 - CatastoDB_catasto_storico_localhost_5432 - INFO - Pool di connessioni 'CatastoAppGUI_catasto_storico' (DB: 'catasto_storico') chiuso con successo.
+2025-06-09 00:26:22,265 - CatastoGUI - INFO - Tentativo di chiusura del pool di connessioni al database completato durante closeEvent.
+2025-06-09 00:26:22,265 - CatastoGUI - INFO - Applicazione GUI Catasto Storico terminata via closeEvent.
+2025-06-09 00:26:22,285 - CatastoGUI - INFO - Loop eventi applicazione terminato con codice: 0
+2025-06-09 00:26:22,285 - CatastoDB_catasto_storico_localhost_5432 - INFO - close_pool chiamato, ma il pool non era attivo o già None.

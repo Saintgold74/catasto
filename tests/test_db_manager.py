@@ -27,7 +27,7 @@ def test_add_and_get_possessore():
     # CatastoDBManager(dbname="catasto_test_db", user="postgres", ...)
     try:
         db_manager = CatastoDBManager(**TEST_DB_PARAMS)
-        conn = db_manager.get_connection()
+        conn = db_manager._get_connection()
     except psycopg2.OperationalError as e:
         pytest.fail(f"Impossibile connettersi al database di test '{TEST_DB_PARAMS['dbname']}'. "
                     f"Assicurati che il database esista, che il server sia in esecuzione e che le credenziali siano corrette. Errore: {e}")
@@ -66,7 +66,7 @@ def test_add_and_get_possessore():
         cur.execute("DELETE FROM possessori WHERE id = %s", (possessore_id_test,))
         conn.commit()
     
-    db_manager.release_connection(conn)
+    db_manager._release_connection(conn)
 
 
 def test_get_non_existent_possessore():

@@ -13,6 +13,9 @@ import logging
 import uuid  # Se usato per session_id in modalità offline
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QApplication
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt
 
 # Importazioni PyQt5
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -770,81 +773,7 @@ class CatastoMainWindow(QMainWindow):
 
         self.statusBar().showMessage("Pronto.")
 
-    def create_menu_bar(self):
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("&File")
-        settings_menu = menu_bar.addMenu("&Impostazioni")
-        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon),  # Esempio icona
-                                   "Configurazione &Database...", self)
-        config_db_action.setStatusTip(
-            "Modifica i parametri di connessione al database")
-        config_db_action.triggered.connect(
-            self._apri_dialogo_configurazione_db)
-        settings_menu.addAction(config_db_action)
-
-        # --- INIZIO SEZIONE DA RIMUOVERE O COMMENTARE ---
-        # Se "Nuovo Comune" è solo nel tab, queste righe non servono più qui.
-        #
-        # self.nuovo_comune_action = QAction(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo &Comune...", self)
-        # self.nuovo_comune_action.setStatusTip("Registra un nuovo comune nel sistema")
-        # self.nuovo_comune_action.triggered.connect(self.apri_dialog_inserimento_comune)
-        # # self.nuovo_comune_action.setEnabled(False) # L'abilitazione era gestita da update_ui_based_on_role
-        # file_menu.addAction(self.nuovo_comune_action) # <-- QUESTA RIGA CAUSA L'ERRORE se self.nuovo_comune_action non è definito
-
-        # file_menu.addSeparator() # Rimuovi anche questo se non ci sono altre azioni prima di "Esci"
-        # --- FINE SEZIONE DA RIMUOVERE O COMMENTARE ---
-
-        # Azione per Uscire (questa può rimanere)
-        exit_action = QAction(QApplication.style().standardIcon(
-            QStyle.SP_DialogCloseButton), "&Esci", self)
-        exit_action.setStatusTip("Chiudi l'applicazione")
-        # Chiama il metodo close della finestra
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
-        # Puoi aggiungere altri menu e azioni qui se necessario
-        # Esempio:
-        # if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
-        #     admin_menu = menu_bar.addMenu("&Amministrazione")
-        #     gestione_utenti_action = QAction("Gestione &Utenti", self)
-        #     # gestione_utenti_action.triggered.connect(self.mostra_tab_gestione_utenti)
-        #     admin_menu.addAction(gestione_utenti_action)
-
-    def create_status_bar_content(self):
-        status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.StyledPanel)
-        status_frame.setFrameShadow(QFrame.Sunken)
-        status_layout = QHBoxLayout(status_frame)
-
-        self.db_status_label = QLabel("Database: Non connesso")
-        self.user_status_label = QLabel("Utente: Nessuno")
-
-        # RIGA RIMOSSA: La definizione di self.btn_nuovo_comune_toolbar
-        # self.btn_nuovo_comune_toolbar = QPushButton(QApplication.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Nuovo Comune")
-        # self.btn_nuovo_comune_toolbar.setToolTip("Registra un nuovo comune nel sistema (Accesso: Admin, Archivista)")
-        # self.btn_nuovo_comune_toolbar.clicked.connect(self.apri_dialog_inserimento_comune)
-        # self.btn_nuovo_comune_toolbar.setEnabled(False)
-
-        self.logout_button = QPushButton(QApplication.style(
-        ).standardIcon(QStyle.SP_DialogCloseButton), "Logout")
-        self.logout_button.setToolTip(
-            "Effettua il logout dell'utente corrente")
-        self.logout_button.clicked.connect(self.handle_logout)
-        self.logout_button.setEnabled(False)
-
-        status_layout.addWidget(self.db_status_label)
-        status_layout.addSpacing(20)
-        status_layout.addWidget(self.user_status_label)
-        status_layout.addStretch()
-
-        # RIGA RIMOSSA: L'aggiunta di self.btn_nuovo_comune_toolbar al layout
-        # status_layout.addWidget(self.btn_nuovo_comune_toolbar)
-        # status_layout.addSpacing(10) # Rimuovi anche questo se btn_nuovo_comune_toolbar è rimosso
-        # o lascialo se vuoi uno spazio prima del logout button.
-        # Per pulizia, se il pulsante è via, anche lo spazio dedicato può andare.
-
-        status_layout.addWidget(self.logout_button)
-        self.main_layout.addWidget(status_frame)
+    
 
     def perform_initial_setup(self, db_manager: CatastoDBManager,
                               # ID utente dell'applicazione
@@ -915,22 +844,45 @@ class CatastoMainWindow(QMainWindow):
     # All'interno della classe CatastoMainWindow in prova.py
 
     def create_menu_bar(self):
+        """
+        Crea e popola la barra dei menu principale dell'applicazione.
+        """
         menu_bar = self.menuBar()
+
+        # --- 1. Crea i Menu Principali ---
         file_menu = menu_bar.addMenu("&File")
         settings_menu = menu_bar.addMenu("&Impostazioni")
-        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon),
-                                   "Configurazione &Database...", self)
-        config_db_action.setStatusTip(
-            "Modifica i parametri di connessione al database")
-        config_db_action.triggered.connect(
-            self._apri_dialogo_configurazione_db)
-        settings_menu.addAction(config_db_action)
+        
+        # --- 2. Definisci TUTTE le Azioni ---
 
-        exit_action = QAction(QApplication.style().standardIcon(
-            QStyle.SP_DialogCloseButton), "&Esci", self)
+        # Azione per importare da CSV
+        import_action = QAction("Importa Possessori da CSV...", self)
+        import_action.setStatusTip("Importa una lista di possessori da un file CSV")
+        import_action.triggered.connect(self._import_possessori_csv) # Assicurati che il metodo _import_possessori_csv esista nella classe
+
+        # Azione per uscire
+        exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
         exit_action.setStatusTip("Chiudi l'applicazione")
         exit_action.triggered.connect(self.close)
+
+        # Azione per la configurazione del DB
+        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon), "Configurazione &Database...", self)
+        config_db_action.setStatusTip("Modifica i parametri di connessione al database")
+        config_db_action.triggered.connect(self._apri_dialogo_configurazione_db) # Assicurati che anche questo metodo esista
+
+        # --- 3. Aggiungi le Azioni ai Menu nell'ordine desiderato ---
+
+        # Aggiungi azioni al menu "File"
+        file_menu.addAction(import_action)
+        file_menu.addSeparator()
         file_menu.addAction(exit_action)
+
+        # Aggiungi azioni al menu "Impostazioni"
+        settings_menu.addAction(config_db_action)
+        
+        # Nota: Ho rimosso la parte relativa a "Nuovo Comune" che sembrava codice residuo
+        # e poteva causare confusione o errori. Se ti serve, può essere aggiunta
+        # di nuovo in modo strutturato.
 
     def create_status_bar_content(self):
         status_frame = QFrame()
@@ -1636,7 +1588,50 @@ class CatastoMainWindow(QMainWindow):
 
 # --- Fine Classe CatastoMainWindow ---
 
+    def _import_possessori_csv(self):
+        """
+        Apre una finestra di dialogo per selezionare un file CSV e avvia il processo di importazione.
+        'self' si riferisce all'istanza della tua finestra principale (es. MainWindow).
+        """
+        # QFileDialog.getOpenFileName restituisce una tupla (percorso_file, filtro_selezionato)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleziona un file CSV da importare",
+            "",  # Directory iniziale (vuota per l'ultima usata)
+            "File CSV (*.csv);;Tutti i file (*)"
+        )
 
+        if not file_path:
+            # L'utente ha chiuso la finestra di dialogo
+            return
+
+        try:
+            # Mostra un cursore di attesa per l'intera applicazione
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
+            # Chiama il metodo del DB Manager (che non è cambiato)
+            num_imported = self.db_manager.import_possessori_from_csv(file_path)
+            
+            # Mostra un messaggio di successo
+            QMessageBox.information(
+                self,
+                "Importazione Completata",
+                f"Importazione completata con successo!\n\nSono stati aggiunti {num_imported} nuovi possessori."
+            )
+            
+            # Qui dovrai chiamare la tua funzione specifica per aggiornare la tabella
+            # Esempio: self.refresh_possessori_table()
+
+        except Exception as e:
+            # Mostra un messaggio di errore dettagliato
+            QMessageBox.critical(
+                self,
+                "Errore durante l'importazione",
+                f"Si è verificato un errore e l'operazione è stata annullata:\n\n{e}"
+            )
+        finally:
+            # Ripristina il cursore normale, anche in caso di errore
+            QApplication.restoreOverrideCursor()
 
 def run_gui_app():
     app = QApplication(sys.argv)

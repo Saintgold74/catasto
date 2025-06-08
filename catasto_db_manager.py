@@ -554,6 +554,100 @@ class CatastoDBManager:
             if conn:
                 self._release_connection(conn)
         return comuni_list
+    def import_possessori_from_csv(self, file_path):
+        """
+        Importa una lista di possessori da un file CSV.
+        Il file CSV deve avere le seguenti colonne: nome, cognome, codice_fiscale, data_nascita.
+        L'operazione è transazionale: se anche una sola riga fallisce, l'intero import viene annullato.
+
+        Args:
+            file_path (str): Il percorso del file CSV da importare.
+
+        Returns:
+            int: Il numero di record importati con successo.
+        
+        Raises:
+            ValueError: Se una riga del CSV non è valida o se un codice fiscale esiste già.
+            FileNotFoundError: Se il file non viene trovato.
+        """
+        conn = self.get_connection()
+        records_to_import = []
+
+        # --- FASE 1: Lettura e Validazione preliminare del file CSV ---
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                
+                # Controlla che le intestazioni necessarie esistano
+                required_headers = {'nome', 'cognome', 'codice_fiscale'}
+                if not required_headers.issubset(reader.fieldnames):
+                    raise ValueError(f"Intestazioni mancanti nel file CSV. Richieste: {', '.join(required_headers)}")
+
+                for row in reader:
+                    # Validazione di base
+                    if not row.get('codice_fiscale') or not row.get('cognome') or not row.get('nome'):
+                        raise ValueError(f"Dati mancanti alla riga {reader.line_num}. 'nome', 'cognome' e 'codice_fiscale' sono obbligatori.")
+                    
+                    records_to_import.append(row)
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Il file non è stato trovato al percorso: {file_path}")
+        except Exception as e:
+            # Rilancia altre eccezioni di lettura con un messaggio più chiaro
+            raise IOError(f"Errore durante la lettura del file CSV: {e}")
+
+        if not records_to_import:
+            return 0 # Nessun record da importare
+
+        # --- FASE 2: Inserimento transazionale nel Database ---
+        cursor = None
+        try:
+            # Inizia la transazione
+            conn.autocommit = False
+            cursor = conn.cursor()
+
+            imported_count = 0
+            for i, record in enumerate(records_to_import):
+                line_num = i + 2  # +1 per l'header, +1 perché l'indice è 0-based
+                cf = record['codice_fiscale']
+                
+                # Controlla se il codice fiscale esiste già
+                cursor.execute("SELECT id FROM possessori WHERE codice_fiscale = %s", (cf,))
+                if cursor.fetchone():
+                    raise ValueError(f"Errore alla riga {line_num}: Il codice fiscale '{cf}' esiste già nel database.")
+
+                # Inserisce il nuovo possessore
+                cursor.execute(
+                    """
+                    INSERT INTO possessori (nome, cognome, codice_fiscale, data_nascita)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (
+                        record['nome'],
+                        record['cognome'],
+                        cf,
+                        record.get('data_nascita') # .get() restituisce None se la chiave non esiste
+                    )
+                )
+                imported_count += 1
+            
+            # Se tutto è andato bene, conferma le modifiche
+            conn.commit()
+            return imported_count
+
+        except (Exception, psycopg2.DatabaseError) as error:
+            # Se si verifica un qualsiasi errore, annulla tutta la transazione
+            if conn:
+                conn.rollback()
+            # Rilancia l'eccezione per notificare l'interfaccia utente
+            raise ValueError(f"Importazione annullata. Errore: {error}")
+        finally:
+            # Assicurati di chiudere sempre cursore e connessione
+            if cursor:
+                cursor.close()
+            if conn:
+                self.release_connection(conn)
+
 
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
         """Verifica se un possessore esiste (per nome completo e comune_id) e ritorna il suo ID."""

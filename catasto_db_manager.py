@@ -891,6 +891,72 @@ class CatastoDBManager:
                 self._release_connection(conn)
         return possessori_list
 
+    
+    def get_partite_per_possessore(self, possessore_id: int) -> List[Dict[str, Any]]:
+        """
+        Recupera tutte le partite associate a un possessore specifico.
+        
+        Args:
+            possessore_id: ID del possessore
+            
+        Returns:
+            Lista di dizionari contenenti i dettagli delle partite
+            
+        Raises:
+            DBMError: Per errori di database
+            DBDataError: Se l'ID possessore non è valido
+        """
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            raise DBDataError(f"ID possessore non valido: {possessore_id}")
+        
+        conn = None
+        try:
+            query = f"""
+                SELECT DISTINCT
+                    p.id,
+                    p.numero_partita,
+                    p.suffisso_partita,
+                    p.tipo,
+                    p.stato,
+                    p.data_impianto,
+                    c.nome as comune_nome,
+                    c.id as comune_id,
+                    pp.titolo,
+                    pp.quota,
+                    pp.tipo_partita,
+                    (SELECT COUNT(*) FROM {self.schema}.immobile i WHERE i.partita_id = p.id) as num_immobili
+                FROM {self.schema}.partita p
+                JOIN {self.schema}.comune c ON p.comune_id = c.id
+                JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
+                WHERE pp.possessore_id = %s
+                ORDER BY c.nome, p.numero_partita, p.suffisso_partita
+            """
+            
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.logger.debug(f"Esecuzione query get_partite_per_possessore per possessore ID {possessore_id}")
+                cur.execute(query, (possessore_id,))
+                results = cur.fetchall()
+                
+                partite_list = [dict(row) for row in results] if results else []
+                self.logger.info(f"Trovate {len(partite_list)} partite per possessore ID {possessore_id}")
+                return partite_list
+                
+        except psycopg2.Error as db_err:
+            self.logger.error(f"Errore DB in get_partite_per_possessore per possessore {possessore_id}: {db_err}", exc_info=True)
+            if conn: 
+                conn.rollback()
+            raise DBMError(f"Errore database durante il recupero delle partite per possessore: {db_err}") from db_err
+            
+        except Exception as e:
+            self.logger.error(f"Errore Python in get_partite_per_possessore per possessore {possessore_id}: {e}", exc_info=True)
+            if conn: 
+                conn.rollback()
+            raise DBMError(f"Errore imprevisto durante il recupero delle partite: {e}") from e
+            
+        finally:
+            if conn:
+                self._release_connection(conn)
     def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         """Recupera località per comune_id, con filtro opzionale per nome."""
         conn = None

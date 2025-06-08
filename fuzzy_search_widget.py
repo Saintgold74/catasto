@@ -11,7 +11,7 @@ Funzionalità:
 - Ricerca fuzzy in tempo reale con tolleranza errori
 - Layout ottimizzato per massimizzare spazio risultati
 - Collegamento completo ai dettagli di possessori e località
-- Integrazione con PartitaDetailsDialog esistente
+- Integrazione con DettaglioPartitaDialog esistente
 - Esportazione risultati e verifica indici GIN
 """
 
@@ -36,10 +36,10 @@ except ImportError:
 
 # Importa il dialog di dettaglio partita esistente
 try:
-    from gui_widgets import PartitaDetailsDialog
+    from gui_widgets import DettaglioPartitaDialog
 except ImportError:
-    print("ATTENZIONE: PartitaDetailsDialog non trovato in gui_widgets")
-    PartitaDetailsDialog = None
+    print("ATTENZIONE: DettaglioPartitaDialog non trovato in gui_widgets")
+    DettaglioPartitaDialog = None
 
 # ========================================================================
 # WORKER THREAD PER RICERCHE IN BACKGROUND
@@ -279,9 +279,9 @@ class DettagliPossessoreDialog(QDialog):
     
     def _apri_dettaglio_partita_id(self, partita_id):
         """Apre il dialog di dettaglio partita."""
-        if PartitaDetailsDialog and self.db_manager:
+        if DettaglioPartitaDialog and self.db_manager:
             try:
-                dettaglio_dialog = PartitaDetailsDialog(
+                dettaglio_dialog = DettaglioPartitaDialog(
                     self.db_manager, 
                     partita_id, 
                     parent=self
@@ -296,7 +296,7 @@ class DettagliPossessoreDialog(QDialog):
             QMessageBox.information(
                 self, "Dettaglio Partita", 
                 f"Apertura dettagli partita ID: {partita_id}\n\n"
-                f"PartitaDetailsDialog: {'Disponibile' if PartitaDetailsDialog else 'Non disponibile'}\n"
+                f"DettaglioPartitaDialog: {'Disponibile' if DettaglioPartitaDialog else 'Non disponibile'}\n"
                 f"DB Manager: {'Disponibile' if self.db_manager else 'Non disponibile'}"
             )
 
@@ -434,9 +434,9 @@ class DettagliLocalitaDialog(QDialog):
     
     def _apri_dettaglio_partita_id(self, partita_id):
         """Apre il dialog di dettaglio partita."""
-        if PartitaDetailsDialog and self.db_manager:
+        if DettaglioPartitaDialog and self.db_manager:
             try:
-                dettaglio_dialog = PartitaDetailsDialog(
+                dettaglio_dialog = DettaglioPartitaDialog(
                     self.db_manager, 
                     partita_id, 
                     parent=self
@@ -451,7 +451,7 @@ class DettagliLocalitaDialog(QDialog):
             QMessageBox.information(
                 self, "Dettaglio Partita", 
                 f"Apertura dettagli partita ID: {partita_id}\n\n"
-                f"PartitaDetailsDialog: {'Disponibile' if PartitaDetailsDialog else 'Non disponibile'}\n"
+                f"DettaglioPartitaDialog: {'Disponibile' if DettaglioPartitaDialog else 'Non disponibile'}\n"
                 f"DB Manager: {'Disponibile' if self.db_manager else 'Non disponibile'}"
             )
 

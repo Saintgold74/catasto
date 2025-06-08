@@ -718,7 +718,7 @@ class LoginDialog(QDialog):
 
 # === IMPORT RICERCA FUZZY ===
 try:
-    from fuzzy_search_widget import add_enhanced_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
+    from fuzzy_search_widget import add_optimized_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
     FUZZY_SEARCH_AVAILABLE = True
     print('[INIT] Ricerca fuzzy disponibile')
 except:

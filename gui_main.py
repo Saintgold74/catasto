@@ -40,7 +40,7 @@ from gui_widgets import (
 from gui_widgets import (
     DBConfigDialog, DettaglioPartitaDialog # Aggiungere qui
 )
-from fuzzy_search_widget import FuzzySearchWidget
+
 from app_utils import FPDF_AVAILABLE, QPasswordLineEdit, _verify_password, _hash_password
 
 

@@ -6575,7 +6575,9 @@ class PartitaDetailsDialog(QDialog):
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setToolTip(percorso_file_full) # Il tooltip mostrerà il percorso completo
                     # Salva il percorso completo nell'UserRole per il pulsante "Apri"
-                    path_item.setData(Qt.UserRole, percorso_file_full) 
+                    percorso_file_full = doc_data.get('percorso_file', '')
+                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
+                    path_item.setData(Qt.UserRole, percorso_file_full)  # Assicurati che questo sia sempre una stringa valida
                     self.documents_table.setItem(row, 5, path_item)
                 self.documents_table.resizeColumnsToContents()
             else:
@@ -7296,6 +7298,9 @@ class ModificaPartitaDialog(QDialog):
             self._aggiorna_stato_pulsanti_variazioni()
             self.logger.debug("Tab 'Variazioni' popolato.")
 
+    # In gui_widgets.py, nella classe ModificaPartitaDialog
+# Sostituisci il metodo _load_documenti_allegati() con questa versione corretta:
+
     def _load_documenti_allegati(self):
         """Carica e popola la tabella dei documenti allegati alla partita."""
         self.documents_table.setRowCount(0)
@@ -7304,15 +7309,13 @@ class ModificaPartitaDialog(QDialog):
         self.logger.info(f"Caricamento documenti per partita ID {self.partita_id}.")
 
         try:
-            # Assumiamo che get_documenti_per_partita restituisca dp_documento_id e dp_partita_id
+            # CORREZIONE: Usa self.partita_id invece di self.partita['id']
             documenti = self.db_manager.get_documenti_per_partita(self.partita_id)
             
             if documenti:
                 self.documents_table.setRowCount(len(documenti))
                 for row, doc in enumerate(documenti):
                     documento_id_storico = doc.get("documento_id")
-                    # dp_documento_id_rel dovrebbe essere l'ID del documento storico
-                    # dp_partita_id_rel dovrebbe essere l'ID della partita
                     
                     item_doc_id = QTableWidgetItem(str(documento_id_storico))
                     # Salviamo l'ID del documento storico e l'ID della partita per la rimozione del legame
@@ -7325,7 +7328,8 @@ class ModificaPartitaDialog(QDialog):
                     self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", '')) or ''))
                     self.documents_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza") or ''))
                     
-                    percorso_file_full = doc.get("percorso_file")
+                    # CORREZIONE: Assicurati che il percorso sia salvato correttamente nell'UserRole
+                    percorso_file_full = doc.get("percorso_file") or ''
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
                     self.documents_table.setItem(row, 5, path_item)
@@ -7342,11 +7346,18 @@ class ModificaPartitaDialog(QDialog):
         except Exception as e:
             self.logger.error(f"Errore caricamento documenti per partita ID {self.partita_id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Caricamento Documenti", f"Si è verificato un errore durante il caricamento dei documenti:\n{e}")
+            # Mostra messaggio di errore nella tabella
+            self.documents_table.setRowCount(1)
+            error_item = QTableWidgetItem(f"Errore nel caricamento dei documenti: {e}")
+            error_item.setTextAlignment(Qt.AlignCenter)
+            self.documents_table.setItem(0, 0, error_item)
+            self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
         finally:
             self.documents_table.setSortingEnabled(True)
             self._update_document_tab_title() 
             self._update_details_doc_buttons_state() 
             self.logger.debug("Tab 'Documenti' popolato.")
+
 
     # --- Metodi per la Gestione dei Pulsanti e Selezioni ---
 

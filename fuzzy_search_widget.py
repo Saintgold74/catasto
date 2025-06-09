@@ -281,12 +281,21 @@ class DettagliPossessoreDialog(QDialog):
         """Apre il dialog di dettaglio partita."""
         if DettaglioPartitaDialog and self.db_manager:
             try:
-                dettaglio_dialog = DettaglioPartitaDialog(
-                    self.db_manager, 
-                    partita_id, 
-                    parent=self
-                )
-                dettaglio_dialog.exec_()
+                # Prima recupera i dati della partita
+                partita_details_data = self.db_manager.get_partita_details(partita_id)
+                
+                if partita_details_data:
+                    # Usa la firma corretta del DettaglioPartitaDialog
+                    dettaglio_dialog = DettaglioPartitaDialog(
+                        partita_details_data,  # Dati invece di db_manager
+                        parent=self
+                    )
+                    dettaglio_dialog.exec_()
+                else:
+                    QMessageBox.warning(
+                        self, "Errore Dati", 
+                        f"Impossibile recuperare i dettagli per la partita ID {partita_id}."
+                    )
             except Exception as e:
                 QMessageBox.critical(
                     self, "Errore", 
@@ -299,7 +308,6 @@ class DettagliPossessoreDialog(QDialog):
                 f"DettaglioPartitaDialog: {'Disponibile' if DettaglioPartitaDialog else 'Non disponibile'}\n"
                 f"DB Manager: {'Disponibile' if self.db_manager else 'Non disponibile'}"
             )
-
 # ========================================================================
 # DIALOG DETTAGLI LOCALITÀ
 # ========================================================================
@@ -436,12 +444,21 @@ class DettagliLocalitaDialog(QDialog):
         """Apre il dialog di dettaglio partita."""
         if DettaglioPartitaDialog and self.db_manager:
             try:
-                dettaglio_dialog = DettaglioPartitaDialog(
-                    self.db_manager, 
-                    partita_id, 
-                    parent=self
-                )
-                dettaglio_dialog.exec_()
+                # Prima recupera i dati della partita
+                partita_details_data = self.db_manager.get_partita_details(partita_id)
+                
+                if partita_details_data:
+                    # Usa la firma corretta del DettaglioPartitaDialog
+                    dettaglio_dialog = DettaglioPartitaDialog(
+                        partita_details_data,  # Dati invece di db_manager
+                        parent=self
+                    )
+                    dettaglio_dialog.exec_()
+                else:
+                    QMessageBox.warning(
+                        self, "Errore Dati", 
+                        f"Impossibile recuperare i dettagli per la partita ID {partita_id}."
+                    )
             except Exception as e:
                 QMessageBox.critical(
                     self, "Errore", 
@@ -454,7 +471,6 @@ class DettagliLocalitaDialog(QDialog):
                 f"DettaglioPartitaDialog: {'Disponibile' if DettaglioPartitaDialog else 'Non disponibile'}\n"
                 f"DB Manager: {'Disponibile' if self.db_manager else 'Non disponibile'}"
             )
-
 # ========================================================================
 # WIDGET PRINCIPALE RICERCA FUZZY
 # ========================================================================

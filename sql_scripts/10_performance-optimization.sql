@@ -1,126 +1,86 @@
--- In 10_performance-optimization.sql (e da eseguire sul DB)
-SET search_path TO catasto; -- Assicurati che lo schema sia corretto
+-- Script per l'ottimizzazione delle performance del database Catasto Storico
+-- Versione: 1.1 (Corretto per compatibilità con PostgreSQL > 9.x)
+-- Data: 2025-06-09
 
-CREATE OR REPLACE PROCEDURE manutenzione_database()
+-- Aumenta la memoria di lavoro per le sessioni correnti per velocizzare le query complesse
+SET work_mem = '256MB';
+
+-- Procedura per eseguire VACUUM e ANALYZE su tutte le tabelle dello schema 'catasto'
+-- Questo aggiorna le statistiche usate dal query planner e recupera spazio.
+CREATE OR REPLACE PROCEDURE vacuum_analyze_catasto_schema()
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_tabella record;
-    v_sql text;
+    tbl_name text;
 BEGIN
-    -- NOTA: VACUUM è stato rimosso perché non può essere eseguito da una funzione.
-    --       Deve essere eseguito esternamente (es. psql, script di manutenzione).
-
-    RAISE NOTICE 'Esecuzione ANALYZE per tabelle catasto...';
-    -- Analisi di tutte le tabelle
-    FOR v_tabella IN (
+    FOR tbl_name IN
         SELECT tablename FROM pg_tables WHERE schemaname = 'catasto'
-    ) LOOP
-        v_sql := 'ANALYZE VERBOSE catasto.' || quote_ident(v_tabella.tablename);
-        EXECUTE v_sql;
-        -- RAISE NOTICE '  ANALYZE eseguito su %', v_tabella.tablename; -- Commentato per ridurre output
+    LOOP
+        RAISE NOTICE 'Eseguendo VACUUM ANALYZE su %.%', 'catasto', tbl_name;
+        EXECUTE format('VACUUM (VERBOSE, ANALYZE) catasto.%I', tbl_name);
     END LOOP;
-
-    -- Aggiornamento delle viste materializzate (se la procedura esiste)
-    RAISE NOTICE 'Tentativo di aggiornamento viste materializzate...';
-    BEGIN
-        CALL aggiorna_tutte_statistiche(); -- Questa procedura è definita in 08_advanced-reporting.sql
-        RAISE NOTICE 'Viste materializzate aggiornate.';
-    EXCEPTION
-        WHEN undefined_function THEN
-            RAISE NOTICE 'Procedura aggiorna_tutte_statistiche() non trovata, salto aggiornamento viste.';
-        WHEN OTHERS THEN
-            RAISE WARNING 'Errore durante aggiornamento viste materializzate: %', SQLERRM;
-    END;
-
-
-    RAISE NOTICE 'Manutenzione del database (ANALYZE e REFRESH VISTE) completata con successo.';
 END;
 $$;
--- ========================================================================
--- AGGIUNTA A 10_performance-optimization.sql
--- Manutenzione specifica per indici GIN
--- ========================================================================
 
--- Aggiorna la procedura manutenzione_database esistente
-CREATE OR REPLACE PROCEDURE manutenzione_database()
+
+-- Procedura per ricostruire tutti gli indici dello schema 'catasto'
+-- Utile per ottimizzare indici frammentati. L'operazione può richiedere tempo e bloccare le tabelle.
+-- Eseguire durante periodi di bassa attività.
+CREATE OR REPLACE PROCEDURE reindex_catasto_schema()
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_tabella record;
-    v_sql text;
-    v_gin_count integer;
+    tbl_name text;
 BEGIN
-    RAISE NOTICE 'Esecuzione ANALYZE per tabelle catasto...';
-    
-    -- Analisi di tutte le tabelle
-    FOR v_tabella IN (
+    FOR tbl_name IN
         SELECT tablename FROM pg_tables WHERE schemaname = 'catasto'
-    ) LOOP
-        v_sql := 'ANALYZE VERBOSE catasto.' || quote_ident(v_tabella.tablename);
-        EXECUTE v_sql;
+    LOOP
+        RAISE NOTICE 'Re-indicizzando la tabella %.%', 'catasto', tbl_name;
+        EXECUTE format('REINDEX TABLE catasto.%I', tbl_name);
     END LOOP;
-
-    -- Verifica e manutenzione indici GIN
-    SELECT COUNT(*) INTO v_gin_count
-    FROM pg_indexes 
-    WHERE schemaname = 'catasto' 
-      AND indexname LIKE '%_trgm%';
-    
-    IF v_gin_count > 0 THEN
-        RAISE NOTICE 'Trovati % indici GIN - esecuzione manutenzione specifica...', v_gin_count;
-        
-        -- REINDEX specifico per indici GIN (se necessario)
-        -- NOTA: REINDEX può essere costoso, eseguire solo se necessario
-        /*
-        REINDEX INDEX CONCURRENTLY catasto.idx_gin_possessore_nome_completo_trgm;
-        REINDEX INDEX CONCURRENTLY catasto.idx_gin_possessore_cognome_nome_trgm;
-        REINDEX INDEX CONCURRENTLY catasto.idx_gin_possessore_paternita_trgm;
-        REINDEX INDEX CONCURRENTLY catasto.idx_gin_localita_nome_trgm;
-        */
-        
-        RAISE NOTICE 'Manutenzione indici GIN completata';
-    ELSE
-        RAISE NOTICE 'Nessun indice GIN trovato - saltata manutenzione specifica';
-    END IF;
-
-    -- Aggiornamento delle viste materializzate (codice esistente)
-    RAISE NOTICE 'Tentativo di aggiornamento viste materializzate...';
-    BEGIN
-        CALL aggiorna_tutte_statistiche();
-        RAISE NOTICE 'Viste materializzate aggiornate.';
-    EXCEPTION
-        WHEN undefined_function THEN
-            RAISE NOTICE 'Procedura aggiorna_tutte_statistiche() non trovata, salto aggiornamento viste.';
-        WHEN OTHERS THEN
-            RAISE WARNING 'Errore durante aggiornamento viste materializzate: %', SQLERRM;
-    END;
-
-    RAISE NOTICE 'Manutenzione del database completata con successo.';
 END;
 $$;
 
--- Nuova funzione per statistiche indici GIN
-CREATE OR REPLACE FUNCTION catasto.statistiche_indici_gin()
-RETURNS TABLE (
-    indexname text,
+-- Funzione per identificare indici inutilizzati o raramente utilizzati
+-- Un indice inutilizzato occupa spazio e rallenta le operazioni di scrittura (INSERT, UPDATE, DELETE)
+-- senza portare benefici in lettura.
+-- Restituisce una tabella con gli indici, la loro dimensione e il numero di volte che sono stati usati.
+CREATE OR REPLACE FUNCTION get_unused_indexes(
+    min_size_mb integer DEFAULT 1,
+    min_scans integer DEFAULT 10
+)
+RETURNS TABLE(
+    table_name text,
+    index_name text,
     index_size text,
     index_scans bigint,
-    tuples_read bigint,
-    tuples_fetched bigint
-)
-LANGUAGE sql
-STABLE
-AS $$
-    SELECT 
+    suggestion text
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        i.tablename::text,
         i.indexname::text,
-        pg_size_pretty(pg_relation_size(i.indexname::regclass))::text as index_size,
-        COALESCE(s.idx_scan, 0) as index_scans,
-        COALESCE(s.idx_tup_read, 0) as tuples_read,
-        COALESCE(s.idx_tup_fetch, 0) as tuples_fetched
-    FROM pg_indexes i
-    LEFT JOIN pg_stat_user_indexes s ON i.indexname = s.indexname
-    WHERE i.schemaname = 'catasto' 
-      AND i.indexname LIKE '%_trgm%'
-    ORDER BY i.tablename, i.indexname;
-$$;
+        pg_size_pretty(pg_relation_size(i.indexname::regclass))::text AS index_size,
+        COALESCE(s.idx_scan, 0) AS index_scans,
+        CASE
+            WHEN COALESCE(s.idx_scan, 0) = 0 THEN 'Indice mai utilizzato. Considerare la rimozione.'
+            WHEN COALESCE(s.idx_scan, 0) < min_scans THEN 'Indice raramente utilizzato. Valutare l''utilità.'
+            ELSE 'Utilizzo normale.'
+        END::text AS suggestion
+    FROM
+        pg_indexes i
+    LEFT JOIN
+        -- CORREZIONE: 's.indexname' è stato sostituito con 's.indexrelname' per compatibilità
+        pg_stat_user_indexes s ON i.indexname = s.indexrelname AND i.schemaname = s.schemaname
+    WHERE
+        i.schemaname = 'catasto'
+        AND pg_relation_size(i.indexname::regclass) > (min_size_mb * 1024 * 1024)
+    ORDER BY
+        COALESCE(s.idx_scan, 0),
+        pg_relation_size(i.indexname::regclass) DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Esempio di chiamata della funzione per trovare indici più grandi di 5MB usati meno di 50 volte
+-- SELECT * FROM get_unused_indexes(min_size_mb => 5, min_scans => 50);

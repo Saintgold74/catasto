@@ -236,7 +236,7 @@ DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Angelo Fosati" (typo)'; END $$;
 SELECT * FROM catasto.ricerca_avanzata_possessori('Angelo Fosati'::TEXT, 0.2::REAL);
 
 DO $$ BEGIN RAISE NOTICE '  -> Ricerca "Rossi A"'; END $$;
-FROM catasto.ricerca_avanzata_possessori('Rossi A'::TEXT, 0.3::REAL);
+SELECT * FROM catasto.ricerca_avanzata_possessori('Rossi A'::TEXT, 0.3::REAL);
 
 DO $$ BEGIN RAISE NOTICE '---------------------------------'; END $$;
 

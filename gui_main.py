@@ -8,7 +8,7 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys
-from fuzzy_search_widget import add_simplified_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
+from fuzzy_search_widget import add_complete_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
 
 import os
 import logging

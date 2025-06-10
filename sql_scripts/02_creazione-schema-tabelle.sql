@@ -292,3 +292,51 @@ EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE 'Errore creazione indici GIN: %', SQLERRM;
 END $$;
+
+-- ========================================================================
+-- INDICI GIN PER RICERCA FUZZY AMPLIATA
+-- ========================================================================
+
+-- Indici per ricerca fuzzy negli immobili
+CREATE INDEX IF NOT EXISTS idx_gin_immobili_natura 
+ON immobile USING gin(to_tsvector('italian', natura));
+
+CREATE INDEX IF NOT EXISTS idx_gin_immobili_classificazione 
+ON immobile USING gin(to_tsvector('italian', COALESCE(classificazione, '')));
+
+CREATE INDEX IF NOT EXISTS idx_gin_immobili_consistenza 
+ON immobile USING gin(to_tsvector('italian', COALESCE(consistenza, '')));
+
+-- Indici per ricerca fuzzy nelle variazioni
+CREATE INDEX IF NOT EXISTS idx_gin_variazioni_tipo 
+ON variazione USING gin(to_tsvector('italian', tipo));
+
+CREATE INDEX IF NOT EXISTS idx_gin_variazioni_nominativo 
+ON variazione USING gin(to_tsvector('italian', COALESCE(nominativo_riferimento, '')));
+
+CREATE INDEX IF NOT EXISTS idx_gin_variazioni_numero_rif 
+ON variazione USING gin(to_tsvector('italian', COALESCE(numero_riferimento, '')));
+
+-- Indici per ricerca fuzzy nei contratti
+CREATE INDEX IF NOT EXISTS idx_gin_contratti_tipo 
+ON contratto USING gin(to_tsvector('italian', tipo));
+
+CREATE INDEX IF NOT EXISTS idx_gin_contratti_notaio 
+ON contratto USING gin(to_tsvector('italian', COALESCE(notaio, '')));
+
+CREATE INDEX IF NOT EXISTS idx_gin_contratti_repertorio 
+ON contratto USING gin(to_tsvector('italian', COALESCE(repertorio, '')));
+
+CREATE INDEX IF NOT EXISTS idx_gin_contratti_note 
+ON contratto USING gin(to_tsvector('italian', COALESCE(note, '')));
+
+-- Indici per ricerca fuzzy possessori e località (già esistenti nel base)
+CREATE INDEX IF NOT EXISTS idx_gin_possessori_nome 
+ON possessore USING gin(to_tsvector('italian', nome_completo));
+
+CREATE INDEX IF NOT EXISTS idx_gin_localita_nome 
+ON localita USING gin(to_tsvector('italian', nome));
+
+COMMENT ON INDEX idx_gin_immobili_natura IS 'Indice GIN per ricerca fuzzy nella natura degli immobili';
+COMMENT ON INDEX idx_gin_variazioni_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di variazione';
+COMMENT ON INDEX idx_gin_contratti_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di contratto';

@@ -438,12 +438,15 @@ class LoginDialog(QDialog):
                     f"Errore imprevisto durante il login per {username}: {str(e_gen)}", exc_info=True)
 
 
+# === IMPORT RICERCA FUZZY ===
 try:
-    from fuzzy_search_widget_expanded import ExpandedFuzzySearchWidget
+    from fuzzy_search_widget import add_enhanced_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
     FUZZY_SEARCH_AVAILABLE = True
-except ImportError as e:
-    print(f"[INIT] Ricerca fuzzy non disponibile")
+    print('[INIT] Ricerca fuzzy disponibile')
+except:
     FUZZY_SEARCH_AVAILABLE = False
+    print('[INIT] Ricerca fuzzy non disponibile')
+    def add_fuzzy_search_tab_to_main_window(window): return False
 
 class CatastoMainWindow(QMainWindow):
     def __init__(self):
@@ -903,17 +906,22 @@ class CatastoMainWindow(QMainWindow):
         # Imposta la Landing Page come tab attivo all'avvio
         
         # === AGGIUNTA TAB RICERCA FUZZY ===
-        if FUZZY_SEARCH_AVAILABLE and self.db_manager:
+        if FUZZY_SEARCH_AVAILABLE:
             try:
-                fuzzy_widget = ExpandedFuzzySearchWidget(self.db_manager)
-                self.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
-                print("✅ Tab ricerca fuzzy ampliato aggiunto")
+                if self.db_manager and hasattr(self.db_manager, 'pool') and self.db_manager.pool:
+                    success = add_fuzzy_search_tab_to_main_window(self)
+                    if success:
+                        self.logger.info("Tab Ricerca Fuzzy aggiunto")
+                    else:
+                        self.logger.warning("Tab Ricerca Fuzzy fallito")
+                else:
+                    self.logger.info("Tab Ricerca Fuzzy saltato: DB non pronto")
             except Exception as e:
-                print(f"⚠️ Errore ricerca fuzzy: {e}")
-                
-                self.tabs.setCurrentIndex(0)
-                logging.getLogger("CatastoGUI").info(
-                    "Setup dei tab completato. Tab corrente impostato su 'Home'.")
+                self.logger.error(f"Errore tab Ricerca Fuzzy: {e}")
+        
+        self.tabs.setCurrentIndex(0)
+        logging.getLogger("CatastoGUI").info(
+            "Setup dei tab completato. Tab corrente impostato su 'Home'.")
 
     # Nuovo metodo per attivare i tab e sotto-tab
 

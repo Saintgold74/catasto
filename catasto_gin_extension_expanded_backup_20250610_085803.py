@@ -16,14 +16,6 @@ Nuove funzionalità:
 - Verifica automatica degli indici GIN
 """
 
-
-# Import adapter per compatibilità
-try:
-    from catasto_db_adapter import adapt_db_manager_for_fuzzy_search
-except ImportError:
-    def adapt_db_manager_for_fuzzy_search(db_manager):
-        return db_manager
-
 import logging
 import psycopg2.extras
 from typing import Dict, List, Optional, Union, Any
@@ -52,20 +44,23 @@ class CatastoGINSearchExpanded:
     def verify_gin_indices(self) -> Dict[str, Any]:
         """Verifica la presenza degli indici GIN."""
         try:
-            # Usa il metodo esistente del db_manager
-            result = self.db_manager.execute_query("SELECT * FROM verify_gin_indices()")
-            
-            if result:
-                return {
-                    'indices': [dict(row) for row in result],
-                    'total_indices': len(result),
-                    'gin_indices': len([row for row in result if row.get('is_gin')]),
-                    'status': 'OK'
-                }
-            else:
-                return {'error': 'Nessun risultato', 'status': 'ERROR'}
-                
+            with self.db_manager.get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                    cursor.execute("SELECT * FROM verify_gin_indices()")
+                    indices = cursor.fetchall()
+                    
+                    result = {
+                        'indices': [dict(idx) for idx in indices],
+                        'total_indices': len(indices),
+                        'gin_indices': len([idx for idx in indices if idx['is_gin']]),
+                        'missing_indices': [idx for idx in indices if not idx['is_gin']],
+                        'status': 'OK' if all(idx['is_gin'] for idx in indices) else 'MISSING_INDICES'
+                    }
+                    
+                    return result
+                    
         except Exception as e:
+            self.logger.error(f"Errore nella verifica degli indici GIN: {e}")
             return {'error': str(e), 'status': 'ERROR'}
     
     def search_immobili_fuzzy(self, query_text: str, max_results: int = 50) -> Dict[str, Any]:
@@ -329,9 +324,6 @@ class CatastoGINSearchExpanded:
 
 def extend_db_manager_with_gin_expanded(db_manager):
     """Estende un'istanza di CatastoDBManager con capacità di ricerca fuzzy ampliata."""
-    
-    # Adatta il db_manager per compatibilità
-    db_manager = adapt_db_manager_for_fuzzy_search(db_manager)
     
     if not hasattr(db_manager, 'gin_search_expanded'):
         db_manager.gin_search_expanded = CatastoGINSearchExpanded(db_manager)

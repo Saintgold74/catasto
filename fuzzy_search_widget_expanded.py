@@ -738,16 +738,21 @@ class ExpandedFuzzySearchWidget(QWidget):
             
             table.setItem(row, 0, QTableWidgetItem(str(immobile['entity_id'])))
             table.setItem(row, 1, QTableWidgetItem(immobile['display_text']))
-            table.setItem(row, 2, QTableWidgetItem(
-                f"{info.get('numero_partita', 'N/A')}"
-                f"{' ' + info.get('suffisso_partita', '') if info.get('suffisso_partita') else ''}"
-            ))
+            
+            # FIX: Usa "partita" invece di "numero_partita"
+            numero = info.get('partita', 'N/A')                    # ← QUESTA È LA CORREZIONE
+            suffisso = info.get('suffisso_partita', '')
+            if suffisso and suffisso.strip():
+                partita_completa = f"{numero} {suffisso.strip()}"
+            else:
+                partita_completa = str(numero)
+            table.setItem(row, 2, QTableWidgetItem(partita_completa))
+            
             table.setItem(row, 3, QTableWidgetItem(info.get('localita', 'N/A')))
             table.setItem(row, 4, QTableWidgetItem(info.get('comune', 'N/A')))
             table.setItem(row, 5, QTableWidgetItem(f"{immobile['similarity_score']:.3f}"))
             table.setItem(row, 6, QTableWidgetItem(immobile['search_field']))
             
-            # Memorizza l'ID per i doppi click
             table.item(row, 0).setData(Qt.UserRole, immobile['entity_id'])
             
     def populate_variazioni_table(self, variazioni):

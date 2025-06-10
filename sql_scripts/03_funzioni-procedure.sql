@@ -285,3 +285,147 @@ BEGIN
     ORDER BY num_partite DESC;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ========================================================================
+-- FUNZIONI PER RICERCA FUZZY AMPLIATA
+-- 
+-- ========================================================================
+DROP FUNCTION IF EXISTS search_all_entities_fuzzy(text,real,boolean,boolean,boolean,boolean,boolean,boolean,integer);
+
+CREATE OR REPLACE FUNCTION search_all_entities_fuzzy(
+    query_text TEXT,
+    similarity_threshold REAL DEFAULT 0.3,
+    search_possessori BOOLEAN DEFAULT TRUE,
+    search_localita BOOLEAN DEFAULT TRUE,
+    search_immobili BOOLEAN DEFAULT FALSE,
+    search_variazioni BOOLEAN DEFAULT FALSE,
+    search_contratti BOOLEAN DEFAULT FALSE,
+    search_partite BOOLEAN DEFAULT FALSE,
+    max_results_per_type INTEGER DEFAULT 30
+)
+RETURNS TABLE (
+    entity_type TEXT,
+    entity_id INTEGER,
+    display_text TEXT,
+    detail_text TEXT,
+    similarity_score REAL,
+    search_field TEXT,
+    additional_info JSONB
+) 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_limit(similarity_threshold);
+    
+    RETURN QUERY
+    
+    -- Possessori
+    (SELECT 
+        'possessore'::TEXT,
+        p.id,
+        p.nome_completo::TEXT,
+        CONCAT(p.cognome_nome, ' - ', c.nome)::TEXT,
+        similarity(p.nome_completo, query_text),
+        'nome_completo'::TEXT,
+        jsonb_build_object(
+            'paternita', p.paternita,
+            'comune', c.nome,
+            'attivo', p.attivo
+        )
+    FROM possessore p
+    JOIN comune c ON p.comune_id = c.id
+    WHERE search_possessori AND p.nome_completo % query_text
+    ORDER BY similarity(p.nome_completo, query_text) DESC, p.id
+    LIMIT max_results_per_type)
+    
+    UNION ALL
+    
+    -- Località
+    (SELECT 
+        'localita'::TEXT,
+        l.id,
+        l.nome::TEXT,
+        CONCAT(l.tipo, ' ', l.nome, ' - ', c.nome)::TEXT,
+        similarity(l.nome, query_text),
+        'nome'::TEXT,
+        jsonb_build_object(
+            'tipo', l.tipo,
+            'civico', l.civico,
+            'comune', c.nome
+        )
+    FROM localita l
+    JOIN comune c ON l.comune_id = c.id
+    WHERE search_localita AND l.nome % query_text
+    ORDER BY similarity(l.nome, query_text) DESC, l.id
+    LIMIT max_results_per_type)
+    
+    UNION ALL
+    
+    -- Immobili (FIX APPLICATO)
+    (SELECT 
+        'immobile'::TEXT,
+        i.id,
+        i.natura::TEXT,
+        CONCAT('Partita ', p.numero_partita, 
+               CASE WHEN p.suffisso_partita IS NOT NULL AND p.suffisso_partita != '' 
+                    THEN CONCAT('/', p.suffisso_partita) 
+                    ELSE '' END,
+               ' - ', l.nome, ' - ', c.nome)::TEXT,
+        similarity(i.natura, query_text),
+        'natura'::TEXT,
+        jsonb_build_object(
+            'partita', p.numero_partita,
+            'suffisso_partita', COALESCE(p.suffisso_partita, ''),
+            'localita', l.nome,
+            'comune', c.nome,
+            'classificazione', i.classificazione,
+            'consistenza', i.consistenza
+        )
+    FROM immobile i
+    JOIN partita p ON i.partita_id = p.id
+    JOIN localita l ON i.localita_id = l.id
+    JOIN comune c ON p.comune_id = c.id
+    WHERE search_immobili AND i.natura % query_text
+    ORDER BY similarity(i.natura, query_text) DESC, i.id
+    LIMIT max_results_per_type * 2);
+    
+END;
+$$;
+
+SET search_path TO catasto, public;
+
+CREATE OR REPLACE FUNCTION verify_gin_indices()
+RETURNS TABLE (
+    table_name TEXT,
+    index_name TEXT,
+    column_name TEXT,
+    is_gin BOOLEAN,
+    status TEXT
+) 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        t.table_name::TEXT,
+        COALESCE(i.indexname, 'N/A')::TEXT as index_name,
+        CASE 
+            WHEN i.indexdef LIKE '%gin(%' THEN
+                substring(i.indexdef from 'gin\(([^)]+)\)')
+            ELSE 'N/A'
+        END::TEXT as column_name,
+        COALESCE(i.indexdef LIKE '%USING gin%', false)::BOOLEAN as is_gin,
+        CASE 
+            WHEN i.indexdef LIKE '%USING gin%' THEN 'OK'
+            WHEN i.indexname IS NULL THEN 'No Index'
+            ELSE 'Not GIN'
+        END::TEXT as status
+    FROM information_schema.tables t
+    LEFT JOIN pg_indexes i ON t.table_name = i.tablename AND i.indexname LIKE '%gin%'
+    WHERE t.table_schema = 'catasto'
+    AND t.table_name IN ('possessore', 'localita', 'immobile', 'variazione', 'contratto', 'partita')
+    ORDER BY t.table_name, i.indexname;
+END;
+$$;
+-- Test
+SELECT 'Fix applicato con successo!' as status;

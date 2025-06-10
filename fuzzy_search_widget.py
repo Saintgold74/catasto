@@ -31,6 +31,12 @@ try:
 except ImportError:
     print("ATTENZIONE: catasto_gin_extension.py non trovato.")
 
+# ========================================================================
+# MODIFICA AL FUZZY SEARCH WORKER NEL WIDGET
+# ========================================================================
+
+# Nel tuo fuzzy_search_widget.py, modifica il FuzzySearchWorker:
+
 class FuzzySearchWorker(QThread):
     """Worker thread per ricerche fuzzy in background."""
     
@@ -55,24 +61,29 @@ class FuzzySearchWorker(QThread):
             
             self.progress_updated.emit(40)
             
-            # Ricerca unificata sempre su tutti i tipi
-            results = self.gin_search.search_combined_fuzzy(
-                self.query_text,
-                search_possessori=True,  # Sempre attivo
-                search_localita=True,   # Sempre attivo
-                similarity_threshold=threshold,
-                max_possessori=self.options.get('max_results', 50),
-                max_localita=self.options.get('max_results', 50) // 2
-            )
-            
-            # Se esiste la ricerca variazioni, aggiungila
-            if hasattr(self.gin_search, 'search_variazioni_fuzzy'):
-                self.progress_updated.emit(70)
-                variazioni = self.gin_search.search_variazioni_fuzzy(
-                    self.query_text, threshold, self.options.get('max_results', 50) // 3
+            # MODIFICA: Usa la nuova funzione combinata se disponibile
+            if hasattr(self.gin_search, 'search_combined_fuzzy_with_variazioni'):
+                results = self.gin_search.search_combined_fuzzy_with_variazioni(
+                    self.query_text,
+                    search_possessori=True,
+                    search_localita=True,
+                    search_variazioni=True,  # NUOVO: attiva ricerca variazioni
+                    similarity_threshold=threshold,
+                    max_possessori=self.options.get('max_results', 50),
+                    max_localita=self.options.get('max_results', 50) // 2,
+                    max_variazioni=self.options.get('max_results', 50) // 3
                 )
-                results['variazioni'] = variazioni
             else:
+                # Fallback alla ricerca normale senza variazioni
+                results = self.gin_search.search_combined_fuzzy(
+                    self.query_text,
+                    search_possessori=True,
+                    search_localita=True,
+                    similarity_threshold=threshold,
+                    max_possessori=self.options.get('max_results', 50),
+                    max_localita=self.options.get('max_results', 50) // 2
+                )
+                # Aggiungi array vuoto per variazioni
                 results['variazioni'] = []
             
             self.progress_updated.emit(100)
@@ -80,6 +91,7 @@ class FuzzySearchWorker(QThread):
             
         except Exception as e:
             self.error_occurred.emit(str(e))
+
 
 class SimplifiedFuzzySearchWidget(QWidget):
     """Widget ricerca fuzzy semplificato senza dropdown tipologie."""
@@ -723,7 +735,15 @@ def add_simplified_fuzzy_search_tab_to_main_window(main_window):
     try:
         if hasattr(main_window, 'db_manager') and main_window.db_manager:
             fuzzy_widget = SimplifiedFuzzySearchWidget(main_window.db_manager, main_window)
-            main_window.tab_widget.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
+            # Usa 'tabs' invece di 'tab_widget' per CatastoMainWindow
+            if hasattr(main_window, 'tabs'):
+                main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
+            elif hasattr(main_window, 'tab_widget'):
+                main_window.tab_widget.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
+            else:
+                print("❌ Nessun container tab trovato (né 'tabs' né 'tab_widget')")
+                return False
+            
             print("✅ Tab Ricerca Fuzzy Semplificata aggiunto con successo")
             return True
         else:
@@ -731,4 +751,6 @@ def add_simplified_fuzzy_search_tab_to_main_window(main_window):
             return False
     except Exception as e:
         print(f"❌ Errore aggiunta tab ricerca fuzzy: {e}")
+        import traceback
+        print(f"Dettagli errore: {traceback.format_exc()}")
         return False

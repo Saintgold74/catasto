@@ -405,3 +405,161 @@ def format_search_results(results: Dict[str, Any]) -> str:
         output.append("")
     
     return "\n".join(output)
+
+# ========================================================================
+# AGGIUNTA RICERCA VARIAZIONI AL WIDGET ESISTENTE
+# ========================================================================
+
+# OPZIONE 1: Aggiungi queste funzioni al tuo catasto_gin_extension.py esistente
+
+def search_variazioni_fuzzy(self, query_text: str, similarity_threshold: float = 0.3, max_results: int = 50):
+    """
+    Ricerca fuzzy nelle variazioni per tipo, numero_riferimento e nominativo_riferimento.
+    """
+    if not query_text or len(query_text) < 2:
+        return []
+    
+    try:
+        with self.db_manager.get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                # Query per ricerca fuzzy nelle variazioni
+                query = """
+                SELECT DISTINCT
+                    v.id,
+                    v.tipo,
+                    v.data_variazione,
+                    v.numero_riferimento,
+                    v.nominativo_riferimento,
+                    po.numero_partita as origine_numero,
+                    co.nome as origine_comune,
+                    pd.numero_partita as destinazione_numero,
+                    cd.nome as destinazione_comune,
+                    ct.tipo as tipo_contratto,
+                    ct.data_contratto,
+                    ct.notaio,
+                    
+                    -- Calcolo similarità su più campi
+                    GREATEST(
+                        COALESCE(similarity(v.tipo, %s), 0),
+                        COALESCE(similarity(COALESCE(v.numero_riferimento, ''), %s), 0),
+                        COALESCE(similarity(COALESCE(v.nominativo_riferimento, ''), %s), 0),
+                        COALESCE(similarity(COALESCE(ct.notaio, ''), %s), 0)
+                    ) as similarity_score
+                    
+                FROM variazione v
+                LEFT JOIN partita po ON v.partita_origine_id = po.id
+                LEFT JOIN comune co ON po.comune_id = co.id
+                LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
+                LEFT JOIN comune cd ON pd.comune_id = cd.id
+                LEFT JOIN contratto ct ON ct.variazione_id = v.id
+                
+                WHERE (
+                    similarity(v.tipo, %s) > %s OR
+                    similarity(COALESCE(v.numero_riferimento, ''), %s) > %s OR
+                    similarity(COALESCE(v.nominativo_riferimento, ''), %s) > %s OR
+                    similarity(COALESCE(ct.notaio, ''), %s) > %s
+                )
+                
+                ORDER BY similarity_score DESC, v.data_variazione DESC
+                LIMIT %s;
+                """
+                
+                # Parametri per la query
+                params = (
+                    query_text, query_text, query_text, query_text,  # Per GREATEST
+                    query_text, similarity_threshold,                # tipo
+                    query_text, similarity_threshold,                # numero_riferimento  
+                    query_text, similarity_threshold,                # nominativo_riferimento
+                    query_text, similarity_threshold,                # notaio
+                    max_results                                      # limite
+                )
+                
+                cur.execute(query, params)
+                results = cur.fetchall()
+                
+                # Converte in lista di dizionari e formatta
+                variazioni = []
+                for row in results:
+                    variazione = dict(row)
+                    
+                    # Aggiungi campi formattati per visualizzazione
+                    variazione['nome_completo'] = f"{variazione['tipo']} - {variazione.get('nominativo_riferimento', 'N/A')}"
+                    variazione['descrizione'] = self._format_variazione_description(variazione)
+                    variazione['similarity'] = variazione['similarity_score']  # Alias per compatibilità
+                    
+                    variazioni.append(variazione)
+                
+                return variazioni
+                
+    except Exception as e:
+        self.logger.error(f"Errore ricerca fuzzy variazioni: {e}")
+        return []
+
+def _format_variazione_description(self, variazione):
+    """Formatta la descrizione della variazione per la visualizzazione."""
+    desc_parts = []
+    
+    # Tipo e data
+    desc_parts.append(f"{variazione['tipo']} del {variazione['data_variazione']}")
+    
+    # Partite coinvolte
+    if variazione.get('origine_numero') and variazione.get('origine_comune'):
+        desc_parts.append(f"da P.{variazione['origine_numero']} ({variazione['origine_comune']})")
+    
+    if variazione.get('destinazione_numero') and variazione.get('destinazione_comune'):
+        desc_parts.append(f"a P.{variazione['destinazione_numero']} ({variazione['destinazione_comune']})")
+    
+    # Contratto
+    if variazione.get('tipo_contratto'):
+        contratto_info = f"Contratto: {variazione['tipo_contratto']}"
+        if variazione.get('notaio'):
+            contratto_info += f" - {variazione['notaio']}"
+        desc_parts.append(contratto_info)
+    
+    return " | ".join(desc_parts)
+
+def search_combined_fuzzy_with_variazioni(self, query_text, search_possessori=True, 
+                                         search_localita=True, search_variazioni=True,
+                                         similarity_threshold=0.3, max_possessori=50, 
+                                         max_localita=20, max_variazioni=30):
+    """
+    Ricerca fuzzy combinata che include possessori, località e variazioni.
+    """
+    import time
+    start_time = time.time()
+    
+    results = {
+        'query_text': query_text,
+        'similarity_threshold': similarity_threshold,
+        'possessori': [],
+        'localita': [],
+        'variazioni': [],
+        'execution_time': 0
+    }
+    
+    try:
+        # Ricerca possessori (se richiesta)
+        if search_possessori and hasattr(self, 'search_possessori_fuzzy'):
+            results['possessori'] = self.search_possessori_fuzzy(
+                query_text, similarity_threshold, max_possessori
+            )
+        
+        # Ricerca località (se richiesta)  
+        if search_localita and hasattr(self, 'search_localita_fuzzy'):
+            results['localita'] = self.search_localita_fuzzy(
+                query_text, similarity_threshold, max_localita
+            )
+        
+        # Ricerca variazioni (se richiesta)
+        if search_variazioni:
+            results['variazioni'] = self.search_variazioni_fuzzy(
+                query_text, similarity_threshold, max_variazioni
+            )
+        
+        results['execution_time'] = time.time() - start_time
+        return results
+        
+    except Exception as e:
+        self.logger.error(f"Errore ricerca combinata: {e}")
+        results['execution_time'] = time.time() - start_time
+        return results

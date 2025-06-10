@@ -698,12 +698,6 @@ class CatastoMainWindow(QMainWindow):
 
         self.logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
-        # Integrazione ricerca fuzzy ampliata
-        try:
-            fuzzy_widget = integrate_expanded_fuzzy_search_widget(self, self.db_manager)
-            print("✅ Ricerca fuzzy ampliata integrata con successo")
-        except Exception as e:
-            print(f"⚠️ Errore integrazione ricerca fuzzy: {e}")
         self.logger.info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()
@@ -902,19 +896,16 @@ class CatastoMainWindow(QMainWindow):
         self.tabs.addTab(sistema_contenitore, "Sistema")
 
         # Imposta la Landing Page come tab attivo all'avvio
-        
-        # === AGGIUNTA TAB RICERCA FUZZY ===
+                # === AGGIUNTA TAB RICERCA FUZZY ===
         if FUZZY_SEARCH_AVAILABLE and self.db_manager:
             try:
-                fuzzy_widget = ExpandedFuzzySearchWidget(self.db_manager)
-                self.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
-                print("✅ Tab ricerca fuzzy ampliato aggiunto")
+                success = add_fuzzy_search_tab_to_main_window(self)
+                if success:
+                    print("✅ Tab ricerca fuzzy semplificato aggiunto")
+                else:
+                    print("⚠️ Errore aggiunta tab ricerca fuzzy")
             except Exception as e:
                 print(f"⚠️ Errore ricerca fuzzy: {e}")
-                
-                self.tabs.setCurrentIndex(0)
-                logging.getLogger("CatastoGUI").info(
-                    "Setup dei tab completato. Tab corrente impostato su 'Home'.")
 
     # Nuovo metodo per attivare i tab e sotto-tab
 

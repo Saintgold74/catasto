@@ -24,13 +24,13 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
 
 # Import estensione GIN per ricerca fuzzy
+# Import estensione GIN per ricerca fuzzy
 try:
-    from catasto_gin_extension import CatastoGINSearch
+    from catasto_gin_extension import extend_db_manager_with_gin
     GIN_AVAILABLE = True
 except ImportError:
     GIN_AVAILABLE = False
-    CatastoGINSearch = None
-
+    extend_db_manager_with_gin = None
 class FuzzySearchThread(QThread):
     """Thread per eseguire ricerche fuzzy in background."""
     
@@ -132,13 +132,14 @@ class CompactFuzzySearchWidget(QWidget):
         self.logger = logging.getLogger(__name__)
         
         # Inizializza componenti GIN
+        # Inizializza componenti GIN
         self.gin_search = None
         if GIN_AVAILABLE and db_manager:
             try:
-                self.gin_search = CatastoGINSearch(db_manager)
+                self.extended_db_manager = extend_db_manager_with_gin(db_manager)
+                self.gin_search = self.extended_db_manager  # Usa il db_manager esteso
             except Exception as e:
-                self.logger.error(f"Errore inizializzazione GIN search: {e}")
-        
+                self.logger.error(f"Errore inizializzazione GIN search: {e}")        
         # Variabili di stato
         self.current_results = {}
         self.search_thread = None
@@ -521,7 +522,7 @@ class CompactFuzzySearchWidget(QWidget):
             return
             
         try:
-            indices = self.gin_search.get_gin_indices_info()
+            indices = self.gin_search.get_gin_indices_status() if hasattr(self.gin_search, 'get_gin_indices_status') else []
             if indices:
                 self.indices_status_label.setText(f"✅ {len(indices)} indici")
                 self.debug_text.append(f"✅ Indici GIN: {len(indices)} trovati")

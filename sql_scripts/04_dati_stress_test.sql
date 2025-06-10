@@ -96,7 +96,7 @@ BEGIN
 
                 -- Collega il possessore alla partita (proprietà esclusiva per semplicità qui)
                 INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo)
-                VALUES (v_partita_id, v_possessore_id, 'principale', 'proprietà esclusiva');
+                VALUES (v_partita_id, v_possessore_id, 'principale', 'proprieta esclusiva');
 
                  -- Genera Immobili per la partita
                 FOR v_immobile_counter IN 1..p_immobili_per_partita_media LOOP
@@ -128,7 +128,7 @@ BEGIN
                  -- Seleziona un possessore casuale per la nuova partita (dal pool del comune)
                  v_possessore_id := v_possessore_ids[floor(random()*array_length(v_possessore_ids, 1) + 1)];
                  INSERT INTO partita_possessore (partita_id, possessore_id, tipo_partita, titolo)
-                 VALUES (v_partita_destinazione_id, v_possessore_id, 'principale', 'proprietà esclusiva');
+                 VALUES (v_partita_destinazione_id, v_possessore_id, 'principale', 'proprieta esclusiva');
 
                  -- Crea la variazione
                  INSERT INTO variazione (partita_origine_id, partita_destinazione_id, tipo, data_variazione)

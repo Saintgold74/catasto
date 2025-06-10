@@ -8,7 +8,6 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys
-from fuzzy_search_widget_expanded import integrate_expanded_fuzzy_search_widget
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -560,12 +559,6 @@ class CatastoMainWindow(QMainWindow):
         logging.getLogger("CatastoGUI").info(
             ">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
-        # Integrazione ricerca fuzzy ampliata
-        try:
-            fuzzy_widget = integrate_expanded_fuzzy_search_widget(self, self.db_manager)
-            print("✅ Ricerca fuzzy ampliata integrata con successo")
-        except Exception as e:
-            print(f"⚠️ Errore integrazione ricerca fuzzy: {e}")
         logging.getLogger("CatastoGUI").info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()
@@ -700,12 +693,6 @@ class CatastoMainWindow(QMainWindow):
 
         self.logger.info(">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
-        # Integrazione ricerca fuzzy ampliata
-        try:
-            fuzzy_widget = integrate_expanded_fuzzy_search_widget(self, self.db_manager)
-            print("✅ Ricerca fuzzy ampliata integrata con successo")
-        except Exception as e:
-            print(f"⚠️ Errore integrazione ricerca fuzzy: {e}")
         self.logger.info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()

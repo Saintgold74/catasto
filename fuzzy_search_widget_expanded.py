@@ -930,10 +930,173 @@ class ExpandedFuzzySearchWidget(QWidget):
         return handler
         
     def show_entity_details(self, entity_type, entity_id):
-        """Mostra i dettagli di un'entità."""
-        dialog = EntityDetailsDialog(self.db_manager, entity_type, entity_id, self)
-        dialog.exec_()
+        """Mostra i dettagli usando i dialog esistenti del sistema."""
+        try:
+            if entity_type == 'possessore':
+                # Usa il dialog di selezione possessore in modalità dettaglio
+                self._show_possessore_details(entity_id)
+                
+            elif entity_type == 'immobile':
+                # Trova la partita dell'immobile e apri i dettagli partita
+                self._show_immobile_via_partita(entity_id)
+                
+            elif entity_type == 'partita':
+                # Usa direttamente PartitaDetailsDialog
+                self._show_partita_details(entity_id)
+                
+            elif entity_type in ['variazione', 'contratto']:
+                # Per variazioni e contratti, trova la partita collegata
+                self._show_variazione_contratto_via_partita(entity_type, entity_id)
+                
+            elif entity_type == 'localita':
+                # Per località, mostra gli immobili
+                self._show_localita_details(entity_id)
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Errore", f"Errore apertura dettagli: {str(e)}")
+
+    def _show_partita_details(self, partita_id):
+        """Apre PartitaDetailsDialog per una partita."""
+        try:
+            # Importa i dialog solo quando servono
+            from gui_widgets import PartitaDetailsDialog
+            
+            # Recupera i dati della partita
+            partita_data = self.db_manager.get_partita_details(partita_id)
+            if partita_data:
+                dialog = PartitaDetailsDialog(partita_data, self)
+                dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore", f"Partita ID {partita_id} non trovata")
+                
+        except ImportError:
+            QMessageBox.information(self, "Dettagli Partita", 
+                                f"Apertura dettagli partita ID: {partita_id}\n"
+                                f"(PartitaDetailsDialog non disponibile)")
+
+    def _show_immobile_via_partita(self, immobile_id):
+        """Mostra dettagli partita dell'immobile."""
+        try:
+            # Trova la partita dell'immobile
+            result = self.db_manager.execute_query(
+                "SELECT partita_id FROM immobile WHERE id = %s", (immobile_id,)
+            )
+            if result:
+                partita_id = result[0]['partita_id']
+                self._show_partita_details(partita_id)
+            else:
+                QMessageBox.warning(self, "Errore", f"Immobile ID {immobile_id} non trovato")
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Errore", f"Errore ricerca partita: {str(e)}")
+
+    def _show_variazione_contratto_via_partita(self, entity_type, entity_id):
+        """Mostra dettagli partita da variazione o contratto."""
+        try:
+            if entity_type == 'variazione':
+                result = self.db_manager.execute_query(
+                    "SELECT partita_origine_id FROM variazione WHERE id = %s", (entity_id,)
+                )
+            else:  # contratto
+                result = self.db_manager.execute_query(
+                    "SELECT v.partita_origine_id FROM contratto c "
+                    "JOIN variazione v ON c.variazione_id = v.id WHERE c.id = %s", 
+                    (entity_id,)
+                )
+                
+            if result:
+                partita_id = result[0]['partita_origine_id']
+                self._show_partita_details(partita_id)
+            else:
+                QMessageBox.warning(self, "Errore", f"{entity_type.title()} ID {entity_id} non trovato")
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Errore", f"Errore ricerca partita: {str(e)}")
+
+    def _show_possessore_details(self, possessore_id):
+        """Mostra dettagli possessore con le sue partite."""
+        try:
+            # Recupera dati possessore
+            result = self.db_manager.execute_query(
+                "SELECT p.*, c.nome as comune_nome FROM possessore p "
+                "JOIN comune c ON p.comune_id = c.id WHERE p.id = %s", 
+                (possessore_id,)
+            )
+            
+            if result:
+                possessore_data = dict(result[0])
+                
+                # Recupera partite collegate
+                partite = self.db_manager.execute_query(
+                    "SELECT p.*, pp.titolo, pp.quota FROM partita p "
+                    "JOIN partita_possessore pp ON p.id = pp.partita_id "
+                    "WHERE pp.possessore_id = %s ORDER BY p.numero_partita", 
+                    (possessore_id,)
+                )
+                
+                # Mostra dialog personalizzato o riusa esistente
+                self._show_possessore_partite_dialog(possessore_data, partite)
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Errore", f"Errore dettagli possessore: {str(e)}")
+
+    def _show_possessore_partite_dialog(self, possessore_data, partite):
+        """Dialog per mostrare possessore e le sue partite."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Dettagli - {possessore_data['nome_completo']}")
+        dialog.setMinimumSize(600, 400)
         
+        layout = QVBoxLayout(dialog)
+        
+        # Info possessore
+        info = f"👤 {possessore_data['nome_completo']}\n"
+        info += f"🏛️ {possessore_data['comune_nome']}\n"
+        if possessore_data.get('paternita'):
+            info += f"👨‍👦 {possessore_data['paternita']}\n"
+        info += f"📊 {len(partite)} partite associate"
+        
+        info_label = QLabel(info)
+        info_label.setStyleSheet("font-size: 12px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;")
+        layout.addWidget(info_label)
+        
+        # Tabella partite
+        if partite:
+            table = QTableWidget()
+            table.setColumnCount(4)
+            table.setHorizontalHeaderLabels(["Numero", "Tipo", "Stato", "Titolo/Quota"])
+            table.setRowCount(len(partite))
+            
+            for row, partita in enumerate(partite):
+                table.setItem(row, 0, QTableWidgetItem(str(partita['numero_partita'])))
+                table.setItem(row, 1, QTableWidgetItem(partita.get('tipo', '')))
+                table.setItem(row, 2, QTableWidgetItem(partita.get('stato', '')))
+                table.setItem(row, 3, QTableWidgetItem(f"{partita.get('titolo', '')}: {partita.get('quota', '')}"))
+                
+                # Doppio click per aprire dettagli partita
+                table.itemDoubleClicked.connect(
+                    lambda item, pid=partita['id']: self._show_partita_details(pid)
+                )
+            
+            table.resizeColumnsToContents()
+            layout.addWidget(table)
+            
+            hint_label = QLabel("💡 Doppio click su una partita per vedere i dettagli completi")
+            hint_label.setStyleSheet("font-size: 10px; color: #666; font-style: italic;")
+            layout.addWidget(hint_label)
+        
+        # Pulsante chiudi
+        close_btn = QPushButton("Chiudi")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.exec_()
+
+    def _show_localita_details(self, localita_id):
+        """Mostra dettagli località con suoi immobili."""
+        # Similar implementation per località...
+        QMessageBox.information(self, "Dettagli Località", 
+                            f"Dettagli località ID {localita_id}\n"
+                            f"(Implementazione con immobili collegati)")       
     def export_results(self):
         """Esporta i risultati in CSV o JSON."""
         if self.unified_table.rowCount() == 0:

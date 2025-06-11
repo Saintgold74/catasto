@@ -7,10 +7,10 @@ Autore: Marco Santoro
 Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
-import sys
-#from fuzzy_search_widget import add_complete_fuzzy_search_tab_to_main_window as add_fuzzy_search_tab_to_main_window
-from fuzzy_search_widget import add_fuzzy_search_tab_to_main_window
-from fuzzy_search_widget_expanded import integrate_expanded_fuzzy_search_widget
+import sys,bcrypt
+from fuzzy_search_unified import UnifiedFuzzySearchWidget,integrate_expanded_fuzzy_search_widget,add_fuzzy_search_tab_to_main_window
+#widget = UnifiedFuzzySearchWidget(db_manager, mode='compact')
+#widget = UnifiedFuzzySearchWidget(db_manager, mode='expanded')
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -57,7 +57,7 @@ from gui_widgets import DBConfigDialog
 from dialogs import DettaglioPartitaDialog
 
 from custom_widgets import QPasswordLineEdit
-from app_utils import FPDF_AVAILABLE,  _verify_password, _hash_password
+from app_utils import FPDF_AVAILABLE
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
@@ -303,7 +303,27 @@ if not gui_logger.hasHandlers():
     #    gui_logger.addHandler(console_handler)
 client_ip_address_gui: str = "127.0.0.1"
 
+def _hash_password(password: str) -> str:
+        """Genera un hash sicuro per la password usando bcrypt."""
+        password_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+        return hashed_bytes.decode('utf-8')
 
+def _verify_password(stored_hash: str, provided_password: str) -> bool:
+        """Verifica se la password fornita corrisponde all'hash memorizzato."""
+        try:
+            stored_hash_bytes = stored_hash.encode('utf-8')
+            provided_password_bytes = provided_password.encode('utf-8')
+            return bcrypt.checkpw(provided_password_bytes, stored_hash_bytes)
+        except ValueError:
+            logging.getLogger("CatastoGUI").error(
+                f"Tentativo di verifica con hash non valido: {stored_hash[:10]}...")
+            return False
+        except Exception as e:
+            logging.getLogger("CatastoGUI").error(
+                f"Errore imprevisto durante la verifica bcrypt: {e}")
+            return False
 
 class LoginDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -448,7 +468,7 @@ class LoginDialog(QDialog):
 
 
 try:
-    from fuzzy_search_widget_expanded import ExpandedFuzzySearchWidget
+    from fuzzy_search_unified import ExpandedFuzzySearchWidget,CompactFuzzySearchWidget
     FUZZY_SEARCH_AVAILABLE = True
 except ImportError as e:
     print(f"[INIT] Ricerca fuzzy non disponibile")
@@ -509,6 +529,7 @@ class CatastoMainWindow(QMainWindow):
         self.statusBar().showMessage("Pronto.")
 
     
+
 
     def perform_initial_setup(self, db_manager: CatastoDBManager,
                               # ID utente dell'applicazione
@@ -784,12 +805,22 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.registra_consultazione_widget_ref, "Registra Consultazione")
-
+        # --- AGGIUNTA TAB RICERCA FUZZY ---
+        # Aggiungi questo blocco dove ha più senso, es. dopo gli altri tab.
+        if self.db_manager: # È una buona pratica controllare che db_manager esista
+            self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
+            self.tabs.addTab(self.fuzzy_search_widget, "Ricerca Globale")
+            print("✅ Tab ricerca fuzzy aggiunto.")
+        else:
+            print("⚠️ Impossibile aggiungere il tab di ricerca fuzzy: db_manager non è disponibile.")
+        
+        
         # Aggiungi i sotto-tab al layout del contenitore
         layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
         # Aggiungi il contenitore come tab principale
         self.tabs.addTab(inserimento_gestione_contenitore,
                          "Inserimento e Gestione")
+        
 
         # --- 4. Tab Esportazioni ---
         self.esportazioni_widget_ref = EsportazioniWidget(

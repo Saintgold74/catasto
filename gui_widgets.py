@@ -54,19 +54,15 @@ if TYPE_CHECKING:
 
 # In gui_widgets.py, dopo le importazioni PyQt e standard:
 from custom_widgets import QPasswordLineEdit
-from dialogs import DBConfigDialog,DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog,PeriodoStoricoDetailsDialog,PartitaDetailsDialog
-from custom_widgets import ImmobiliTableWidget
+from dialogs import (DBConfigDialog,DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
+                    PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog,PeriodoStoricoDetailsDialog,
+                    PartitaDetailsDialog,PDFApreviewDialog,CreateUserDialog)
+from dialogs import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog,LocalitaSelectionDialog, 
+                    DettagliLegamePossessoreDialog, UserSelectionDialog,qdate_to_datetime, datetime_to_qdate,_hash_password,_verify_password)
 
-# Dai nuovi moduli che creeremo:
-from app_utils import (
-    ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog,
-    # Dialoghi di selezione
-    LocalitaSelectionDialog, DettagliLegamePossessoreDialog, UserSelectionDialog,
-    qdate_to_datetime, datetime_to_qdate, gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
-    gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
-    GenericTextReportPDF, AggiungiDocumentoDialog, CreateUserDialog, 
-    PDFApreviewDialog, FPDF_AVAILABLE, GenericTextReportPDF , _hash_password
-)
+from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
+                       gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
+                       GenericTextReportPDF,FPDF_AVAILABLE, GenericTextReportPDF)
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
 
@@ -81,11 +77,6 @@ except ImportError:
     class DBMError(Exception):
         pass  # ... definizioni fallback come nel file originale
     print("ATTENZIONE: catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
-
-
-
-
-
 class ElencoComuniWidget(QWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
@@ -632,7 +623,49 @@ class RicercaPartiteWidget(QWidget):
                     self, "Errore", f"Non è stato possibile recuperare i dettagli della partita ID {partita_id}.")
         else:
             QMessageBox.warning(self, "Errore", "ID partita non valido.")
+    # ======================================================================
+    # ECCO LO SLOT CHE STAI CERCANDO DI POSIZIONARE
+    # È un metodo della stessa classe che contiene il pulsante e la tabella.
+    # ======================================================================
+    @pyqtSlot()
+    def apri_dialog_modifica_immobile(self):
+        """
+        Slot che viene eseguito quando si clicca il pulsante "Modifica".
+        Apre il dialogo di modifica per l'immobile selezionato.
+        """
+        selected_rows = self.tabella_immobili.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Nessuna Selezione", "Per favore, seleziona un immobile dalla tabella da modificare.")
+            return
 
+        # Prendi la riga selezionata (anche se sono multiple, consideriamo solo la prima)
+        riga_selezionata = selected_rows[0].row()
+        
+        # Recupera l'ID dell'immobile che abbiamo salvato in precedenza
+        primo_item_nella_riga = self.tabella_immobili.item(riga_selezionata, 0)
+        if not primo_item_nella_riga:
+            QMessageBox.critical(self, "Errore", "Impossibile recuperare i dati dalla riga selezionata.")
+            return
+            
+        immobile_id = primo_item_nella_riga.data(Qt.UserRole)
+
+        # Crea e lancia il dialogo, passando tutti i parametri necessari
+        dialog = ModificaImmobileDialog(
+            db_manager=self.db_manager,
+            immobile_id=immobile_id,
+            comune_id_partita=self.comune_id_attuale, # Usa l'ID del comune di questo widget
+            parent=self  # Il parent è questo widget stesso
+        )
+
+        # Esegui il dialogo. Il codice si ferma qui finché il dialogo non viene chiuso.
+        # Usiamo exec_() per compatibilità con tutti i nomi
+        if dialog.exec_() == QDialog.Accepted:
+            # Se l'utente ha premuto "Salva" e le modifiche sono state salvate,
+            # aggiorna la tabella per mostrare i nuovi dati.
+            print("Modifiche salvate. Aggiornamento della vista in corso...")
+            self.carica_dati_immobili()
+        else:
+            print("Operazione di modifica annullata dall'utente.")
 
 class RicercaPossessoriWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):

@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget)
+                             QVBoxLayout, QWidget,QSplitter)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot
 
 # Importazione commentata (da abilitare se necessario)
@@ -5282,89 +5282,144 @@ class AdminDBOperationsWidget(QWidget):
         self._update_admin_buttons_state()  # Nuovo metodo per aggiornare stato pulsanti
 
     def _initUI(self):
+        # --- 1. CREA PRIMA TUTTI GLI OGGETTI PULSANTE ---
+        self.setup_database_button = QPushButton("Esegui Setup Struttura")
+        self.load_data_button = QPushButton("Carica Dati Esempio")
+        self.delete_data_button = QPushButton("Elimina Tutti i Dati")
+        # Aggiungi qui la creazione di qualsiasi altro pulsante ti serva
+
+
+        # --- 2. COLLEGA I SEGNALI DEI PULSANTI AI LORO METODI (SLOT) ---
+        # Assicurati che questi metodi (es. self.handle_setup_database) esistano nella classe
+        self.setup_database_button.clicked.connect(self.handle_setup_database) 
+        self.load_data_button.clicked.connect(self.handle_load_data)
+        self.delete_data_button.clicked.connect(self.handle_delete_data)
+        
+
+        # --- 3. ORA COSTRUISCI LA UI USANDO I PULSANTI APPENA CREATI ---
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(15)
+        splitter = QSplitter(Qt.Vertical)
+        main_layout.addWidget(splitter)
 
-        # --- 0. Sezione Creazione Database (Solo se il DB non esiste) ---
-        # Questo pulsante sarà abilitato/disabilitato in base allo stato del pool
-        create_db_group = QGroupBox(
-            "0. Creazione Database Principale ('catasto_storico')")
-        create_db_layout = QVBoxLayout(create_db_group)
-        self.btn_run_create_database = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_CommandLink), " Crea Database 'catasto_storico'")
-        self.btn_run_create_database.setToolTip(
-            "Esegue lo script '01_creazione-database.sql' per creare il database principale.\nRichiede credenziali utente PostgreSQL con privilegi di creazione database.")
-        self.btn_run_create_database.clicked.connect(
-            self._run_script_crea_database)
-        create_db_layout.addWidget(self.btn_run_create_database)
-        create_db_layout.addWidget(
-            QLabel("<i>Eseguire solo se il database 'catasto_storico' non esiste.</i>"))
-        main_layout.addWidget(create_db_group)
+        actions_container = QWidget()
+        actions_layout = QVBoxLayout(actions_container)
+        actions_layout.setAlignment(Qt.AlignTop)
 
-        # --- 1. Sezione Configurazione Iniziale ---
-        config_group = QGroupBox(
-            "1. Setup Struttura Database (Tabelle, Funzioni, ecc.)")
-        config_layout = QVBoxLayout(config_group)
-        self.btn_run_initial_setup = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_MediaPlay), " Esegui Script Configurazione Struttura")
-        self.btn_run_initial_setup.setToolTip(
-            "Esegue script SQL per creare tabelle, viste, funzioni, ecc. (dopo creazione DB)")
-        self.btn_run_initial_setup.clicked.connect(
-            self._run_all_config_scripts)
-        config_layout.addWidget(self.btn_run_initial_setup)
-        config_layout.addWidget(QLabel(
-            "<i>Eseguire dopo che il database 'catasto_storico' è stato creato e il pool è attivo.</i>"))
-        main_layout.addWidget(config_group)
+        # Gruppo Setup
+        setup_group = QGroupBox("Setup e Inizializzazione Database")
+        setup_layout = QVBoxLayout(setup_group)
+        
+        # La chiamata ora funziona perché self.setup_database_button ESISTE
+        setup_layout.addWidget(
+            self._crea_pannello_azione(
+                "Creazione Struttura Database (Tabelle, Funzioni)",
+                "Crea o aggiorna lo schema del database...",
+                self.setup_database_button  # Ora questo è un oggetto valido
+            )
+        )
+        setup_layout.addWidget(
+            self._crea_pannello_azione(
+                "Caricamento Dati di Esempio",
+                "Popola il DB con dati iniziali di test...",
+                self.load_data_button # Anche questo ora è un oggetto valido
+            )
+        )
+        
+        actions_layout.addWidget(setup_group)
 
-        # --- 2. Sezione Carico Dati SQL ---
-        load_sql_group = QGroupBox(
-            "2. Caricamento Dati di Esempio (Script SQL)")
-        load_sql_layout = QVBoxLayout(load_sql_group)
-        self.btn_run_sql_data_load = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_ArrowUp), " Esegui Script Caricamento Dati SQL")
-        self.btn_run_sql_data_load.setToolTip(
-            "Esegue lo script SQL ('04_dati_stress_test.sql') per popolare il DB.")
-        self.btn_run_sql_data_load.clicked.connect(
-            self._run_sql_data_load_script)
-        load_sql_layout.addWidget(self.btn_run_sql_data_load)
-        main_layout.addWidget(load_sql_group)
+        # Gruppo Danger
+        danger_group = QGroupBox("Operazioni Distruttive")
+        danger_group.setObjectName("DangerousGroupBox")
+        danger_layout = QVBoxLayout(danger_group)
+        
+        danger_layout.addWidget(
+            self._crea_pannello_azione(
+                "Eliminazione Completa Dati Utente",
+                "ATTENZIONE: Questa operazione cancellerà IRREVERSIBILMENTE tutti i dati...",
+                self.delete_data_button # E anche questo
+            )
+        )
+        actions_layout.addWidget(danger_group)
+        
+        splitter.addWidget(actions_container)
+    def _crea_pannello_azione(self, titolo, descrizione, bottone_azione):
+        """
+        Metodo helper per creare un 'pannello' standard per una singola azione.
+        """
+        pannello = QFrame()
+        pannello.setFrameShape(QFrame.StyledPanel)
+        layout_principale = QVBoxLayout(pannello)
+        
+        titolo_label = QLabel(titolo)
+        titolo_label.setStyleSheet("font-weight: bold; font-size: 11pt;")
+        
+        descrizione_label = QLabel(descrizione)
+        descrizione_label.setWordWrap(True)
+        descrizione_label.setStyleSheet("font-size: 9pt; color: #555;")
 
-        # --- 3. Sezione Popolamento Dati Python ---
-        populate_py_group = QGroupBox("3. Popolamento Dati Guidato (Python)")
-        populate_py_layout = QVBoxLayout(populate_py_group)
-        self.btn_run_python_populate = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_ArrowRight), " Esegui Popolamento Dati Python")
-        self.btn_run_python_populate.setToolTip(
-            "Genera e inserisce dati di esempio usando la logica Python dell'applicazione.")
-        self.btn_run_python_populate.clicked.connect(
-            self._run_python_data_population)
-        populate_py_layout.addWidget(self.btn_run_python_populate)
-        main_layout.addWidget(populate_py_group)
+        # Layout per allineare il pulsante a destra
+        layout_bottone = QHBoxLayout()
+        layout_bottone.addStretch()
+        layout_bottone.addWidget(bottone_azione)
 
-        # --- 4. Sezione Cancellazione DB ---
-        delete_db_group = QGroupBox("Operazioni Distruttive")
-        delete_db_layout = QVBoxLayout(delete_db_group)
-        self.btn_run_db_wipe = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_TrashIcon), " Esegui Script Cancellazione Database")
-        self.btn_run_db_wipe.setStyleSheet(
-            "QPushButton { background-color: #d9534f; border-color: #d43f3a; color: white; } QPushButton:hover { background-color: #c9302c; } QPushButton:pressed { background-color: #ac2925; }")
-        self.btn_run_db_wipe.setToolTip(
-            "ATTENZIONE: Esegue lo script 'drop_db.sql' per cancellare il database specificato.")
-        self.btn_run_db_wipe.clicked.connect(self._run_db_deletion_script)
-        delete_db_layout.addWidget(self.btn_run_db_wipe)
-        delete_db_layout.addWidget(QLabel(
-            "<font color='red'><b>ATTENZIONE MASSIMA: Operazioni altamente distruttive. Richiederanno multiple conferme.</b></font>"))
-        main_layout.addWidget(delete_db_group)
+        layout_principale.addWidget(titolo_label)
+        layout_principale.addWidget(descrizione_label)
+        layout_principale.addLayout(layout_bottone)
+        
+        return pannello
 
-        self.output_log = QTextEdit()  # Definisci l'attributo qui
-        self.output_log.setReadOnly(True)
-        self.output_log.setLineWrapMode(QTextEdit.NoWrap)
-        self.output_log.setFixedHeight(200)
-        main_layout.addWidget(QLabel("Log Operazioni Amministrazione DB:"))
-        main_layout.addWidget(self.output_log, 1)
-        main_layout.addStretch(1)
-        self.setLayout(main_layout)
+    # Esempio di come potresti applicare uno stile al gruppo "pericoloso"
+    # nel tuo foglio di stile principale (MODERN_STYLESHEET)
+    """
+    #DangerousGroupBox {
+        border: 1px solid red;
+        margin-top: 15px;
+    }
+    #DangerousGroupBox::title {
+        color: red;
+        font-weight: bold;
+    }
+    """
+    @pyqtSlot()
+    def handle_setup_database(self):
+        """
+        Slot per avviare la creazione/aggiornamento dello schema del database.
+        """
+        self.log_text_edit.append("-> Avvio setup struttura database...")
+        # QUI andrà la chiamata al self.db_manager per eseguire lo script SQL
+        QMessageBox.information(self, "In Sviluppo", "Funzionalità di setup DB non ancora implementata.")
+        self.log_text_edit.append("<- Operazione 'Setup Struttura' terminata.")
+
+    @pyqtSlot()
+    def handle_load_data(self):
+        """
+        Slot per caricare i dati di esempio.
+        """
+        self.log_text_edit.append("-> Avvio caricamento dati di esempio...")
+        QMessageBox.information(self, "In Sviluppo", "Funzionalità di caricamento dati non ancora implementata.")
+        self.log_text_edit.append("<- Operazione 'Caricamento Dati' terminata.")
+
+    @pyqtSlot()
+    def handle_delete_data(self):
+        """
+        Slot per l'eliminazione di tutti i dati, con dialogo di conferma.
+        """
+        self.log_text_edit.append("-> Richiesta eliminazione dati...")
+        
+        # Dialogo di conferma per un'operazione così critica
+        reply = QMessageBox.warning(self, "Conferma Operazione Distruttiva",
+                                    "Sei assolutamente sicuro di voler eliminare tutti i dati?\n\n"
+                                    "L'OPERAZIONE È IRREVERSIBILE.",
+                                    QMessageBox.Yes | QMessageBox.Cancel,
+                                    QMessageBox.Cancel)
+
+        if reply == QMessageBox.Yes:
+            self.log_text_edit.append("--> L'utente ha CONFERMATO. Procedo con l'eliminazione...")
+            # QUI andrà la chiamata al db_manager per l'eliminazione
+            QMessageBox.information(self, "In Sviluppo", "Funzionalità di eliminazione dati non ancora implementata.")
+            self.log_text_edit.append("<-- Operazione di eliminazione terminata.")
+        else:
+            self.log_text_edit.append("--> L'utente ha ANNULLATO l'operazione.")
 
     def _log_output(self, message: str, error: bool = False):
         """Aggiunge un messaggio al QTextEdit self.output_log con timestamp."""

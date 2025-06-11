@@ -1,0 +1,390 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="3015pt" height="476pt" viewBox="0.00 0.00 3014.57 476.00">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 472)">
+<title>packages_Catasto</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-472 3010.57,-472 3010.57,4 -4,4"/>
+<!-- catasto -->
+<g id="node1" class="node">
+<title>catasto</title>
+<polygon fill="none" stroke="black" points="476.86,-36 421.99,-36 421.99,0 476.86,0 476.86,-36"/>
+<text text-anchor="middle" x="449.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto</text>
+</g>
+<!-- catasto.app_utils -->
+<g id="node2" class="node">
+<title>catasto.app_utils</title>
+<polygon fill="none" stroke="black" points="604.27,-36 494.57,-36 494.57,0 604.27,0 604.27,-36"/>
+<text text-anchor="middle" x="549.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.app_utils</text>
+</g>
+<!-- catasto.catasto_db_manager -->
+<g id="node4" class="node">
+<title>catasto.catasto_db_manager</title>
+<polygon fill="none" stroke="black" points="1057.14,-324 883.71,-324 883.71,-288 1057.14,-288 1057.14,-324"/>
+<text text-anchor="middle" x="970.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.catasto_db_manager</text>
+</g>
+<!-- catasto.app_utils&#45;&gt;catasto.catasto_db_manager -->
+<g id="edge1" class="edge">
+<title>catasto.app_utils-&gt;catasto.catasto_db_manager</title>
+<path fill="none" stroke="black" d="M575.12,-36.46C647.58,-85.68 853.56,-225.61 935.84,-281.51"/>
+<polygon fill="black" stroke="black" points="943.78,-286.9 932.98,-285.01 940.65,-284.78 935.51,-281.28 935.51,-281.28 935.51,-281.28 940.65,-284.78 938.04,-277.56 943.78,-286.9"/>
+</g>
+<!-- catasto.config -->
+<g id="node7" class="node">
+<title>catasto.config</title>
+<polygon fill="none" stroke="black" points="268.49,-324 174.36,-324 174.36,-288 268.49,-288 268.49,-324"/>
+<text text-anchor="middle" x="221.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.config</text>
+</g>
+<!-- catasto.app_utils&#45;&gt;catasto.config -->
+<g id="edge2" class="edge">
+<title>catasto.app_utils-&gt;catasto.config</title>
+<path fill="none" stroke="black" d="M494.12,-34.47C468.55,-43.14 438.57,-55.56 414.42,-72 331.73,-128.3 265.26,-229.79 236.64,-278.07"/>
+<polygon fill="black" stroke="black" points="231.73,-286.48 232.89,-275.57 233.64,-283.21 236.77,-277.84 236.77,-277.84 236.77,-277.84 233.64,-283.21 240.66,-280.11 231.73,-286.48"/>
+</g>
+<!-- catasto.dialogs -->
+<g id="node9" class="node">
+<title>catasto.dialogs</title>
+<polygon fill="none" stroke="black" points="521.83,-108 423.02,-108 423.02,-72 521.83,-72 521.83,-108"/>
+<text text-anchor="middle" x="472.42" y="-85.8" font-family="Times,serif" font-size="14.00">catasto.dialogs</text>
+</g>
+<!-- catasto.app_utils&#45;&gt;catasto.dialogs -->
+<g id="edge3" class="edge">
+<title>catasto.app_utils-&gt;catasto.dialogs</title>
+<path fill="none" stroke="black" d="M530.39,-36.3C521.13,-44.72 509.84,-54.98 499.69,-64.21"/>
+<polygon fill="black" stroke="black" points="492.41,-70.83 496.78,-60.78 495.2,-68.29 499.81,-64.11 499.81,-64.11 499.81,-64.11 495.2,-68.29 502.83,-67.44 492.41,-70.83"/>
+</g>
+<!-- catasto.catasto_db_adapter -->
+<g id="node3" class="node">
+<title>catasto.catasto_db_adapter</title>
+<polygon fill="none" stroke="black" points="664.64,-468 498.21,-468 498.21,-432 664.64,-432 664.64,-468"/>
+<text text-anchor="middle" x="581.42" y="-445.8" font-family="Times,serif" font-size="14.00">catasto.catasto_db_adapter</text>
+</g>
+<!-- catasto.catasto_gin_extension -->
+<g id="node5" class="node">
+<title>catasto.catasto_gin_extension</title>
+<polygon fill="none" stroke="black" points="1355.81,-396 1173.03,-396 1173.03,-360 1355.81,-360 1355.81,-396"/>
+<text text-anchor="middle" x="1264.42" y="-373.8" font-family="Times,serif" font-size="14.00">catasto.catasto_gin_extension</text>
+</g>
+<!-- catasto.catasto_gin_extension_expanded -->
+<g id="node6" class="node">
+<title>catasto.catasto_gin_extension_expanded</title>
+<polygon fill="none" stroke="black" points="703.14,-396 459.71,-396 459.71,-360 703.14,-360 703.14,-396"/>
+<text text-anchor="middle" x="581.42" y="-373.8" font-family="Times,serif" font-size="14.00">catasto.catasto_gin_extension_expanded</text>
+</g>
+<!-- catasto.catasto_gin_extension_expanded&#45;&gt;catasto.catasto_db_adapter -->
+<g id="edge4" class="edge">
+<title>catasto.catasto_gin_extension_expanded-&gt;catasto.catasto_db_adapter</title>
+<path fill="none" stroke="black" d="M581.42,-396.3C581.42,-403.68 581.42,-412.48 581.42,-420.75"/>
+<polygon fill="black" stroke="black" points="581.42,-430.68 576.92,-420.68 581.42,-426.9 581.42,-420.68 581.42,-420.68 581.42,-420.68 581.42,-426.9 585.92,-420.68 581.42,-430.68"/>
+</g>
+<!-- catasto.custom_widgets -->
+<g id="node8" class="node">
+<title>catasto.custom_widgets</title>
+<polygon fill="none" stroke="black" points="436.1,-324 286.74,-324 286.74,-288 436.1,-288 436.1,-324"/>
+<text text-anchor="middle" x="361.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.custom_widgets</text>
+</g>
+<!-- catasto.dialogs&#45;&gt;catasto.catasto_db_manager -->
+<g id="edge5" class="edge">
+<title>catasto.dialogs-&gt;catasto.catasto_db_manager</title>
+<path fill="none" stroke="black" d="M518.38,-108.44C579.39,-131.84 690.29,-175.17 783.42,-216 832.69,-237.6 888.25,-264.36 925.92,-282.86"/>
+<polygon fill="black" stroke="black" points="934.47,-287.08 923.52,-286.69 931.08,-285.4 925.5,-282.66 925.5,-282.66 925.5,-282.66 931.08,-285.4 927.49,-278.62 934.47,-287.08"/>
+</g>
+<!-- catasto.dialogs&#45;&gt;catasto.config -->
+<g id="edge6" class="edge">
+<title>catasto.dialogs-&gt;catasto.config</title>
+<path fill="none" stroke="black" d="M433.21,-108.4C415.56,-117.42 395.19,-129.58 379.42,-144 336.3,-183.44 346.54,-211.48 304.42,-252 292.61,-263.36 278,-273.65 264.35,-282.07"/>
+<polygon fill="black" stroke="black" points="256.15,-286.97 262.43,-277.98 259.4,-285.03 264.73,-281.84 264.73,-281.84 264.73,-281.84 259.4,-285.03 267.04,-285.71 256.15,-286.97"/>
+</g>
+<!-- catasto.dialogs&#45;&gt;catasto.custom_widgets -->
+<g id="edge7" class="edge">
+<title>catasto.dialogs-&gt;catasto.custom_widgets</title>
+<path fill="none" stroke="black" d="M439.22,-108.47C425.3,-117.36 410.14,-129.4 400.42,-144 373.21,-184.91 364.95,-242.93 362.46,-277"/>
+<polygon fill="black" stroke="black" points="361.88,-286.76 357.99,-276.51 362.1,-282.99 362.48,-276.78 362.48,-276.78 362.48,-276.78 362.1,-282.99 366.97,-277.05 361.88,-286.76"/>
+</g>
+<!-- catasto.gui_widgets -->
+<g id="node18" class="node">
+<title>catasto.gui_widgets</title>
+<polygon fill="none" stroke="black" points="535.83,-180 409.02,-180 409.02,-144 535.83,-144 535.83,-180"/>
+<text text-anchor="middle" x="472.42" y="-157.8" font-family="Times,serif" font-size="14.00">catasto.gui_widgets</text>
+</g>
+<!-- catasto.dialogs&#45;&gt;catasto.gui_widgets -->
+<g id="edge8" class="edge">
+<title>catasto.dialogs-&gt;catasto.gui_widgets</title>
+<path fill="none" stroke="black" d="M466.51,-108.3C465.75,-115.68 465.51,-124.48 465.79,-132.75"/>
+<polygon fill="black" stroke="black" points="466.45,-142.68 461.29,-133 466.2,-138.91 465.78,-132.7 465.78,-132.7 465.78,-132.7 466.2,-138.91 470.27,-132.4 466.45,-142.68"/>
+</g>
+<!-- catasto.dipp -->
+<g id="node10" class="node">
+<title>catasto.dipp</title>
+<polygon fill="none" stroke="black" points="705.05,-36 621.79,-36 621.79,0 705.05,0 705.05,-36"/>
+<text text-anchor="middle" x="663.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.dipp</text>
+</g>
+<!-- catasto.fix_fuzzy_integration -->
+<g id="node11" class="node">
+<title>catasto.fix_fuzzy_integration</title>
+<polygon fill="none" stroke="black" points="902.25,-36 722.59,-36 722.59,0 902.25,0 902.25,-36"/>
+<text text-anchor="middle" x="812.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.fix_fuzzy_integration</text>
+</g>
+<!-- catasto.fuzzy&#45;search&#45;unified -->
+<g id="node12" class="node">
+<title>catasto.fuzzy-search-unified</title>
+<polygon fill="none" stroke="black" points="1249.52,-324 1075.33,-324 1075.33,-288 1249.52,-288 1249.52,-324"/>
+<text text-anchor="middle" x="1162.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.fuzzy-search-unified</text>
+</g>
+<!-- catasto.fuzzy&#45;search&#45;unified&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge9" class="edge">
+<title>catasto.fuzzy-search-unified-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M1187.9,-324.48C1200.65,-333.24 1216.27,-343.96 1230.07,-353.42"/>
+<polygon fill="black" stroke="black" points="1238.27,-359.05 1227.48,-357.1 1235.15,-356.91 1230.02,-353.39 1230.02,-353.39 1230.02,-353.39 1235.15,-356.91 1232.57,-349.68 1238.27,-359.05"/>
+</g>
+<!-- catasto.fuzzy&#45;search&#45;unified&#45;&gt;catasto.catasto_gin_extension_expanded -->
+<g id="edge10" class="edge">
+<title>catasto.fuzzy-search-unified-&gt;catasto.catasto_gin_extension_expanded</title>
+<path fill="none" stroke="black" d="M1075.08,-322.72C1072.16,-323.16 1069.27,-323.59 1066.42,-324 947.84,-340.96 812.26,-355.36 714.65,-364.85"/>
+<polygon fill="black" stroke="black" points="704.75,-365.8 714.27,-360.36 708.52,-365.44 714.71,-364.84 714.71,-364.84 714.71,-364.84 708.52,-365.44 715.14,-369.32 704.75,-365.8"/>
+</g>
+<!-- catasto.fuzzy_search_unified -->
+<g id="node13" class="node">
+<title>catasto.fuzzy_search_unified</title>
+<polygon fill="none" stroke="black" points="670.86,-324 491.99,-324 491.99,-288 670.86,-288 670.86,-324"/>
+<text text-anchor="middle" x="581.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.fuzzy_search_unified</text>
+</g>
+<!-- catasto.fuzzy_search_unified&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge11" class="edge">
+<title>catasto.fuzzy_search_unified-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M671.1,-322.86C673.9,-323.26 676.68,-323.64 679.42,-324 847.76,-346.19 1044.6,-361.94 1161.65,-370.23"/>
+<polygon fill="black" stroke="black" points="1171.5,-370.93 1161.21,-374.71 1167.73,-370.66 1161.53,-370.22 1161.53,-370.22 1161.53,-370.22 1167.73,-370.66 1161.85,-365.74 1171.5,-370.93"/>
+</g>
+<!-- catasto.fuzzy_search_unified&#45;&gt;catasto.catasto_gin_extension_expanded -->
+<g id="edge12" class="edge">
+<title>catasto.fuzzy_search_unified-&gt;catasto.catasto_gin_extension_expanded</title>
+<path fill="none" stroke="black" d="M581.42,-324.3C581.42,-331.68 581.42,-340.48 581.42,-348.75"/>
+<polygon fill="black" stroke="black" points="581.42,-358.68 576.92,-348.68 581.42,-354.9 581.42,-348.68 581.42,-348.68 581.42,-348.68 581.42,-354.9 585.92,-348.68 581.42,-358.68"/>
+</g>
+<!-- catasto.fuzzy_search_widget -->
+<g id="node14" class="node">
+<title>catasto.fuzzy_search_widget</title>
+<polygon fill="none" stroke="black" points="866.08,-324 688.77,-324 688.77,-288 866.08,-288 866.08,-324"/>
+<text text-anchor="middle" x="777.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.fuzzy_search_widget</text>
+</g>
+<!-- catasto.fuzzy_search_widget&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge13" class="edge">
+<title>catasto.fuzzy_search_widget-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M866.47,-322.74C869.15,-323.17 871.8,-323.59 874.42,-324 971.8,-339.14 1083.23,-354.04 1161.98,-364.17"/>
+<polygon fill="black" stroke="black" points="1171.66,-365.41 1161.17,-368.6 1167.91,-364.93 1161.74,-364.14 1161.74,-364.14 1161.74,-364.14 1167.91,-364.93 1162.32,-359.68 1171.66,-365.41"/>
+</g>
+<!-- catasto.fuzzy_search_widget&#45;&gt;catasto.catasto_gin_extension_expanded -->
+<g id="edge14" class="edge">
+<title>catasto.fuzzy_search_widget-&gt;catasto.catasto_gin_extension_expanded</title>
+<path fill="none" stroke="black" d="M728.47,-324.48C701.83,-334 668.67,-345.84 640.58,-355.87"/>
+<polygon fill="black" stroke="black" points="631.24,-359.21 639.14,-351.61 634.8,-357.94 640.66,-355.85 640.66,-355.85 640.66,-355.85 634.8,-357.94 642.17,-360.08 631.24,-359.21"/>
+</g>
+<!-- catasto.fuzzy_search_widget_expanded_old -->
+<g id="node15" class="node">
+<title>catasto.fuzzy_search_widget_expanded_old</title>
+<polygon fill="none" stroke="black" points="262.85,-108 0,-108 0,-72 262.85,-72 262.85,-108"/>
+<text text-anchor="middle" x="131.42" y="-85.8" font-family="Times,serif" font-size="14.00">catasto.fuzzy_search_widget_expanded_old</text>
+</g>
+<!-- catasto.fuzzy_search_widget_expanded_old&#45;&gt;catasto.catasto_gin_extension_expanded -->
+<g id="edge15" class="edge">
+<title>catasto.fuzzy_search_widget_expanded_old-&gt;catasto.catasto_gin_extension_expanded</title>
+<path fill="none" stroke="black" d="M127.76,-108.38C119.73,-151.75 105.77,-265.43 165.42,-324 204.59,-362.46 341.94,-374 448.23,-376.99"/>
+<polygon fill="black" stroke="black" points="458.17,-377.25 448.06,-381.49 454.39,-377.15 448.18,-376.99 448.18,-376.99 448.18,-376.99 454.39,-377.15 448.29,-372.49 458.17,-377.25"/>
+</g>
+<!-- catasto.fuzzy_search_widget_expanded_old&#45;&gt;catasto.gui_widgets -->
+<g id="edge16" class="edge">
+<title>catasto.fuzzy_search_widget_expanded_old-&gt;catasto.gui_widgets</title>
+<path fill="none" stroke="black" d="M216.59,-108.48C272.33,-119.92 344.45,-134.73 397.91,-145.7"/>
+<polygon fill="black" stroke="black" points="407.49,-147.67 396.79,-150.07 403.78,-146.91 397.69,-145.66 397.69,-145.66 397.69,-145.66 403.78,-146.91 398.6,-141.25 407.49,-147.67"/>
+</g>
+<!-- catasto.fuzzy_search_widget_old -->
+<g id="node16" class="node">
+<title>catasto.fuzzy_search_widget_old</title>
+<polygon fill="none" stroke="black" points="1685.52,-324 1483.32,-324 1483.32,-288 1685.52,-288 1685.52,-324"/>
+<text text-anchor="middle" x="1584.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.fuzzy_search_widget_old</text>
+</g>
+<!-- catasto.fuzzy_search_widget_old&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge17" class="edge">
+<title>catasto.fuzzy_search_widget_old-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M1504.5,-324.48C1459.07,-334.42 1402.04,-346.9 1354.97,-357.19"/>
+<polygon fill="black" stroke="black" points="1345.35,-359.3 1354.16,-352.76 1349.04,-358.49 1355.12,-357.16 1355.12,-357.16 1355.12,-357.16 1349.04,-358.49 1356.08,-361.56 1345.35,-359.3"/>
+</g>
+<!-- catasto.gui_main -->
+<g id="node17" class="node">
+<title>catasto.gui_main</title>
+<polygon fill="none" stroke="black" points="544.05,-252 432.8,-252 432.8,-216 544.05,-216 544.05,-252"/>
+<text text-anchor="middle" x="488.42" y="-229.8" font-family="Times,serif" font-size="14.00">catasto.gui_main</text>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.app_utils -->
+<g id="edge18" class="edge">
+<title>catasto.gui_main-&gt;catasto.app_utils</title>
+<path fill="none" stroke="black" d="M525.32,-215.69C539.29,-207.08 553.67,-195.21 561.42,-180 583.15,-137.37 570.57,-80.01 559.77,-46.51"/>
+<polygon fill="black" stroke="black" points="556.62,-37.28 564.11,-45.29 557.84,-40.86 559.85,-46.74 559.85,-46.74 559.85,-46.74 557.84,-40.86 555.59,-48.2 556.62,-37.28"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.catasto_db_manager -->
+<g id="edge19" class="edge">
+<title>catasto.gui_main-&gt;catasto.catasto_db_manager</title>
+<path fill="none" stroke="black" d="M544.33,-250.17C547.39,-250.83 550.44,-251.45 553.42,-252 691.55,-277.65 731,-267.82 872.42,-287.62"/>
+<polygon fill="black" stroke="black" points="882.02,-289 871.49,-292.04 878.28,-288.46 872.12,-287.58 872.12,-287.58 872.12,-287.58 878.28,-288.46 872.76,-283.13 882.02,-289"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.config -->
+<g id="edge20" class="edge">
+<title>catasto.gui_main-&gt;catasto.config</title>
+<path fill="none" stroke="black" d="M432.7,-248.21C392.54,-257.91 336.83,-271.73 279.46,-287.5"/>
+<polygon fill="black" stroke="black" points="269.91,-290.14 278.35,-283.14 273.55,-289.13 279.55,-287.47 279.55,-287.47 279.55,-287.47 273.55,-289.13 280.74,-291.81 269.91,-290.14"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.custom_widgets -->
+<g id="edge21" class="edge">
+<title>catasto.gui_main-&gt;catasto.custom_widgets</title>
+<path fill="none" stroke="black" d="M456.7,-252.48C440.21,-261.57 419.87,-272.78 402.22,-282.51"/>
+<polygon fill="black" stroke="black" points="393.81,-287.15 400.39,-278.38 397.12,-285.33 402.56,-282.32 402.56,-282.32 402.56,-282.32 397.12,-285.33 404.74,-286.27 393.81,-287.15"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.dialogs -->
+<g id="edge22" class="edge">
+<title>catasto.gui_main-&gt;catasto.dialogs</title>
+<path fill="none" stroke="black" d="M514.84,-215.58C526.21,-206.48 538.28,-194.26 544.42,-180 550.75,-165.3 551.64,-158.28 544.42,-144 538.46,-132.2 528.5,-122.39 517.85,-114.55"/>
+<polygon fill="black" stroke="black" points="509.84,-109.11 520.64,-111 512.97,-111.23 518.11,-114.72 518.11,-114.72 518.11,-114.72 512.97,-111.23 515.58,-118.45 509.84,-109.11"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.fuzzy_search_unified -->
+<g id="edge23" class="edge">
+<title>catasto.gui_main-&gt;catasto.fuzzy_search_unified</title>
+<path fill="none" stroke="black" d="M511.41,-252.3C522.92,-260.97 537.05,-271.6 549.59,-281.04"/>
+<polygon fill="black" stroke="black" points="557.4,-286.92 546.71,-284.5 554.38,-284.65 549.41,-280.91 549.41,-280.91 549.41,-280.91 554.38,-284.65 552.12,-277.31 557.4,-286.92"/>
+</g>
+<!-- catasto.gui_main&#45;&gt;catasto.gui_widgets -->
+<g id="edge24" class="edge">
+<title>catasto.gui_main-&gt;catasto.gui_widgets</title>
+<path fill="none" stroke="black" d="M490.41,-215.9C489.48,-208.38 487.66,-199.35 485.43,-190.9"/>
+<polygon fill="black" stroke="black" points="482.64,-181.47 489.79,-189.79 483.71,-185.1 485.47,-191.06 485.47,-191.06 485.47,-191.06 483.71,-185.1 481.16,-192.34 482.64,-181.47"/>
+</g>
+<!-- catasto.gui_widgets&#45;&gt;catasto.app_utils -->
+<g id="edge25" class="edge">
+<title>catasto.gui_widgets-&gt;catasto.app_utils</title>
+<path fill="none" stroke="black" d="M497.84,-143.58C509.47,-134.32 522.42,-121.97 530.42,-108 541.06,-89.45 545.76,-65.63 547.83,-47.31"/>
+<polygon fill="black" stroke="black" points="548.73,-37.38 552.3,-47.75 548.39,-41.15 547.82,-47.34 547.82,-47.34 547.82,-47.34 548.39,-41.15 543.34,-46.93 548.73,-37.38"/>
+</g>
+<!-- catasto.gui_widgets&#45;&gt;catasto.catasto_db_manager -->
+<g id="edge26" class="edge">
+<title>catasto.gui_widgets-&gt;catasto.catasto_db_manager</title>
+<path fill="none" stroke="black" d="M536.12,-166.2C593.74,-171.16 679.69,-183.8 747.42,-216 769.93,-226.7 768.45,-240.23 790.42,-252 816.4,-265.91 846.48,-276.61 874.54,-284.62"/>
+<polygon fill="black" stroke="black" points="884,-287.24 873.17,-288.91 880.36,-286.23 874.37,-284.58 874.37,-284.58 874.37,-284.58 880.36,-286.23 875.57,-280.24 884,-287.24"/>
+</g>
+<!-- catasto.gui_widgets&#45;&gt;catasto.custom_widgets -->
+<g id="edge27" class="edge">
+<title>catasto.gui_widgets-&gt;catasto.custom_widgets</title>
+<path fill="none" stroke="black" d="M455.46,-180.13C445.73,-190.25 433.48,-203.5 423.42,-216 407.19,-236.18 390.51,-260.37 378.54,-278.43"/>
+<polygon fill="black" stroke="black" points="373.08,-286.75 374.8,-275.92 375.15,-283.59 378.56,-278.39 378.56,-278.39 378.56,-278.39 375.15,-283.59 382.33,-280.86 373.08,-286.75"/>
+</g>
+<!-- catasto.gui_widgets&#45;&gt;catasto.dialogs -->
+<g id="edge28" class="edge">
+<title>catasto.gui_widgets-&gt;catasto.dialogs</title>
+<path fill="none" stroke="black" d="M478.32,-143.9C479.09,-136.55 479.34,-127.76 479.07,-119.47"/>
+<polygon fill="black" stroke="black" points="478.42,-109.52 483.56,-119.2 478.66,-113.29 479.07,-119.5 479.07,-119.5 479.07,-119.5 478.66,-113.29 474.58,-119.79 478.42,-109.52"/>
+</g>
+<!-- catasto.gui_widgets&#45;&gt;catasto.gui_main -->
+<g id="edge33" class="edge">
+<title>catasto.gui_widgets-&gt;catasto.gui_main</title>
+<path fill="none" stroke="black" stroke-dasharray="5,2" d="M470.46,-180.3C471.41,-187.85 473.24,-196.88 475.48,-205.32"/>
+<polygon fill="black" stroke="black" points="478.27,-214.73 471.11,-206.42 477.2,-211.1 475.43,-205.14 475.43,-205.14 475.43,-205.14 477.2,-211.1 479.74,-203.86 478.27,-214.73"/>
+</g>
+<!-- catasto.implement_details_connection -->
+<g id="node19" class="node">
+<title>catasto.implement_details_connection</title>
+<polygon fill="none" stroke="black" points="1150.53,-36 920.32,-36 920.32,0 1150.53,0 1150.53,-36"/>
+<text text-anchor="middle" x="1035.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.implement_details_connection</text>
+</g>
+<!-- catasto.implement_expanded_fuzzy_search -->
+<g id="node20" class="node">
+<title>catasto.implement_expanded_fuzzy_search</title>
+<polygon fill="none" stroke="black" points="1428.29,-36 1168.56,-36 1168.56,0 1428.29,0 1428.29,-36"/>
+<text text-anchor="middle" x="1298.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.implement_expanded_fuzzy_search</text>
+</g>
+<!-- catasto.integrate_fuzzy_expanded -->
+<g id="node21" class="node">
+<title>catasto.integrate_fuzzy_expanded</title>
+<polygon fill="none" stroke="black" points="1652.46,-36 1446.39,-36 1446.39,0 1652.46,0 1652.46,-36"/>
+<text text-anchor="middle" x="1549.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.integrate_fuzzy_expanded</text>
+</g>
+<!-- catasto.integrate_fuzzy_expanded_fixed -->
+<g id="node22" class="node">
+<title>catasto.integrate_fuzzy_expanded_fixed</title>
+<polygon fill="none" stroke="black" points="1912.34,-36 1670.5,-36 1670.5,0 1912.34,0 1912.34,-36"/>
+<text text-anchor="middle" x="1791.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.integrate_fuzzy_expanded_fixed</text>
+</g>
+<!-- catasto.integrate_fuzzy_search -->
+<g id="node23" class="node">
+<title>catasto.integrate_fuzzy_search</title>
+<polygon fill="none" stroke="black" points="2118.51,-36 1930.33,-36 1930.33,0 2118.51,0 2118.51,-36"/>
+<text text-anchor="middle" x="2024.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.integrate_fuzzy_search</text>
+</g>
+<!-- catasto.optimized_fuzzy_widget_layout -->
+<g id="node24" class="node">
+<title>catasto.optimized_fuzzy_widget_layout</title>
+<polygon fill="none" stroke="black" points="1943.19,-324 1703.65,-324 1703.65,-288 1943.19,-288 1943.19,-324"/>
+<text text-anchor="middle" x="1823.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.optimized_fuzzy_widget_layout</text>
+</g>
+<!-- catasto.optimized_fuzzy_widget_layout&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge29" class="edge">
+<title>catasto.optimized_fuzzy_widget_layout-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M1703.26,-322.87C1700.29,-323.25 1697.34,-323.63 1694.42,-324 1582.62,-338.26 1454.38,-353.98 1367.25,-364.57"/>
+<polygon fill="black" stroke="black" points="1357.51,-365.75 1366.89,-360.08 1361.26,-365.3 1367.44,-364.55 1367.44,-364.55 1367.44,-364.55 1361.26,-365.3 1367.98,-369.02 1357.51,-365.75"/>
+</g>
+<!-- catasto.simplified_fuzzy_widget -->
+<g id="node25" class="node">
+<title>catasto.simplified_fuzzy_widget</title>
+<polygon fill="none" stroke="black" points="1465.59,-324 1267.26,-324 1267.26,-288 1465.59,-288 1465.59,-324"/>
+<text text-anchor="middle" x="1366.42" y="-301.8" font-family="Times,serif" font-size="14.00">catasto.simplified_fuzzy_widget</text>
+</g>
+<!-- catasto.simplified_fuzzy_widget&#45;&gt;catasto.catasto_gin_extension -->
+<g id="edge30" class="edge">
+<title>catasto.simplified_fuzzy_widget-&gt;catasto.catasto_gin_extension</title>
+<path fill="none" stroke="black" d="M1340.95,-324.48C1328.19,-333.24 1312.57,-343.96 1298.78,-353.42"/>
+<polygon fill="black" stroke="black" points="1290.58,-359.05 1296.28,-349.68 1293.7,-356.91 1298.82,-353.39 1298.82,-353.39 1298.82,-353.39 1293.7,-356.91 1301.37,-357.1 1290.58,-359.05"/>
+</g>
+<!-- catasto.test_fuzzy_expanded -->
+<g id="node26" class="node">
+<title>catasto.test_fuzzy_expanded</title>
+<polygon fill="none" stroke="black" points="738.69,-252 562.15,-252 562.15,-216 738.69,-216 738.69,-252"/>
+<text text-anchor="middle" x="650.42" y="-229.8" font-family="Times,serif" font-size="14.00">catasto.test_fuzzy_expanded</text>
+</g>
+<!-- catasto.test_fuzzy_expanded&#45;&gt;catasto.catasto_db_manager -->
+<g id="edge31" class="edge">
+<title>catasto.test_fuzzy_expanded-&gt;catasto.catasto_db_manager</title>
+<path fill="none" stroke="black" d="M730.35,-252.48C775.77,-262.42 832.8,-274.9 879.88,-285.19"/>
+<polygon fill="black" stroke="black" points="889.5,-287.3 878.77,-289.56 885.8,-286.49 879.73,-285.16 879.73,-285.16 879.73,-285.16 885.8,-286.49 880.69,-280.76 889.5,-287.3"/>
+</g>
+<!-- catasto.test_fuzzy_expanded&#45;&gt;catasto.catasto_gin_extension_expanded -->
+<g id="edge32" class="edge">
+<title>catasto.test_fuzzy_expanded-&gt;catasto.catasto_gin_extension_expanded</title>
+<path fill="none" stroke="black" d="M564.56,-252.44C529.11,-261.55 493.84,-273.76 483.42,-288 473.97,-300.91 475.23,-310.26 483.42,-324 491.11,-336.9 503.15,-346.85 516.2,-354.46"/>
+<polygon fill="black" stroke="black" points="524.75,-359.01 513.81,-358.28 521.42,-357.24 515.93,-354.31 515.93,-354.31 515.93,-354.31 521.42,-357.24 518.04,-350.34 524.75,-359.01"/>
+</g>
+<!-- catasto.tests -->
+<g id="node27" class="node">
+<title>catasto.tests</title>
+<polygon fill="none" stroke="black" points="2220.05,-36 2136.79,-36 2136.79,0 2220.05,0 2220.05,-36"/>
+<text text-anchor="middle" x="2178.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.tests</text>
+</g>
+<!-- catasto.tests.test_app_utils -->
+<g id="node28" class="node">
+<title>catasto.tests.test_app_utils</title>
+<polygon fill="none" stroke="black" points="2402.69,-36 2238.16,-36 2238.16,0 2402.69,0 2402.69,-36"/>
+<text text-anchor="middle" x="2320.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.tests.test_app_utils</text>
+</g>
+<!-- catasto.tests.test_db_manager -->
+<g id="node29" class="node">
+<title>catasto.tests.test_db_manager</title>
+<polygon fill="none" stroke="black" points="2602.62,-36 2420.23,-36 2420.23,0 2602.62,0 2602.62,-36"/>
+<text text-anchor="middle" x="2511.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.tests.test_db_manager</text>
+</g>
+<!-- catasto.update_widget_layout -->
+<g id="node30" class="node">
+<title>catasto.update_widget_layout</title>
+<polygon fill="none" stroke="black" points="2803.81,-36 2621.03,-36 2621.03,0 2803.81,0 2803.81,-36"/>
+<text text-anchor="middle" x="2712.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.update_widget_layout</text>
+</g>
+<!-- catasto.upgrade_fuzzy_search -->
+<g id="node31" class="node">
+<title>catasto.upgrade_fuzzy_search</title>
+<polygon fill="none" stroke="black" points="3006.57,-36 2822.27,-36 2822.27,0 3006.57,0 3006.57,-36"/>
+<text text-anchor="middle" x="2914.42" y="-13.8" font-family="Times,serif" font-size="14.00">catasto.upgrade_fuzzy_search</text>
+</g>
+</g>
+</svg>

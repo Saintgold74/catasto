@@ -5271,16 +5271,43 @@ class BackupRestoreWidget(QWidget):
         self.process.start(executable, args)
 
 class AdminDBOperationsWidget(QWidget):
-    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+    """
+    Widget per le operazioni di amministrazione del database.
+    """
+    def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.current_process: Optional[QProcess] = None
-        self.script_base_path = os.path.join(
-            os.path.dirname(__file__), "sql_scripts")
+        self.init_ui()
+        self._update_admin_buttons_state()
 
-        self._initUI()
-        self._update_admin_buttons_state()  # Nuovo metodo per aggiornare stato pulsanti
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Sezione Gestione Utenti
+        user_management_group = QGroupBox("Gestione Utenti")
+        user_management_layout = QGridLayout()
+        
+        self.btn_manage_users = QPushButton("Apri Gestione Utenti")
+        self.btn_manage_users.clicked.connect(self.manage_users)
+        user_management_layout.addWidget(self.btn_manage_users, 0, 0)
 
+        user_management_group.setLayout(user_management_layout)
+        layout.addWidget(user_management_group)
+
+        # Sezione Creazione DB Locale (visibile solo se necessario)
+        self.local_db_group = QGroupBox("Gestione Database Locale")
+        local_db_layout = QGridLayout()
+
+        self.btn_run_create_database = QPushButton("Crea Database Locale")
+        self.btn_run_create_database.setToolTip("Crea e inizializza un nuovo database PostgreSQL in locale.")
+        self.btn_run_create_database.clicked.connect(self.run_create_database_script)
+        local_db_layout.addWidget(self.btn_run_create_database, 0, 0)
+
+        self.local_db_group.setLayout(local_db_layout)
+        layout.addWidget(self.local_db_group)
+        
+        layout.addStretch(1)
+        self.setLayout(layout)
     def _initUI(self):
         # --- 1. CREA PRIMA TUTTI GLI OGGETTI PULSANTE ---
         self.setup_database_button = QPushButton("Esegui Setup Struttura")
@@ -5741,6 +5768,22 @@ class AdminDBOperationsWidget(QWidget):
     # Assicurati che questi metodi ora chiamino _execute_sql_script_list_via_psql
     # e che _run_db_deletion_script gestisca correttamente la chiusura del pool PRIMA
     # di chiamare _execute_sql_script_list_via_psql per lo script drop_db.sql.
+    def _update_admin_buttons_state(self):
+        """
+        Aggiorna lo stato dei pulsanti in base allo stato della connessione.
+        """
+        # La variabile `is_connected` viene ora letta correttamente dall'adapter del db.
+        is_connected = self.db_manager.db_adapter.is_connected() if self.db_manager and self.db_manager.db_adapter else False
+        is_local_db = "(local)" in self.db_manager.db_adapter.get_connection_info() if self.db_manager and self.db_manager.db_adapter else False
+
+        # Abilita la gestione utenti se connesso
+        self.btn_manage_users.setEnabled(is_connected)
+        
+        # Abilita il pulsante di creazione DB locale solo se non siamo connessi a un DB remoto
+        # E se la connessione attuale non è già locale e attiva
+        can_create_local_db = not (is_connected and not is_local_db)
+        self.btn_run_create_database.setEnabled(can_create_local_db)
+        self.local_db_group.setVisible(True) # Il gruppo è sempre visibile, ma il pulsante è disabilitato/abilitato
 
     def _run_python_data_population(self):
         if not self.db_manager.pool:
@@ -5898,6 +5941,35 @@ class AdminDBOperationsWidget(QWidget):
         self._disable_all_buttons(False)  # Riabilita sempre i pulsanti
         self._update_admin_buttons_state()  # Aggiorna lo stato in base al pool
         self.current_process = None  # Resetta riferimento al processo
+    def manage_users(self):
+        """
+        Apre la dialog per la gestione degli utenti.
+        """
+        if self.db_manager:
+            self.db_manager.open_user_management_dialog()
+    def run_create_database_script(self):
+        """
+        Esegue lo script per creare un database locale.
+        """
+        reply = QMessageBox.question(self, 'Conferma Creazione DB',
+                                     "Questa operazione creerà un nuovo database in locale. "
+                                     "Se esiste già un database con lo stesso nome, potrebbe essere sovrascritto. "
+                                     "Continuare?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            if self.db_manager and hasattr(self.db_manager.db_adapter, 'run_initialization_scripts'):
+                # Assumiamo che db_adapter abbia una funzione per eseguire gli script di inizializzazione
+                # Questa logica è stata spostata in CatastoDbAdapter per gestire la creazione locale
+                success = self.db_manager.db_adapter.run_initialization_scripts()
+                if success:
+                    QMessageBox.information(self, "Successo", "Database locale creato e inizializzato correttamente.")
+                else:
+                    QMessageBox.critical(self, "Errore", "Creazione del database locale fallita.")
+            else:
+                QMessageBox.warning(self, "Funzione non disponibile", "La funzione per creare il DB non è implementata correttamente.")
+            
+            self._update_admin_buttons_state()
 
 class RegistraConsultazioneWidget(QWidget):
     def __init__(self, db_manager: 'CatastoDBManager',

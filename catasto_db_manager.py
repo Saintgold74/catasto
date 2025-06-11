@@ -24,7 +24,11 @@ import json
 import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
+# --- CORREZIONE ---
+# Ho corretto il nome della classe in 'CatastoDBAdapter' con la 'B' maiuscola.
+from catasto_db_adapter import CatastoDBAdapter
 
+# ------------------
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
@@ -64,25 +68,29 @@ class DBDataError(DBMError):
 # -------------------------------------------------
 
 class CatastoDBManager:
-    def __init__(self, dbname, user, password, host, port,
-                 schema="catasto",
-                 application_name="CatastoApp_Pool",
-                 log_file="catasto_db_manager.log",
-                 log_level=logging.DEBUG, # O il suo default
-                 min_conn=1,
-                 max_conn=5):
-        
-        self._main_db_conn_params = {"dbname": dbname, "user": user, "password": password, "host": host, "port": port}
-        self._maintenance_db_name = "postgres" 
-        self.schema = schema
-        self.application_name = application_name
-        self._min_conn_pool = min_conn
-        self._max_conn_pool = max_conn
+    """
+    Gestisce le operazioni di amministrazione e manutenzione del database Catasto.
+    Versione semplificata.
+    """
+    # --- CORREZIONE DEFINITIVA ---
+    # Aggiunto **kwargs per accettare qualsiasi argomento keyword extra (come 'schema', 
+    # 'application_name', etc.) senza causare un TypeError.
+    def __init__(self, dbname, user, password, host, port, log_level=logging.INFO, **kwargs):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
 
-        self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
-        # ... (resto della configurazione del logger come prima) ...
-        self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
-        self.pool = None # Il pool viene inizializzato esplicitamente dopo
+        # Gli argomenti extra in kwargs (es. schema, application_name) vengono
+        # semplicemente ignorati qui, rendendo il costruttore compatibile.
+        connection_string = f"dbname='{dbname}' user='{user}' password='{password}' host='{host}' port='{port}'"
+        
+        self.db_adapter = CatastoDBAdapter(connection_string)
+        
+        if not self.db_adapter.connect():
+             self.logger.warning(f"Connessione iniziale fallita per: {connection_string}")
+        else:
+            self.logger.info("CatastoDBManager inizializzato e connesso con successo.")
+
+
 
 
     def initialize_main_pool(self) -> bool:
@@ -3224,31 +3232,86 @@ class CatastoDBManager:
             output_string = "Verifica completata. Nessun messaggio specifico o problema riportato dalla procedura."
             
         return problemi_rilevati_flag, output_string
-    def refresh_materialized_views(self) -> bool:
-        """Aggiorna tutte le viste materializzate definite nel database, usando il pool."""
-        self.logger.info("Avvio aggiornamento viste materializzate...")
-        conn = None
+    def _execute_query(self, query, params=None, fetch=None, many=False, script=False):
+        """Metodo di utility per eseguire query in modo sicuro."""
         try:
-            conn = self._get_connection()
-            with conn.cursor() as cur:
-                # Assumendo che la procedura sia nello schema corretto (es. self.schema)
-                # Se la procedura non accetta argomenti, la chiamata è semplice.
-                self.logger.debug(f"Chiamata procedura {self.schema}.aggiorna_tutte_statistiche()")
-                cur.execute(f"CALL {self.schema}.aggiorna_tutte_statistiche();")
-                conn.commit()
-            self.logger.info("Aggiornamento viste materializzate completato con successo.")
-            return True
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback()
-            self.logger.error(f"Errore DB durante l'aggiornamento delle viste materializzate: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
-            return False
+            # Ora utilizza self.db_adapter che è stato correttamente salvato.
+            return self.db_adapter.execute_query(query, params, fetch, many, script)
         except Exception as e:
-            if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore Python imprevisto durante l'aggiornamento delle viste materializzate: {e}", exc_info=True)
+            logging.error(f"Errore durante l'esecuzione della query: {e}")
+            QMessageBox.critical(None, "Errore Database", f"Si è verificato un errore: {e}")
+            return None if fetch else False
+    def open_user_management_dialog(self):
+        """
+        Apre la finestra di dialogo per la gestione degli utenti e dei ruoli.
+        """
+        # --- CORREZIONE ---
+        # L'importazione viene fatta qui, solo quando il metodo è chiamato.
+        # A questo punto, entrambi i moduli sono già stati caricati e non c'è più un ciclo.
+        from dialogs import UserManagementDialog
+        try:
+            # Ora utilizza self.db_adapter che è stato correttamente salvato.
+            dialog = UserManagementDialog(self.db_adapter)
+            dialog.exec_()
+        except Exception as e:
+            logging.error(f"Impossibile aprire la gestione utenti: {e}")
+            QMessageBox.critical(None, "Errore", f"Impossibile aprire la finestra di gestione utenti: {e}")
+
+    def run_sql_script(self, script_path):
+        """
+        Esegue un singolo script SQL.
+        """
+        logging.info(f"Esecuzione dello script SQL: {script_path}")
+        try:
+            with open(script_path, 'r', encoding='utf-8') as f:
+                sql_script = f.read()
+            # Ora utilizza self.db_adapter che è stato correttamente salvato.
+            if self.db_adapter.execute_script(sql_script):
+                logging.info(f"Script {script_path} eseguito con successo.")
+                QMessageBox.information(None, "Successo", f"Lo script {script_path} è stato eseguito correttamente.")
+                return True
+            else:
+                return False
+        except Exception as e:
+            logging.error(f"Errore durante l'esecuzione dello script {script_path}: {e}")
+            QMessageBox.critical(None, "Errore Script", f"Impossibile eseguire lo script {script_path}: {e}")
             return False
-        finally:
-            if conn:
-                self._release_connection(conn)
+    def refresh_materialized_views(self, show_success_message=True):
+        """
+        Aggiorna tutte le viste materializzate nel database.
+        """
+        logging.info("Inizio aggiornamento delle viste materializzate.")
+        
+        progress_dialog = QProgressDialog("Aggiornamento viste materializzate in corso...", "Annulla", 0, 0)
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setCancelButton(None) 
+        progress_dialog.show()
+
+        query = """
+        DO $$
+        DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT matviewname FROM pg_matviews WHERE schemaname = 'catasto') LOOP
+                EXECUTE 'REFRESH MATERIALIZED VIEW catasto.' || quote_ident(r.matviewname);
+            END LOOP;
+        END $$;
+        """
+        try:
+            success = self._execute_query(query, script=True)
+            progress_dialog.close()
+            if success:
+                if show_success_message:
+                    QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
+                logging.info("Viste materializzate aggiornate con successo.")
+                return True
+            else:
+                return False
+        except Exception as e:
+            progress_dialog.close()
+            logging.error(f"Errore critico durante l'aggiornamento delle viste: {e}")
+            QMessageBox.critical(None, "Errore Aggiornamento Viste", f"Impossibile aggiornare le viste materializzate: {e}")
+            return False
 
     def run_database_maintenance(self) -> bool:
         """Esegue manutenzione generale del database (es. ANALYZE e aggiorna viste), usando il pool."""

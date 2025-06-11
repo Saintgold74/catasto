@@ -1959,15 +1959,39 @@ class CatastoDBManager:
         except psycopg2.Error as db_err: logger.error(f"Errore DB aggiornamento immobile ID {immobile_id}: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python aggiornamento immobile ID {immobile_id}: {e}"); self.rollback(); return False
 
-    def delete_immobile(self, immobile_id: int) -> bool:
-        """Chiama la procedura SQL elimina_immobile."""
-        call_proc = "CALL elimina_immobile(%s)"
+    def delete_immobile(self, immobile_id):
+        """
+        Elimina un immobile dal database utilizzando una procedura memorizzata
+        e gestendo la transazione in modo sicuro con il connection pool.
+        """
+        call_proc = "SELECT public.delete_immobile_by_id(%s);"
+        conn = None  # Inizializza la variabile della connessione
         try:
-            if self.execute_query(call_proc, (immobile_id,)): self.commit(); logger.info(f"Immobile ID {immobile_id} eliminato."); return True
+            # 1. Ottieni una connessione dal pool
+            conn = self.pool.getconn()
+            
+            # 2. Utilizza la connessione con un blocco 'with' per il cursore
+            with conn.cursor() as cur:
+                # 3. Esegui la query/procedura sul cursore
+                cur.execute(call_proc, (immobile_id,))
+                
+                # 4. Esegui il commit sulla connessione
+                conn.commit()
+                
+                logger.info(f"Immobile ID {immobile_id} eliminato con successo.")
+                return True
+                
+        except Exception as e:
+            # Se si verifica un errore, esegui il rollback
+            if conn:
+                conn.rollback()
+            logger.error(f"Errore durante l'eliminazione dell'immobile ID {immobile_id}: {e}")
             return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB eliminazione immobile ID {immobile_id}: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python eliminazione immobile ID {immobile_id}: {e}"); self.rollback(); return False
-
+            
+        finally:
+            # 5. Rilascia SEMPRE la connessione al pool
+            if conn:
+                self.pool.putconn(conn)
     def update_variazione(self, variazione_id: int, **kwargs) -> bool:
         """Chiama la procedura SQL aggiorna_variazione."""
         params = {'p_variazione_id': variazione_id, 'p_tipo': kwargs.get('tipo'), 'p_data_variazione': kwargs.get('data_variazione'),

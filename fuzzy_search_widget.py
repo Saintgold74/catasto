@@ -24,13 +24,18 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
 
 # Import estensione GIN per ricerca fuzzy
-# Import estensione GIN per ricerca fuzzy
 try:
     from catasto_gin_extension import extend_db_manager_with_gin
     GIN_AVAILABLE = True
-except ImportError:
+    print("DEBUG: Importazione GIN riuscita")
+except ImportError as e:
     GIN_AVAILABLE = False
     extend_db_manager_with_gin = None
+    print(f"DEBUG: Errore importazione GIN: {e}")
+except Exception as e:
+    GIN_AVAILABLE = False
+    extend_db_manager_with_gin = None
+    print(f"DEBUG: Errore generico importazione: {e}")
 class FuzzySearchThread(QThread):
     """Thread per eseguire ricerche fuzzy in background."""
     
@@ -132,7 +137,7 @@ class CompactFuzzySearchWidget(QWidget):
         self.logger = logging.getLogger(__name__)
         
         # Inizializza componenti GIN
-        # Inizializza componenti GIN
+        
         self.gin_search = None
         if GIN_AVAILABLE and db_manager:
             try:
@@ -413,19 +418,21 @@ class CompactFuzzySearchWidget(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         
-        # Tabella immobili
+        # Tabella immobili con più colonne
         self.immobili_table = QTableWidget()
-        self.immobili_table.setColumnCount(4)
+        self.immobili_table.setColumnCount(6)  # Aumenta a 6 colonne
         self.immobili_table.setHorizontalHeaderLabels([
-            "Descrizione", "Partita", "Comune", "Similitud."
+            "Natura", "Classificazione", "Partita", "Comune", "Località", "Similitud."
         ])
         
         header = self.immobili_table.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Natura
+        header.setSectionResizeMode(1, QHeaderView.Stretch)          # Classificazione
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Partita
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Comune
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Località
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Similitud.
         
         self.immobili_table.setAlternatingRowColors(True)
         self.immobili_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -557,6 +564,9 @@ class CompactFuzzySearchWidget(QWidget):
         query_text = self.search_edit.text().strip()
         if len(query_text) < 3:
             return
+        # DEBUG: Aggiungi questo
+        print(f"DEBUG: self.gin_search = {self.gin_search}")
+        print(f"DEBUG: type(self.gin_search) = {type(self.gin_search)}")
         
         if not self.gin_search:
             QMessageBox.warning(self, "Errore", "Sistema di ricerca fuzzy non disponibile")
@@ -757,20 +767,29 @@ class CompactFuzzySearchWidget(QWidget):
         self.immobili_table.setRowCount(len(immobili))
         
         for row, i in enumerate(immobili):
-            # Descrizione (troncata)
-            descrizione = i.get('descrizione', '')
-            if len(descrizione) > 60:
-                descrizione = descrizione[:57] + "..."
-            desc_item = QTableWidgetItem(descrizione)
-            desc_item.setData(Qt.UserRole, i)
-            self.immobili_table.setItem(row, 0, desc_item)
+            # Natura
+            natura = i.get('natura', '')
+            natura_item = QTableWidgetItem(natura)
+            natura_item.setData(Qt.UserRole, i)
+            self.immobili_table.setItem(row, 0, natura_item)
             
-            # Partita
-            partita = str(i.get('numero_partita', ''))
-            self.immobili_table.setItem(row, 1, QTableWidgetItem(partita))
+            # Classificazione (troncata se troppo lunga)
+            classificazione = i.get('classificazione', '')
+            if len(classificazione) > 50:
+                classificazione = classificazione[:47] + "..."
+            self.immobili_table.setItem(row, 1, QTableWidgetItem(classificazione))
+            
+            # Partita con suffisso
+            numero_partita = str(i.get('numero_partita', ''))
+            suffisso = str(i.get('suffisso', ''))
+            partita_completa = f"{numero_partita}/{suffisso}" if suffisso else numero_partita
+            self.immobili_table.setItem(row, 2, QTableWidgetItem(partita_completa))
             
             # Comune
-            self.immobili_table.setItem(row, 2, QTableWidgetItem(i.get('comune_nome', '')))
+            self.immobili_table.setItem(row, 3, QTableWidgetItem(i.get('comune', '')))
+            
+            # Località
+            self.immobili_table.setItem(row, 4, QTableWidgetItem(i.get('localita', '')))
             
             # Similarità
             similarity = i.get('similarity_score', 0)
@@ -782,7 +801,7 @@ class CompactFuzzySearchWidget(QWidget):
                 sim_item.setBackground(QColor(255, 255, 224))
             else:
                 sim_item.setBackground(QColor(255, 228, 225))
-            self.immobili_table.setItem(row, 3, sim_item)
+            self.immobili_table.setItem(row, 5, sim_item)
     
     def _populate_contratti_table(self, contratti):
         """Popola la tabella dei contratti."""
@@ -935,7 +954,7 @@ class CompactFuzzySearchWidget(QWidget):
                     f.write(f"IMMOBILI ({len(immobili)})\n")
                     f.write("-" * 40 + "\n")
                     for i in immobili:
-                        f.write(f"• {i.get('descrizione', 'N/A')} - {i.get('comune_nome', 'N/A')} "
+                        f.write(f"• {i.get('classificazione', 'N/A')} - {i.get('comune_nome', 'N/A')} "
                                f"(Similarità: {i.get('similarity_score', 0):.1%})\n")
                     f.write("\n")
                 
@@ -965,14 +984,9 @@ class CompactFuzzySearchWidget(QWidget):
             QMessageBox.critical(self, "Errore Export", f"Errore durante l'esportazione TXT:\n{e}")
     
     def _export_results_pdf(self):
-        """Esporta risultati in formato PDF."""
+        """Esporta risultati in formato PDF usando fpdf."""
         try:
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.pagesizes import letter, A4
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import inch
-            from reportlab.lib import colors
+            from fpdf import FPDF
             
             if not self.current_results:
                 QMessageBox.warning(self, "Attenzione", "Nessun risultato da esportare")
@@ -988,131 +1002,179 @@ class CompactFuzzySearchWidget(QWidget):
             if not filename:
                 return
             
-            doc = SimpleDocTemplate(filename, pagesize=A4)
-            styles = getSampleStyleSheet()
-            story = []
+            # Crea PDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_auto_page_break(auto=True, margin=15)
             
             # Titolo
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=16,
-                spaceAfter=30,
-                alignment=1  # Center
-            )
-            story.append(Paragraph("RISULTATI RICERCA FUZZY", title_style))
-            story.append(Spacer(1, 12))
+            pdf.set_font('Arial', 'B', 16)
+            pdf.cell(0, 10, 'RISULTATI RICERCA FUZZY', 0, 1, 'C')
+            pdf.ln(5)
             
             # Informazioni query
             query_text = self.current_results.get('query_text', 'N/A')
-            story.append(Paragraph(f"<b>Query:</b> {query_text}", styles['Normal']))
-            story.append(Paragraph(f"<b>Data:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
-            story.append(Spacer(1, 20))
+            pdf.set_font('Arial', 'B', 12)
+            pdf.cell(30, 8, 'Query:', 0, 0)
+            pdf.set_font('Arial', '', 12)
+            pdf.cell(0, 8, query_text, 0, 1)
+            
+            pdf.set_font('Arial', 'B', 12)
+            pdf.cell(30, 8, 'Data:', 0, 0)
+            pdf.set_font('Arial', '', 12)
+            pdf.cell(0, 8, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 0, 1)
+            pdf.ln(10)
             
             # Funzione helper per creare sezioni
-            def add_section(title, data, headers, get_row_data):
-                if data:
-                    story.append(Paragraph(f"<b>{title} ({len(data)})</b>", styles['Heading2']))
-                    story.append(Spacer(1, 6))
+            def add_section(title, data, headers, get_row_data, col_widths):
+                if not data:
+                    return
                     
-                    table_data = [headers]
-                    for item in data:
-                        table_data.append(get_row_data(item))
+                # Controlla se serve una nuova pagina
+                if pdf.get_y() > 250:
+                    pdf.add_page()
+                
+                # Titolo sezione
+                pdf.set_font('Arial', 'B', 14)
+                pdf.cell(0, 10, f"{title} ({len(data)})", 0, 1)
+                pdf.ln(2)
+                
+                # Intestazioni tabella
+                pdf.set_font('Arial', 'B', 10)
+                pdf.set_fill_color(200, 200, 200)
+                for i, (header, width) in enumerate(zip(headers, col_widths)):
+                    pdf.cell(width, 8, header, 1, 0, 'C', 1)
+                pdf.ln()
+                
+                # Dati tabella
+                pdf.set_font('Arial', '', 9)
+                pdf.set_fill_color(245, 245, 245)
+                
+                for idx, item in enumerate(data[:50]):  # Limita a 50 righe
+                    # Controlla se serve una nuova pagina
+                    if pdf.get_y() > 260:
+                        pdf.add_page()
+                        # Ripeti intestazioni
+                        pdf.set_font('Arial', 'B', 10)
+                        pdf.set_fill_color(200, 200, 200)
+                        for i, (header, width) in enumerate(zip(headers, col_widths)):
+                            pdf.cell(width, 8, header, 1, 0, 'C', 1)
+                        pdf.ln()
+                        pdf.set_font('Arial', '', 9)
+                        pdf.set_fill_color(245, 245, 245)
                     
-                    table = Table(table_data)
-                    table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                    ]))
-                    story.append(table)
-                    story.append(Spacer(1, 12))
+                    row_data = get_row_data(item)
+                    fill = idx % 2 == 0
+                    
+                    for i, (value, width) in enumerate(zip(row_data, col_widths)):
+                        # Tronca il testo se troppo lungo
+                        if isinstance(value, str) and len(value) > width/2:
+                            value = value[:int(width/2)-3] + '...'
+                        pdf.cell(width, 7, str(value), 1, 0, 'L', fill)
+                    pdf.ln()
+                
+                pdf.ln(5)
             
-            # Sezioni dati
+            # POSSESSORI
             add_section(
                 "POSSESSORI",
                 self.current_results.get('possessori', []),
-                ['Nome Completo', 'Comune', 'Similarità'],
+                ['Nome Completo', 'Comune', 'Simil.'],
                 lambda p: [
                     p.get('nome_completo', 'N/A'),
-                    p.get('comune_nome', 'N/A'),
+                    p.get('comune', 'N/A'),
                     f"{p.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [80, 70, 40]  # larghezze colonne
             )
             
+            # LOCALITÀ
             add_section(
                 "LOCALITÀ",
                 self.current_results.get('localita', []),
-                ['Nome', 'Tipo', 'Comune', 'Similarità'],
+                ['Nome', 'Tipo', 'Comune', 'Simil.'],
                 lambda l: [
                     f"{l.get('nome', 'N/A')} {l.get('civico', '')}".strip(),
                     l.get('tipo', 'N/A'),
                     l.get('comune_nome', 'N/A'),
                     f"{l.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [70, 40, 50, 30]
             )
             
+            # VARIAZIONI
             add_section(
                 "VARIAZIONI",
                 self.current_results.get('variazioni', []),
-                ['Tipo', 'Data', 'Descrizione', 'Similarità'],
+                ['Tipo', 'Data', 'Nominativo', 'Simil.'],
                 lambda v: [
                     v.get('tipo', 'N/A'),
                     str(v.get('data_variazione', 'N/A'))[:10],
-                    v.get('descrizione', '')[:50] + '...' if len(v.get('descrizione', '')) > 50 else v.get('descrizione', ''),
+                    v.get('nominativo_riferimento', '')[:30],
                     f"{v.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [50, 30, 80, 30]
             )
             
+            # IMMOBILI
             add_section(
                 "IMMOBILI",
                 self.current_results.get('immobili', []),
-                ['Descrizione', 'Partita', 'Comune', 'Similarità'],
+                ['Natura', 'Classificazione', 'Partita', 'Comune', 'Simil.'],
                 lambda i: [
-                    i.get('descrizione', 'N/A')[:50] + '...' if len(i.get('descrizione', '')) > 50 else i.get('descrizione', 'N/A'),
-                    str(i.get('numero_partita', '')),
-                    i.get('comune_nome', 'N/A'),
+                    i.get('natura', 'N/A'),
+                    i.get('classificazione', 'N/A')[:30],
+                    f"{i.get('numero_partita', '')}/{i.get('suffisso', '')}",
+                    i.get('comune', 'N/A'),
                     f"{i.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [40, 50, 30, 40, 30]
             )
             
+            # CONTRATTI
             add_section(
                 "CONTRATTI",
                 self.current_results.get('contratti', []),
-                ['Tipo', 'Data Stipula', 'Partita', 'Similarità'],
+                ['Tipo', 'Data', 'Notaio', 'Simil.'],
                 lambda c: [
                     c.get('tipo', 'N/A'),
-                    str(c.get('data_stipula', 'N/A'))[:10],
-                    str(c.get('numero_partita', '')),
+                    str(c.get('data_contratto', 'N/A'))[:10],
+                    c.get('notaio', 'N/A')[:40],
                     f"{c.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [50, 30, 80, 30]
             )
             
+            # PARTITE
             add_section(
                 "PARTITE",
                 self.current_results.get('partite', []),
-                ['Numero', 'Tipo', 'Comune', 'Similarità'],
+                ['Numero', 'Suffisso', 'Comune', 'Simil.'],
                 lambda p: [
                     str(p.get('numero_partita', '?')),
-                    p.get('tipo_partita', 'N/A'),
-                    p.get('comune_nome', 'N/A'),
+                    p.get('suffisso', ''),
+                    p.get('comune', 'N/A'),
                     f"{p.get('similarity_score', 0):.1%}"
-                ]
+                ],
+                [40, 30, 90, 30]
             )
             
-            doc.build(story)
+            # Riepilogo finale
+            pdf.set_font('Arial', 'I', 10)
+            total_results = sum(len(self.current_results.get(key, [])) 
+                            for key in ['possessori', 'localita', 'variazioni', 
+                                        'immobili', 'contratti', 'partite'])
+            pdf.cell(0, 10, f'Totale risultati: {total_results}', 0, 1, 'C')
+            
+            # Salva il PDF
+            pdf.output(filename)
             QMessageBox.information(self, "Export completato", f"Risultati salvati in:\n{filename}")
             
         except ImportError:
             QMessageBox.warning(
                 self, "Libreria mancante", 
-                "Per l'esportazione PDF è necessaria la libreria reportlab.\n\n"
-                "Installa con: pip install reportlab"
+                "Per l'esportazione PDF è necessaria la libreria fpdf.\n\n"
+                "Installa con: pip install fpdf"
             )
         except Exception as e:
             QMessageBox.critical(self, "Errore Export PDF", f"Errore durante l'esportazione PDF:\n{e}")
@@ -1241,7 +1303,7 @@ class CompactFuzzySearchWidget(QWidget):
             immobile_data = item.data(Qt.UserRole)
             immobile_id = immobile_data.get('id')
             
-            dettagli_msg = f"Descrizione: {immobile_data.get('descrizione', 'N/A')}\n"
+            dettagli_msg = f"Classificazione: {immobile_data.get('classificazione', 'N/A')}\n"
             dettagli_msg += f"Natura: {immobile_data.get('natura', 'N/A')}\n"
             dettagli_msg += f"Partita: {immobile_data.get('numero_partita', 'N/A')}\n"
             dettagli_msg += f"Comune: {immobile_data.get('comune_nome', 'N/A')}\n"

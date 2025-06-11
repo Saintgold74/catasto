@@ -356,6 +356,397 @@ class CatastoGINExtension:
             self.logger.error(f"Errore explain query: {e}")
             return None
 
+    # ========================================================================
+    # FUNZIONE FACTORY
+    # ========================================================================
+
+    def extend_db_manager_with_gin(db_manager):
+        """
+        Estende un'istanza di CatastoDBManager con funzionalità GIN.
+        """
+        return CatastoGINExtension(db_manager)
+
+    # ========================================================================
+    # UTILITY FUNCTIONS
+    # ========================================================================
+
+    def format_search_results(results: Dict[str, Any]) -> str:
+        """
+        Formatta i risultati di ricerca per display.
+        """
+        output = []
+        output.append(f"=== RISULTATI RICERCA: '{results.get('query_text', '')}' ===")
+        output.append(f"Soglia similarità: {results.get('similarity_threshold', 0)}")
+        output.append(f"Tempo esecuzione: {results.get('execution_time', 0):.3f}s")
+        output.append(f"Totale risultati: {results.get('total_results', 0)}")
+        output.append("")
+        
+        # Possessori
+        possessori = results.get('possessori', [])
+        if possessori:
+            output.append(f"POSSESSORI ({len(possessori)}):")
+            for p in possessori[:10]:  # Mostra solo i primi 10
+                comune = f" ({p.get('comune_nome', 'N/A')})" if p.get('comune_nome') else ""
+                output.append(f"  - {p.get('nome_completo', '')}{comune} "
+                            f"[Sim: {p.get('similarity_score', 0):.3f}]")
+            if len(possessori) > 10:
+                output.append(f"  ... e altri {len(possessori) - 10} risultati")
+            output.append("")
+        
+        # Località
+        localita = results.get('localita', [])
+        if localita:
+            output.append(f"LOCALITÀ ({len(localita)}):")
+            for l in localita:
+                civico = f" {l.get('civico', '')}" if l.get('civico') else ""
+                comune = f" ({l.get('comune_nome', 'N/A')})" if l.get('comune_nome') else ""
+                output.append(f"  - {l.get('nome', '')}{civico} [{l.get('tipo', '')}]{comune} "
+                            f"[Sim: {l.get('similarity_score', 0):.3f}]")
+            output.append("")
+        
+        return "\n".join(output)
+
+    # ========================================================================
+    # AGGIUNTA RICERCA VARIAZIONI AL WIDGET ESISTENTE
+    # ========================================================================
+
+    # OPZIONE 1: Aggiungi queste funzioni al tuo catasto_gin_extension.py esistente
+
+    def search_variazioni_fuzzy(self, query_text: str, similarity_threshold: float = 0.3, max_results: int = 50):
+        """
+        Ricerca fuzzy nelle variazioni per tipo, numero_riferimento e nominativo_riferimento.
+        """
+        if not query_text or len(query_text) < 2:
+            return []
+        
+        try:
+            with self.db_manager.connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    # Query per ricerca fuzzy nelle variazioni
+                    query = """
+                    SELECT DISTINCT
+                        v.id,
+                        v.tipo,
+                        v.data_variazione,
+                        v.numero_riferimento,
+                        v.nominativo_riferimento,
+                        po.numero_partita as origine_numero,
+                        co.nome as origine_comune,
+                        pd.numero_partita as destinazione_numero,
+                        cd.nome as destinazione_comune,
+                        ct.tipo as tipo_contratto,
+                        ct.data_contratto,
+                        ct.notaio,
+                        
+                        -- Calcolo similarità su più campi
+                        GREATEST(
+                            COALESCE(similarity(v.tipo, %s), 0),
+                            COALESCE(similarity(COALESCE(v.numero_riferimento, ''), %s), 0),
+                            COALESCE(similarity(COALESCE(v.nominativo_riferimento, ''), %s), 0),
+                            COALESCE(similarity(COALESCE(ct.notaio, ''), %s), 0)
+                        ) as similarity_score
+                        
+                    FROM variazione v
+                    LEFT JOIN partita po ON v.partita_origine_id = po.id
+                    LEFT JOIN comune co ON po.comune_id = co.id
+                    LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
+                    LEFT JOIN comune cd ON pd.comune_id = cd.id
+                    LEFT JOIN contratto ct ON ct.variazione_id = v.id
+                    
+                    WHERE (
+                        similarity(v.tipo, %s) > %s OR
+                        similarity(COALESCE(v.numero_riferimento, ''), %s) > %s OR
+                        similarity(COALESCE(v.nominativo_riferimento, ''), %s) > %s OR
+                        similarity(COALESCE(ct.notaio, ''), %s) > %s
+                    )
+                    
+                    ORDER BY similarity_score DESC, v.data_variazione DESC
+                    LIMIT %s;
+                    """
+                    
+                    # Parametri per la query
+                    params = (
+                        query_text, query_text, query_text, query_text,  # Per GREATEST
+                        query_text, similarity_threshold,                # tipo
+                        query_text, similarity_threshold,                # numero_riferimento  
+                        query_text, similarity_threshold,                # nominativo_riferimento
+                        query_text, similarity_threshold,                # notaio
+                        max_results                                      # limite
+                    )
+                    
+                    cur.execute(query, params)
+                    results = cur.fetchall()
+                    
+                    # Converte in lista di dizionari e formatta
+                    variazioni = []
+                    for row in results:
+                        variazione = dict(row)
+                        
+                        # Aggiungi campi formattati per visualizzazione
+                        variazione['nome_completo'] = f"{variazione['tipo']} - {variazione.get('nominativo_riferimento', 'N/A')}"
+                        variazione['descrizione'] = self._format_variazione_description(variazione)
+                        variazione['similarity'] = variazione['similarity_score']  # Alias per compatibilità
+                        
+                        variazioni.append(variazione)
+                    
+                    return variazioni
+                    
+        except Exception as e:
+            self.logger.error(f"Errore ricerca fuzzy variazioni: {e}")
+            return []
+
+    def _format_variazione_description(self, variazione):
+        """Formatta la descrizione della variazione per la visualizzazione."""
+        desc_parts = []
+        
+        # Tipo e data
+        desc_parts.append(f"{variazione['tipo']} del {variazione['data_variazione']}")
+        
+        # Partite coinvolte
+        if variazione.get('origine_numero') and variazione.get('origine_comune'):
+            desc_parts.append(f"da P.{variazione['origine_numero']} ({variazione['origine_comune']})")
+        
+        if variazione.get('destinazione_numero') and variazione.get('destinazione_comune'):
+            desc_parts.append(f"a P.{variazione['destinazione_numero']} ({variazione['destinazione_comune']})")
+        
+        # Contratto
+        if variazione.get('tipo_contratto'):
+            contratto_info = f"Contratto: {variazione['tipo_contratto']}"
+            if variazione.get('notaio'):
+                contratto_info += f" - {variazione['notaio']}"
+            desc_parts.append(contratto_info)
+        
+        return " | ".join(desc_parts)
+
+    def search_combined_fuzzy_with_variazioni(self, query_text, search_possessori=True, 
+                                            search_localita=True, search_variazioni=True,
+                                            similarity_threshold=0.3, max_possessori=50, 
+                                            max_localita=20, max_variazioni=30):
+        """
+        Ricerca fuzzy combinata che include possessori, località e variazioni.
+        """
+        import time
+        start_time = time.time()
+        
+        results = {
+            'query_text': query_text,
+            'similarity_threshold': similarity_threshold,
+            'possessori': [],
+            'localita': [],
+            'variazioni': [],
+            'execution_time': 0
+        }
+        
+        try:
+            # Ricerca possessori (se richiesta)
+            if search_possessori and hasattr(self, 'search_possessori_fuzzy'):
+                results['possessori'] = self.search_possessori_fuzzy(
+                    query_text, similarity_threshold, max_possessori
+                )
+            
+            # Ricerca località (se richiesta)  
+            if search_localita and hasattr(self, 'search_localita_fuzzy'):
+                results['localita'] = self.search_localita_fuzzy(
+                    query_text, similarity_threshold, max_localita
+                )
+            
+            # Ricerca variazioni (se richiesta)
+            if search_variazioni:
+                results['variazioni'] = self.search_variazioni_fuzzy(
+                    query_text, similarity_threshold, max_variazioni
+                )
+            
+            results['execution_time'] = time.time() - start_time
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Errore ricerca combinata: {e}")
+            results['execution_time'] = time.time() - start_time
+            return results
+
+
+    def search_immobili_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
+            """Ricerca fuzzy negli immobili."""
+            try:
+                query = """
+                    SELECT DISTINCT
+                        i.id,
+                        i.natura,
+                        i.classificazione,
+                        i.consistenza,
+                        i.numero_piani,
+                        i.numero_vani,
+                        p.numero_partita,
+                        p.suffisso,  -- Aggiungi il suffisso dalla tabella partita
+                        c.nome as comune,
+                        l.nome as localita,
+                        
+                        -- Calcolo similarità
+                        GREATEST(
+                            similarity(i.natura, %s),
+                            similarity(COALESCE(i.classificazione, ''), %s),
+                            similarity(COALESCE(i.consistenza, ''), %s)
+                        ) as similarity_score
+                        
+                    FROM immobile i
+                    JOIN partita p ON i.partita_id = p.id
+                    JOIN comune c ON p.comune_id = c.id
+                    JOIN localita l ON i.localita_id = l.id
+
+                    WHERE (
+                        similarity(i.natura, %s) > %s OR
+                        similarity(COALESCE(i.classificazione, ''), %s) > %s OR
+                        similarity(COALESCE(i.consistenza, ''), %s) > %s
+                    )
+
+                    ORDER BY similarity_score DESC
+                    LIMIT %s;
+                    """
+                
+                params = (query_text, query_text, query_text, query_text,
+                        query_text, query_text, threshold, limit)
+                
+                conn = self.db_manager._get_connection()
+                try:
+                    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                        cur.execute(query, params)
+                        results = cur.fetchall()
+                        return [dict(row) for row in results]
+                finally:
+                    self.db_manager._release_connection(conn)
+                    
+            except Exception as e:
+                self.logger.error(f"Errore ricerca immobili fuzzy: {e}")
+                return []
+
+    def search_contratti_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
+            """Ricerca fuzzy nei contratti."""
+            try:
+                query = """
+                SELECT 
+                    co.id,
+                    co.tipo,
+                    co.data_contratto,
+                    co.contraente,
+                    p.numero_partita,
+                    COALESCE(
+                        GREATEST(
+                            similarity(co.tipo, %s),
+                            similarity(co.contraente, %s)
+                        ), 0
+                    ) as similarity_score
+                FROM contratto co
+                LEFT JOIN variazione v ON co.variazione_id = v.id
+                LEFT JOIN partita po ON v.partita_origine_id = po.id
+                LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
+                
+                WHERE (co.tipo %% %s OR co.contraente %% %s)
+                AND GREATEST(
+                    similarity(co.tipo, %s),
+                    similarity(co.contraente, %s)
+                ) > %s
+                ORDER BY similarity_score DESC, co.data_contratto DESC
+                LIMIT %s
+                """
+                
+                params = (query_text, query_text, query_text, query_text,
+                        query_text, query_text, threshold, limit)
+                
+                conn = self.db_manager._get_connection()
+                try:
+                    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                        cur.execute(query, params)
+                        results = cur.fetchall()
+                        return [dict(row) for row in results]
+                finally:
+                    self.db_manager._release_connection(conn)
+                    
+            except Exception as e:
+                self.logger.error(f"Errore ricerca contratti fuzzy: {e}")
+                return []
+
+    def search_partite_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
+            """Ricerca fuzzy nelle partite."""
+            try:
+                # Se query_text è numerica, cerca per numero partita
+                if query_text.isdigit():
+                    query = """
+                    SELECT 
+                        p.id,
+                        p.tipo,
+                        p.numero_partita,
+                        p.suffisso_partita,
+                        p.data_impianto,
+                        c.nome as comune_nome,
+                        1.0 as similarity_score
+                    FROM partita p
+                    LEFT JOIN comune c ON p.comune_id = c.id
+                    WHERE p.numero_partita::text LIKE %s
+                    ORDER BY p.numero_partita
+                    LIMIT %s
+                    """
+                    search_pattern = f"%{query_text}%"
+                    params = (search_pattern, limit)
+                else:
+                    # Ricerca testuale su suffisso_partita
+                    query = """
+                    SELECT 
+                        p.id,
+                        p.numero_partita,
+                        p.suffisso_partita,
+                        p.tipo,
+                        p.data_impianto,
+                        c.nome as comune_nome,
+                        COALESCE(similarity(p.suffisso_partita, %s), 0) as similarity_score
+                    FROM partita p
+                    LEFT JOIN comune c ON p.comune_id = c.id
+                    WHERE p.suffisso_partita %% %s
+                    AND similarity(p.suffisso_partita, %s) > %s
+                    ORDER BY similarity_score DESC, p.numero_partita
+                    LIMIT %s
+                    """
+                    params = (query_text, query_text, query_text, threshold, limit)
+                
+                conn = self.db_manager._get_connection()
+                try:
+                    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                        cur.execute(query, params)
+                        results = cur.fetchall()
+                        return [dict(row) for row in results]
+                finally:
+                    self.db_manager._release_connection(conn)
+                    
+            except Exception as e:
+                self.logger.error(f"Errore ricerca partite fuzzy: {e}")
+                return []
+
+    def get_gin_indices_info(self):
+            """Ottiene informazioni sugli indici GIN disponibili."""
+            try:
+                conn = self.db_manager._get_connection()
+                try:
+                    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                        query = """
+                        SELECT 
+                            schemaname,
+                            tablename,
+                            indexname,
+                            indexdef
+                        FROM pg_indexes 
+                        WHERE indexdef ILIKE '%gin%'
+                        AND schemaname = %s
+                        ORDER BY tablename, indexname
+                        """
+                        
+                        cur.execute(query, (self.db_manager.schema,))
+                        return [dict(row) for row in cur.fetchall()]
+                        
+                finally:
+                    self.db_manager._release_connection(conn)
+                    
+            except Exception as e:
+                self.logger.error(f"Errore recupero indici GIN: {e}")
+                return []
 # ========================================================================
 # FUNZIONE FACTORY
 # ========================================================================
@@ -366,411 +757,3 @@ def extend_db_manager_with_gin(db_manager):
     """
     return CatastoGINExtension(db_manager)
 
-# ========================================================================
-# UTILITY FUNCTIONS
-# ========================================================================
-
-def format_search_results(results: Dict[str, Any]) -> str:
-    """
-    Formatta i risultati di ricerca per display.
-    """
-    output = []
-    output.append(f"=== RISULTATI RICERCA: '{results.get('query_text', '')}' ===")
-    output.append(f"Soglia similarità: {results.get('similarity_threshold', 0)}")
-    output.append(f"Tempo esecuzione: {results.get('execution_time', 0):.3f}s")
-    output.append(f"Totale risultati: {results.get('total_results', 0)}")
-    output.append("")
-    
-    # Possessori
-    possessori = results.get('possessori', [])
-    if possessori:
-        output.append(f"POSSESSORI ({len(possessori)}):")
-        for p in possessori[:10]:  # Mostra solo i primi 10
-            comune = f" ({p.get('comune_nome', 'N/A')})" if p.get('comune_nome') else ""
-            output.append(f"  - {p.get('nome_completo', '')}{comune} "
-                         f"[Sim: {p.get('similarity_score', 0):.3f}]")
-        if len(possessori) > 10:
-            output.append(f"  ... e altri {len(possessori) - 10} risultati")
-        output.append("")
-    
-    # Località
-    localita = results.get('localita', [])
-    if localita:
-        output.append(f"LOCALITÀ ({len(localita)}):")
-        for l in localita:
-            civico = f" {l.get('civico', '')}" if l.get('civico') else ""
-            comune = f" ({l.get('comune_nome', 'N/A')})" if l.get('comune_nome') else ""
-            output.append(f"  - {l.get('nome', '')}{civico} [{l.get('tipo', '')}]{comune} "
-                         f"[Sim: {l.get('similarity_score', 0):.3f}]")
-        output.append("")
-    
-    return "\n".join(output)
-
-# ========================================================================
-# AGGIUNTA RICERCA VARIAZIONI AL WIDGET ESISTENTE
-# ========================================================================
-
-# OPZIONE 1: Aggiungi queste funzioni al tuo catasto_gin_extension.py esistente
-
-def search_variazioni_fuzzy(self, query_text: str, similarity_threshold: float = 0.3, max_results: int = 50):
-    """
-    Ricerca fuzzy nelle variazioni per tipo, numero_riferimento e nominativo_riferimento.
-    """
-    if not query_text or len(query_text) < 2:
-        return []
-    
-    try:
-        with self.db_manager.get_connection() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                # Query per ricerca fuzzy nelle variazioni
-                query = """
-                SELECT DISTINCT
-                    v.id,
-                    v.tipo,
-                    v.data_variazione,
-                    v.numero_riferimento,
-                    v.nominativo_riferimento,
-                    po.numero_partita as origine_numero,
-                    co.nome as origine_comune,
-                    pd.numero_partita as destinazione_numero,
-                    cd.nome as destinazione_comune,
-                    ct.tipo as tipo_contratto,
-                    ct.data_contratto,
-                    ct.notaio,
-                    
-                    -- Calcolo similarità su più campi
-                    GREATEST(
-                        COALESCE(similarity(v.tipo, %s), 0),
-                        COALESCE(similarity(COALESCE(v.numero_riferimento, ''), %s), 0),
-                        COALESCE(similarity(COALESCE(v.nominativo_riferimento, ''), %s), 0),
-                        COALESCE(similarity(COALESCE(ct.notaio, ''), %s), 0)
-                    ) as similarity_score
-                    
-                FROM variazione v
-                LEFT JOIN partita po ON v.partita_origine_id = po.id
-                LEFT JOIN comune co ON po.comune_id = co.id
-                LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
-                LEFT JOIN comune cd ON pd.comune_id = cd.id
-                LEFT JOIN contratto ct ON ct.variazione_id = v.id
-                
-                WHERE (
-                    similarity(v.tipo, %s) > %s OR
-                    similarity(COALESCE(v.numero_riferimento, ''), %s) > %s OR
-                    similarity(COALESCE(v.nominativo_riferimento, ''), %s) > %s OR
-                    similarity(COALESCE(ct.notaio, ''), %s) > %s
-                )
-                
-                ORDER BY similarity_score DESC, v.data_variazione DESC
-                LIMIT %s;
-                """
-                
-                # Parametri per la query
-                params = (
-                    query_text, query_text, query_text, query_text,  # Per GREATEST
-                    query_text, similarity_threshold,                # tipo
-                    query_text, similarity_threshold,                # numero_riferimento  
-                    query_text, similarity_threshold,                # nominativo_riferimento
-                    query_text, similarity_threshold,                # notaio
-                    max_results                                      # limite
-                )
-                
-                cur.execute(query, params)
-                results = cur.fetchall()
-                
-                # Converte in lista di dizionari e formatta
-                variazioni = []
-                for row in results:
-                    variazione = dict(row)
-                    
-                    # Aggiungi campi formattati per visualizzazione
-                    variazione['nome_completo'] = f"{variazione['tipo']} - {variazione.get('nominativo_riferimento', 'N/A')}"
-                    variazione['descrizione'] = self._format_variazione_description(variazione)
-                    variazione['similarity'] = variazione['similarity_score']  # Alias per compatibilità
-                    
-                    variazioni.append(variazione)
-                
-                return variazioni
-                
-    except Exception as e:
-        self.logger.error(f"Errore ricerca fuzzy variazioni: {e}")
-        return []
-
-def _format_variazione_description(self, variazione):
-    """Formatta la descrizione della variazione per la visualizzazione."""
-    desc_parts = []
-    
-    # Tipo e data
-    desc_parts.append(f"{variazione['tipo']} del {variazione['data_variazione']}")
-    
-    # Partite coinvolte
-    if variazione.get('origine_numero') and variazione.get('origine_comune'):
-        desc_parts.append(f"da P.{variazione['origine_numero']} ({variazione['origine_comune']})")
-    
-    if variazione.get('destinazione_numero') and variazione.get('destinazione_comune'):
-        desc_parts.append(f"a P.{variazione['destinazione_numero']} ({variazione['destinazione_comune']})")
-    
-    # Contratto
-    if variazione.get('tipo_contratto'):
-        contratto_info = f"Contratto: {variazione['tipo_contratto']}"
-        if variazione.get('notaio'):
-            contratto_info += f" - {variazione['notaio']}"
-        desc_parts.append(contratto_info)
-    
-    return " | ".join(desc_parts)
-
-def search_combined_fuzzy_with_variazioni(self, query_text, search_possessori=True, 
-                                         search_localita=True, search_variazioni=True,
-                                         similarity_threshold=0.3, max_possessori=50, 
-                                         max_localita=20, max_variazioni=30):
-    """
-    Ricerca fuzzy combinata che include possessori, località e variazioni.
-    """
-    import time
-    start_time = time.time()
-    
-    results = {
-        'query_text': query_text,
-        'similarity_threshold': similarity_threshold,
-        'possessori': [],
-        'localita': [],
-        'variazioni': [],
-        'execution_time': 0
-    }
-    
-    try:
-        # Ricerca possessori (se richiesta)
-        if search_possessori and hasattr(self, 'search_possessori_fuzzy'):
-            results['possessori'] = self.search_possessori_fuzzy(
-                query_text, similarity_threshold, max_possessori
-            )
-        
-        # Ricerca località (se richiesta)  
-        if search_localita and hasattr(self, 'search_localita_fuzzy'):
-            results['localita'] = self.search_localita_fuzzy(
-                query_text, similarity_threshold, max_localita
-            )
-        
-        # Ricerca variazioni (se richiesta)
-        if search_variazioni:
-            results['variazioni'] = self.search_variazioni_fuzzy(
-                query_text, similarity_threshold, max_variazioni
-            )
-        
-        results['execution_time'] = time.time() - start_time
-        return results
-        
-    except Exception as e:
-        self.logger.error(f"Errore ricerca combinata: {e}")
-        results['execution_time'] = time.time() - start_time
-        return results
-def search_variazioni_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
-        """Ricerca fuzzy nelle variazioni."""
-        try:
-            query = """
-            SELECT 
-                v.id,
-                v.tipo,
-                v.data_variazione,
-                v.descrizione,
-                p.numero_partita,
-                COALESCE(
-                    GREATEST(
-                        similarity(v.tipo, %s),
-                        similarity(v.descrizione, %s)
-                    ), 0
-                ) as similarity_score
-            FROM variazione v
-            LEFT JOIN partita p ON v.partita_id = p.id
-            WHERE (v.tipo %% %s OR v.descrizione %% %s)
-            AND GREATEST(
-                similarity(v.tipo, %s),
-                similarity(v.descrizione, %s)
-            ) > %s
-            ORDER BY similarity_score DESC, v.data_variazione DESC
-            LIMIT %s
-            """
-            
-            params = (query_text, query_text, query_text, query_text, 
-                     query_text, query_text, threshold, limit)
-            
-            conn = self.db_manager._get_connection()
-            try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(query, params)
-                    results = cur.fetchall()
-                    return [dict(row) for row in results]
-            finally:
-                self.db_manager._release_connection(conn)
-                
-        except Exception as e:
-            self.logger.error(f"Errore ricerca variazioni fuzzy: {e}")
-            return []
-
-def search_immobili_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
-        """Ricerca fuzzy negli immobili."""
-        try:
-            query = """
-            SELECT 
-                i.id,
-                i.descrizione,
-                i.natura,
-                p.numero_partita,
-                c.nome as comune_nome,
-                COALESCE(
-                    GREATEST(
-                        similarity(i.descrizione, %s),
-                        similarity(i.natura, %s)
-                    ), 0
-                ) as similarity_score
-            FROM immobile i
-            LEFT JOIN partita p ON i.partita_id = p.id
-            LEFT JOIN comune c ON p.comune_id = c.id
-            WHERE (i.descrizione %% %s OR i.natura %% %s)
-            AND GREATEST(
-                similarity(i.descrizione, %s),
-                similarity(i.natura, %s)
-            ) > %s
-            ORDER BY similarity_score DESC, i.descrizione
-            LIMIT %s
-            """
-            
-            params = (query_text, query_text, query_text, query_text,
-                     query_text, query_text, threshold, limit)
-            
-            conn = self.db_manager._get_connection()
-            try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(query, params)
-                    results = cur.fetchall()
-                    return [dict(row) for row in results]
-            finally:
-                self.db_manager._release_connection(conn)
-                
-        except Exception as e:
-            self.logger.error(f"Errore ricerca immobili fuzzy: {e}")
-            return []
-
-def search_contratti_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
-        """Ricerca fuzzy nei contratti."""
-        try:
-            query = """
-            SELECT 
-                co.id,
-                co.tipo,
-                co.data_stipula,
-                co.contraente,
-                p.numero_partita,
-                COALESCE(
-                    GREATEST(
-                        similarity(co.tipo, %s),
-                        similarity(co.contraente, %s)
-                    ), 0
-                ) as similarity_score
-            FROM contratto co
-            LEFT JOIN partita p ON co.partita_id = p.id
-            WHERE (co.tipo %% %s OR co.contraente %% %s)
-            AND GREATEST(
-                similarity(co.tipo, %s),
-                similarity(co.contraente, %s)
-            ) > %s
-            ORDER BY similarity_score DESC, co.data_stipula DESC
-            LIMIT %s
-            """
-            
-            params = (query_text, query_text, query_text, query_text,
-                     query_text, query_text, threshold, limit)
-            
-            conn = self.db_manager._get_connection()
-            try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(query, params)
-                    results = cur.fetchall()
-                    return [dict(row) for row in results]
-            finally:
-                self.db_manager._release_connection(conn)
-                
-        except Exception as e:
-            self.logger.error(f"Errore ricerca contratti fuzzy: {e}")
-            return []
-
-def search_partite_fuzzy(self, query_text: str, threshold: float = 0.3, limit: int = 100):
-        """Ricerca fuzzy nelle partite."""
-        try:
-            # Se query_text è numerica, cerca per numero partita
-            if query_text.isdigit():
-                query = """
-                SELECT 
-                    p.id,
-                    p.numero_partita,
-                    p.tipo_partita,
-                    p.anno_attivazione,
-                    c.nome as comune_nome,
-                    1.0 as similarity_score
-                FROM partita p
-                LEFT JOIN comune c ON p.comune_id = c.id
-                WHERE p.numero_partita::text LIKE %s
-                ORDER BY p.numero_partita
-                LIMIT %s
-                """
-                search_pattern = f"%{query_text}%"
-                params = (search_pattern, limit)
-            else:
-                # Ricerca testuale su tipo_partita
-                query = """
-                SELECT 
-                    p.id,
-                    p.numero_partita,
-                    p.tipo_partita,
-                    p.anno_attivazione,
-                    c.nome as comune_nome,
-                    COALESCE(similarity(p.tipo_partita, %s), 0) as similarity_score
-                FROM partita p
-                LEFT JOIN comune c ON p.comune_id = c.id
-                WHERE p.tipo_partita %% %s
-                AND similarity(p.tipo_partita, %s) > %s
-                ORDER BY similarity_score DESC, p.numero_partita
-                LIMIT %s
-                """
-                params = (query_text, query_text, query_text, threshold, limit)
-            
-            conn = self.db_manager._get_connection()
-            try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(query, params)
-                    results = cur.fetchall()
-                    return [dict(row) for row in results]
-            finally:
-                self.db_manager._release_connection(conn)
-                
-        except Exception as e:
-            self.logger.error(f"Errore ricerca partite fuzzy: {e}")
-            return []
-
-def get_gin_indices_info(self):
-        """Ottiene informazioni sugli indici GIN disponibili."""
-        try:
-            conn = self.db_manager._get_connection()
-            try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    query = """
-                    SELECT 
-                        schemaname,
-                        tablename,
-                        indexname,
-                        indexdef
-                    FROM pg_indexes 
-                    WHERE indexdef ILIKE '%gin%'
-                    AND schemaname = %s
-                    ORDER BY tablename, indexname
-                    """
-                    
-                    cur.execute(query, (self.db_manager.schema,))
-                    return [dict(row) for row in cur.fetchall()]
-                    
-            finally:
-                self.db_manager._release_connection(conn)
-                
-        except Exception as e:
-            self.logger.error(f"Errore recupero indici GIN: {e}")
-            return []
-        

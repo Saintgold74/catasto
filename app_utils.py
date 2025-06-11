@@ -17,13 +17,17 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTextEdit
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QFrame, QHBoxLayout, QPushButton, QApplication, QStyle, QMessageBox
+from PyQt5.QtCore import Qt, QSettings, pyqtSlot
 from catasto_db_manager import CatastoDBManager, DBUniqueConstraintError, DBMError # Assumendo che sia nello stesso pacchetto o usa il path corretto
-
+from dialogs import LocalitaSelectionDialog
 # In app_utils.py, dopo le importazioni PyQt e standard:
 # Nessuna dipendenza ciclica dagli altri due moduli GUI (gui_main, gui_widgets) dovrebbe essere necessaria qui.
 # Questo modulo fornisce utility AGLI ALTRI.
 # Se necessario, importa CatastoDBManager per type hinting o usi diretti limitati:
-
+from config import (
+    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
+)
 
 
 
@@ -143,10 +147,7 @@ def datetime_to_qdate(dt_date: Optional[date]) -> QDate:
     return QDate(dt_date.year, dt_date.month, dt_date.day)
 
 
-class QPasswordLineEdit(QLineEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setEchoMode(QLineEdit.Password)
+
         
         
 def format_full_name(first_name, last_name):

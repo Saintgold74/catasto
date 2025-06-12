@@ -8,9 +8,7 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys,bcrypt
-from fuzzy_search_unified import UnifiedFuzzySearchWidget,integrate_expanded_fuzzy_search_widget,add_fuzzy_search_tab_to_main_window
-#widget = UnifiedFuzzySearchWidget(db_manager, mode='compact')
-#widget = UnifiedFuzzySearchWidget(db_manager, mode='expanded')
+from fuzzy_search_unified import UnifiedFuzzySearchWidget
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -805,14 +803,19 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.registra_consultazione_widget_ref, "Registra Consultazione")
-        # --- AGGIUNTA TAB RICERCA FUZZY ---
-        # Aggiungi questo blocco dove ha più senso, es. dopo gli altri tab.
-        if self.db_manager: # È una buona pratica controllare che db_manager esista
+        self.logger.info("Tentativo di aggiungere il tab di Ricerca Globale Fuzzy.")
+        try:
+            # Qui usiamo la classe importata direttamente. Il costruttore ora non ha più 'mode'.
+            # Il parametro 'parent' è corretto, e il widget verrà aggiunto come ultimo tab.
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
-            self.tabs.addTab(self.fuzzy_search_widget, "Ricerca Globale")
-            print("✅ Tab ricerca fuzzy aggiunto.")
-        else:
-            print("⚠️ Impossibile aggiungere il tab di ricerca fuzzy: db_manager non è disponibile.")
+            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
+            self.logger.info("Tab di Ricerca Globale Fuzzy aggiunto con successo.")
+        except Exception as e:
+            self.logger.error(f"Fallita l'aggiunta del tab di Ricerca Globale Fuzzy: {e}", exc_info=True)
+            # Mostra un placeholder se l'aggiunta fallisce
+            error_label = QLabel(f"Errore caricamento Ricerca Globale:\n{e}")
+            error_label.setAlignment(Qt.AlignCenter)
+            self.tabs.addTab(error_label, "🔍 Ricerca (Errore)")
         
         
         # Aggiungi i sotto-tab al layout del contenitore

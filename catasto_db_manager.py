@@ -4875,8 +4875,135 @@ class CatastoDBManager:
         finally:
             if conn:
                 self._release_connection(conn)
+                
+    # ========================================================================
+    # NUOVA SEZIONE: LOGICA DI RICERCA FUZZY UNIFICATA (VERSIONE FINALE E COMPLETA)
+    # ========================================================================
 
-    # Opzionali: scollega_documento_da_partita, elimina_documento_storico (con gestione file!)
+    def search_all_entities_fuzzy(self, query_text: str,
+                                search_possessori: bool = True,
+                                search_localita: bool = True,
+                                search_immobili: bool = True,
+                                search_variazioni: bool = True,
+                                search_contratti: bool = True,
+                                search_partite: bool = True,
+                                max_results_per_type: int = 50,
+                                similarity_threshold: float = 0.3) -> Dict[str, List[Dict]]:
+        """
+        Metodo orchestratore per la ricerca fuzzy che riusa una singola connessione
+        per tutte le query, migliorando performance e gestione del pool.
+        """
+        self.logger.info(f"Avvio ricerca fuzzy ottimizzata per: '{query_text}' con soglia {similarity_threshold}")
+        
+        all_results = {
+            "possessore": [], "localita": [], "immobile": [],
+            "variazione": [], "contratto": [], "partita": []
+        }
+
+        try:
+            with self._get_connection() as conn:
+                if search_possessori:
+                    all_results["possessore"] = self._search_possessori_fuzzy_internal(conn, query_text, similarity_threshold, max_results_per_type)
+                if search_localita:
+                    all_results["localita"] = self._search_localita_fuzzy_internal(conn, query_text, similarity_threshold, max_results_per_type)
+                if search_immobili:
+                    all_results["immobile"] = self._search_immobili_fuzzy_internal(conn, query_text, similarity_threshold, max_results_per_type)
+                # Aggiungere qui le altre chiamate passando 'conn'
+            
+            total_found = sum(len(v) for v in all_results.values())
+            self.logger.info(f"Ricerca fuzzy completata. Trovati {total_found} risultati totali.")
+            return all_results
+
+        except psycopg2.pool.PoolError as pe:
+            self.logger.error(f"Pool di connessioni esaurito durante la ricerca fuzzy: {pe}")
+            return {}
+        except Exception as e:
+            self.logger.error(f"Errore critico durante search_all_entities_fuzzy: {e}", exc_info=True)
+            return {}
+
+    # --- METODI DI RICERCA INTERNI (modificati per accettare la connessione) ---
+
+    def _search_possessori_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
+        """Ricerca fuzzy interna per i possessori usando una connessione esistente."""
+        sql = f"""
+            SELECT
+                p.id AS entity_id,
+                p.nome_completo AS display_text,
+                'Comune: ' || c.nome_comune || ' | Partite: ' || COALESCE(ps.num_partite, 0) AS detail_text,
+                greatest(similarity(p.nome_completo, %s), similarity(p.cognome_nome, %s)) AS similarity_score,
+                CASE
+                    WHEN similarity(p.nome_completo, %s) > similarity(p.cognome_nome, %s) THEN 'nome_completo'
+                    ELSE 'cognome_nome'
+                END AS search_field
+            FROM {self.schema}.possessore p
+            JOIN {self.schema}.comune c ON p.comune_id = c.id
+            LEFT JOIN (
+                SELECT id_possessore, COUNT(*) as num_partite
+                FROM {self.schema}.partita_possessore
+                GROUP BY id_possessore
+            ) ps ON p.id = ps.id_possessore
+            WHERE greatest(similarity(p.nome_completo, %s), similarity(p.cognome_nome, %s)) >= %s
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, (query, query, query, query, query, query, threshold, limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore ricerca fuzzy possessori: {e}", exc_info=True)
+            return []
+
+    def _search_localita_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
+        """Ricerca fuzzy interna per le località usando una connessione esistente."""
+        sql = f"""
+            SELECT
+                l.id AS entity_id,
+                l.nome AS display_text,
+                'Comune: ' || c.nome_comune || ' | Tipo: ' || l.tipo AS detail_text,
+                similarity(l.nome, %s) AS similarity_score,
+                'nome' AS search_field
+            FROM {self.schema}.localita l
+            JOIN {self.schema}.comune c ON l.id_comune = c.id
+            WHERE similarity(l.nome, %s) >= %s
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, (query, query, threshold, limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore ricerca fuzzy località: {e}", exc_info=True)
+            return []
+
+    def _search_immobili_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
+        """Ricerca fuzzy interna per gli immobili (su natura e classificazione)."""
+        sql = f"""
+            SELECT
+                i.id AS entity_id,
+                i.natura || ' - ' || i.classificazione AS display_text,
+                'Partita N: ' || pa.numero_partita || ' | Comune: ' || c.nome_comune AS detail_text,
+                greatest(similarity(i.natura, %s), similarity(i.classificazione, %s)) AS similarity_score,
+                CASE
+                    WHEN similarity(i.natura, %s) > similarity(i.classificazione, %s) THEN 'natura'
+                    ELSE 'classificazione'
+                END AS search_field
+            FROM {self.schema}.immobile i
+            JOIN {self.schema}.partita pa ON i.id_partita = pa.id
+            JOIN {self.schema}.comune c ON pa.id_comune = c.id
+            WHERE greatest(similarity(i.natura, %s), similarity(i.classificazione, %s)) >= %s
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, (query, query, query, query, query, query, threshold, limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore ricerca fuzzy immobili: {e}", exc_info=True)
+            return []
+    
         
 # --- Esempio di utilizzo minimale (invariato) ---
 if __name__ == "__main__":

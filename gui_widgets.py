@@ -4124,15 +4124,19 @@ class StatisticheWidget(QWidget):
         self.log_status(
             "Avvio aggiornamento di tutte le viste materializzate...")
 
-        if self.db_manager.refresh_materialized_views():
-            self.log_status("Aggiornamento viste completato con successo.")
+        # In un metodo del suo widget della GUI
+        progress_dialog = QProgressDialog("Aggiornamento viste in corso...", "Annulla", 0, 0)
+        # ... setup del progress dialog ...
+        progress_dialog.show()
+        QApplication.processEvents() # Per assicurarsi che il dialogo appaia
 
-            # Aggiorna le tabelle
-            self.refresh_stats_comune()
-            self.refresh_immobili_tipologia()
+        success, message = self.db_manager.refresh_materialized_views()
+
+        progress_dialog.close()
+        if success:
+            QMessageBox.information(self, "Successo", message)
         else:
-            self.log_status(
-                "ERRORE: Aggiornamento viste non riuscito. Controlla i log.")
+            QMessageBox.critical(self, "Errore Aggiornamento Viste", message)
 
     def run_maintenance(self):
         """Esegue la manutenzione generale del database."""
@@ -5774,8 +5778,17 @@ class AdminDBOperationsWidget(QWidget):
         """
         # La variabile `is_connected` viene ora letta correttamente dall'adapter del db.
         is_connected = self.db_manager.pool is not None if self.db_manager else False
-        is_local_db = "(local)" in self.db_manager.get_connection() if self.db_manager and self.db_manager else False
-
+        is_local_db = False
+        if self.db_manager:
+            # 1. Recupera i parametri di connessione in modo sicuro
+            conn_params = self.db_manager.get_connection_parameters()
+            
+            # 2. Estrai l'host, gestendo il caso in cui non esista e convertendo in minuscolo
+            db_host = conn_params.get('host', '').lower()
+            
+            # 3. Controlla se l'host corrisponde a una macchina locale
+            if db_host in ['localhost', '127.0.0.1']:
+                is_local_db = True
         # Abilita la gestione utenti se connesso
         self.btn_manage_users.setEnabled(is_connected)
         

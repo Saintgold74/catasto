@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Widget Unificato per Ricerca Fuzzy nel Database Catasto
-========================================================
+Widget per Ricerca Fuzzy nel Database Catasto - Versione Completa
+==================================================================
 File: fuzzy_search_widget_unified.py
 Autore: Marco Santoro
 Data: 10/06/2025
-Versione: 3.0 (unificata compact + expanded)
+Versione: 4.0 (solo expanded, tutte le funzionalità)
 
-Combina le funzionalità di:
-- fuzzy_search_widget.py (modalità compatta)
-- fuzzy_search_widget_expanded.py (modalità espansa)
+Supporta:
+- Ricerca in tutte le entità (possessori, località, immobili, variazioni, contratti, partite)
+- Export multipli (TXT, PDF, CSV, JSON)
+- Vista unificata e per tipo
+- Dettagli avanzati delle entità
 """
 
 import logging
@@ -55,11 +57,11 @@ except ImportError:
 GIN_AVAILABLE = GIN_EXPANDED_AVAILABLE or GIN_BASIC_AVAILABLE
 
 # ========================================================================
-# THREAD UNIFICATO PER RICERCHE IN BACKGROUND
+# THREAD PER RICERCHE IN BACKGROUND
 # ========================================================================
 
-class UnifiedFuzzySearchThread(QThread):
-    """Thread unificato per eseguire ricerche fuzzy in background."""
+class FuzzySearchThread(QThread):
+    """Thread per eseguire ricerche fuzzy in background."""
     
     results_ready = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
@@ -183,16 +185,93 @@ class UnifiedFuzzySearchThread(QThread):
             self.error_occurred.emit(str(e))
 
 # ========================================================================
-# WIDGET PRINCIPALE UNIFICATO
+# DIALOG PER DETTAGLI ENTITÀ
 # ========================================================================
 
-class UnifiedFuzzySearchWidget(QWidget):
-    """Widget unificato per ricerca fuzzy con modalità compatta ed espansa."""
+class EntityDetailsDialog(QDialog):
+    """Dialog per visualizzare i dettagli completi di un'entità."""
     
-    def __init__(self, db_manager, mode='compact', parent=None):
+    def __init__(self, db_manager, entity_type, entity_id, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.mode = mode  # 'compact' o 'expanded'
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        
+        self.setWindowTitle(f"Dettagli {entity_type.title()} - ID {entity_id}")
+        self.setMinimumSize(600, 400)
+        self.setup_ui()
+        self.load_details()
+        
+    def setup_ui(self):
+        """Configura l'interfaccia del dialog."""
+        layout = QVBoxLayout(self)
+        
+        # Area dettagli principali
+        self.details_text = QTextEdit()
+        self.details_text.setReadOnly(True)
+        layout.addWidget(self.details_text)
+        
+        # Pulsanti
+        buttons_layout = QHBoxLayout()
+        
+        self.refresh_btn = QPushButton("🔄 Aggiorna")
+        self.refresh_btn.clicked.connect(self.load_details)
+        buttons_layout.addWidget(self.refresh_btn)
+        
+        buttons_layout.addStretch()
+        
+        self.close_btn = QPushButton("Chiudi")
+        self.close_btn.clicked.connect(self.accept)
+        buttons_layout.addWidget(self.close_btn)
+        
+        layout.addLayout(buttons_layout)
+        
+    def load_details(self):
+        """Carica i dettagli dell'entità."""
+        try:
+            if hasattr(self.db_manager, 'get_entity_details'):
+                details = self.db_manager.get_entity_details(self.entity_type, self.entity_id)
+                
+                if details.get('status') == 'OK':
+                    self.display_details(details['details'])
+                else:
+                    self.details_text.setPlainText(f"Errore: {details.get('error', 'Impossibile caricare i dettagli')}")
+            else:
+                self.details_text.setPlainText("Funzionalità dettagli non disponibile")
+                
+        except Exception as e:
+            self.details_text.setPlainText(f"Errore nel caricamento: {str(e)}")
+            
+    def display_details(self, details):
+        """Visualizza i dettagli formattati."""
+        text = f"=== DETTAGLI {self.entity_type.upper()} ===\n\n"
+        
+        for key, value in details.items():
+            if value is not None:
+                # Formatta le date
+                if 'data' in key.lower() and hasattr(value, 'strftime'):
+                    value = value.strftime('%d/%m/%Y')
+                
+                # Formatta i booleani
+                elif isinstance(value, bool):
+                    value = "Sì" if value else "No"
+                
+                # Capitalizza le chiavi per la visualizzazione
+                display_key = key.replace('_', ' ').title()
+                text += f"{display_key}: {value}\n"
+        
+        self.details_text.setPlainText(text)
+
+# ========================================================================
+# WIDGET PRINCIPALE RICERCA FUZZY
+# ========================================================================
+
+class FuzzySearchWidget(QWidget):
+    """Widget completo per ricerca fuzzy in tutte le entità del catasto."""
+    
+    def __init__(self, db_manager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
         self.parent_window = parent
         self.logger = logging.getLogger(__name__)
         
@@ -207,7 +286,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.search_timer.setSingleShot(True)
         self.search_timer.timeout.connect(self._perform_search)
         
-        # Setup UI basato sulla modalità
+        # Setup UI
         self._setup_ui()
         self._setup_signals()
         self._check_gin_status()
@@ -239,138 +318,7 @@ class UnifiedFuzzySearchWidget(QWidget):
                 self.logger.error(f"Errore caricamento GIN base: {e}")
     
     def _setup_ui(self):
-        """Configura l'interfaccia utente in base alla modalità."""
-        if self.mode == 'compact':
-            self._setup_compact_ui()
-        else:
-            self._setup_expanded_ui()
-    
-    def _setup_compact_ui(self):
-        """Configura l'interfaccia compatta."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(8)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        
-        # === AREA CONTROLLI ===
-        controls_frame = QFrame()
-        controls_frame.setFrameStyle(QFrame.StyledPanel)
-        controls_layout = QVBoxLayout(controls_frame)
-        controls_layout.setSpacing(6)
-        controls_layout.setContentsMargins(8, 8, 8, 8)
-        
-        # Prima riga: ricerca e precisione
-        search_row = QHBoxLayout()
-        
-        search_row.addWidget(QLabel("Ricerca:"))
-        
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Inserisci testo da cercare (min. 3 caratteri)...")
-        self.search_edit.setMinimumWidth(300)
-        search_row.addWidget(self.search_edit)
-        
-        search_row.addWidget(QLabel("Precisione:"))
-        
-        self.precision_slider = QSlider(Qt.Horizontal)
-        self.precision_slider.setRange(10, 90)
-        self.precision_slider.setValue(30)
-        self.precision_slider.setMaximumWidth(100)
-        search_row.addWidget(self.precision_slider)
-        
-        self.precision_label = QLabel("30%")
-        self.precision_label.setMinimumWidth(35)
-        search_row.addWidget(self.precision_label)
-        
-        search_row.addWidget(QLabel("Max:"))
-        
-        self.max_results_combo = QComboBox()
-        self.max_results_combo.addItems(["50", "100", "200", "500"])
-        self.max_results_combo.setCurrentText("100")
-        self.max_results_combo.setMaximumWidth(60)
-        search_row.addWidget(self.max_results_combo)
-        
-        search_row.addStretch()
-        controls_layout.addLayout(search_row)
-        
-        # Seconda riga: opzioni ricerca
-        options_row = QHBoxLayout()
-        
-        self.search_possessori_cb = QCheckBox("👥 Possessori")
-        self.search_possessori_cb.setChecked(True)
-        options_row.addWidget(self.search_possessori_cb)
-        
-        self.search_localita_cb = QCheckBox("🏘️ Località")
-        self.search_localita_cb.setChecked(True)
-        options_row.addWidget(self.search_localita_cb)
-        
-        self.search_variazioni_cb = QCheckBox("📋 Variazioni")
-        self.search_variazioni_cb.setChecked(True)
-        options_row.addWidget(self.search_variazioni_cb)
-        
-        self.search_immobili_cb = QCheckBox("🏢 Immobili")
-        self.search_immobili_cb.setChecked(True)
-        options_row.addWidget(self.search_immobili_cb)
-        
-        self.search_contratti_cb = QCheckBox("📄 Contratti")
-        self.search_contratti_cb.setChecked(True)
-        options_row.addWidget(self.search_contratti_cb)
-        
-        self.search_partite_cb = QCheckBox("📊 Partite")
-        self.search_partite_cb.setChecked(True)
-        options_row.addWidget(self.search_partite_cb)
-        
-        options_row.addWidget(QLabel("|"))
-        
-        # Pulsante export unificato
-        self.export_btn = QPushButton("📤 Esporta")
-        self.export_btn.setEnabled(False)
-        self.export_btn.clicked.connect(self._export_results)
-        options_row.addWidget(self.export_btn)
-        
-        options_row.addStretch()
-        controls_layout.addLayout(options_row)
-        
-        main_layout.addWidget(controls_frame)
-        
-        # === PROGRESS BAR ===
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumHeight(8)
-        self.progress_bar.setVisible(False)
-        main_layout.addWidget(self.progress_bar)
-        
-        # === TAB RISULTATI ===
-        self._create_results_tabs()
-        main_layout.addWidget(self.results_tabs)
-        
-        # === STATUS BAR ===
-        self._create_status_bar()
-        main_layout.addLayout(self.status_layout)
-        
-        # === DEBUG AREA (compatta) ===
-        debug_frame = QFrame()
-        debug_frame.setFrameStyle(QFrame.StyledPanel)
-        debug_layout = QVBoxLayout(debug_frame)
-        debug_layout.setContentsMargins(4, 4, 4, 4)
-        
-        debug_header = QHBoxLayout()
-        debug_header.addWidget(QLabel("Debug:"))
-        debug_header.addStretch()
-        
-        clear_debug_btn = QPushButton("Pulisci")
-        clear_debug_btn.setMaximumSize(60, 20)
-        clear_debug_btn.clicked.connect(lambda: self.debug_text.clear())
-        debug_header.addWidget(clear_debug_btn)
-        
-        debug_layout.addLayout(debug_header)
-        
-        self.debug_text = QTextEdit()
-        self.debug_text.setMaximumHeight(80)
-        self.debug_text.setStyleSheet("font-size: 9px;")
-        debug_layout.addWidget(self.debug_text)
-        
-        main_layout.addWidget(debug_frame)
-    
-    def _setup_expanded_ui(self):
-        """Configura l'interfaccia espansa."""
+        """Configura l'interfaccia utente completa."""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
@@ -514,13 +462,35 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._create_status_bar()
         main_layout.addLayout(self.status_layout)
         
+        # === DEBUG AREA (minimale) ===
+        debug_frame = QFrame()
+        debug_frame.setMaximumHeight(50)
+        debug_layout = QHBoxLayout(debug_frame)
+        debug_layout.setContentsMargins(5, 2, 5, 2)
+        
+        self.status_label = QLabel("Sistema ricerca fuzzy pronto")
+        self.status_label.setStyleSheet("font-size: 10px; color: #666;")
+        debug_layout.addWidget(self.status_label)
+        
+        debug_layout.addStretch()
+        
+        self.indices_status_label = QLabel("Indici: Non verificato")
+        self.indices_status_label.setStyleSheet("font-size: 10px; color: #666;")
+        debug_layout.addWidget(self.indices_status_label)
+        
+        main_layout.addWidget(debug_frame)
+        
         # Focus iniziale
         self.search_edit.setFocus()
     
     def _create_results_tabs(self):
-        """Crea i tab per i risultati (comune a entrambe le modalità)."""
+        """Crea i tab per i risultati."""
         self.results_tabs = QTabWidget()
         self.results_tabs.setMinimumHeight(400)
+        
+        # Tab Unificata
+        self.unified_table = self._create_unified_table()
+        self.results_tabs.addTab(self.unified_table, "🔍 Tutti")
         
         # Tab Possessori
         self.possessori_tab = self._create_possessori_tab()
@@ -545,14 +515,9 @@ class UnifiedFuzzySearchWidget(QWidget):
         # Tab Partite
         self.partite_tab = self._create_partite_tab()
         self.results_tabs.addTab(self.partite_tab, "📊 Partite")
-        
-        # Tab Unificata (solo in modalità expanded)
-        if self.mode == 'expanded':
-            self.unified_table = self._create_unified_table()
-            self.results_tabs.insertTab(0, self.unified_table, "🔍 Tutti")
     
     def _create_status_bar(self):
-        """Crea la barra di stato (comune a entrambe le modalità)."""
+        """Crea la barra di stato."""
         self.status_layout = QHBoxLayout()
         
         self.stats_label = QLabel("Inserire almeno 3 caratteri per iniziare")
@@ -560,181 +525,9 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.status_layout.addWidget(self.stats_label)
         
         self.status_layout.addStretch()
-        
-        self.indices_status_label = QLabel("Verifica indici...")
-        self.indices_status_label.setStyleSheet("color: orange; font-size: 10px;")
-        self.status_layout.addWidget(self.indices_status_label)
-        
-        self.status_label = QLabel("Pronto")
-        self.status_label.setStyleSheet("color: green; font-weight: bold; font-size: 10px;")
-        self.status_layout.addWidget(self.status_label)
-    
-    def _create_possessori_tab(self):
-        """Crea il tab per i possessori."""
-        possessori_group = QGroupBox("👥 Possessori")
-        layout = QVBoxLayout(possessori_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella possessori
-        self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels([
-            "Nome Completo", "Comune", "Partite", "Similitud."
-        ])
-        
-        header = self.possessori_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        
-        self.possessori_table.setAlternatingRowColors(True)
-        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.possessori_table)
-        
-        return possessori_group
-    
-    def _create_localita_tab(self):
-        """Crea il tab per le località."""
-        localita_group = QGroupBox("🏘️ Località")
-        layout = QVBoxLayout(localita_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella località
-        self.localita_table = QTableWidget()
-        self.localita_table.setColumnCount(4)
-        self.localita_table.setHorizontalHeaderLabels([
-            "Nome", "Comune", "Immobili", "Similitud."
-        ])
-        
-        header = self.localita_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        
-        self.localita_table.setAlternatingRowColors(True)
-        self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.localita_table)
-        
-        return localita_group
-    
-    def _create_variazioni_tab(self):
-        """Crea il tab per le variazioni."""
-        variazioni_group = QGroupBox("📋 Variazioni")
-        layout = QVBoxLayout(variazioni_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella variazioni
-        self.variazioni_table = QTableWidget()
-        self.variazioni_table.setColumnCount(4)
-        self.variazioni_table.setHorizontalHeaderLabels([
-            "Tipo", "Data", "Descrizione", "Similitud."
-        ])
-        
-        header = self.variazioni_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        
-        self.variazioni_table.setAlternatingRowColors(True)
-        self.variazioni_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.variazioni_table)
-        
-        return variazioni_group
-    
-    def _create_immobili_tab(self):
-        """Crea il tab per gli immobili."""
-        immobili_group = QGroupBox("🏢 Immobili")
-        layout = QVBoxLayout(immobili_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella immobili
-        self.immobili_table = QTableWidget()
-        self.immobili_table.setColumnCount(6)
-        self.immobili_table.setHorizontalHeaderLabels([
-            "Natura", "Classificazione", "Partita", "Comune", "Località", "Similitud."
-        ])
-        
-        header = self.immobili_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        
-        self.immobili_table.setAlternatingRowColors(True)
-        self.immobili_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.immobili_table)
-        
-        return immobili_group
-    
-    def _create_contratti_tab(self):
-        """Crea il tab per i contratti."""
-        contratti_group = QGroupBox("📄 Contratti")
-        layout = QVBoxLayout(contratti_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella contratti
-        self.contratti_table = QTableWidget()
-        self.contratti_table.setColumnCount(4)
-        self.contratti_table.setHorizontalHeaderLabels([
-            "Tipo", "Data Stipula", "Partita", "Similitud."
-        ])
-        
-        header = self.contratti_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        
-        self.contratti_table.setAlternatingRowColors(True)
-        self.contratti_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.contratti_table)
-        
-        return contratti_group
-    
-    def _create_partite_tab(self):
-        """Crea il tab per le partite."""
-        partite_group = QGroupBox("📊 Partite")
-        layout = QVBoxLayout(partite_group)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # Tabella partite
-        self.partite_table = QTableWidget()
-        self.partite_table.setColumnCount(4)
-        self.partite_table.setHorizontalHeaderLabels([
-            "Numero", "Tipo", "Comune", "Similitud."
-        ])
-        
-        header = self.partite_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        
-        self.partite_table.setAlternatingRowColors(True)
-        self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.partite_table)
-        
-        return partite_group
     
     def _create_unified_table(self):
-        """Crea la tabella unificata (solo modalità expanded)."""
+        """Crea la tabella unificata."""
         table = QTableWidget()
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels([
@@ -754,19 +547,191 @@ class UnifiedFuzzySearchWidget(QWidget):
         
         return table
     
+    def _create_possessori_tab(self):
+        """Crea il tab per i possessori."""
+        possessori_group = QGroupBox("👥 Possessori")
+        layout = QVBoxLayout(possessori_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella possessori
+        self.possessori_table = QTableWidget()
+        self.possessori_table.setColumnCount(6)
+        self.possessori_table.setHorizontalHeaderLabels([
+            "ID", "Nome Completo", "Paternità", "Comune", "Similarità", "Azioni"
+        ])
+        
+        header = self.possessori_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        
+        self.possessori_table.setAlternatingRowColors(True)
+        self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.possessori_table)
+        
+        return possessori_group
+    
+    def _create_localita_tab(self):
+        """Crea il tab per le località."""
+        localita_group = QGroupBox("🏘️ Località")
+        layout = QVBoxLayout(localita_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella località
+        self.localita_table = QTableWidget()
+        self.localita_table.setColumnCount(6)
+        self.localita_table.setHorizontalHeaderLabels([
+            "ID", "Nome", "Tipo", "Comune", "Similarità", "Azioni"
+        ])
+        
+        header = self.localita_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        
+        self.localita_table.setAlternatingRowColors(True)
+        self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.localita_table)
+        
+        return localita_group
+    
+    def _create_variazioni_tab(self):
+        """Crea il tab per le variazioni."""
+        variazioni_group = QGroupBox("📋 Variazioni")
+        layout = QVBoxLayout(variazioni_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella variazioni
+        self.variazioni_table = QTableWidget()
+        self.variazioni_table.setColumnCount(7)
+        self.variazioni_table.setHorizontalHeaderLabels([
+            "ID", "Tipo", "Da Partita", "A Partita", "Data", "Similarità", "Campo"
+        ])
+        
+        header = self.variazioni_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
+        self.variazioni_table.setAlternatingRowColors(True)
+        self.variazioni_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.variazioni_table)
+        
+        return variazioni_group
+    
+    def _create_immobili_tab(self):
+        """Crea il tab per gli immobili."""
+        immobili_group = QGroupBox("🏢 Immobili")
+        layout = QVBoxLayout(immobili_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella immobili
+        self.immobili_table = QTableWidget()
+        self.immobili_table.setColumnCount(7)
+        self.immobili_table.setHorizontalHeaderLabels([
+            "ID", "Natura", "Partita", "Località", "Comune", "Similarità", "Campo"
+        ])
+        
+        header = self.immobili_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
+        self.immobili_table.setAlternatingRowColors(True)
+        self.immobili_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.immobili_table)
+        
+        return immobili_group
+    
+    def _create_contratti_tab(self):
+        """Crea il tab per i contratti."""
+        contratti_group = QGroupBox("📄 Contratti")
+        layout = QVBoxLayout(contratti_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella contratti
+        self.contratti_table = QTableWidget()
+        self.contratti_table.setColumnCount(6)
+        self.contratti_table.setHorizontalHeaderLabels([
+            "ID", "Tipo", "Data", "Notaio", "Similarità", "Campo"
+        ])
+        
+        header = self.contratti_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        
+        self.contratti_table.setAlternatingRowColors(True)
+        self.contratti_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.contratti_table)
+        
+        return contratti_group
+    
+    def _create_partite_tab(self):
+        """Crea il tab per le partite."""
+        partite_group = QGroupBox("📊 Partite")
+        layout = QVBoxLayout(partite_group)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Tabella partite
+        self.partite_table = QTableWidget()
+        self.partite_table.setColumnCount(7)
+        self.partite_table.setHorizontalHeaderLabels([
+            "ID", "Numero", "Suffisso", "Comune", "Stato", "Similarità", "Campo"
+        ])
+        
+        header = self.partite_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
+        self.partite_table.setAlternatingRowColors(True)
+        self.partite_table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.partite_table)
+        
+        return partite_group
+    
     def _setup_signals(self):
-        """Configura i segnali (comune a entrambe le modalità)."""
+        """Configura i segnali."""
         # Ricerca in tempo reale
         self.search_edit.textChanged.connect(self._on_search_text_changed)
         
         # Aggiornamento slider precisione
         self.precision_slider.valueChanged.connect(
-            lambda v: self.precision_label.setText(f"{v}%" if self.mode == 'compact' else f"{v/100:.2f}")
+            lambda v: self.precision_label.setText(f"{v/100:.2f}")
         )
         self.precision_slider.valueChanged.connect(self._trigger_search_if_text)
         
         # Cambi opzioni rilanciano ricerca
         self.max_results_combo.currentTextChanged.connect(self._trigger_search_if_text)
+        self.search_type_combo.currentTextChanged.connect(self._trigger_search_if_text)
         self.search_possessori_cb.toggled.connect(self._trigger_search_if_text)
         self.search_localita_cb.toggled.connect(self._trigger_search_if_text)
         self.search_variazioni_cb.toggled.connect(self._trigger_search_if_text)
@@ -775,19 +740,13 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.search_partite_cb.toggled.connect(self._trigger_search_if_text)
         
         # Doppio click per dettagli
-        self.possessori_table.doubleClicked.connect(self._on_possessore_double_click)
-        self.localita_table.doubleClicked.connect(self._on_localita_double_click)
-        self.variazioni_table.doubleClicked.connect(self._on_variazione_double_click)
-        self.immobili_table.doubleClicked.connect(self._on_immobile_double_click)
-        self.contratti_table.doubleClicked.connect(self._on_contratto_double_click)
-        self.partite_table.doubleClicked.connect(self._on_partita_double_click)
-        
-        # Segnali specifici per modalità expanded
-        if self.mode == 'expanded':
-            if hasattr(self, 'search_type_combo'):
-                self.search_type_combo.currentTextChanged.connect(self._trigger_search_if_text)
-            if hasattr(self, 'unified_table'):
-                self.unified_table.doubleClicked.connect(self._on_unified_double_click)
+        self.possessori_table.doubleClicked.connect(lambda: self._on_entity_double_click('possessore'))
+        self.localita_table.doubleClicked.connect(lambda: self._on_entity_double_click('localita'))
+        self.variazioni_table.doubleClicked.connect(lambda: self._on_entity_double_click('variazione'))
+        self.immobili_table.doubleClicked.connect(lambda: self._on_entity_double_click('immobile'))
+        self.contratti_table.doubleClicked.connect(lambda: self._on_entity_double_click('contratto'))
+        self.partite_table.doubleClicked.connect(lambda: self._on_entity_double_click('partita'))
+        self.unified_table.doubleClicked.connect(self._on_unified_double_click)
     
     def _check_gin_status(self):
         """Verifica stato indici GIN."""
@@ -810,20 +769,16 @@ class UnifiedFuzzySearchWidget(QWidget):
                 indices = self.gin_search.get_gin_indices_status()
                 if indices:
                     self.indices_status_label.setText(f"✅ {len(indices)} indici")
-                    if hasattr(self, 'debug_text'):
-                        self.debug_text.append(f"✅ Indici GIN: {len(indices)} trovati")
                 else:
                     self.indices_status_label.setText("❌ Nessun indice")
                     
         except Exception as e:
             self.indices_status_label.setText("❌ Errore verifica")
-            if hasattr(self, 'debug_text'):
-                self.debug_text.append(f"❌ Errore verifica indici: {e}")
     
     def _on_search_text_changed(self, text):
         """Gestisce cambiamenti nel testo di ricerca."""
         if len(text) >= 3:
-            self.search_timer.start(500 if self.mode == 'compact' else 800)
+            self.search_timer.start(800)
             self.stats_label.setText("Ricerca in corso...")
         else:
             self.search_timer.stop()
@@ -853,17 +808,15 @@ class UnifiedFuzzySearchWidget(QWidget):
         max_results = int(self.max_results_combo.currentText())
         
         # Determina tipo di ricerca
-        search_type = 'standard'
-        if self.mode == 'expanded' and hasattr(self, 'search_type_combo'):
-            type_map = {
-                0: 'unified',
-                1: 'immobili',
-                2: 'variazioni',
-                3: 'contratti',
-                4: 'partite',
-                5: 'combined'
-            }
-            search_type = type_map.get(self.search_type_combo.currentIndex(), 'unified')
+        type_map = {
+            0: 'unified',
+            1: 'immobili',
+            2: 'variazioni',
+            3: 'contratti',
+            4: 'partite',
+            5: 'combined'
+        }
+        search_type = type_map.get(self.search_type_combo.currentIndex(), 'unified')
         
         search_options = {
             'search_type': search_type,
@@ -885,10 +838,9 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.progress_bar.setVisible(True)
         self.status_label.setText("🔍 Ricerca in corso...")
         self.status_label.setStyleSheet("color: blue; font-size: 10px;")
-        if hasattr(self, 'search_btn'):
-            self.search_btn.setEnabled(False)
+        self.search_btn.setEnabled(False)
         
-        self.search_thread = UnifiedFuzzySearchThread(
+        self.search_thread = FuzzySearchThread(
             self.gin_search, query_text, search_options
         )
         self.search_thread.results_ready.connect(self._display_results)
@@ -896,9 +848,6 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.search_thread.progress_updated.connect(self.progress_bar.setValue)
         self.search_thread.finished.connect(self._search_finished)
         self.search_thread.start()
-        
-        if hasattr(self, 'debug_text'):
-            self.debug_text.append(f"🔍 Ricerca: '{query_text}' (soglia: {threshold:.2f})")
     
     def _display_results(self, results):
         """Visualizza i risultati della ricerca."""
@@ -907,11 +856,12 @@ class UnifiedFuzzySearchWidget(QWidget):
             self.current_results = results
             
             # Se abbiamo risultati nel formato expanded
-            if 'results_by_type' in results and self.mode == 'expanded':
+            if 'results_by_type' in results:
                 self._display_unified_results(results['results_by_type'])
                 self._populate_individual_tabs_expanded(results['results_by_type'])
             else:
-                # Formato standard per entrambe le modalità
+                # Formato standard
+                self._clear_unified_table()
                 self._populate_possessori_table(results.get('possessori', []))
                 self._populate_localita_table(results.get('localita', []))
                 self._populate_variazioni_table(results.get('variazioni', []))
@@ -936,6 +886,7 @@ class UnifiedFuzzySearchWidget(QWidget):
             
             # Abilita export se ci sono risultati
             self.export_btn.setEnabled(total > 0)
+            self.results_count_label.setText(f"{total} risultati")
             
             # Status finale
             if total > 0:
@@ -952,207 +903,8 @@ class UnifiedFuzzySearchWidget(QWidget):
         finally:
             self.progress_bar.setVisible(False)
     
-    def _populate_possessori_table(self, possessori):
-        """Popola la tabella dei possessori."""
-        self.possessori_table.setRowCount(len(possessori))
-        
-        for row, p in enumerate(possessori):
-            # Nome completo
-            nome_item = QTableWidgetItem(p.get('nome_completo', ''))
-            nome_item.setData(Qt.UserRole, p)
-            self.possessori_table.setItem(row, 0, nome_item)
-            
-            # Comune
-            self.possessori_table.setItem(row, 1, QTableWidgetItem(p.get('comune_nome', '')))
-            
-            # Numero partite
-            num_partite = str(p.get('num_partite', 0))
-            self.possessori_table.setItem(row, 2, QTableWidgetItem(num_partite))
-            
-            # Similarità con colore
-            similarity = p.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.possessori_table.setItem(row, 3, sim_item)
-    
-    def _populate_localita_table(self, localita):
-        """Popola la tabella delle località."""
-        self.localita_table.setRowCount(len(localita))
-        
-        for row, l in enumerate(localita):
-            # Nome con civico
-            nome = l.get('nome', '')
-            civico = l.get('civico', '')
-            nome_completo = f"{nome} {civico}" if civico else nome
-            nome_item = QTableWidgetItem(nome_completo)
-            nome_item.setData(Qt.UserRole, l)
-            self.localita_table.setItem(row, 0, nome_item)
-            
-            # Comune
-            self.localita_table.setItem(row, 1, QTableWidgetItem(l.get('comune_nome', '')))
-            
-            # Numero immobili
-            num_immobili = str(l.get('num_immobili', 0))
-            self.localita_table.setItem(row, 2, QTableWidgetItem(num_immobili))
-            
-            # Similarità
-            similarity = l.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.localita_table.setItem(row, 3, sim_item)
-    
-    def _populate_variazioni_table(self, variazioni):
-        """Popola la tabella delle variazioni."""
-        self.variazioni_table.setRowCount(len(variazioni))
-        
-        for row, v in enumerate(variazioni):
-            # Tipo
-            tipo_item = QTableWidgetItem(v.get('tipo', ''))
-            tipo_item.setData(Qt.UserRole, v)
-            self.variazioni_table.setItem(row, 0, tipo_item)
-            
-            # Data
-            data = v.get('data_variazione', '')
-            if isinstance(data, str) and len(data) > 10:
-                data = data[:10]
-            self.variazioni_table.setItem(row, 1, QTableWidgetItem(str(data)))
-            
-            # Descrizione (troncata)
-            descrizione = v.get('descrizione', '')
-            if len(descrizione) > 50:
-                descrizione = descrizione[:47] + "..."
-            self.variazioni_table.setItem(row, 2, QTableWidgetItem(descrizione))
-            
-            # Similarità
-            similarity = v.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.variazioni_table.setItem(row, 3, sim_item)
-    
-    def _populate_immobili_table(self, immobili):
-        """Popola la tabella degli immobili."""
-        self.immobili_table.setRowCount(len(immobili))
-        
-        for row, i in enumerate(immobili):
-            # Natura
-            natura = i.get('natura', '')
-            natura_item = QTableWidgetItem(natura)
-            natura_item.setData(Qt.UserRole, i)
-            self.immobili_table.setItem(row, 0, natura_item)
-            
-            # Classificazione (troncata se troppo lunga)
-            classificazione = i.get('classificazione', '')
-            if len(classificazione) > 50:
-                classificazione = classificazione[:47] + "..."
-            self.immobili_table.setItem(row, 1, QTableWidgetItem(classificazione))
-            
-            # Partita con suffisso
-            numero_partita = str(i.get('numero_partita', ''))
-            suffisso = str(i.get('suffisso', ''))
-            partita_completa = f"{numero_partita}/{suffisso}" if suffisso else numero_partita
-            self.immobili_table.setItem(row, 2, QTableWidgetItem(partita_completa))
-            
-            # Comune
-            self.immobili_table.setItem(row, 3, QTableWidgetItem(i.get('comune', '')))
-            
-            # Località
-            self.immobili_table.setItem(row, 4, QTableWidgetItem(i.get('localita', '')))
-            
-            # Similarità
-            similarity = i.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.immobili_table.setItem(row, 5, sim_item)
-    
-    def _populate_contratti_table(self, contratti):
-        """Popola la tabella dei contratti."""
-        self.contratti_table.setRowCount(len(contratti))
-        
-        for row, c in enumerate(contratti):
-            # Tipo
-            tipo_item = QTableWidgetItem(c.get('tipo', ''))
-            tipo_item.setData(Qt.UserRole, c)
-            self.contratti_table.setItem(row, 0, tipo_item)
-            
-            # Data stipula
-            data = c.get('data_stipula', '')
-            if isinstance(data, str) and len(data) > 10:
-                data = data[:10]
-            self.contratti_table.setItem(row, 1, QTableWidgetItem(str(data)))
-            
-            # Partita
-            partita = str(c.get('numero_partita', ''))
-            self.contratti_table.setItem(row, 2, QTableWidgetItem(partita))
-            
-            # Similarità
-            similarity = c.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.contratti_table.setItem(row, 3, sim_item)
-    
-    def _populate_partite_table(self, partite):
-        """Popola la tabella delle partite."""
-        self.partite_table.setRowCount(len(partite))
-        
-        for row, p in enumerate(partite):
-            # Numero
-            numero_item = QTableWidgetItem(str(p.get('numero_partita', '')))
-            numero_item.setData(Qt.UserRole, p)
-            self.partite_table.setItem(row, 0, numero_item)
-            
-            # Tipo
-            self.partite_table.setItem(row, 1, QTableWidgetItem(p.get('tipo_partita', '')))
-            
-            # Comune
-            self.partite_table.setItem(row, 2, QTableWidgetItem(p.get('comune_nome', '')))
-            
-            # Similarità
-            similarity = p.get('similarity_score', 0)
-            sim_item = QTableWidgetItem(f"{similarity:.3f}")
-            sim_item.setTextAlignment(Qt.AlignCenter)
-            if similarity > 0.7:
-                sim_item.setBackground(QColor(144, 238, 144))
-            elif similarity > 0.5:
-                sim_item.setBackground(QColor(255, 255, 224))
-            else:
-                sim_item.setBackground(QColor(255, 228, 225))
-            self.partite_table.setItem(row, 3, sim_item)
-    
     def _display_unified_results(self, results_by_type):
-        """Visualizza i risultati nella tab unificata (modalità expanded)."""
-        if not hasattr(self, 'unified_table'):
-            return
-            
+        """Visualizza i risultati nella tab unificata."""
         table = self.unified_table
         table.setRowCount(0)
         
@@ -1201,11 +953,404 @@ class UnifiedFuzzySearchWidget(QWidget):
                 
                 row += 1
     
+    def _clear_unified_table(self):
+        """Pulisce la tabella unificata."""
+        self.unified_table.setRowCount(0)
+    
     def _populate_individual_tabs_expanded(self, results_by_type):
         """Popola le tab individuali con dati del formato expanded."""
-        # Implementazione specifica per format expanded
-        # Da completare se necessario
-        pass
+        # Possessori
+        if 'possessore' in results_by_type:
+            self._populate_possessori_expanded(results_by_type['possessore'])
+            
+        # Località
+        if 'localita' in results_by_type:
+            self._populate_localita_expanded(results_by_type['localita'])
+            
+        # Immobili
+        if 'immobile' in results_by_type:
+            self._populate_immobili_expanded(results_by_type['immobile'])
+            
+        # Variazioni
+        if 'variazione' in results_by_type:
+            self._populate_variazioni_expanded(results_by_type['variazione'])
+            
+        # Contratti
+        if 'contratto' in results_by_type:
+            self._populate_contratti_expanded(results_by_type['contratto'])
+            
+        # Partite
+        if 'partita' in results_by_type:
+            self._populate_partite_expanded(results_by_type['partita'])
+    
+    def _populate_possessori_table(self, possessori):
+        """Popola la tabella dei possessori (formato standard)."""
+        self.possessori_table.setRowCount(len(possessori))
+        
+        for row, p in enumerate(possessori):
+            # ID
+            self.possessori_table.setItem(row, 0, QTableWidgetItem(str(p.get('id', ''))))
+            
+            # Nome completo
+            nome_item = QTableWidgetItem(p.get('nome_completo', ''))
+            nome_item.setData(Qt.UserRole, p)
+            self.possessori_table.setItem(row, 1, nome_item)
+            
+            # Paternità
+            self.possessori_table.setItem(row, 2, QTableWidgetItem(p.get('paternita', '')))
+            
+            # Comune
+            self.possessori_table.setItem(row, 3, QTableWidgetItem(p.get('comune_nome', '')))
+            
+            # Similarità con colore
+            similarity = p.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.possessori_table.setItem(row, 4, sim_item)
+            
+            # Pulsante azioni
+            action_btn = QPushButton("📋")
+            action_btn.clicked.connect(
+                lambda checked, eid=p.get('id'): 
+                self._show_entity_details('possessore', eid)
+            )
+            self.possessori_table.setCellWidget(row, 5, action_btn)
+    
+    def _populate_possessori_expanded(self, possessori):
+        """Popola la tabella possessori dal formato expanded."""
+        self.possessori_table.setRowCount(len(possessori))
+        
+        for row, possessore in enumerate(possessori):
+            info = possessore.get('additional_info', {})
+            
+            self.possessori_table.setItem(row, 0, QTableWidgetItem(str(possessore.get('entity_id', ''))))
+            self.possessori_table.setItem(row, 1, QTableWidgetItem(possessore.get('display_text', '')))
+            self.possessori_table.setItem(row, 2, QTableWidgetItem(info.get('paternita', 'N/A')))
+            self.possessori_table.setItem(row, 3, QTableWidgetItem(info.get('comune', 'N/A')))
+            self.possessori_table.setItem(row, 4, QTableWidgetItem(f"{possessore.get('similarity_score', 0):.3f}"))
+            
+            # Pulsante azioni
+            action_btn = QPushButton("📋")
+            action_btn.clicked.connect(
+                lambda checked, eid=possessore.get('entity_id'): 
+                self._show_entity_details('possessore', eid)
+            )
+            self.possessori_table.setCellWidget(row, 5, action_btn)
+    
+    def _populate_localita_table(self, localita):
+        """Popola la tabella delle località (formato standard)."""
+        self.localita_table.setRowCount(len(localita))
+        
+        for row, l in enumerate(localita):
+            # ID
+            self.localita_table.setItem(row, 0, QTableWidgetItem(str(l.get('id', ''))))
+            
+            # Nome con civico
+            nome = l.get('nome', '')
+            civico = l.get('civico', '')
+            nome_completo = f"{nome} {civico}" if civico else nome
+            nome_item = QTableWidgetItem(nome_completo)
+            nome_item.setData(Qt.UserRole, l)
+            self.localita_table.setItem(row, 1, nome_item)
+            
+            # Tipo
+            self.localita_table.setItem(row, 2, QTableWidgetItem(l.get('tipo', '')))
+            
+            # Comune
+            self.localita_table.setItem(row, 3, QTableWidgetItem(l.get('comune_nome', '')))
+            
+            # Similarità
+            similarity = l.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.localita_table.setItem(row, 4, sim_item)
+            
+            # Pulsante azioni
+            action_btn = QPushButton("📋")
+            action_btn.clicked.connect(
+                lambda checked, eid=l.get('id'): 
+                self._show_entity_details('localita', eid)
+            )
+            self.localita_table.setCellWidget(row, 5, action_btn)
+    
+    def _populate_localita_expanded(self, localita):
+        """Popola la tabella località dal formato expanded."""
+        self.localita_table.setRowCount(len(localita))
+        
+        for row, loc in enumerate(localita):
+            info = loc.get('additional_info', {})
+            
+            self.localita_table.setItem(row, 0, QTableWidgetItem(str(loc.get('entity_id', ''))))
+            self.localita_table.setItem(row, 1, QTableWidgetItem(loc.get('display_text', '')))
+            self.localita_table.setItem(row, 2, QTableWidgetItem(info.get('tipo', 'N/A')))
+            self.localita_table.setItem(row, 3, QTableWidgetItem(info.get('comune', 'N/A')))
+            self.localita_table.setItem(row, 4, QTableWidgetItem(f"{loc.get('similarity_score', 0):.3f}"))
+            
+            # Pulsante azioni
+            action_btn = QPushButton("📋")
+            action_btn.clicked.connect(
+                lambda checked, eid=loc.get('entity_id'): 
+                self._show_entity_details('localita', eid)
+            )
+            self.localita_table.setCellWidget(row, 5, action_btn)
+    
+    def _populate_variazioni_table(self, variazioni):
+        """Popola la tabella delle variazioni (formato standard)."""
+        self.variazioni_table.setRowCount(len(variazioni))
+        
+        for row, v in enumerate(variazioni):
+            # ID
+            self.variazioni_table.setItem(row, 0, QTableWidgetItem(str(v.get('id', ''))))
+            
+            # Tipo
+            tipo_item = QTableWidgetItem(v.get('tipo', ''))
+            tipo_item.setData(Qt.UserRole, v)
+            self.variazioni_table.setItem(row, 1, tipo_item)
+            
+            # Da partita
+            self.variazioni_table.setItem(row, 2, QTableWidgetItem(str(v.get('partita_origine_id', ''))))
+            
+            # A partita
+            self.variazioni_table.setItem(row, 3, QTableWidgetItem(str(v.get('partita_destinazione_id', ''))))
+            
+            # Data
+            data = v.get('data_variazione', '')
+            if isinstance(data, str) and len(data) > 10:
+                data = data[:10]
+            self.variazioni_table.setItem(row, 4, QTableWidgetItem(str(data)))
+            
+            # Similarità
+            similarity = v.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.variazioni_table.setItem(row, 5, sim_item)
+            
+            # Campo ricerca
+            self.variazioni_table.setItem(row, 6, QTableWidgetItem(v.get('search_field', '')))
+    
+    def _populate_variazioni_expanded(self, variazioni):
+        """Popola la tabella variazioni dal formato expanded."""
+        self.variazioni_table.setRowCount(len(variazioni))
+        
+        for row, variazione in enumerate(variazioni):
+            info = variazione.get('additional_info', {})
+            
+            self.variazioni_table.setItem(row, 0, QTableWidgetItem(str(variazione.get('entity_id', ''))))
+            self.variazioni_table.setItem(row, 1, QTableWidgetItem(variazione.get('display_text', '')))
+            
+            # Estrai da detail_text o additional_info
+            detail_parts = variazione.get('detail_text', '').split(' - ')
+            if len(detail_parts) >= 2:
+                partite_info = detail_parts[0].replace('Partita ', '')
+                self.variazioni_table.setItem(row, 2, QTableWidgetItem(partite_info.split(' → ')[0]))
+                if ' → ' in partite_info:
+                    self.variazioni_table.setItem(row, 3, QTableWidgetItem(partite_info.split(' → ')[1]))
+                else:
+                    self.variazioni_table.setItem(row, 3, QTableWidgetItem('N/A'))
+            else:
+                self.variazioni_table.setItem(row, 2, QTableWidgetItem('N/A'))
+                self.variazioni_table.setItem(row, 3, QTableWidgetItem('N/A'))
+                
+            # Data variazione
+            data_var = info.get('data_variazione', 'N/A')
+            if hasattr(data_var, 'strftime'):
+                data_var = data_var.strftime('%d/%m/%Y')
+            self.variazioni_table.setItem(row, 4, QTableWidgetItem(str(data_var)))
+            
+            self.variazioni_table.setItem(row, 5, QTableWidgetItem(f"{variazione.get('similarity_score', 0):.3f}"))
+            self.variazioni_table.setItem(row, 6, QTableWidgetItem(variazione.get('search_field', '')))
+    
+    def _populate_immobili_table(self, immobili):
+        """Popola la tabella degli immobili (formato standard)."""
+        self.immobili_table.setRowCount(len(immobili))
+        
+        for row, i in enumerate(immobili):
+            # ID
+            self.immobili_table.setItem(row, 0, QTableWidgetItem(str(i.get('id', ''))))
+            
+            # Natura
+            natura = i.get('natura', '')
+            natura_item = QTableWidgetItem(natura)
+            natura_item.setData(Qt.UserRole, i)
+            self.immobili_table.setItem(row, 1, natura_item)
+            
+            # Partita con suffisso
+            numero_partita = str(i.get('numero_partita', ''))
+            suffisso = str(i.get('suffisso', ''))
+            partita_completa = f"{numero_partita}/{suffisso}" if suffisso else numero_partita
+            self.immobili_table.setItem(row, 2, QTableWidgetItem(partita_completa))
+            
+            # Località
+            self.immobili_table.setItem(row, 3, QTableWidgetItem(i.get('localita', '')))
+            
+            # Comune
+            self.immobili_table.setItem(row, 4, QTableWidgetItem(i.get('comune', '')))
+            
+            # Similarità
+            similarity = i.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.immobili_table.setItem(row, 5, sim_item)
+            
+            # Campo ricerca
+            self.immobili_table.setItem(row, 6, QTableWidgetItem(i.get('search_field', '')))
+    
+    def _populate_immobili_expanded(self, immobili):
+        """Popola la tabella immobili dal formato expanded."""
+        self.immobili_table.setRowCount(len(immobili))
+        
+        for row, immobile in enumerate(immobili):
+            info = immobile.get('additional_info', {})
+            
+            self.immobili_table.setItem(row, 0, QTableWidgetItem(str(immobile.get('entity_id', ''))))
+            self.immobili_table.setItem(row, 1, QTableWidgetItem(immobile.get('display_text', '')))
+            
+            # Partita completa
+            numero = info.get('partita', info.get('numero_partita', 'N/A'))
+            suffisso = info.get('suffisso_partita', '')
+            if suffisso and suffisso.strip():
+                partita_completa = f"{numero} {suffisso.strip()}"
+            else:
+                partita_completa = str(numero)
+            self.immobili_table.setItem(row, 2, QTableWidgetItem(partita_completa))
+            
+            self.immobili_table.setItem(row, 3, QTableWidgetItem(info.get('localita', 'N/A')))
+            self.immobili_table.setItem(row, 4, QTableWidgetItem(info.get('comune', 'N/A')))
+            self.immobili_table.setItem(row, 5, QTableWidgetItem(f"{immobile.get('similarity_score', 0):.3f}"))
+            self.immobili_table.setItem(row, 6, QTableWidgetItem(immobile.get('search_field', '')))
+    
+    def _populate_contratti_table(self, contratti):
+        """Popola la tabella dei contratti (formato standard)."""
+        self.contratti_table.setRowCount(len(contratti))
+        
+        for row, c in enumerate(contratti):
+            # ID
+            self.contratti_table.setItem(row, 0, QTableWidgetItem(str(c.get('id', ''))))
+            
+            # Tipo
+            tipo_item = QTableWidgetItem(c.get('tipo', ''))
+            tipo_item.setData(Qt.UserRole, c)
+            self.contratti_table.setItem(row, 1, tipo_item)
+            
+            # Data
+            data = c.get('data_stipula', c.get('data_contratto', ''))
+            if isinstance(data, str) and len(data) > 10:
+                data = data[:10]
+            self.contratti_table.setItem(row, 2, QTableWidgetItem(str(data)))
+            
+            # Notaio
+            self.contratti_table.setItem(row, 3, QTableWidgetItem(c.get('notaio', '')))
+            
+            # Similarità
+            similarity = c.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.contratti_table.setItem(row, 4, sim_item)
+            
+            # Campo ricerca
+            self.contratti_table.setItem(row, 5, QTableWidgetItem(c.get('search_field', '')))
+    
+    def _populate_contratti_expanded(self, contratti):
+        """Popola la tabella contratti dal formato expanded."""
+        self.contratti_table.setRowCount(len(contratti))
+        
+        for row, contratto in enumerate(contratti):
+            info = contratto.get('additional_info', {})
+            
+            self.contratti_table.setItem(row, 0, QTableWidgetItem(str(contratto.get('entity_id', ''))))
+            self.contratti_table.setItem(row, 1, QTableWidgetItem(contratto.get('display_text', '')))
+            
+            # Data contratto
+            data_contr = info.get('data_contratto', 'N/A')
+            if hasattr(data_contr, 'strftime'):
+                data_contr = data_contr.strftime('%d/%m/%Y')
+            self.contratti_table.setItem(row, 2, QTableWidgetItem(str(data_contr)))
+            
+            self.contratti_table.setItem(row, 3, QTableWidgetItem(info.get('notaio', 'N/A')))
+            self.contratti_table.setItem(row, 4, QTableWidgetItem(f"{contratto.get('similarity_score', 0):.3f}"))
+            self.contratti_table.setItem(row, 5, QTableWidgetItem(contratto.get('search_field', '')))
+    
+    def _populate_partite_table(self, partite):
+        """Popola la tabella delle partite (formato standard)."""
+        self.partite_table.setRowCount(len(partite))
+        
+        for row, p in enumerate(partite):
+            # ID
+            self.partite_table.setItem(row, 0, QTableWidgetItem(str(p.get('id', ''))))
+            
+            # Numero
+            numero_item = QTableWidgetItem(str(p.get('numero_partita', '')))
+            numero_item.setData(Qt.UserRole, p)
+            self.partite_table.setItem(row, 1, numero_item)
+            
+            # Suffisso
+            self.partite_table.setItem(row, 2, QTableWidgetItem(p.get('suffisso_partita', '')))
+            
+            # Comune
+            self.partite_table.setItem(row, 3, QTableWidgetItem(p.get('comune_nome', '')))
+            
+            # Stato
+            self.partite_table.setItem(row, 4, QTableWidgetItem(p.get('stato', '')))
+            
+            # Similarità
+            similarity = p.get('similarity_score', 0)
+            sim_item = QTableWidgetItem(f"{similarity:.3f}")
+            sim_item.setTextAlignment(Qt.AlignCenter)
+            if similarity > 0.7:
+                sim_item.setBackground(QColor(144, 238, 144))
+            elif similarity > 0.5:
+                sim_item.setBackground(QColor(255, 255, 224))
+            else:
+                sim_item.setBackground(QColor(255, 228, 225))
+            self.partite_table.setItem(row, 5, sim_item)
+            
+            # Campo ricerca
+            self.partite_table.setItem(row, 6, QTableWidgetItem(p.get('search_field', '')))
+    
+    def _populate_partite_expanded(self, partite):
+        """Popola la tabella partite dal formato expanded."""
+        self.partite_table.setRowCount(len(partite))
+        
+        for row, partita in enumerate(partite):
+            info = partita.get('additional_info', {})
+            
+            self.partite_table.setItem(row, 0, QTableWidgetItem(str(partita.get('entity_id', ''))))
+            self.partite_table.setItem(row, 1, QTableWidgetItem(str(info.get('numero_partita', 'N/A'))))
+            self.partite_table.setItem(row, 2, QTableWidgetItem(info.get('suffisso_partita', '') or ''))
+            self.partite_table.setItem(row, 3, QTableWidgetItem(info.get('comune', 'N/A')))
+            self.partite_table.setItem(row, 4, QTableWidgetItem(info.get('stato', 'N/A')))
+            self.partite_table.setItem(row, 5, QTableWidgetItem(f"{partita.get('similarity_score', 0):.3f}"))
+            self.partite_table.setItem(row, 6, QTableWidgetItem(partita.get('search_field', '')))
     
     def _update_tab_counters(self, results):
         """Aggiorna i contatori nei tab."""
@@ -1230,44 +1375,31 @@ class UnifiedFuzzySearchWidget(QWidget):
                 'partite': len(results.get('partite', []))
             }
         
-        # Trova indice base (0 se c'è tab unificata, altrimenti 0)
-        base_index = 1 if self.mode == 'expanded' and hasattr(self, 'unified_table') else 0
-        
-        self.results_tabs.setTabText(base_index, f"👥 Possessori ({counts['possessori']})")
-        self.results_tabs.setTabText(base_index + 1, f"🏘️ Località ({counts['localita']})")
-        self.results_tabs.setTabText(base_index + 2, f"📋 Variazioni ({counts['variazioni']})")
-        self.results_tabs.setTabText(base_index + 3, f"🏢 Immobili ({counts['immobili']})")
-        self.results_tabs.setTabText(base_index + 4, f"📄 Contratti ({counts['contratti']})")
-        self.results_tabs.setTabText(base_index + 5, f"📊 Partite ({counts['partite']})")
-        
-        # Aggiorna contatore totale se in modalità expanded
-        if self.mode == 'expanded' and hasattr(self, 'results_count_label'):
-            total = sum(counts.values())
-            self.results_count_label.setText(f"{total} risultati")
+        self.results_tabs.setTabText(1, f"👥 Possessori ({counts['possessori']})")
+        self.results_tabs.setTabText(2, f"🏘️ Località ({counts['localita']})")
+        self.results_tabs.setTabText(3, f"📋 Variazioni ({counts['variazioni']})")
+        self.results_tabs.setTabText(4, f"🏢 Immobili ({counts['immobili']})")
+        self.results_tabs.setTabText(5, f"📄 Contratti ({counts['contratti']})")
+        self.results_tabs.setTabText(6, f"📊 Partite ({counts['partite']})")
     
     def _clear_results(self):
         """Pulisce tutti i risultati."""
-        for table in [self.possessori_table, self.localita_table, self.variazioni_table,
-                     self.immobili_table, self.contratti_table, self.partite_table]:
+        for table in [self.unified_table, self.possessori_table, self.localita_table, 
+                     self.variazioni_table, self.immobili_table, self.contratti_table, 
+                     self.partite_table]:
             table.setRowCount(0)
         
-        if hasattr(self, 'unified_table'):
-            self.unified_table.setRowCount(0)
-        
         # Reset contatori tab
-        base_index = 1 if self.mode == 'expanded' and hasattr(self, 'unified_table') else 0
-        self.results_tabs.setTabText(base_index, "👥 Possessori")
-        self.results_tabs.setTabText(base_index + 1, "🏘️ Località")
-        self.results_tabs.setTabText(base_index + 2, "📋 Variazioni")
-        self.results_tabs.setTabText(base_index + 3, "🏢 Immobili")
-        self.results_tabs.setTabText(base_index + 4, "📄 Contratti")
-        self.results_tabs.setTabText(base_index + 5, "📊 Partite")
+        self.results_tabs.setTabText(1, "👥 Possessori")
+        self.results_tabs.setTabText(2, "🏘️ Località")
+        self.results_tabs.setTabText(3, "📋 Variazioni")
+        self.results_tabs.setTabText(4, "🏢 Immobili")
+        self.results_tabs.setTabText(5, "📄 Contratti")
+        self.results_tabs.setTabText(6, "📊 Partite")
         
         # Disabilita export
         self.export_btn.setEnabled(False)
-        
-        if hasattr(self, 'results_count_label'):
-            self.results_count_label.setText("0 risultati")
+        self.results_count_label.setText("0 risultati")
         
         self.current_results = {}
     
@@ -1276,28 +1408,25 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.progress_bar.setVisible(False)
         self.status_label.setText("❌ Errore ricerca")
         self.status_label.setStyleSheet("color: red; font-size: 10px;")
-        if hasattr(self, 'debug_text'):
-            self.debug_text.append(f"❌ Errore: {error_message}")
         QMessageBox.critical(self, "Errore Ricerca", f"Errore durante la ricerca:\n{error_message}")
     
     def _search_finished(self):
         """Chiamato quando la ricerca termina."""
         self.progress_bar.setVisible(False)
-        if hasattr(self, 'search_btn'):
-            self.search_btn.setEnabled(True)
+        self.search_btn.setEnabled(True)
     
     def _clear_search(self):
-        """Pulisce la ricerca (modalità expanded)."""
+        """Pulisce la ricerca."""
         self.search_edit.clear()
         self._clear_results()
         self.status_label.setText("Ricerca pulita")
     
     # ========================================================================
-    # METODI PER EXPORT UNIFICATO
+    # METODI PER EXPORT
     # ========================================================================
     
     def _export_results(self):
-        """Export unificato che supporta tutti i formati."""
+        """Export che supporta tutti i formati."""
         if not self.current_results or (
             'total_results' in self.current_results and 
             self.current_results['total_results'] == 0
@@ -1345,8 +1474,7 @@ class UnifiedFuzzySearchWidget(QWidget):
             f.write("RISULTATI RICERCA FUZZY\n")
             f.write("=" * 60 + "\n")
             f.write(f"Query: {self.current_results.get('query_text', 'N/A')}\n")
-            f.write(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Modalità: {self.mode}\n\n")
+            f.write(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
             # Export per ogni tipo di risultato
             result_types = [
@@ -1518,7 +1646,6 @@ class UnifiedFuzzySearchWidget(QWidget):
         export_data = {
             'query': self.current_results.get('query_text', 'N/A'),
             'timestamp': datetime.now().isoformat(),
-            'mode': self.mode,
             'threshold': self.current_results.get('threshold', 0),
             'results': {}
         }
@@ -1535,81 +1662,32 @@ class UnifiedFuzzySearchWidget(QWidget):
     # METODI GESTIONE DOPPIO CLICK
     # ========================================================================
     
-    def _on_possessore_double_click(self, index):
-        """Gestisce doppio click su possessore."""
-        item = self.possessori_table.item(index.row(), 0)
-        if item:
-            possessore_data = item.data(Qt.UserRole)
-            possessore_id = possessore_data.get('id')
+    def _on_entity_double_click(self, entity_type):
+        """Gestisce il doppio click nelle tab specifiche."""
+        # Mappa tipo entità -> tabella
+        table_map = {
+            'possessore': self.possessori_table,
+            'localita': self.localita_table,
+            'variazione': self.variazioni_table,
+            'immobile': self.immobili_table,
+            'contratto': self.contratti_table,
+            'partita': self.partite_table
+        }
+        
+        table = table_map.get(entity_type)
+        if not table:
+            return
             
-            if self.mode == 'expanded':
-                self._show_entity_details('possessore', possessore_id)
-            else:
-                # Modalità compact: mostra dialog semplice
-                self._show_simple_possessore_details(possessore_data)
-    
-    def _on_localita_double_click(self, index):
-        """Gestisce doppio click su località."""
-        item = self.localita_table.item(index.row(), 0)
-        if item:
-            localita_data = item.data(Qt.UserRole)
-            localita_id = localita_data.get('id')
-            
-            if self.mode == 'expanded':
-                self._show_entity_details('localita', localita_id)
-            else:
-                self._show_simple_localita_details(localita_data)
-    
-    def _on_variazione_double_click(self, index):
-        """Gestisce doppio click su variazione."""
-        item = self.variazioni_table.item(index.row(), 0)
-        if item:
-            variazione_data = item.data(Qt.UserRole)
-            variazione_id = variazione_data.get('id')
-            
-            if self.mode == 'expanded':
-                self._show_entity_details('variazione', variazione_id)
-            else:
-                self._show_simple_variazione_details(variazione_data)
-    
-    def _on_immobile_double_click(self, index):
-        """Gestisce doppio click su immobile."""
-        item = self.immobili_table.item(index.row(), 0)
-        if item:
-            immobile_data = item.data(Qt.UserRole)
-            immobile_id = immobile_data.get('id')
-            
-            if self.mode == 'expanded':
-                self._show_entity_details('immobile', immobile_id)
-            else:
-                self._show_simple_immobile_details(immobile_data)
-    
-    def _on_contratto_double_click(self, index):
-        """Gestisce doppio click su contratto."""
-        item = self.contratti_table.item(index.row(), 0)
-        if item:
-            contratto_data = item.data(Qt.UserRole)
-            contratto_id = contratto_data.get('id')
-            
-            if self.mode == 'expanded':
-                self._show_entity_details('contratto', contratto_id)
-            else:
-                self._show_simple_contratto_details(contratto_data)
-    
-    def _on_partita_double_click(self, index):
-        """Gestisce doppio click su partita."""
-        item = self.partite_table.item(index.row(), 0)
-        if item:
-            partita_data = item.data(Qt.UserRole)
-            partita_id = partita_data.get('id')
-            
-            if self.mode == 'expanded':
-                self._show_entity_details('partita', partita_id)
-            else:
-                self._show_simple_partita_details(partita_data)
+        current_row = table.currentRow()
+        if current_row >= 0:
+            id_item = table.item(current_row, 0)
+            if id_item:
+                entity_id = int(id_item.text()) if id_item.text().isdigit() else None
+                if entity_id:
+                    self._show_entity_details(entity_type, entity_id)
     
     def _on_unified_double_click(self, index):
-        """Gestisce doppio click nella tab unificata (modalità expanded)."""
+        """Gestisce il doppio click nella tab unificata."""
         if index.isValid():
             row = index.row()
             item = self.unified_table.item(row, 0)
@@ -1621,114 +1699,25 @@ class UnifiedFuzzySearchWidget(QWidget):
                     if entity_type and entity_id:
                         self._show_entity_details(entity_type, entity_id)
     
-    # Metodi per dettagli semplici (modalità compact)
-    def _show_simple_possessore_details(self, possessore_data):
-        """Mostra dettagli semplici possessore (modalità compact)."""
-        nome = possessore_data.get('nome_completo', 'N/A')
-        comune = possessore_data.get('comune_nome', 'N/A')
-        num_partite = possessore_data.get('num_partite', 0)
-        
-        dettagli_msg = f"Nome: {nome}\n"
-        dettagli_msg += f"Comune: {comune}\n"
-        dettagli_msg += f"Partite collegate: {num_partite}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {possessore_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Possessore",
-            dettagli_msg
-        )
-    
-    def _show_simple_localita_details(self, localita_data):
-        """Mostra dettagli semplici località (modalità compact)."""
-        nome = localita_data.get('nome', 'N/A')
-        civico = localita_data.get('civico', '')
-        nome_completo = f"{nome} {civico}" if civico else nome
-        comune = localita_data.get('comune_nome', 'N/A')
-        num_immobili = localita_data.get('num_immobili', 0)
-        
-        dettagli_msg = f"Località: {nome_completo}\n"
-        dettagli_msg += f"Comune: {comune}\n"
-        dettagli_msg += f"Immobili: {num_immobili}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {localita_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Località",
-            dettagli_msg
-        )
-    
-    def _show_simple_variazione_details(self, variazione_data):
-        """Mostra dettagli semplici variazione (modalità compact)."""
-        dettagli_msg = f"Tipo: {variazione_data.get('tipo', 'N/A')}\n"
-        dettagli_msg += f"Data: {variazione_data.get('data_variazione', 'N/A')}\n"
-        dettagli_msg += f"Descrizione: {variazione_data.get('descrizione', 'N/A')}\n"
-        dettagli_msg += f"Partita: {variazione_data.get('numero_partita', 'N/A')}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {variazione_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Variazione",
-            dettagli_msg
-        )
-    
-    def _show_simple_immobile_details(self, immobile_data):
-        """Mostra dettagli semplici immobile (modalità compact)."""
-        dettagli_msg = f"Classificazione: {immobile_data.get('classificazione', 'N/A')}\n"
-        dettagli_msg += f"Natura: {immobile_data.get('natura', 'N/A')}\n"
-        dettagli_msg += f"Partita: {immobile_data.get('numero_partita', 'N/A')}\n"
-        dettagli_msg += f"Comune: {immobile_data.get('comune_nome', 'N/A')}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {immobile_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Immobile",
-            dettagli_msg
-        )
-    
-    def _show_simple_contratto_details(self, contratto_data):
-        """Mostra dettagli semplici contratto (modalità compact)."""
-        dettagli_msg = f"Tipo: {contratto_data.get('tipo', 'N/A')}\n"
-        dettagli_msg += f"Data Stipula: {contratto_data.get('data_stipula', 'N/A')}\n"
-        dettagli_msg += f"Partita: {contratto_data.get('numero_partita', 'N/A')}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {contratto_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Contratto",
-            dettagli_msg
-        )
-    
-    def _show_simple_partita_details(self, partita_data):
-        """Mostra dettagli semplici partita (modalità compact)."""
-        dettagli_msg = f"Numero: {partita_data.get('numero_partita', 'N/A')}\n"
-        dettagli_msg += f"Tipo: {partita_data.get('tipo_partita', 'N/A')}\n"
-        dettagli_msg += f"Comune: {partita_data.get('comune_nome', 'N/A')}\n"
-        dettagli_msg += f"\nSimilarità ricerca: {partita_data.get('similarity_score', 0):.1%}"
-        
-        QMessageBox.information(
-            self, f"Dettagli Partita",
-            dettagli_msg
-        )
-    
     def _show_entity_details(self, entity_type, entity_id):
-        """Mostra dettagli avanzati entità (modalità expanded)."""
-        # Implementa dialog avanzati o integrazione con widget esistenti
-        # Per ora usa i metodi semplici come fallback
-        if entity_type == 'possessore':
-            # Cerca nei risultati correnti
-            for p in self.current_results.get('possessori', []):
-                if p.get('id') == entity_id:
-                    self._show_simple_possessore_details(p)
-                    return
-        # ... implementare per altri tipi ...
+        """Mostra i dettagli usando il dialog avanzato."""
+        try:
+            # Usa il dialog generico per dettagli
+            dialog = EntityDetailsDialog(self.db_manager, entity_type, entity_id, self)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.warning(self, "Errore", f"Errore apertura dettagli: {str(e)}")
 
 # ========================================================================
 # FUNZIONI DI INTEGRAZIONE
 # ========================================================================
 
-def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
+def add_fuzzy_search_tab_to_main_window(main_window):
     """
     Aggiunge il tab di ricerca fuzzy alla finestra principale.
     
     Args:
         main_window: Istanza di CatastoMainWindow
-        mode: 'compact' o 'expanded'
         
     Returns:
         bool: True se aggiunto con successo, False altrimenti
@@ -1742,15 +1731,15 @@ def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
             return False
             
         # Crea il widget di ricerca fuzzy
-        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, mode, main_window)
+        fuzzy_widget = FuzzySearchWidget(main_window.db_manager, main_window)
         
         # Aggiunge il tab alla finestra principale
         tab_index = main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
         
         if hasattr(main_window, 'logger'):
-            main_window.logger.info(f"Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+            main_window.logger.info(f"Tab Ricerca Fuzzy aggiunto all'indice {tab_index}")
         else:
-            print(f"✅ Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+            print(f"✅ Tab Ricerca Fuzzy aggiunto all'indice {tab_index}")
         
         return True
         
@@ -1765,14 +1754,14 @@ def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
         return False
 
 def integrate_expanded_fuzzy_search_widget(main_gui, db_manager):
-    """Integra il widget di ricerca fuzzy in modalità expanded."""
-    fuzzy_widget = UnifiedFuzzySearchWidget(db_manager, 'expanded')
+    """Integra il widget di ricerca fuzzy."""
+    fuzzy_widget = FuzzySearchWidget(db_manager)
     
     if hasattr(main_gui, 'tab_widget') or hasattr(main_gui, 'tabs'):
         tab_widget = getattr(main_gui, 'tab_widget', getattr(main_gui, 'tabs', None))
         if tab_widget:
             tab_widget.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
-            print("Widget ricerca fuzzy expanded integrato come nuovo tab")
+            print("Widget ricerca fuzzy integrato come nuovo tab")
     else:
         print("ATTENZIONE: GUI non ha tab_widget/tabs, integrazione manuale necessaria")
         
@@ -1783,12 +1772,10 @@ def integrate_expanded_fuzzy_search_widget(main_gui, db_manager):
 # ========================================================================
 
 # Classi
-CompactFuzzySearchWidget = lambda db_manager, parent=None: UnifiedFuzzySearchWidget(db_manager, 'compact', parent)
-ExpandedFuzzySearchWidget = lambda db_manager: UnifiedFuzzySearchWidget(db_manager, 'expanded')
-
-# Thread
-FuzzySearchThread = UnifiedFuzzySearchThread
-ExpandedFuzzySearchWorker = UnifiedFuzzySearchThread
+UnifiedFuzzySearchWidget = FuzzySearchWidget  # Alias per compatibilità
+CompactFuzzySearchWidget = FuzzySearchWidget  # Tutto è expanded ora
+ExpandedFuzzySearchWidget = FuzzySearchWidget
+ExpandedFuzzySearchWorker = FuzzySearchThread
 
 # Funzioni di integrazione
 add_working_fuzzy_search_tab_to_main_window = add_fuzzy_search_tab_to_main_window
@@ -1814,17 +1801,11 @@ if __name__ == "__main__":
         def __init__(self):
             self.schema = "catasto"
     
-    # Test modalità compact
-    print("Test modalità COMPACT:")
-    widget_compact = UnifiedFuzzySearchWidget(MockDBManager(), mode='compact')
-    widget_compact.setWindowTitle("Ricerca Fuzzy - Modalità Compatta")
-    widget_compact.show()
-    
-    # Test modalità expanded
-    print("\nTest modalità EXPANDED:")
-    widget_expanded = UnifiedFuzzySearchWidget(MockDBManager(), mode='expanded')
-    widget_expanded.setWindowTitle("Ricerca Fuzzy - Modalità Espansa")
-    widget_expanded.move(widget_compact.x() + 50, widget_compact.y() + 50)
-    widget_expanded.show()
+    # Test widget
+    print("Test widget ricerca fuzzy completo:")
+    widget = FuzzySearchWidget(MockDBManager())
+    widget.setWindowTitle("Ricerca Fuzzy - Sistema Catasto")
+    widget.resize(1200, 800)
+    widget.show()
     
     sys.exit(app.exec_())

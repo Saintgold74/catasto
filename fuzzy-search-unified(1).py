@@ -83,11 +83,10 @@ class FuzzySearchThread(QThread):
             
             self.progress_updated.emit(30)
             
-            # CORREZIONE: Passare threshold come secondo parametro
+            # Usa sempre la ricerca unificata
             if hasattr(self.gin_search, 'search_all_entities_fuzzy'):
                 results = self.gin_search.search_all_entities_fuzzy(
                     self.query_text,
-                    threshold,  # ← AGGIUNTO: parametro threshold
                     search_possessori=self.options.get('search_possessori', True),
                     search_localita=self.options.get('search_localita', True),
                     search_immobili=self.options.get('search_immobili', True),
@@ -97,7 +96,11 @@ class FuzzySearchThread(QThread):
                     max_results_per_type=max_results_per_type
                 )
             else:
-                # Fallback con ricerche individuali..
+                # Fallback: usa ricerche individuali e combina i risultati
+                self.progress_updated.emit(20)
+                results = {'results_by_type': {}}
+                total_steps = sum(1 for k, v in self.options.items() if k.startswith('search_') and v)
+                current_step = 0
                 
                 # Ricerca possessori
                 if self.options.get('search_possessori', True):
@@ -105,9 +108,23 @@ class FuzzySearchThread(QThread):
                     self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
                     if hasattr(self.gin_search, 'search_possessori_fuzzy'):
                         possessori = self.gin_search.search_possessori_fuzzy(
-                            self.query_text, threshold, max_results
+                            self.query_text, threshold, self.options.get('max_results', 100)
                         )
-                        results['possessori'] = possessori or []
+                        if possessori:
+                            results['results_by_type']['possessore'] = [
+                                {
+                                    'entity_id': p.get('id'),
+                                    'display_text': p.get('nome_completo', ''),
+                                    'detail_text': p.get('comune_nome', ''),
+                                    'similarity_score': p.get('similarity_score', 0),
+                                    'search_field': 'nome_completo',
+                                    'additional_info': {
+                                        'paternita': p.get('paternita', ''),
+                                        'comune': p.get('comune_nome', ''),
+                                        'num_partite': p.get('num_partite', 0)
+                                    }
+                                } for p in possessori
+                            ]
                 
                 # Ricerca località
                 if self.options.get('search_localita', True):
@@ -115,59 +132,38 @@ class FuzzySearchThread(QThread):
                     self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
                     if hasattr(self.gin_search, 'search_localita_fuzzy'):
                         localita = self.gin_search.search_localita_fuzzy(
-                            self.query_text, threshold, max_results
+                            self.query_text, threshold, self.options.get('max_results', 100)
                         )
-                        results['localita'] = localita or []
+                        if localita:
+                            results['results_by_type']['localita'] = [
+                                {
+                                    'entity_id': l.get('id'),
+                                    'display_text': f"{l.get('nome', '')} {l.get('civico', '')}".strip(),
+                                    'detail_text': l.get('comune_nome', ''),
+                                    'similarity_score': l.get('similarity_score', 0),
+                                    'search_field': 'nome',
+                                    'additional_info': {
+                                        'tipo': l.get('tipo', ''),
+                                        'comune': l.get('comune_nome', ''),
+                                        'num_immobili': l.get('num_immobili', 0)
+                                    }
+                                } for l in localita
+                            ]
                 
-                # Ricerca variazioni
-                if self.options.get('search_variazioni', True):
-                    current_step += 1
-                    self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
-                    if hasattr(self.gin_search, 'search_variazioni_fuzzy'):
-                        variazioni = self.gin_search.search_variazioni_fuzzy(
-                            self.query_text, threshold, max_results
-                        )
-                        results['variazioni'] = variazioni or []
+                # Aggiungi ricerche per altre entità se disponibili...
+                # (immobili, variazioni, contratti, partite)
                 
-                # Ricerca immobili
-                if self.options.get('search_immobili', True):
-                    current_step += 1
-                    self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
-                    if hasattr(self.gin_search, 'search_immobili_fuzzy'):
-                        immobili = self.gin_search.search_immobili_fuzzy(
-                            self.query_text, threshold, max_results
-                        )
-                        results['immobili'] = immobili or []
-                
-                # Ricerca contratti
-                if self.options.get('search_contratti', True):
-                    current_step += 1
-                    self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
-                    if hasattr(self.gin_search, 'search_contratti_fuzzy'):
-                        contratti = self.gin_search.search_contratti_fuzzy(
-                            self.query_text, threshold, max_results
-                        )
-                        results['contratti'] = contratti or []
-                
-                # Ricerca partite
-                if self.options.get('search_partite', True):
-                    current_step += 1
-                    self.progress_updated.emit(int(20 + (current_step * 60 / total_steps)))
-                    if hasattr(self.gin_search, 'search_partite_fuzzy'):
-                        partite = self.gin_search.search_partite_fuzzy(
-                            self.query_text, threshold, max_results
-                        )
-                        results['partite'] = partite or []
+                results['status'] = 'OK'
             
             # Aggiungi metadati
             results['query_text'] = self.query_text
             results['threshold'] = threshold
             results['timestamp'] = datetime.now()
-            results['search_type'] = search_type
+            results['search_type'] = 'unified'
             
             # Calcola totale risultati
             if 'results_by_type' in results:
-                total = sum(len(entities) for entities in results['results_by_type'].values())
+                total = sum(len(entities) for entities in results.get('results_by_type', {}).values())
             else:
                 total = sum(len(entities) for key, entities in results.items() 
                           if isinstance(entities, list))
@@ -178,29 +174,7 @@ class FuzzySearchThread(QThread):
             
         except Exception as e:
             self.error_occurred.emit(str(e))
-    def _verify_available_functions(self):
-        """Verifica quali funzioni di ricerca sono disponibili."""
-        if not self.gin_search:
-            return {}
-        
-        available_functions = {}
-        functions_to_check = [
-            'search_possessori_fuzzy',
-            'search_localita_fuzzy', 
-            'search_immobili_fuzzy',
-            'search_variazioni_fuzzy',
-            'search_contratti_fuzzy',
-            'search_partite_fuzzy',
-            'search_all_entities_fuzzy',
-            'verify_gin_indices'
-        ]
-        
-        for func_name in functions_to_check:
-            available_functions[func_name] = hasattr(self.gin_search, func_name)
-            if not available_functions[func_name]:
-                self.logger.warning(f"Funzione {func_name} non disponibile")
-        
-        return available_functions
+
 # ========================================================================
 # DIALOG PER DETTAGLI ENTITÀ
 # ========================================================================
@@ -369,16 +343,6 @@ class FuzzySearchWidget(QWidget):
         
         # Controlli avanzati
         controls_row = QHBoxLayout()
-        
-        # Tipo di ricerca
-        controls_row.addWidget(QLabel("Tipo:"))
-        self.search_type_combo = QComboBox()
-        self.search_type_combo.addItems([
-            "Unificata", "Solo Immobili", "Solo Variazioni", 
-            "Solo Contratti", "Solo Partite", "Possessori+Località"
-        ])
-        self.search_type_combo.setMaximumWidth(150)
-        controls_row.addWidget(self.search_type_combo)
         
         # Soglia similarità
         controls_row.addWidget(QLabel("Soglia:"))
@@ -748,7 +712,6 @@ class FuzzySearchWidget(QWidget):
         
         # Cambi opzioni rilanciano ricerca
         self.max_results_combo.currentTextChanged.connect(self._trigger_search_if_text)
-        self.search_type_combo.currentTextChanged.connect(self._trigger_search_if_text)
         self.search_possessori_cb.toggled.connect(self._trigger_search_if_text)
         self.search_localita_cb.toggled.connect(self._trigger_search_if_text)
         self.search_variazioni_cb.toggled.connect(self._trigger_search_if_text)
@@ -824,18 +787,8 @@ class FuzzySearchWidget(QWidget):
         threshold = self.precision_slider.value() / 100.0
         max_results = int(self.max_results_combo.currentText())
         
-        # Determina tipo di ricerca
+        # Usa sempre ricerca unificata
         search_type = 'unified'
-        if hasattr(self, 'search_type_combo'):
-            type_map = {
-                0: 'unified',
-                1: 'immobili', 
-                2: 'variazioni',
-                3: 'contratti',
-                4: 'partite',
-                5: 'combined'
-            }
-            search_type = type_map.get(self.search_type_combo.currentIndex(), 'unified')
         
         search_options = {
             'search_type': search_type,
@@ -868,140 +821,6 @@ class FuzzySearchWidget(QWidget):
         self.search_thread.finished.connect(self._search_finished)
         self.search_thread.start()
     
-    def _handle_search_error(self, error_message):
-        """Gestisce errori di ricerca."""
-        self.progress_bar.setVisible(False)
-        self.status_label.setText("❌ Errore ricerca")
-        self.status_label.setStyleSheet("color: red; font-size: 10px;")
-        self.search_btn.setEnabled(True)
-        QMessageBox.critical(self, "Errore Ricerca", f"Errore durante la ricerca:\n{error_message}")
-    
-    def _search_finished(self):
-        """Chiamato quando la ricerca termina."""
-        self.progress_bar.setVisible(False)
-        self.search_btn.setEnabled(True)
-    
-    def _clear_search(self):
-        """Pulisce la ricerca."""
-        self.search_edit.clear()
-        self._clear_results()
-        self.status_label.setText("Ricerca pulita")
-    
-    def _clear_results(self):
-        """Pulisce tutti i risultati."""
-        for table in [self.unified_table, self.possessori_table, self.localita_table, 
-                     self.variazioni_table, self.immobili_table, self.contratti_table, 
-                     self.partite_table]:
-            table.setRowCount(0)
-        
-        # Reset contatori tab
-        self.results_tabs.setTabText(1, "👥 Possessori")
-        self.results_tabs.setTabText(2, "🏘️ Località")
-        self.results_tabs.setTabText(3, "📋 Variazioni")
-        self.results_tabs.setTabText(4, "🏢 Immobili")
-        self.results_tabs.setTabText(5, "📄 Contratti")
-        self.results_tabs.setTabText(6, "📊 Partite")
-        
-        # Disabilita export
-        self.export_btn.setEnabled(False)
-        self.results_count_label.setText("0 risultati")
-        
-        self.current_results = {}
-
-    def _perform_individual_searches(self, query_text, options):
-        """Esegue ricerche individuali con gestione errori robusta."""
-        results = {'results_by_type': {}}
-        threshold = options.get('threshold', 0.3)
-        max_results = options.get('max_results', 100)
-        
-        # Ricerca possessori
-        if options.get('search_possessori', True):
-            try:
-                if hasattr(self.gin_search, 'search_possessori_fuzzy'):
-                    possessori = self.gin_search.search_possessori_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if possessori:
-                        # Converte al formato unificato
-                        results['results_by_type']['possessore'] = [
-                            self._convert_possessore_to_unified(p) for p in possessori
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca possessori: {e}")
-        
-        # Ricerca località
-        if options.get('search_localita', True):
-            try:
-                if hasattr(self.gin_search, 'search_localita_fuzzy'):
-                    localita = self.gin_search.search_localita_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if localita:
-                        results['results_by_type']['localita'] = [
-                            self._convert_localita_to_unified(l) for l in localita
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca località: {e}")
-        
-        # Ricerca immobili
-        if options.get('search_immobili', True):
-            try:
-                if hasattr(self.gin_search, 'search_immobili_fuzzy'):
-                    immobili = self.gin_search.search_immobili_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if immobili:
-                        results['results_by_type']['immobile'] = [
-                            self._convert_immobile_to_unified(i) for i in immobili
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca immobili: {e}")
-        
-        # Ricerca variazioni
-        if options.get('search_variazioni', True):
-            try:
-                if hasattr(self.gin_search, 'search_variazioni_fuzzy'):
-                    variazioni = self.gin_search.search_variazioni_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if variazioni:
-                        results['results_by_type']['variazione'] = [
-                            self._convert_variazione_to_unified(v) for v in variazioni
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca variazioni: {e}")
-        
-        # Ricerca contratti
-        if options.get('search_contratti', True):
-            try:
-                if hasattr(self.gin_search, 'search_contratti_fuzzy'):
-                    contratti = self.gin_search.search_contratti_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if contratti:
-                        results['results_by_type']['contratto'] = [
-                            self._convert_contratto_to_unified(c) for c in contratti
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca contratti: {e}")
-        
-        # Ricerca partite
-        if options.get('search_partite', True):
-            try:
-                if hasattr(self.gin_search, 'search_partite_fuzzy'):
-                    partite = self.gin_search.search_partite_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if partite:
-                        results['results_by_type']['partita'] = [
-                            self._convert_partita_to_unified(p) for p in partite
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca partite: {e}")
-        
-        return results
-
-    
     def _display_results(self, results):
         """Visualizza i risultati della ricerca."""
         try:
@@ -1013,8 +832,13 @@ class FuzzySearchWidget(QWidget):
                 self._display_unified_results(results['results_by_type'])
                 self._populate_individual_tabs_expanded(results['results_by_type'])
             else:
-                # Formato standard
+                # Formato standard - convertiamo per la vista unificata
                 self._clear_unified_table()
+                converted_results = self._convert_standard_to_unified(results)
+                if converted_results:
+                    self._display_unified_results(converted_results)
+                
+                # Popola tab individuali
                 self._populate_possessori_table(results.get('possessori', []))
                 self._populate_localita_table(results.get('localita', []))
                 self._populate_variazioni_table(results.get('variazioni', []))
@@ -1109,6 +933,48 @@ class FuzzySearchWidget(QWidget):
     def _clear_unified_table(self):
         """Pulisce la tabella unificata."""
         self.unified_table.setRowCount(0)
+    
+    def _convert_standard_to_unified(self, results):
+        """Converte i risultati dal formato standard al formato unificato."""
+        converted = {}
+        
+        # Possessori
+        if 'possessori' in results and results['possessori']:
+            converted['possessore'] = [
+                {
+                    'entity_id': p.get('id'),
+                    'display_text': p.get('nome_completo', ''),
+                    'detail_text': p.get('comune_nome', ''),
+                    'similarity_score': p.get('similarity_score', 0),
+                    'search_field': 'nome_completo',
+                    'additional_info': {
+                        'paternita': p.get('paternita', ''),
+                        'comune': p.get('comune_nome', ''),
+                        'num_partite': p.get('num_partite', 0)
+                    }
+                } for p in results['possessori']
+            ]
+        
+        # Località
+        if 'localita' in results and results['localita']:
+            converted['localita'] = [
+                {
+                    'entity_id': l.get('id'),
+                    'display_text': f"{l.get('nome', '')} {l.get('civico', '')}".strip(),
+                    'detail_text': l.get('comune_nome', ''),
+                    'similarity_score': l.get('similarity_score', 0),
+                    'search_field': 'nome',
+                    'additional_info': {
+                        'tipo': l.get('tipo', ''),
+                        'comune': l.get('comune_nome', ''),
+                        'num_immobili': l.get('num_immobili', 0)
+                    }
+                } for l in results['localita']
+            ]
+        
+        # Aggiungi altre conversioni per immobili, variazioni, ecc. se necessario
+        
+        return converted if converted else None
     
     def _populate_individual_tabs_expanded(self, results_by_type):
         """Popola le tab individuali con dati del formato expanded."""
@@ -1860,374 +1726,6 @@ class FuzzySearchWidget(QWidget):
             dialog.exec_()
         except Exception as e:
             QMessageBox.warning(self, "Errore", f"Errore apertura dettagli: {str(e)}")
-    # ========================================================================
-    # CORREZIONE 2: Aggiungere verifica robusta delle funzioni disponibili
-    # ========================================================================
-
-    def _verify_available_functions(self):
-        """Verifica quali funzioni di ricerca sono disponibili."""
-        if not self.gin_search:
-            return {}
-        
-        available_functions = {}
-        functions_to_check = [
-            'search_possessori_fuzzy',
-            'search_localita_fuzzy', 
-            'search_immobili_fuzzy',
-            'search_variazioni_fuzzy',
-            'search_contratti_fuzzy',
-            'search_partite_fuzzy',
-            'search_all_entities_fuzzy',
-            'verify_gin_indices'
-        ]
-        
-        for func_name in functions_to_check:
-            available_functions[func_name] = hasattr(self.gin_search, func_name)
-            if not available_functions[func_name]:
-                self.logger.warning(f"Funzione {func_name} non disponibile")
-        
-        return available_functions
-
-    # ========================================================================
-    # CORREZIONE 3: Gestione sicura delle ricerche individuali
-    # ========================================================================
-
-    def _perform_individual_searches(self, query_text, options):
-        """Esegue ricerche individuali con gestione errori robusta."""
-        results = {'results_by_type': {}}
-        threshold = options.get('threshold', 0.3)
-        max_results = options.get('max_results', 100)
-        
-        # Ricerca possessori
-        if options.get('search_possessori', True):
-            try:
-                if hasattr(self.gin_search, 'search_possessori_fuzzy'):
-                    possessori = self.gin_search.search_possessori_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if possessori:
-                        # Converte al formato unificato
-                        results['results_by_type']['possessore'] = [
-                            self._convert_possessore_to_unified(p) for p in possessori
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca possessori: {e}")
-        
-        # Ricerca località
-        if options.get('search_localita', True):
-            try:
-                if hasattr(self.gin_search, 'search_localita_fuzzy'):
-                    localita = self.gin_search.search_localita_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if localita:
-                        results['results_by_type']['localita'] = [
-                            self._convert_localita_to_unified(l) for l in localita
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca località: {e}")
-        
-        # Ricerca immobili
-        if options.get('search_immobili', True):
-            try:
-                if hasattr(self.gin_search, 'search_immobili_fuzzy'):
-                    immobili = self.gin_search.search_immobili_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if immobili:
-                        results['results_by_type']['immobile'] = [
-                            self._convert_immobile_to_unified(i) for i in immobili
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca immobili: {e}")
-        
-        # Ricerca variazioni
-        if options.get('search_variazioni', True):
-            try:
-                if hasattr(self.gin_search, 'search_variazioni_fuzzy'):
-                    variazioni = self.gin_search.search_variazioni_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if variazioni:
-                        results['results_by_type']['variazione'] = [
-                            self._convert_variazione_to_unified(v) for v in variazioni
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca variazioni: {e}")
-        
-        # Ricerca contratti
-        if options.get('search_contratti', True):
-            try:
-                if hasattr(self.gin_search, 'search_contratti_fuzzy'):
-                    contratti = self.gin_search.search_contratti_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if contratti:
-                        results['results_by_type']['contratto'] = [
-                            self._convert_contratto_to_unified(c) for c in contratti
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca contratti: {e}")
-        
-        # Ricerca partite
-        if options.get('search_partite', True):
-            try:
-                if hasattr(self.gin_search, 'search_partite_fuzzy'):
-                    partite = self.gin_search.search_partite_fuzzy(
-                        query_text, threshold, max_results
-                    )
-                    if partite:
-                        results['results_by_type']['partita'] = [
-                            self._convert_partita_to_unified(p) for p in partite
-                        ]
-            except Exception as e:
-                self.logger.error(f"Errore ricerca partite: {e}")
-        
-        return results
-
-    # ========================================================================
-    # CORREZIONE 4: Funzioni di conversione al formato unificato
-    # ========================================================================
-
-    def _convert_possessore_to_unified(self, possessore):
-        """Converte risultato possessore al formato unificato."""
-        return {
-            'entity_id': possessore.get('id'),
-            'entity_type': 'possessore',
-            'display_text': possessore.get('nome_completo', ''),
-            'detail_text': possessore.get('comune_nome', ''),
-            'similarity_score': possessore.get('similarity_score', 0),
-            'search_field': 'nome_completo',
-            'additional_info': {
-                'paternita': possessore.get('paternita', ''),
-                'comune': possessore.get('comune_nome', ''),
-                'num_partite': possessore.get('num_partite', 0)
-            }
-        }
-
-    def _convert_localita_to_unified(self, localita):
-        """Converte risultato località al formato unificato."""
-        return {
-            'entity_id': localita.get('id'),
-            'entity_type': 'localita',
-            'display_text': f"{localita.get('nome', '')} {localita.get('civico', '')}".strip(),
-            'detail_text': localita.get('comune_nome', ''),
-            'similarity_score': localita.get('similarity_score', 0),
-            'search_field': 'nome',
-            'additional_info': {
-                'tipo': localita.get('tipo', ''),
-                'comune': localita.get('comune_nome', ''),
-                'num_immobili': localita.get('num_immobili', 0)
-            }
-        }
-
-    def _convert_immobile_to_unified(self, immobile):
-        """Converte risultato immobile al formato unificato."""
-        return {
-            'entity_id': immobile.get('id'),
-            'entity_type': 'immobile', 
-            'display_text': immobile.get('natura', ''),
-            'detail_text': f"Partita {immobile.get('numero_partita', '')} - {immobile.get('comune_nome', '')}",
-            'similarity_score': immobile.get('similarity_score', 0),
-            'search_field': immobile.get('search_field', 'natura'),
-            'additional_info': {
-                'natura': immobile.get('natura', ''),
-                'classificazione': immobile.get('classificazione', ''),
-                'consistenza': immobile.get('consistenza', ''),
-                'partita': immobile.get('numero_partita', ''),
-                'suffisso_partita': immobile.get('suffisso_partita', ''),
-                'localita': immobile.get('localita_nome', ''),
-                'comune': immobile.get('comune_nome', '')
-            }
-        }
-
-    def _convert_variazione_to_unified(self, variazione):
-        """Converte risultato variazione al formato unificato."""
-        return {
-            'entity_id': variazione.get('id'),
-            'entity_type': 'variazione',
-            'display_text': variazione.get('tipo', ''),
-            'detail_text': f"Partita {variazione.get('partita_origine_id', '')} → {variazione.get('partita_destinazione_id', '')} - {variazione.get('data_variazione', '')}",
-            'similarity_score': variazione.get('similarity_score', 0),
-            'search_field': variazione.get('search_field', 'tipo'),
-            'additional_info': {
-                'tipo': variazione.get('tipo', ''),
-                'data_variazione': variazione.get('data_variazione'),
-                'partita_origine': variazione.get('partita_origine_id'),
-                'partita_destinazione': variazione.get('partita_destinazione_id'),
-                'nominativo_riferimento': variazione.get('nominativo_riferimento', ''),
-                'numero_riferimento': variazione.get('numero_riferimento', '')
-            }
-        }
-
-    def _convert_contratto_to_unified(self, contratto):
-        """Converte risultato contratto al formato unificato."""
-        return {
-            'entity_id': contratto.get('id'),
-            'entity_type': 'contratto',
-            'display_text': contratto.get('tipo', ''),
-            'detail_text': f"{contratto.get('notaio', '')} - {contratto.get('data_stipula', '')}",
-            'similarity_score': contratto.get('similarity_score', 0),
-            'search_field': contratto.get('search_field', 'tipo'),
-            'additional_info': {
-                'tipo': contratto.get('tipo', ''),
-                'data_contratto': contratto.get('data_stipula'),
-                'notaio': contratto.get('notaio', ''),
-                'repertorio': contratto.get('repertorio', ''),
-                'note': contratto.get('note', ''),
-                'partita_id': contratto.get('partita_id')
-            }
-        }
-
-    def _convert_partita_to_unified(self, partita):
-        """Converte risultato partita al formato unificato."""
-        return {
-            'entity_id': partita.get('id'),
-            'entity_type': 'partita',
-            'display_text': f"Partita {partita.get('numero_partita', '')} {partita.get('suffisso_partita', '')}".strip(),
-            'detail_text': f"{partita.get('comune_nome', '')} - {partita.get('stato', '')}",
-            'similarity_score': partita.get('similarity_score', 0),
-            'search_field': partita.get('search_field', 'numero_partita'),
-            'additional_info': {
-                'numero_partita': partita.get('numero_partita'),
-                'suffisso_partita': partita.get('suffisso_partita', ''),
-                'tipo_partita': partita.get('tipo_partita', ''),
-                'comune': partita.get('comune_nome', ''),
-                'stato': partita.get('stato', ''),
-                'num_immobili': partita.get('num_immobili', 0)
-            }
-        }
-
-    # ========================================================================
-    # CORREZIONE 5: Verifica completa degli indici GIN
-    # ========================================================================
-
-    def _comprehensive_gin_check(self):
-        """Verifica completa degli indici GIN e delle funzioni."""
-        if not self.gin_search:
-            return {
-                'status': 'ERROR',
-                'message': 'Estensione GIN non disponibile',
-                'indices': [],
-                'functions': {}
-            }
-        
-        try:
-            # Verifica indici
-            indices_status = {}
-            if hasattr(self.gin_search, 'verify_gin_indices'):
-                indices_result = self.gin_search.verify_gin_indices()
-                if indices_result.get('status') == 'OK':
-                    indices_status = indices_result
-                
-            # Verifica funzioni
-            functions_status = self._verify_available_functions()
-            
-            # Verifica estensione pg_trgm
-            trgm_available = False
-            if hasattr(self.gin_search, 'check_pg_trgm_extension'):
-                trgm_available = self.gin_search.check_pg_trgm_extension()
-            
-            return {
-                'status': 'OK',
-                'indices': indices_status,
-                'functions': functions_status,
-                'pg_trgm_available': trgm_available,
-                'recommended_indices': [
-                    'idx_gin_possessore_nome_completo_trgm',
-                    'idx_gin_possessore_cognome_nome_trgm',
-                    'idx_gin_possessore_paternita_trgm',
-                    'idx_gin_localita_nome_trgm',
-                    'idx_gin_immobili_natura',
-                    'idx_gin_variazioni_tipo',
-                    'idx_gin_contratti_notaio',
-                    'idx_gin_partite_numero'
-                ]
-            }
-            
-        except Exception as e:
-            return {
-                'status': 'ERROR',
-                'message': str(e),
-                'indices': [],
-                'functions': {}
-            }
-
-    # ========================================================================
-    # CORREZIONE 6: Test di coerenza SQL-Python
-    # ========================================================================
-
-    def test_sql_python_coherence(self):
-        """Test per verificare la coerenza tra implementazione Python e SQL."""
-        results = {
-            'coherence_score': 0,
-            'tests_passed': 0,
-            'tests_total': 0,
-            'issues': []
-        }
-        
-        if not self.gin_search:
-            results['issues'].append("Estensione GIN non disponibile")
-            return results
-        
-        # Test 1: Verifica presenza funzioni base
-        base_functions = ['search_possessori_fuzzy', 'search_localita_fuzzy']
-        for func in base_functions:
-            results['tests_total'] += 1
-            if hasattr(self.gin_search, func):
-                results['tests_passed'] += 1
-            else:
-                results['issues'].append(f"Funzione mancante: {func}")
-        
-        # Test 2: Verifica funzioni ampliato
-        extended_functions = [
-            'search_immobili_fuzzy', 'search_variazioni_fuzzy',
-            'search_contratti_fuzzy', 'search_partite_fuzzy'
-        ]
-        for func in extended_functions:
-            results['tests_total'] += 1
-            if hasattr(self.gin_search, func):
-                results['tests_passed'] += 1
-            else:
-                results['issues'].append(f"Funzione ampliata mancante: {func}")
-        
-        # Test 3: Verifica funzione unificata
-        results['tests_total'] += 1
-        if hasattr(self.gin_search, 'search_all_entities_fuzzy'):
-            results['tests_passed'] += 1
-            
-            # Test parametri funzione unificata
-            try:
-                # Test con parametri corretti
-                test_result = self.gin_search.search_all_entities_fuzzy(
-                    "test", 0.3, True, True, True, True, True, True, 10
-                )
-                results['tests_total'] += 1
-                results['tests_passed'] += 1
-            except Exception as e:
-                results['issues'].append(f"Errore parametri funzione unificata: {e}")
-        else:
-            results['issues'].append("Funzione search_all_entities_fuzzy mancante")
-        
-        # Test 4: Verifica indici GIN
-        results['tests_total'] += 1
-        if hasattr(self.gin_search, 'verify_gin_indices'):
-            try:
-                indices_check = self.gin_search.verify_gin_indices()
-                if indices_check.get('status') == 'OK':
-                    results['tests_passed'] += 1
-                else:
-                    results['issues'].append("Verifica indici GIN fallita")
-            except Exception as e:
-                results['issues'].append(f"Errore verifica indici: {e}")
-        else:
-            results['issues'].append("Funzione verify_gin_indices mancante")
-        
-        # Calcola score di coerenza
-        if results['tests_total'] > 0:
-            results['coherence_score'] = (results['tests_passed'] / results['tests_total']) * 100
-        
-        return results
 
 # ========================================================================
 # FUNZIONI DI INTEGRAZIONE

@@ -9,8 +9,13 @@ Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys,bcrypt
 from fuzzy_search_unified import UnifiedFuzzySearchWidget,integrate_expanded_fuzzy_search_widget,add_fuzzy_search_tab_to_main_window
-#widget = UnifiedFuzzySearchWidget(db_manager, mode='compact')
-#widget = UnifiedFuzzySearchWidget(db_manager, mode='expanded')
+from fuzzy_search_unified import FuzzySearchWidget
+from fuzzy_search_unified import (
+    FUZZY_SEARCH_AVAILABLE, 
+    add_fuzzy_search_tab_to_main_window
+)
+
+
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -805,15 +810,16 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.registra_consultazione_widget_ref, "Registra Consultazione")
-        # --- AGGIUNTA TAB RICERCA FUZZY ---
-        # Aggiungi questo blocco dove ha più senso, es. dopo gli altri tab.
-        if self.db_manager: # È una buona pratica controllare che db_manager esista
-            self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
-            self.tabs.addTab(self.fuzzy_search_widget, "Ricerca Globale")
-            print("✅ Tab ricerca fuzzy aggiunto.")
-        else:
-            print("⚠️ Impossibile aggiungere il tab di ricerca fuzzy: db_manager non è disponibile.")
-        
+        # === AGGIUNTA TAB RICERCA FUZZY ===
+        if FUZZY_SEARCH_AVAILABLE and self.db_manager:
+            try:
+                success = add_fuzzy_search_tab_to_main_window(self)
+                if success:
+                    print("✅ Tab ricerca fuzzy semplificato aggiunto")
+                else:
+                    print("⚠️ Errore aggiunta tab ricerca fuzzy")
+            except Exception as e:
+                print(f"⚠️ Errore ricerca fuzzy: {e}")
         
         # Aggiungi i sotto-tab al layout del contenitore
         layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
@@ -1612,7 +1618,6 @@ def run_gui_app():
         input("Premi Invio per chiudere...") # Mette in pausa per farti leggere l'errore
 
 
-
 if __name__ == "__main__":
     print("[FASE 4] Inizio blocco di esecuzione __main__.")
     
@@ -1634,7 +1639,7 @@ if __name__ == "__main__":
     import traceback
     
     try:
-        run_gui_app()
+        run_gui_app()  # ← QUESTA DEVE ESSERE INDENTATA DENTRO IL BLOCCO if __name__
     except Exception as e:
         # Log dell'errore critico
         gui_logger.critical(f"Errore critico all'avvio dell'applicazione: {e}", exc_info=True)

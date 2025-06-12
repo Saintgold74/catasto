@@ -3251,31 +3251,26 @@ class CatastoDBManager:
             output_string = "Verifica completata. Nessun messaggio specifico o problema riportato dalla procedura."
             
         return problemi_rilevati_flag, output_string
-    def _execute_query(self, query, params=None, fetch=None, many=False, script=False):
-        """Metodo di utility per eseguire query in modo sicuro."""
-        try:
-            # Ora utilizza self.db_adapter che è stato correttamente salvato.
-            return self.db_adapter.execute_query(query, params, fetch, many, script)
-        except Exception as e:
-            logging.error(f"Errore durante l'esecuzione della query: {e}")
-            QMessageBox.critical(None, "Errore Database", f"Si è verificato un errore: {e}")
-            return None if fetch else False
+    
     def open_user_management_dialog(self):
         """
         Apre la finestra di dialogo per la gestione degli utenti e dei ruoli.
+        Questa versione passa l'istanza del manager stesso al dialogo.
         """
-        # --- CORREZIONE ---
-        # L'importazione viene fatta qui, solo quando il metodo è chiamato.
-        # A questo punto, entrambi i moduli sono già stati caricati e non c'è più un ciclo.
+        # L'importazione rimane qui per evitare importazioni circolari
         from dialogs import UserManagementDialog
+        
         try:
-            # Ora utilizza self.db_adapter che è stato correttamente salvato.
-            dialog = UserManagementDialog(self.db_adapter)
+            # Passiamo 'self', ovvero l'intera istanza di CatastoDBManager
+            dialog = UserManagementDialog(self) 
             dialog.exec_()
         except Exception as e:
-            logging.error(f"Impossibile aprire la gestione utenti: {e}")
-            QMessageBox.critical(None, "Errore", f"Impossibile aprire la finestra di gestione utenti: {e}")
-
+            self.logger.error(f"Impossibile aprire la gestione utenti: {e}", exc_info=True)
+            # Qui un QMessageBox è accettabile solo se questo metodo è chiamato da un contesto GUI.
+            # Per coerenza, sarebbe meglio che anche questo metodo sollevasse un'eccezione
+            # e fosse la GUI a mostrare il messaggio di errore.
+            # from PyQt5.QtWidgets import QMessageBox
+            # QMessageBox.critical(None, "Errore", f"Impossibile aprire la finestra di gestione utenti: {e}")
     def run_sql_script(self, script_path):
         """
         Esegue un singolo script SQL.
@@ -3295,42 +3290,65 @@ class CatastoDBManager:
             logging.error(f"Errore durante l'esecuzione dello script {script_path}: {e}")
             QMessageBox.critical(None, "Errore Script", f"Impossibile eseguire lo script {script_path}: {e}")
             return False
-    def refresh_materialized_views(self, show_success_message=True):
+    def refresh_materialized_views(self) -> Tuple[bool, str]:
         """
-        Aggiorna tutte le viste materializzate nel database.
+        Aggiorna tutte le viste materializzate nello schema 'catasto'.
+        Utilizza il pool di connessioni e restituisce un esito e un messaggio.
+        Questo metodo è ora disaccoppiato dalla GUI.
         """
-        logging.info("Inizio aggiornamento delle viste materializzate.")
+        self.logger.info("Inizio aggiornamento delle viste materializzate.")
         
-        progress_dialog = QProgressDialog("Aggiornamento viste materializzate in corso...", "Annulla", 0, 0)
-        progress_dialog.setWindowModality(Qt.WindowModal)
-        progress_dialog.setCancelButton(None) 
-        progress_dialog.show()
-
+        # La query rimane la stessa
         query = """
         DO $$
         DECLARE
             r RECORD;
         BEGIN
             FOR r IN (SELECT matviewname FROM pg_matviews WHERE schemaname = 'catasto') LOOP
-                EXECUTE 'REFRESH MATERIALIZED VIEW catasto.' || quote_ident(r.matviewname);
+                RAISE NOTICE 'Aggiornamento vista: %', r.matviewname;
+                EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY catasto.' || quote_ident(r.matviewname);
             END LOOP;
+            RAISE NOTICE 'Aggiornamento completato.';
         END $$;
         """
+        
+        conn = None
         try:
-            success = self._execute_query(query, script=True)
-            progress_dialog.close()
-            if success:
-                if show_success_message:
-                    QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
-                logging.info("Viste materializzate aggiornate con successo.")
-                return True
-            else:
-                return False
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(query)
+                # REFRESH MATERIALIZED VIEW (anche in un DO block) non richiede commit esplicito
+                # se eseguito in una sessione con autocommit off, ma è buona norma farlo se si
+                # vuole essere sicuri che la transazione si chiuda.
+                conn.commit() 
+            
+            # Recupera eventuali messaggi (NOTICE) generati dalla procedura per darli alla GUI
+            notices = "\n".join(conn.notices) if hasattr(conn, 'notices') and conn.notices else ""
+            msg_success = f"Viste materializzate aggiornate con successo.\n{notices}"
+            self.logger.info(msg_success)
+            return True, msg_success
+
+        except psycopg2.Error as db_err:
+            if conn: conn.rollback()
+            # Messaggio specifico se si tenta REFRESH CONCURRENTLY senza indice UNIQUE
+            if "cannot refresh materialized view concurrently" in str(db_err).lower():
+                msg = "Una o più viste non hanno un indice UNIQUE, necessario per l'aggiornamento CONCURRENTLY. Usare un aggiornamento standard o creare gli indici."
+                self.logger.error(f"Errore aggiornamento viste: {msg}. Dettaglio DB: {getattr(db_err, 'pgerror', str(db_err))}")
+                return False, msg
+
+            msg_failure = f"Errore database durante l'aggiornamento delle viste: {getattr(db_err, 'pgerror', str(db_err))}"
+            self.logger.error(msg_failure, exc_info=True)
+            return False, msg_failure
+
         except Exception as e:
-            progress_dialog.close()
-            logging.error(f"Errore critico durante l'aggiornamento delle viste: {e}")
-            QMessageBox.critical(None, "Errore Aggiornamento Viste", f"Impossibile aggiornare le viste materializzate: {e}")
-            return False
+            if conn and not conn.closed: conn.rollback()
+            msg_failure = f"Errore di sistema imprevisto durante l'aggiornamento delle viste: {e}"
+            self.logger.error(msg_failure, exc_info=True)
+            return False, msg_failure
+            
+        finally:
+            if conn:
+                self._release_connection(conn)
 
     def run_database_maintenance(self) -> bool:
         """Esegue manutenzione generale del database (es. ANALYZE e aggiorna viste), usando il pool."""
@@ -4717,27 +4735,21 @@ class CatastoDBManager:
     def execute_sql_from_file(self, file_path: str) -> Tuple[bool, str]:
         if not os.path.exists(file_path):
             return False, f"File SQL non trovato: {file_path}"
+        
         conn = None
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
             conn = self._get_connection()
-            # Per DDL o script complessi, potrebbe essere necessario uscire da una transazione
-            # o usare autocommit, ma questo dipende dallo script.
-            # conn.autocommit = True # Usare con cautela, potrebbe interferire con il pool
             with conn.cursor() as cur:
                 self.logger.info(f"Esecuzione script SQL da file: {file_path}")
-                cur.execute(sql_content) # Esegue l'intero contenuto
-                # Per DDL, non c'è un commit esplicito necessario se autocommit non è attivo per la sessione
-                # ma è meglio fare commit se lo script contiene DML o se autocommit è off.
-                # Se lo script gestisce le proprie transazioni, va bene.
-                # Per script di setup DDL, spesso si eseguono fuori da una transazione esplicita
-                # o con connessioni in modalità autocommit.
-                # Se si usa una connessione dal pool, l'autocommit di default è solitamente False.
+                cur.execute(sql_content)
                 conn.commit() 
+                
             self.logger.info(f"Script SQL {file_path} eseguito con successo.")
             return True, f"Script {os.path.basename(file_path)} eseguito con successo."
+
         except psycopg2.Error as db_err:
             if conn: conn.rollback()
             msg = f"Errore DB eseguendo script {file_path}: {getattr(db_err, 'pgerror', str(db_err))}"
@@ -4749,7 +4761,6 @@ class CatastoDBManager:
             self.logger.error(msg, exc_info=True)
             return False, msg
         finally:
-            # if conn and conn.autocommit: conn.autocommit = False # Ripristina se modificato
             if conn:
                 self._release_connection(conn)
     def clear_audit_session_variables(self) -> bool:

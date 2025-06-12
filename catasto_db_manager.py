@@ -72,23 +72,42 @@ class CatastoDBManager:
     Gestisce le operazioni di amministrazione e manutenzione del database Catasto.
     Versione semplificata.
     """
-    # --- CORREZIONE DEFINITIVA ---
-    # Aggiunto **kwargs per accettare qualsiasi argomento keyword extra (come 'schema', 
-    # 'application_name', etc.) senza causare un TypeError.
-    def __init__(self, dbname, user, password, host, port, log_level=logging.INFO, **kwargs):
+    # --- VERSIONE CORRETTA E ROBUSTA DEL COSTRUTTORE ---
+    def __init__(self, dbname, user, password, host, port, log_level=logging.INFO, schema='catasto', application_name='CatastoApp', **kwargs):
+        """
+        Costruttore passivo. Non si connette al DB, ma si limita a configurare
+        i parametri necessari per le connessioni future gestite dal pool.
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
 
-        # Gli argomenti extra in kwargs (es. schema, application_name) vengono
-        # semplicemente ignorati qui, rendendo il costruttore compatibile.
-        connection_string = f"dbname='{dbname}' user='{user}' password='{password}' host='{host}' port='{port}'"
+        # Dizionario contenente i parametri di connessione principali.
+        # Sarà la fonte unica di verità per tutte le connessioni.
+        self._main_db_conn_params = {
+            'dbname': dbname,
+            'user': user,
+            'password': password,
+            'host': host,
+            'port': port
+        }
         
-        self.db_adapter = CatastoDBAdapter(connection_string)
+        # Attributi di configurazione
+        self.schema = schema
+        self.application_name = application_name
+        self.pool = None  # Il pool viene inizializzato esplicitamente, non qui.
         
-        if not self.db_adapter.connect():
-             self.logger.warning(f"Connessione iniziale fallita per: {connection_string}")
-        else:
-            self.logger.info("CatastoDBManager inizializzato e connesso con successo.")
+        # Parametri per la configurazione del pool
+        self._min_conn_pool = kwargs.get('min_conn_pool', 1)
+        self._max_conn_pool = kwargs.get('max_conn_pool', 10)
+        
+        # L'istanza di CatastoDBAdapter, se ancora necessaria per alcune funzioni specifiche,
+        # può essere creata qui ma senza chiamare connect().
+        # Tuttavia, consiglio di razionalizzare l'uso e affidarsi solo al pool.
+        # Per ora, la rimuoviamo da __init__ per risolvere l'errore.
+        # self.db_adapter = CatastoDBAdapter(f"dbname='{dbname}' user='{user}'...")
+
+        self.logger.info(f"CatastoDBManager inizializzato per il database '{dbname}'. "
+                         "Il pool di connessioni deve essere attivato esplicitamente.")
 
 
 

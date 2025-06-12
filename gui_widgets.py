@@ -5773,8 +5773,8 @@ class AdminDBOperationsWidget(QWidget):
         Aggiorna lo stato dei pulsanti in base allo stato della connessione.
         """
         # La variabile `is_connected` viene ora letta correttamente dall'adapter del db.
-        is_connected = self.db_manager.db_adapter.is_connected() if self.db_manager and self.db_manager.db_adapter else False
-        is_local_db = "(local)" in self.db_manager.db_adapter.get_connection_info() if self.db_manager and self.db_manager.db_adapter else False
+        is_connected = self.db_manager.pool is not None if self.db_manager else False
+        is_local_db = "(local)" in self.db_manager.get_connection() if self.db_manager and self.db_manager else False
 
         # Abilita la gestione utenti se connesso
         self.btn_manage_users.setEnabled(is_connected)

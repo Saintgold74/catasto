@@ -1558,18 +1558,19 @@ class CatastoDBManager:
             # Il rollback è automatico, rilanciamo un'eccezione chiara per il chiamante
             raise DBMError(f"Impossibile registrare la consultazione: {e}") from e
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo registra_nuova_proprieta con questo:
+
     def registra_nuova_proprieta(self, comune_id: int, numero_partita: int, data_impianto: date,
                                  possessori_json_str: str,
                                  immobili_json_str: str,
                                  suffisso_partita: Optional[str] = None
                                 ) -> int:
         """
-        Chiama la procedura SQL per registrare una nuova proprietà in modo transazionale.
+        Chiama la procedura SQL per registrare una nuova proprietà, gestendo
+        specificamente l'errore di partita duplicata.
         """
-        # La validazione dei parametri iniziali resta invariata
         if not (isinstance(comune_id, int) and comune_id > 0): raise DBDataError("ID comune non valido.")
         if not (isinstance(numero_partita, int) and numero_partita > 0): raise DBDataError("Numero partita non valido.")
-        if not isinstance(data_impianto, date): raise DBDataError("Data impianto non valida.")
         try:
             json.loads(possessori_json_str); json.loads(immobili_json_str)
         except json.JSONDecodeError as je:
@@ -1600,15 +1601,28 @@ class CatastoDBManager:
 
                     if result and result['id']:
                         new_partita_id = result['id']
-                        # Il commit è automatico all'uscita del blocco 'with'
                         self.logger.info(f"Nuova proprietà registrata. Partita ID: {new_partita_id}.")
                         return new_partita_id
                     else:
-                        # Se non troviamo l'ID, qualcosa è andato storto. Il rollback sarà automatico.
                         raise DBMError("Fallimento nel recuperare l'ID della nuova partita dopo la registrazione.")
+        
+        # --- BLOCCO DI GESTIONE ECCEZIONI MIGLIORATO ---
+        except psycopg2.errors.UniqueViolation as uve:
+            # Controlliamo il nome del vincolo violato per dare un messaggio specifico
+            constraint_name = getattr(uve.diag, 'constraint_name', '')
+            if constraint_name == 'partita_unique_numero_suffisso_comune':
+                messaggio = "Impossibile registrare: una partita con lo stesso numero e suffisso esiste già in questo comune."
+                raise DBUniqueConstraintError(messaggio, constraint_name=constraint_name) from uve
+            else:
+                # Se è un altro vincolo di unicità, diamo un messaggio più generico
+                messaggio_generico = f"Violazione di un vincolo di unicità '{constraint_name}'. Controllare i dati."
+                raise DBUniqueConstraintError(messaggio_generico, constraint_name=constraint_name) from uve
+        
         except Exception as e:
+            # Cattura tutte le altre eccezioni
             self.logger.error(f"Errore in registra_nuova_proprieta: {e}", exc_info=True)
             raise DBMError(f"Impossibile registrare la nuova proprietà: {e}") from e
+        # --- FINE BLOCCO MIGLIORATO ---
     
     def registra_passaggio_proprieta(self, partita_origine_id: int, comune_id_nuova_partita: int, 
                                  numero_nuova_partita: int, tipo_variazione: str, data_variazione: date, 

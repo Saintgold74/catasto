@@ -1,0 +1,19 @@
+{
+    "partita": {
+        "id": 2769,
+        "tipo": "principale",
+        "stato": "attiva",
+        "comune_id": 4,
+        "comune_nome": "Comune Stress Test 1",
+        "data_chiusura": null,
+        "data_impianto": "2025-06-14",
+        "data_modifica": "2025-06-14T00:23:09",
+        "data_creazione": "2025-06-14T00:23:09",
+        "numero_partita": 1,
+        "suffisso_partita": "A",
+        "numero_provenienza": null
+    },
+    "immobili": [],
+    "possessori": [],
+    "variazioni": []
+}

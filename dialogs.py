@@ -983,96 +983,75 @@ class PartitaDetailsDialog(QDialog):
         else:
             QMessageBox.warning(self, "Percorso Mancante", "Informazioni sul percorso del file non disponibili per il documento selezionato.")
 
-# *** NUOVO: Riscrizione Completa della Classe ModificaPartitaDialog ***
 class ModificaPartitaDialog(QDialog):
-    # 1. Metodo __init__ aggiunto per gestire la creazione dell'oggetto
     def __init__(self, db_manager: 'CatastoDBManager', partita_id: int, parent=None):
-        super().__init__(parent)  # Chiamata corretta al costruttore della classe genitore
-        
-        # 2. Inizializzazione degli attributi di istanza
+        super().__init__(parent)
         self.db_manager = db_manager
         self.partita_id = partita_id
         self.partita_data_originale: Optional[Dict[str, Any]] = None
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        
-        # Data di default problematica (da confrontare se letta dal DB)
-        self.problematic_default_date_db = date(1, 1, 1)
 
         self.setWindowTitle(f"Modifica Dati Partita ID: {self.partita_id}")
-        self.setMinimumSize(800, 600) # Dimensioni indicative
+        self.setMinimumSize(800, 600)
 
-        # 3. Chiamata ai metodi per costruire la UI e caricare i dati
         self._init_ui()
         self._load_all_partita_data()
 
-    # 4. I metodi seguenti rimangono invariati, ma ora sono chiamati dal costruttore
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
 
-        # --- Intestazione del Dialogo (Informazioni di Base) ---
         header_group = QGroupBox("Dettagli Partita Corrente")
         header_layout = QGridLayout(header_group)
-        header_layout.setColumnStretch(1, 1)
-        header_layout.setColumnStretch(3, 1)
-
-        header_layout.addWidget(QLabel("<b>ID Partita:</b>"), 0, 0)
         self.id_label = QLabel(str(self.partita_id))
-        header_layout.addWidget(self.id_label, 0, 1)
-
-        header_layout.addWidget(QLabel("<b>Comune:</b>"), 0, 2)
         self.comune_label = QLabel("Caricamento...")
+        header_layout.addWidget(QLabel("<b>ID Partita:</b>"), 0, 0)
+        header_layout.addWidget(self.id_label, 0, 1)
+        header_layout.addWidget(QLabel("<b>Comune:</b>"), 0, 2)
         header_layout.addWidget(self.comune_label, 0, 3)
-        
         main_layout.addWidget(header_group)
 
-        # --- Tab Widget Principale ---
         self.tab_widget = QTabWidget(self)
         main_layout.addWidget(self.tab_widget)
 
-        # --- Tab 1: Dati Generali Partita ---
+        # --- Tab 1: Dati Generali Partita (Riscritto per coerenza) ---
         self.tab_dati_generali = QWidget()
         form_layout_generali = QFormLayout(self.tab_dati_generali)
         form_layout_generali.setSpacing(10)
-        form_layout_generali.setLabelAlignment(Qt.AlignRight)
 
-        self.numero_partita_spinbox = QSpinBox()
-        self.numero_partita_spinbox.setRange(1, 999999)
+        self.numero_partita_spinbox = QSpinBox(); self.numero_partita_spinbox.setRange(1, 999999)
         form_layout_generali.addRow("Numero Partita (*):", self.numero_partita_spinbox)
 
-        self.suffisso_partita_edit = QLineEdit()
-        self.suffisso_partita_edit.setPlaceholderText("Es. bis, ter, A, B (opzionale)")
-        self.suffisso_partita_edit.setMaxLength(20)
+        self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. bis, A")
         form_layout_generali.addRow("Suffisso Partita (opz.):", self.suffisso_partita_edit)
 
-        self.tipo_combo = QComboBox()
-        self.tipo_combo.addItems(["principale", "secondaria"])
+        self.data_impianto_edit = QDateEdit(calendarPopup=True); self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
+        form_layout_generali.addRow("Data Impianto (*):", self.data_impianto_edit)
+
+        # NUOVA GESTIONE PER DATA CHIUSURA
+        self.data_chiusura_check = QCheckBox("Imposta data chiusura")
+        self.data_chiusura_check.toggled.connect(self._toggle_data_chiusura)
+        self.data_chiusura_edit = QDateEdit(calendarPopup=True)
+        self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_chiusura_edit.setEnabled(False)
+        data_chiusura_layout = QHBoxLayout()
+        data_chiusura_layout.addWidget(self.data_chiusura_check)
+        data_chiusura_layout.addWidget(self.data_chiusura_edit)
+        form_layout_generali.addRow("Data Chiusura:", data_chiusura_layout)
+
+        # CORREZIONE TIPO DI INPUT PER NUMERO PROVENIENZA
+        self.numero_provenienza_edit = QLineEdit()
+        self.numero_provenienza_edit.setPlaceholderText("Numero o testo di riferimento (opzionale)")
+        self.numero_provenienza_edit.setMaxLength(50)
+        form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_edit)
+        
+        self.tipo_combo = QComboBox(); self.tipo_combo.addItems(["principale", "secondaria"])
         form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
 
-        self.stato_combo = QComboBox()
-        self.stato_combo.addItems(["attiva", "inattiva"])
+        self.stato_combo = QComboBox(); self.stato_combo.addItems(["attiva", "inattiva"])
         form_layout_generali.addRow("Stato (*):", self.stato_combo)
 
-        self.data_impianto_edit = QDateEdit()
-        self.data_impianto_edit.setCalendarPopup(True)
-        self.data_impianto_edit.setDisplayFormat("dd.MM.yyyy") # Formato di visualizzazione comune in Italia
-        self.data_impianto_edit.setDate(QDate())
-        form_layout_generali.addRow("Data Impianto:", self.data_impianto_edit)
-        
-        self.data_chiusura_edit = QDateEdit()
-        self.data_chiusura_edit.setCalendarPopup(True)
-        self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_chiusura_edit.setDate(QDate())
-        form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
-
-        form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
-
-        self.numero_provenienza_spinbox = QSpinBox()
-        self.numero_provenienza_spinbox.setRange(0, 999999)
-        self.numero_provenienza_spinbox.setSpecialValueText("Nessuno")
-        form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_spinbox)
-        
         self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
-
+        # --- Fine Tab 1 ---
         # --- Tab 2: Possessori Associati ---
         self.tab_possessori = QWidget()
         layout_possessori = QVBoxLayout(self.tab_possessori)
@@ -1230,6 +1209,12 @@ class ModificaPartitaDialog(QDialog):
         self.setLayout(main_layout)
 
     # --- Metodi per il Caricamento dei Dati (Centralizzato) ---
+    def _toggle_data_chiusura(self, checked):
+        """Abilita o disabilita il QDateEdit per la data di chiusura."""
+        self.data_chiusura_edit.setEnabled(checked)
+        if not checked:
+            self.data_chiusura_edit.setDate(QDate()) # Imposta una data nulla
+
     def _load_all_partita_data(self):
         """Carica tutti i dati della partita e popola i vari tab del dialogo."""
         self.logger.info(f"ModificaPartitaDialog: Caricamento dati per partita ID {self.partita_id}...")
@@ -1261,20 +1246,22 @@ class ModificaPartitaDialog(QDialog):
         stato_idx = self.stato_combo.findText(partita.get('stato', ''), Qt.MatchFixedString)
         if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
 
-        data_impianto_db = partita.get('data_impianto')
-        self.data_impianto_edit.setDate(datetime_to_qdate(data_impianto_db) if data_impianto_db else QDate())
+        self.data_impianto_edit.setDate(datetime_to_qdate(partita.get('data_impianto')))
 
+        # Logica aggiornata per data_chiusura
         data_chiusura_db = partita.get('data_chiusura')
-        # Gestisce il default problematico e NULL
-        if data_chiusura_db is None or data_chiusura_db == self.problematic_default_date_db:
-            self.data_chiusura_edit.setDate(QDate())
-        else:
+        if data_chiusura_db:
+            self.data_chiusura_check.setChecked(True)
             self.data_chiusura_edit.setDate(datetime_to_qdate(data_chiusura_db))
-
+        else:
+            self.data_chiusura_check.setChecked(False)
+            
+        # Logica aggiornata per numero_provenienza
         num_prov_val = partita.get('numero_provenienza')
-        self.numero_provenienza_spinbox.setValue(num_prov_val if num_prov_val is not None else self.numero_provenienza_spinbox.minimum())
+        self.numero_provenienza_edit.setText(str(num_prov_val) if num_prov_val is not None else "")
 
-        self.logger.debug("Tab 'Dati Generali' popolato.")
+        self.logger.debug("Tab 'Dati Generali' popolato con la nuova logica.")
+
 
     def _load_possessori_associati(self):
         """Carica e popola la tabella dei possessori associati alla partita."""
@@ -2065,55 +2052,36 @@ class ModificaPartitaDialog(QDialog):
             self.logger.error(f"Errore imprevisto durante l'aggiornamento del titolo del tab documenti: {e}", exc_info=True)
 
     def _save_changes(self):
-        """
-        Raccoglie i dati dal tab 'Dati Generali', li valida e chiama il db_manager
-        per salvare le modifiche sulla tabella 'partita'.
-        """
+        """Salva le modifiche apportate ai dati generali della partita."""
         self.logger.info(f"Tentativo di salvare le modifiche per la partita ID: {self.partita_id}")
 
-        # 1. Raccoglie i dati dai widget della UI
+        # Raccoglie i dati dai widget, inclusi quelli nuovi/modificati
+        data_chiusura_val = self.data_chiusura_edit.date().toPyDate() if self.data_chiusura_check.isChecked() else None
+        
         dati_da_salvare = {
             "numero_partita": self.numero_partita_spinbox.value(),
-            "suffisso_partita": self.suffisso_partita_edit.text().strip() or None, # Salva None se la stringa è vuota
+            "suffisso_partita": self.suffisso_partita_edit.text().strip() or None,
             "tipo": self.tipo_combo.currentText(),
             "stato": self.stato_combo.currentText(),
-            "data_impianto": qdate_to_datetime(self.data_impianto_edit.date()), # Usa la funzione di utilità
-            "data_chiusura": qdate_to_datetime(self.data_chiusura_edit.date()), # Gestisce date nulle
-            "numero_provenienza": self.numero_provenienza_spinbox.value() if self.numero_provenienza_spinbox.value() != 0 else None
+            "data_impianto": qdate_to_datetime(self.data_impianto_edit.date()),
+            "data_chiusura": data_chiusura_val,
+            "numero_provenienza": self.numero_provenienza_edit.text().strip() or None
         }
 
-        # 2. Validazione dei dati
-        if dati_da_salvare["numero_partita"] <= 0:
-            QMessageBox.warning(self, "Dati Non Validi", "Il numero di partita deve essere un valore positivo.")
-            self.numero_partita_spinbox.setFocus()
-            return
-            
-        # Potresti aggiungere altri controlli qui, ad esempio sulla data di chiusura rispetto a quella di impianto.
-        if dati_da_salvare["data_impianto"] and dati_da_salvare["data_chiusura"]:
-            if dati_da_salvare["data_chiusura"] < dati_da_salvare["data_impianto"]:
-                QMessageBox.warning(self, "Date Non Valide", "La data di chiusura non può essere precedente alla data di impianto.")
-                return
-
+        # La validazione e la chiamata al DB rimangono le stesse...
         try:
-            # 3. Chiama il DB Manager per aggiornare
             self.db_manager.update_partita(self.partita_id, dati_da_salvare)
-            
-            # 4. Gestione del successo
             self.logger.info(f"Dati generali della partita ID {self.partita_id} aggiornati con successo.")
             QMessageBox.information(self, "Salvataggio Riuscito", "Le modifiche ai dati generali della partita sono state salvate.")
-            
-            # Dopo aver salvato, ricarica i dati per mantenere la UI sincronizzata
-            self._load_all_partita_data() 
-            
-            # Non chiudiamo il dialogo, l'utente potrebbe voler fare altre modifiche
-            # self.accept() # Rimuovere questa riga per non chiudere il dialogo al salvataggio
-
+            # Ricarica i dati per mantenere la UI sincronizzata con il DB
+            self._load_all_partita_data()
         except (DBUniqueConstraintError, DBDataError, DBNotFoundError, DBMError) as e:
-            self.logger.error(f"Errore durante il salvataggio dei dati generali per la partita ID {self.partita_id}: {e}", exc_info=True)
+            self.logger.error(f"Errore durante il salvataggio dei dati per la partita ID {self.partita_id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare le modifiche:\n{e}")
         except Exception as e_gen:
-            self.logger.critical(f"Errore imprevisto durante il salvataggio della partita ID {self.partita_id}: {e_gen}", exc_info=True)
+            # ...
             QMessageBox.critical(self, "Errore Critico", f"Si è verificato un errore di sistema imprevisto: {e_gen}")
+
 
 class DettagliLegamePossessoreDialog(QDialog):
     def __init__(self, nome_possessore_selezionato: str, partita_tipo: str,
@@ -5453,6 +5421,71 @@ class AggiungiDocumentoDialog(QDialog):
             "metadati_json": metadati_str 
         }
         self.accept()
+        
+class CSVImportResultDialog(QDialog):
+    """
+    Un dialogo per visualizzare i risultati di un'importazione da CSV,
+    separando i record importati con successo da quelli con errori.
+    """
+    def __init__(self, success_data: List[Dict], error_data: List[Tuple[int, Dict, str]], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Riepilogo Importazione CSV")
+        self.setMinimumSize(700, 500)
+
+        main_layout = QVBoxLayout(self)
+
+        # Messaggio di riepilogo
+        summary_text = f"<b>Importazione completata.</b><br>" \
+                       f"Record importati con successo: <b>{len(success_data)}</b><br>" \
+                       f"Record con errori: <b>{len(error_data)}</b>"
+        summary_label = QLabel(summary_text)
+        main_layout.addWidget(summary_label)
+
+        # Tab per separare successi ed errori
+        tabs = QTabWidget()
+        
+        # Tab dei successi
+        success_table = self._create_table(["ID Assegnato", "Nome Completo", "Comune"], success_data)
+        tabs.addTab(success_table, f"✅ Successi ({len(success_data)})")
+
+        # Tab degli errori
+        error_table = self._create_error_table(["Riga N.", "Dati Riga", "Errore"], error_data)
+        tabs.addTab(error_table, f"❌ Errori ({len(error_data)})")
+        
+        if not error_data:
+            tabs.setTabEnabled(1, False) # Disabilita il tab errori se non ci sono errori
+
+        main_layout.addWidget(tabs)
+
+        # Pulsante OK
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box.accepted.connect(self.accept)
+        main_layout.addWidget(button_box)
+
+    def _create_table(self, headers: List[str], data: List[Dict]) -> QTableWidget:
+        table = QTableWidget(len(data), len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        for row_idx, row_data in enumerate(data):
+            table.setItem(row_idx, 0, QTableWidgetItem(str(row_data.get('id', 'N/A'))))
+            table.setItem(row_idx, 1, QTableWidgetItem(row_data.get('nome_completo', '')))
+            table.setItem(row_idx, 2, QTableWidgetItem(row_data.get('comune_nome', '')))
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setStretchLastSection(True)
+        return table
+
+    def _create_error_table(self, headers: List[str], data: List[Tuple[int, Dict, str]]) -> QTableWidget:
+        table = QTableWidget(len(data), len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        for row_idx, error_tuple in enumerate(data):
+            line_num, row_data, error_msg = error_tuple
+            table.setItem(row_idx, 0, QTableWidgetItem(str(line_num)))
+            table.setItem(row_idx, 1, QTableWidgetItem(str(row_data)))
+            table.setItem(row_idx, 2, QTableWidgetItem(error_msg))
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setStretchLastSection(True)
+        return table
 def qdate_to_datetime(q_date: QDate) -> Optional[date]:
     if q_date.isNull() or not q_date.isValid():  # Controlla anche isValid
         return None

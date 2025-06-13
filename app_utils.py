@@ -26,11 +26,10 @@ from dialogs import LocalitaSelectionDialog,CSVApreviewDialog,PDFApreviewDialog
 # Se necessario, importa CatastoDBManager per type hinting o usi diretti limitati:
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
-)
-
-
-
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
+    COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
+    COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
+    NUOVE_ETICHETTE_POSSESSORI)
 # Importa FPDF se disponibile
 try:
     from fpdf import FPDF
@@ -71,52 +70,6 @@ except ImportError:
     class DBDataError(DBMError):
         pass
     # QMessageBox.warning(None, "Avviso Importazione", "Eccezioni DB personalizzate non trovate in app_utils.")
-
-# Eventuale importazione di CatastoDBManager se alcune utility qui ne avessero bisogno direttamente,
-# ma è più probabile che i dialoghi ricevano l'istanza db_manager come parametro.
-# from catasto_db_manager import CatastoDBManager
-# Costanti per le colonne delle tabelle, se usate in più punti
-
-# Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
-COLONNE_POSSESSORI_DETTAGLI_NUM = 6
-COLONNE_POSSESSORI_DETTAGLI_LABELS = [
-    "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
-# Costanti per la configurazione delle tabelle dei possessori, se usate in più punti
-# Scegli nomi specifici se diverse tabelle hanno diverse configurazioni
-# Esempio: ID, Nome Compl, Paternità, Comune, Num. Partite
-COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM = 5
-COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Rif.", "Num. Partite"]
-
-# Per InserimentoPossessoreWidget, se la sua tabella è diversa:
-# Esempio: ID, Nome Completo, Paternità, Comune
-COLONNE_INSERIMENTO_POSSESSORI_NUM = 4
-COLONNE_INSERIMENTO_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Riferimento"]
-
-NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome",
-                              "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
-# Nomi per le chiavi di QSettings (globali o definite prima di run_gui_app)
-# --- Nomi per le chiavi di QSettings (definisci globalmente o prima di run_gui_app) ---
-SETTINGS_DB_TYPE = "Database/Type"
-SETTINGS_DB_HOST = "Database/Host"
-SETTINGS_DB_PORT = "Database/Port"
-SETTINGS_DB_NAME = "Database/DBName"
-SETTINGS_DB_USER = "Database/User"
-SETTINGS_DB_SCHEMA = "Database/Schema"
-# Non salviamo la password in QSettings
-# Non usato, ma definito per completezza
-SETTINGS_DB_PASSWORD = "Database/Password"
-
-# --- Funzioni Helper per Password ---
-
-
-
-
-
-
-
-        
         
 def format_full_name(first_name, last_name):
     """Formatta nome e cognome in 'Cognome Nome', gestendo input non validi."""
@@ -359,9 +312,17 @@ def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partit
             return
         # --- FINE MODIFICA ---
 
-        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json"
+        # --- MODIFICA QUI ---
+        # 1. Crea solo il nome base del file
+        default_filename_base = f"partita_{partita_id}_{date.today().isoformat()}.json"
+        
+        # 2. Usa la nuova funzione per ottenere il percorso completo di default
+        full_default_path = _get_default_export_path(default_filename_base)
+
+        # 3. Passa il percorso completo a QFileDialog
         filename, _ = QFileDialog.getSaveFileName(
-            parent_widget, "Salva JSON Partita", default_filename, "JSON Files (*.json)")
+            parent_widget, "Salva JSON Partita", full_default_path, "JSON Files (*.json)")
+        # --- FINE MODIFICA ---
 
         if filename:
             try:
@@ -414,9 +375,12 @@ def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per partita ID {partita_id} annullata dall'utente dopo anteprima.")
         return
     # --- FINE LOGICA ANTEPRIMA CSV ---
+    
     default_filename = f"partita_{partita_id}_{date.today()}.csv"
+    # 2. Usa la nuova funzione per ottenere il percorso completo di default
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva CSV Partita", default_filename, "CSV Files (*.csv)")
+        parent_widget, "Salva CSV Partita", full_default_path, "CSV Files (*.csv)")
     if not filename:
         return
 
@@ -510,8 +474,9 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
         return
     # --- FINE LOGICA ANTEPRIMA TESTUALE PDF ---
     default_filename = f"partita_{partita_id}_{date.today()}.pdf"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva PDF Partita", default_filename, "PDF Files (*.pdf)")
+        parent_widget, "Salva PDF Partita", full_default_path, "PDF Files (*.pdf)")
     if not filename:
         return
 
@@ -632,8 +597,9 @@ def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, poss
     # --- FINE Logica di Anteprima ---
 
     default_filename = f"possessore_{possessore_id}_{date.today()}.csv"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva CSV Possessore", default_filename, "CSV Files (*.csv)")
+        parent_widget, "Salva CSV Possessore", full_default_path, "CSV Files (*.csv)")
     if not filename:
         return
 
@@ -712,8 +678,9 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
     # --- FINE Logica di Anteprima ---
 
     default_filename = f"possessore_{possessore_id}_{date.today()}.pdf"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva PDF Possessore", default_filename, "PDF Files (*.pdf)")
+        parent_widget, "Salva PDF Possessore", full_default_path, "PDF Files (*.pdf)")
     if not filename:
         return
 
@@ -773,6 +740,26 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
             "Errore esportazione PDF possessore (GUI)")
         QMessageBox.critical(parent_widget, "Errore Esportazione",
                              f"Errore durante l'esportazione PDF:\n{e}")
+# In app_utils.py, dopo le importazioni
+
+import os # Assicurati che 'os' sia importato
+
+def _get_default_export_path(default_filename: str) -> str:
+    """
+    Crea la sottocartella 'esportazioni' se non esiste e restituisce
+    il percorso completo per il file di default.
+    """
+    # Definisce il nome della sottocartella
+    export_dir_name = "esportazioni"
+    
+    # Crea il percorso completo della cartella (relativo alla posizione di esecuzione)
+    full_dir_path = os.path.abspath(export_dir_name)
+    
+    # Crea la directory se non esiste, senza generare errori se esiste già
+    os.makedirs(full_dir_path, exist_ok=True)
+    
+    # Unisce il percorso della cartella con il nome del file suggerito
+    return os.path.join(full_dir_path, default_filename)
 
 
 

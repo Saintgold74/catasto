@@ -281,9 +281,16 @@ class UnifiedFuzzySearchWidget(QWidget):
             cb.toggled.connect(self._trigger_search_if_text)
 
         # Double-click
+        
+        # --- MODIFICA QUI: Colleghiamo il doppio click per tutte le tabelle ---
         self.unified_table.doubleClicked.connect(self._on_unified_double_click)
-        # Qui potresti aggiungere i double-click per le tabelle individuali se necessario
-        # self.possessori_table.doubleClicked.connect(...)
+        self.possessori_table.doubleClicked.connect(self._on_possessori_double_click)
+        self.localita_table.doubleClicked.connect(self._on_localita_double_click)
+        self.immobili_table.doubleClicked.connect(self._on_immobili_double_click)
+        self.variazioni_table.doubleClicked.connect(self._on_variazioni_double_click)
+        self.contratti_table.doubleClicked.connect(self._on_contratti_double_click)
+        self.partite_table.doubleClicked.connect(self._on_partite_double_click)
+        # --- FINE MODIFICA ---
 
     def _check_gin_status(self):
         """Verifica lo stato degli indici GIN."""
@@ -499,89 +506,37 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.stats_label.setText("Pronto")
 
     # In fuzzy_search_unified.py, dentro la classe UnifiedFuzzySearchWidget
+    # In fuzzy_search_unified.py, SOSTITUISCI il metodo _on_unified_double_click con questo
 
     def _on_unified_double_click(self, index):
         """
-        Gestisce il doppio click nella tabella unificata, aprendo un dialogo
-        di dettaglio appropriato in base al tipo di entità.
+        Gestisce il doppio click nella tabella unificata, chiamando il gestore appropriato.
         """
-        if not index.isValid():
-            return
+        if not index.isValid(): return
             
         item_con_dati = self.unified_table.item(index.row(), 0)
-        if not item_con_dati:
-            return
+        if not item_con_dati: return
 
         full_item_data = item_con_dati.data(Qt.UserRole)
-        if not isinstance(full_item_data, dict):
-            return
+        if not isinstance(full_item_data, dict): return
 
         entity_type = full_item_data.get('type')
-        entity_data = full_item_data.get('data', {})
-        entity_id = entity_data.get('entity_id')
 
-        if not entity_type or not entity_id:
-            QMessageBox.warning(self, "Errore Dati", "Impossibile recuperare tipo o ID dell'entità selezionata.")
-            return
-
-        self.logger.info(f"Doppio click su entità di tipo '{entity_type}' con ID {entity_id}.")
-
-        # --- Logica di smistamento per aprire il dialogo corretto ---
-
+        # Simula un evento di doppio click sul tab appropriato
         if entity_type == 'partita':
-            # Per PartitaDetailsDialog serve il dizionario completo dei dettagli
-            full_details = self.db_manager.get_partita_details(entity_id)
-            if full_details:
-                dialog = PartitaDetailsDialog(full_details, self)
-                dialog.exec_()
-            else:
-                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la partita ID {entity_id}.")
-        
+            self._on_partite_double_click(index)
         elif entity_type == 'possessore':
-            # Riusiamo il dialogo di modifica, che mostra già tutti i dettagli
-            dialog = ModificaPossessoreDialog(self.db_manager, entity_id, self)
-            dialog.exec_()
-            # Se il dialogo viene accettato (modifiche salvate), rieseguiamo la ricerca
-            if dialog.result() == QDialog.Accepted:
-                self._perform_search()
-
+            self._on_possessori_double_click(index)
         elif entity_type == 'localita':
-            # Riusiamo il dialogo di modifica. Dobbiamo recuperare il comune_id.
-            localita_details = self.db_manager.get_localita_details(entity_id)
-            if localita_details and localita_details.get('comune_id'):
-                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.get('comune_id'), self)
-                dialog.exec_()
-                if dialog.result() == QDialog.Accepted:
-                    self._perform_search()
-            else:
-                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la località ID {entity_id}.")
-
-        elif entity_type == 'immobile' and ModificaImmobileDialog:
-             # Riusiamo il dialogo di modifica. Dobbiamo recuperare il comune_id della partita a cui appartiene.
-            immobile_details = self.db_manager.get_immobile_details(entity_id)
-            if immobile_details and immobile_details.get('partita_id'):
-                partita_details = self.db_manager.get_partita_details(immobile_details.get('partita_id'))
-                if partita_details and partita_details.get('comune_id'):
-                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.get('comune_id'), self)
-                    dialog.exec_()
-                    if dialog.result() == QDialog.Accepted:
-                        self._perform_search()
-                else:
-                    QMessageBox.warning(self, "Errore Dati", f"Impossibile determinare il comune per l'immobile ID {entity_id}.")
-            else:
-                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per l'immobile ID {entity_id}.")
-
+            self._on_localita_double_click(index)
+        elif entity_type == 'immobile':
+            self._on_immobili_double_click(index)
+        elif entity_type == 'variazione':
+            self._on_variazioni_double_click(index)
+        elif entity_type == 'contratto':
+            self._on_contratti_double_click(index)
         else:
-            # Fallback per tutti gli altri tipi: mostra un popup formattato e leggibile
-            testo_formattato = f"<h3>Dettagli - {entity_type.title()} ID: {entity_id}</h3>"
-            testo_formattato += "<table border='0' cellspacing='5'>"
-            for key, value in entity_data.items():
-                chiave_formattata = key.replace('_', ' ').title()
-                testo_formattato += f"<tr><td><b>{chiave_formattata}:</b></td><td>{value}</td></tr>"
-            testo_formattato += "</table>"
-            
-            QMessageBox.information(self, f"Dettagli - {entity_type.title()}", testo_formattato)
-    # --- METODI PER EXPORT (da implementare o semplificare) ---
+            QMessageBox.warning(self, "Tipo Sconosciuto", f"Nessuna azione di dettaglio definita per il tipo '{entity_type}'.")
     def _export_results(self):
         if not self.current_results or not self.current_results.get('total_results', 0) > 0:
             QMessageBox.warning(self, "Nessun Risultato", "Non ci sono risultati da esportare.")
@@ -643,7 +598,89 @@ class UnifiedFuzzySearchWidget(QWidget):
                         entity.get('search_field', ''),
                         entity.get('entity_id', '')
                     ])
+    def _get_entity_id_from_table(self, table: QTableWidget, index: 'QModelIndex') -> Optional[int]:
+        """Helper generico per estrarre l'ID dell'entità da una riga della tabella."""
+        if not index.isValid():
+            return None
+        
+        # I dati completi sono sempre salvati nella prima colonna (indice 0)
+        item_con_dati = table.item(index.row(), 0)
+        if not item_con_dati:
+            return None
+            
+        entity_data = item_con_dati.data(Qt.UserRole)
+        if isinstance(entity_data, dict):
+            # Per il tab "Tutti", i dati sono in un sotto-dizionario
+            if 'data' in entity_data and 'entity_id' in entity_data['data']:
+                return entity_data['data'].get('entity_id')
+            # Per i tab specifici, l'ID è direttamente nel dizionario
+            elif 'entity_id' in entity_data:
+                return entity_data.get('entity_id')
+        return None
 
+    def _on_possessori_double_click(self, index):
+        entity_id = self._get_entity_id_from_table(self.possessori_table, index)
+        if entity_id:
+            dialog = ModificaPossessoreDialog(self.db_manager, entity_id, self)
+            if dialog.exec_() == QDialog.Accepted:
+                self._perform_search() # Aggiorna i risultati se ci sono state modifiche
+
+    def _on_localita_double_click(self, index):
+        entity_id = self._get_entity_id_from_table(self.localita_table, index)
+        if entity_id:
+            localita_details = self.db_manager.get_localita_details(entity_id)
+            if localita_details and localita_details.get('comune_id'):
+                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.get('comune_id'), self)
+                if dialog.exec_() == QDialog.Accepted:
+                    self._perform_search()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la località ID {entity_id}.")
+
+    def _on_immobili_double_click(self, index):
+        entity_id = self._get_entity_id_from_table(self.immobili_table, index)
+        if entity_id:
+            immobile_details = self.db_manager.get_immobile_details(entity_id)
+            if immobile_details and immobile_details.get('partita_id'):
+                partita_details = self.db_manager.get_partita_details(immobile_details.get('partita_id'))
+                if partita_details and partita_details.get('comune_id'):
+                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.get('comune_id'), self)
+                    if dialog.exec_() == QDialog.Accepted:
+                        self._perform_search()
+                else:
+                    QMessageBox.warning(self, "Errore Dati", f"Impossibile determinare il comune per l'immobile ID {entity_id}.")
+            else:
+                 QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per l'immobile ID {entity_id}.")
+
+    def _on_partite_double_click(self, index):
+        entity_id = self._get_entity_id_from_table(self.partite_table, index)
+        if entity_id:
+            full_details = self.db_manager.get_partita_details(entity_id)
+            if full_details:
+                dialog = PartitaDetailsDialog(full_details, self)
+                dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la partita ID {entity_id}.")
+
+    def _show_generic_details_popup(self, table: QTableWidget, index: 'QModelIndex', entity_type_name: str):
+        """Mostra un popup leggibile per entità senza un dialogo di dettaglio dedicato."""
+        item_con_dati = table.item(index.row(), 0)
+        if not item_con_dati: return
+        entity_data = item_con_dati.data(Qt.UserRole)
+        entity_id = entity_data.get('entity_id', 'N/A')
+
+        testo_formattato = f"<h3>Dettagli - {entity_type_name.title()} ID: {entity_id}</h3>"
+        testo_formattato += "<table border='0' cellspacing='5'>"
+        for key, value in entity_data.items():
+            chiave_formattata = key.replace('_', ' ').title()
+            testo_formattato += f"<tr><td><b>{chiave_formattata}:</b></td><td>{value}</td></tr>"
+        testo_formattato += "</table>"
+        QMessageBox.information(self, f"Dettagli - {entity_type_name.title()}", testo_formattato)
+
+    def _on_variazioni_double_click(self, index):
+        self._show_generic_details_popup(self.variazioni_table, index, 'variazione')
+
+    def _on_contratti_double_click(self, index):
+        self._show_generic_details_popup(self.contratti_table, index, 'contratto')
 # ========================================================================
 # FUNZIONI DI INTEGRAZIONE
 # ========================================================================

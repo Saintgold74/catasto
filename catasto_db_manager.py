@@ -95,53 +95,76 @@ class CatastoDBManager:
         self.application_name = application_name
         self._min_conn_pool = min_conn
         self._max_conn_pool = max_conn
+        # --- AGGIUNGERE QUESTA RIGA ---
+        self.last_connection_error = None # Per memorizzare i dettagli dell'ultimo errore
+        # -----------------------------
 
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
         # ... (resto della configurazione del logger come prima) ...
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
         self.pool = None # Il pool viene inizializzato esplicitamente dopo
-
+    # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
     def initialize_main_pool(self) -> bool:
         if self.pool:
             self.logger.info("Pool principale già inizializzato.")
             return True
 
+        self.last_connection_error = None
         target_dbname = self._main_db_conn_params.get("dbname")
-        # Costruisci i parametri per il pool, includendo application_name
+        
         pool_config = {
             "minconn": self._min_conn_pool,
             "maxconn": self._max_conn_pool,
-            **self._main_db_conn_params, # Espande dbname, user, password, host, port
+            **self._main_db_conn_params,
             "options": f"-c search_path={self.schema},public -c application_name='{self.application_name}_{target_dbname}'"
         }
+        
         try:
-            self.logger.info(f"Tentativo di inizializzazione pool per DB '{target_dbname}' con parametri: { {k:v for k,v in pool_config.items() if k != 'password'} }") # Non loggare la password
+            self.logger.info(f"Tentativo di inizializzazione pool per DB '{target_dbname}'...")
             self.pool = psycopg2.pool.ThreadedConnectionPool(**pool_config)
+            
+            conn_test = self.pool.getconn()
+            self.pool.putconn(conn_test)
+            
+            self.logger.info(f"Pool di connessioni per DB '{target_dbname}' inizializzato e testato con successo.")
+            return True
 
-            conn_test = None
-            try:
-                conn_test = self.pool.getconn()
-                self.logger.info(f"Pool di connessioni '{self.application_name}_{target_dbname}' per DB '{target_dbname}' inizializzato e testato con successo.")
-                return True
-            except psycopg2.Error as pool_get_err:
-                self.logger.critical(f"Pool per DB '{target_dbname}' creato, ma FALLITO ottenimento connessione di test. Errore Psycopg2: {pool_get_err}", exc_info=False) # exc_info=False per non avere il traceback completo qui, solo il messaggio psycopg2
-                self.logger.critical(f"   Dettagli Errore Psycopg2: pgcode={getattr(pool_get_err, 'pgcode', 'N/A')}, pgerror={getattr(pool_get_err, 'pgerror', 'N/A')}")
-                if self.pool: self.pool.closeall()
-                self.pool = None
-                return False
-            finally:
-                if conn_test and self.pool: self.pool.putconn(conn_test)
+        except (psycopg2.pool.PoolError, psycopg2.Error) as e_init:
+            
+            # --- NUOVA LOGICA ROBUSTA DI ANALISI DELL'ERRORE ---
+            error_string = str(e_init).lower()
+            custom_pgcode = "UNKNOWN_DB_ERROR" # Default
 
-        except psycopg2.Error as e_init: # Cattura specificamente errori psycopg2 durante la creazione del pool
-            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}'. Errore Psycopg2: {e_init}", exc_info=False)
-            self.logger.critical(f"   Dettagli Errore Psycopg2: pgcode={getattr(e_init, 'pgcode', 'N/A')}, pgerror={getattr(e_init, 'pgerror', 'N/A')}")
+            if "password authentication failed" in error_string or "autenticazione con password fallita" in error_string:
+                custom_pgcode = "28P01" # Codice per Authentication Failure
+            elif 'database' in error_string and ('does not exist' in error_string or 'non esiste' in error_string):
+                custom_pgcode = "3D000" # Codice per Invalid Catalog Name
+            elif "connection refused" in error_string or "connessione rifiutata" in error_string or "timed out" in error_string or "could not connect" in error_string:
+                custom_pgcode = "08001" # Codice per Connection Exception
+
+            self.last_connection_error = {
+                'pgcode': custom_pgcode,
+                'pgerror': str(e_init).strip() # Salva sempre il messaggio completo
+            }
+            # --- FINE NUOVA LOGICA ---
+            
+            self.logger.critical(f"FALLIMENTO inizializzazione pool per DB '{target_dbname}'. Errore: {e_init}", exc_info=False)
+            self.logger.critical(f"   Dettagli Errore Analizzati: pgcode={self.last_connection_error['pgcode']}, pgerror='{self.last_connection_error['pgerror']}'")
+            
+            if self.pool:
+                self.pool.closeall()
             self.pool = None
             return False
-        except Exception as e_generic: # Altri errori Python imprevisti
-            self.logger.critical(f"FALLIMENTO inizializzazione pool principale per DB '{target_dbname}'. Errore generico: {e_generic}", exc_info=True)
+            
+        except Exception as e_generic:
+            self.last_connection_error = {'pgcode': 'GENERIC_PYTHON_ERROR', 'pgerror': str(e_generic)}
+            self.logger.critical(f"FALLIMENTO inizializzazione pool per DB '{target_dbname}'. Errore generico: {e_generic}", exc_info=True)
+            if self.pool:
+                self.pool.closeall()
             self.pool = None
             return False
+
     def close_pool(self):
         """
         Chiude tutte le connessioni nel pool e imposta self.pool a None.
@@ -320,6 +343,11 @@ class CatastoDBManager:
             return params_copy
         self.logger.warning("Tentativo di accesso ai parametri di connessione fallito: _main_db_conn_params non definito.")
         return {}
+    # --- AGGIUNGERE QUESTO NUOVO METODO ALLA CLASSE ---
+    def get_last_connect_error_details(self) -> Optional[Dict[str, str]]:
+        """Restituisce i dettagli dell'ultimo errore di connessione occorso."""
+        return self.last_connection_error
+    # -------------------------------------------------
     
 
     
@@ -571,15 +599,20 @@ class CatastoDBManager:
             self.logger.error(f"Errore nel recuperare l'elenco dei comuni: {e}", exc_info=True)
             # Solleviamo un'eccezione personalizzata per informare il chiamante del fallimento
             raise DBMError("Impossibile recuperare l'elenco dei comuni.") from e
-    def import_possessori_from_csv(self, file_path: str, comune_id: int) -> int:
+    # In catasto_db_manager.py, sostituisci la vecchia funzione con questa:
+
+    def import_possessori_from_csv(self, file_path: str, comune_id: int, comune_nome: str) -> Dict[str, list]:
         """
-        Importa una lista di possessori da un file CSV associandoli a un comune specifico.
-        L'operazione è transazionale e usa il nuovo pattern di connessione.
+        Importa una lista di possessori da un file CSV, gestendo gli errori riga per riga.
+        Restituisce un dizionario con i risultati dettagliati ('success' e 'errors').
+        L'operazione è transazionale a livello di singola riga usando SAVEPOINT.
         """
         records_to_import = []
         try:
+            # La fase di lettura del file rimane invariata
             with open(file_path, mode='r', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
+                # Usiamo il punto e virgola come delimitatore, comune in Italia
+                reader = csv.DictReader(csvfile, delimiter=';')
                 required_headers = {'cognome_nome', 'nome_completo'}
                 if not required_headers.issubset(reader.fieldnames or []):
                     raise ValueError(f"Intestazioni mancanti nel CSV. Richieste: {', '.join(required_headers)}")
@@ -595,49 +628,88 @@ class CatastoDBManager:
             raise IOError(f"Errore leggendo il file CSV: {e}")
 
         if not records_to_import:
-            return 0
+            return {"success": [], "errors": []}
+
+        # Liste per raccogliere i risultati
+        success_rows = []
+        error_rows = []
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
-                    # Il blocco 'with self._get_connection()' gestisce l'intera transazione.
-                    # Il commit avverrà solo se il ciclo for si completa senza eccezioni.
-                    # Il rollback sarà automatico in caso di qualsiasi errore.
-                    
                     for i, record in enumerate(records_to_import):
                         line_num = i + 2
-                        nome_completo = record['nome_completo']
                         
-                        # Controlla l'esistenza del possessore
-                        cur.execute(f"SELECT id FROM {self.schema}.possessore WHERE nome_completo = %s AND comune_id = %s", (nome_completo, comune_id))
-                        if cur.fetchone():
-                            raise ValueError(f"Errore riga {line_num}: Il possessore '{nome_completo}' esiste già nel comune selezionato.")
+                        # Definiamo un SAVEPOINT per isolare la transazione di questa riga
+                        cur.execute("SAVEPOINT record_savepoint")
+                        
+                        try:
+                            nome_completo = record['nome_completo'].strip()
+                            cognome_nome = record['cognome_nome'].strip()
+                            paternita = record.get('paternita', '').strip() or None
 
-                        # Inserisce il nuovo possessore
-                        cur.execute(
-                            f"""
-                            INSERT INTO {self.schema}.possessore (comune_id, cognome_nome, paternita, nome_completo, attivo)
-                            VALUES (%s, %s, %s, %s, %s)
-                            """,
-                            (comune_id, record['cognome_nome'], record.get('paternita'), nome_completo, True)
-                        )
-            
-            # Se arriviamo qui, il blocco 'with' è terminato senza errori e il commit è stato eseguito.
-            return len(records_to_import)
+                            # Controlla l'esistenza del possessore
+                            cur.execute(
+                                f"SELECT id FROM {self.schema}.possessore WHERE nome_completo = %s AND comune_id = %s",
+                                (nome_completo, comune_id)
+                            )
+                            if cur.fetchone():
+                                # Se esiste già, lo trattiamo come un errore per questa riga
+                                raise ValueError(f"Il possessore '{nome_completo}' esiste già in questo comune.")
 
-        except (ValueError, psycopg2.Error) as error:
-            # Rilancia l'eccezione per informare il chiamante, il rollback è già stato gestito.
-            self.logger.error(f"Importazione possessori fallita: {error}", exc_info=True)
-            # Rilancia come DBMError per coerenza
-            raise DBMError(f"Importazione annullata: {error}") from error
-    def import_partite_from_csv(self, file_path: str, comune_id: int) -> int:
+                            # Inserisce il nuovo possessore e recupera il suo ID
+                            cur.execute(
+                                f"""
+                                INSERT INTO {self.schema}.possessore (comune_id, cognome_nome, paternita, nome_completo, attivo)
+                                VALUES (%s, %s, %s, %s, %s)
+                                RETURNING id;
+                                """,
+                                (comune_id, cognome_nome, paternita, nome_completo, True)
+                            )
+                            
+                            new_id_result = cur.fetchone()
+                            if not new_id_result:
+                                raise DBMError("Inserimento fallito, nessun ID restituito dal database.")
+                            
+                            new_id = new_id_result[0]
+
+                            # Rilascia il savepoint, rendendo l'inserimento permanente (al commit finale)
+                            cur.execute("RELEASE SAVEPOINT record_savepoint")
+                            
+                            # Aggiungi ai successi
+                            success_rows.append({
+                                'id': new_id,
+                                'nome_completo': nome_completo,
+                                'comune_nome': comune_nome # Aggiungiamo il nome del comune per il report
+                            })
+
+                        except (ValueError, psycopg2.Error, DBMError) as error:
+                            # Se si verifica un errore, torna al savepoint, annullando l'inserimento di questa riga
+                            cur.execute("ROLLBACK TO SAVEPOINT record_savepoint")
+                            # Aggiungi agli errori
+                            error_rows.append((line_num, record, str(error)))
+
+            # Se il ciclo 'with' termina senza errori gravi, la transazione principale viene committata,
+            # salvando tutti gli inserimenti per cui è stato fatto "RELEASE SAVEPOINT".
+            self.logger.info(f"Importazione CSV completata. Successi: {len(success_rows)}, Errori: {len(error_rows)}")
+            return {"success": success_rows, "errors": error_rows}
+
+        except Exception as e:
+            # Questo cattura errori gravi (es. connessione persa)
+            self.logger.error(f"Errore critico durante l'importazione CSV dei possessori: {e}", exc_info=True)
+            # Rilancia come DBMError per informare il chiamante
+            raise DBMError(f"Errore critico di sistema durante l'importazione: {e}") from e
+    # In catasto_db_manager.py, SOSTITUISCI la vecchia funzione con questa
+
+    def import_partite_from_csv(self, file_path: str, comune_id: int, comune_nome: str) -> Dict[str, list]:
         """
-        Importa una lista di partite da un file CSV. L'operazione è transazionale.
+        Importa una lista di partite da un file CSV, gestendo gli errori riga per riga.
+        Restituisce un dizionario con i risultati dettagliati ('success' e 'errors').
         """
         records_to_import = []
         try:
             with open(file_path, mode='r', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
+                reader = csv.DictReader(csvfile, delimiter=';')
                 required_headers = {'numero_partita', 'data_impianto', 'stato', 'tipo'}
                 if not required_headers.issubset(reader.fieldnames or []):
                     raise ValueError(f"Intestazioni mancanti nel CSV. Richieste: {', '.join(required_headers)}")
@@ -649,37 +721,52 @@ class CatastoDBManager:
             raise IOError(f"Errore leggendo il file CSV: {e}")
 
         if not records_to_import:
-            return 0
+            return {"success": [], "errors": []}
+
+        success_rows = []
+        error_rows = []
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
                     for i, record in enumerate(records_to_import):
                         line_num = i + 2
-                        numero_partita = record['numero_partita']
-                        suffisso_partita = record.get('suffisso_partita') or None
+                        cur.execute("SAVEPOINT record_savepoint")
+                        try:
+                            numero_partita = int(record['numero_partita'])
+                            suffisso_partita = record.get('suffisso_partita') or None
+                            
+                            cur.execute(
+                                f"SELECT id FROM {self.schema}.partita WHERE comune_id = %s AND numero_partita = %s AND (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))",
+                                (comune_id, numero_partita, suffisso_partita, suffisso_partita)
+                            )
+                            if cur.fetchone():
+                                suffisso_str = f" con suffisso '{suffisso_partita}'" if suffisso_partita else ""
+                                raise ValueError(f"La partita n.{numero_partita}{suffisso_str} esiste già.")
+
+                            cur.execute(
+                                f"""
+                                INSERT INTO {self.schema}.partita (comune_id, numero_partita, suffisso_partita, data_impianto, data_chiusura, numero_provenienza, stato, tipo)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                                """,
+                                (comune_id, numero_partita, suffisso_partita, record['data_impianto'], record.get('data_chiusura') or None, record.get('numero_provenienza') or None, record['stato'], record['tipo'])
+                            )
+                            new_id = cur.fetchone()[0]
+                            cur.execute("RELEASE SAVEPOINT record_savepoint")
+                            record['id'] = new_id
+                            record['comune_nome'] = comune_nome
+                            success_rows.append(record)
                         
-                        cur.execute(
-                            f"SELECT id FROM {self.schema}.partita WHERE comune_id = %s AND numero_partita = %s AND (suffisso_partita = %s OR (suffisso_partita IS NULL AND %s IS NULL))",
-                            (comune_id, numero_partita, suffisso_partita, suffisso_partita)
-                        )
-                        if cur.fetchone():
-                            suffisso_str = f" con suffisso '{suffisso_partita}'" if suffisso_partita else ""
-                            raise ValueError(f"Errore riga {line_num}: La partita n.{numero_partita}{suffisso_str} esiste già.")
-
-                        cur.execute(
-                            f"""
-                            INSERT INTO {self.schema}.partita (comune_id, numero_partita, suffisso_partita, data_impianto, data_chiusura, numero_provenienza, stato, tipo)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            """,
-                            (comune_id, numero_partita, suffisso_partita, record['data_impianto'], record.get('data_chiusura') or None, record.get('numero_provenienza') or None, record['stato'], record['tipo'])
-                        )
+                        except (ValueError, psycopg2.Error, DBMError) as error:
+                            cur.execute("ROLLBACK TO SAVEPOINT record_savepoint")
+                            error_rows.append((line_num, record, str(error)))
             
-            return len(records_to_import)
+            self.logger.info(f"Importazione CSV partite completata. Successi: {len(success_rows)}, Errori: {len(error_rows)}")
+            return {"success": success_rows, "errors": error_rows}
 
-        except (ValueError, psycopg2.Error) as error:
-            self.logger.error(f"Importazione partite fallita: {error}", exc_info=True)
-            raise DBMError(f"Importazione annullata: {error}") from error
+        except Exception as e:
+            self.logger.error(f"Errore critico durante l'importazione CSV delle partite: {e}", exc_info=True)
+            raise DBMError(f"Errore critico di sistema durante l'importazione: {e}") from e
     def check_possessore_exists(self, nome_completo: str, comune_id: Optional[int] = None) -> Optional[int]:
         """Verifica se un possessore esiste e ritorna il suo ID, usando il pattern corretto."""
         try:
@@ -716,7 +803,43 @@ class CatastoDBManager:
                 raise DBMError(f"Errore database: {e}") from e
 
     
+    # In catasto_db_manager.py, aggiungi questo nuovo metodo alla classe
 
+    def create_partita(self, comune_id: int, numero_partita: int, tipo: str, stato: str, data_impianto: date,
+                       suffisso_partita: Optional[str] = None, data_chiusura: Optional[date] = None,
+                       numero_provenienza: Optional[int] = None) -> int:
+        """
+        Crea una nuova, singola partita nel database e restituisce il suo ID.
+        """
+        # Validazione base
+        if not all([comune_id, numero_partita, tipo, stato, data_impianto]):
+            raise DBDataError("Comune, Numero Partita, Tipo, Stato e Data Impianto sono obbligatori.")
+
+        query = f"""
+            INSERT INTO {self.schema}.partita
+                (comune_id, numero_partita, suffisso_partita, data_impianto, data_chiusura, numero_provenienza, stato, tipo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """
+        params = (comune_id, numero_partita, suffisso_partita, data_impianto,
+                  data_chiusura, numero_provenienza, stato, tipo)
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    result = cur.fetchone()
+                    if result and result[0]:
+                        self.logger.info(f"Partita N.{numero_partita} creata con successo. ID: {result[0]}")
+                        return result[0]
+                    else:
+                        raise DBMError("Creazione partita fallita, nessun ID restituito.")
+        except psycopg2.errors.UniqueViolation as e:
+            # Rileva violazione del vincolo di unicità (comune_id, numero_partita, suffisso_partita)
+            raise DBUniqueConstraintError(f"Esiste già una partita con questo numero e suffisso nel comune selezionato.") from e
+        except Exception as e:
+            self.logger.error(f"Errore DB durante la creazione della partita: {e}", exc_info=True)
+            raise DBMError(f"Errore imprevisto durante la creazione della partita: {e}") from e
     def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         query = f"""
             SELECT p.id, c.nome as comune_nome, p.cognome_nome, p.paternita, p.nome_completo, p.attivo,

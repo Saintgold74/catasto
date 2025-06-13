@@ -49,18 +49,21 @@ from gui_widgets import (
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  # Aggiunto se non c'era
+    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget
 )
 from gui_widgets import DBConfigDialog
-from dialogs import DettaglioPartitaDialog
+from dialogs import DettaglioPartitaDialog,CSVImportResultDialog
 
 from custom_widgets import QPasswordLineEdit
 from app_utils import FPDF_AVAILABLE
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
-)
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
+    COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
+    COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
+    NUOVE_ETICHETTE_POSSESSORI)
+
 try:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
@@ -101,33 +104,6 @@ except ImportError:
                              "Non è possibile importare CatastoDBManager. "
                              "Assicurati che catasto_db_manager.py sia accessibile.")
         sys.exit(1)
-
-# Importazioni dagli altri nuovi moduli (verranno create dopo)
-# from gui_widgets import (ElencoComuniWidget, ...) # Esempio
-# from app_utils import (FPDF_AVAILABLE, ...) # Esempio
-
-# Costanti per le colonne delle tabelle, se usate in più punti
-
-# Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
-COLONNE_POSSESSORI_DETTAGLI_NUM = 6
-COLONNE_POSSESSORI_DETTAGLI_LABELS = [
-    "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
-# Costanti per la configurazione delle tabelle dei possessori, se usate in più punti
-# Scegli nomi specifici se diverse tabelle hanno diverse configurazioni
-# Esempio: ID, Nome Compl, Paternità, Comune, Num. Partite
-COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM = 5
-COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Rif.", "Num. Partite"]
-
-# Per InserimentoPossessoreWidget, se la sua tabella è diversa:
-# Esempio: ID, Nome Completo, Paternità, Comune
-COLONNE_INSERIMENTO_POSSESSORI_NUM = 4
-COLONNE_INSERIMENTO_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Riferimento"]
-
-NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome",
-                              "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
-# Nomi per le chiavi di QSettings (globali o definite prima di run_gui_app)
 
 # --- Stylesheet Moderno (senza icone custom sui pulsanti principali) ---
 MODERN_STYLESHEET = """
@@ -280,7 +256,7 @@ MODERN_STYLESHEET = """
 """
 print("[FASE 1] Importazioni completate.")
 
-# Configurazione del logger (SOLO IN gui_main.py)
+
 # --- Configurazione Logger (assicurati sia definito prima del suo uso) ---
 gui_logger = logging.getLogger("CatastoGUI")
 if not gui_logger.hasHandlers():
@@ -682,10 +658,7 @@ class CatastoMainWindow(QMainWindow):
 
         self.tabs.clear()
 
-        # Inizializza gli attributi self.xxxx_sub_tabs qui, se sono usati per contenere i sotto-tab
-        # Esempio: self.consultazione_sub_tabs = QTabWidget()
-        # Se non sono attributi di istanza, non serve self. qui, ma è meglio che lo siano per la coerenza
-        # e per permettere a update_ui_based_on_role di accedervi.
+        
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
         self.sistema_sub_tabs = QTabWidget()  # Assicurati sia inizializzato
@@ -759,6 +732,15 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.inserimento_possessore_widget_ref, "Nuovo Possessore")
+        # --- AGGIUNGERE QUESTA CONNESSIONE ---
+        self.inserimento_possessore_widget_ref.import_csv_requested.connect(self._import_possessori_csv)
+        # ------------------------------------
+        # --- AGGIUNGERE QUESTO BLOCCO ---
+        self.inserimento_partite_widget_ref = InserimentoPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_partite_widget_ref, "Nuova Partita")
+        self.inserimento_partite_widget_ref.import_csv_requested.connect(self._import_partite_csv)
+        # --- FINE BLOCCO ---
+
 
         self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(
             self.db_manager, self.inserimento_sub_tabs)
@@ -1299,34 +1281,28 @@ class CatastoMainWindow(QMainWindow):
         logging.getLogger("CatastoGUI").info(
             "Applicazione GUI Catasto Storico terminata via closeEvent.")
         event.accept()
+   
     def _import_possessori_csv(self):
         """
-        Gestisce il flusso di importazione: 1. Scegli Comune, 2. Scegli File, 3. Importa.
+        Gestisce il flusso di importazione dei possessori da CSV, chiamando la logica
+        di importazione nel DB manager e visualizzando i risultati dettagliati.
         """
         try:
-            # --- PASSO 1: Chiedi all'utente di selezionare un comune ---
+            # --- PASSO 1: Selezione del comune (invariato) ---
             comuni = self.db_manager.get_elenco_comuni_semplice()
             if not comuni:
                 QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
                 return
 
-            # Crea una lista di nomi di comuni per il dialogo
             nomi_comuni = [c[1] for c in comuni]
-            
             nome_comune_selezionato, ok = QInputDialog.getItem(
-                self, 
-                "Selezione Comune", 
-                "A quale comune vuoi associare i nuovi possessori?",
-                nomi_comuni, 
-                0, # Indice iniziale
-                False # Non editabile
+                self, "Selezione Comune", "A quale comune vuoi associare i nuovi possessori?",
+                nomi_comuni, 0, False
             )
             
             if not ok or not nome_comune_selezionato:
-                # L'utente ha premuto Annulla
                 return
 
-            # Trova l'ID del comune selezionato
             comune_id_selezionato = None
             for comun_id, comun_nome in comuni:
                 if comun_nome == nome_comune_selezionato:
@@ -1334,46 +1310,56 @@ class CatastoMainWindow(QMainWindow):
                     break
             
             if comune_id_selezionato is None:
-                # Non dovrebbe mai succedere, ma è una sicurezza
                 QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
                 return
 
-            # --- PASSO 2: Chiedi all'utente di selezionare il file CSV ---
+            # --- PASSO 2: Selezione del file CSV (invariato) ---
             file_path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Seleziona il file CSV con i possessori",
-                "",
+                self, "Seleziona il file CSV con i possessori", "",
                 "File CSV (*.csv);;Tutti i file (*)"
             )
 
             if not file_path:
                 return
 
-            # --- PASSO 3: Avvia l'importazione ---
+            # --- PASSO 3: Avvia l'importazione e mostra il nuovo dialogo di riepilogo ---
             QApplication.setOverrideCursor(Qt.WaitCursor)
             
-            num_imported = self.db_manager.import_possessori_from_csv(file_path, comune_id_selezionato)
-            
-            QMessageBox.information(
-                self,
-                "Importazione Completata",
-                f"Operazione completata con successo!\n\nSono stati importati {num_imported} nuovi possessori nel comune di {nome_comune_selezionato}."
+            # --- MODIFICA CHIAVE QUI ---
+            # Chiamiamo il metodo del db_manager che ora restituisce un dizionario dettagliato.
+            # Passiamo anche il nome del comune per poterlo visualizzare nel report di successo.
+            import_results = self.db_manager.import_possessori_from_csv(
+                file_path, comune_id_selezionato, nome_comune_selezionato
             )
-            # Qui puoi chiamare una funzione per aggiornare la vista
-            # self.refresh_view()
 
+            # Invece di una semplice QMessageBox, creiamo e mostriamo il nostro nuovo dialogo.
+            result_dialog = CSVImportResultDialog(
+                import_results.get('success', []),
+                import_results.get('errors', []),
+                self
+            )
+            result_dialog.exec_()
+            # --- FINE MODIFICA ---
+
+            # Dopo l'importazione, aggiorniamo la vista dei comuni per riflettere eventuali
+            # cambiamenti (se ad esempio la vista mostrasse il numero di possessori).
+            if self.elenco_comuni_widget_ref:
+                self.elenco_comuni_widget_ref.load_comuni_data()
+
+        except DBMError as e:
+            self.logger.error(f"Errore DB durante il processo di importazione CSV: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore di database:\n\n{e}")
         except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore:\n\n{e}")
+            self.logger.error(f"Errore imprevisto durante l'importazione CSV: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore imprevisto:\n\n{e}")
         finally:
             QApplication.restoreOverrideCursor()
     
     def _import_partite_csv(self):
         """
-        Gestisce il flusso di importazione delle partite:
-        1. Scegli Comune, 2. Scegli File, 3. Importa.
+        Gestisce l'importazione di partite da un file CSV e mostra i risultati.
         """
         try:
-            # Chiedi all'utente di selezionare un comune
             comuni = self.db_manager.get_elenco_comuni_semplice()
             if not comuni:
                 QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
@@ -1391,31 +1377,41 @@ class CatastoMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
                 return
 
-            # Chiedi all'utente di selezionare il file CSV
             file_path, _ = QFileDialog.getOpenFileName(
                 self, "Seleziona il file CSV con le partite", "", "File CSV (*.csv);;Tutti i file (*)"
             )
             if not file_path:
                 return
 
-            # Avvia l'importazione
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            num_imported = self.db_manager.import_partite_from_csv(file_path, comune_id_selezionato)
             
-            QMessageBox.information(
-                self, "Importazione Completata",
-                f"Operazione completata con successo!\n\nSono state importate {num_imported} nuove partite nel comune di {nome_comune_selezionato}."
+            import_results = self.db_manager.import_partite_from_csv(file_path, comune_id_selezionato, nome_comune_selezionato)
+            
+            # Crea una versione dei dati di successo adatta al dialogo generico
+            success_display_data = []
+            for row in import_results.get('success', []):
+                success_display_data.append({
+                    'id': row.get('id'),
+                    'nome_completo': f"Partita N.{row.get('numero_partita')} {row.get('suffisso_partita') or ''}".strip(),
+                    'comune_nome': row.get('comune_nome')
+                })
+
+            result_dialog = CSVImportResultDialog(
+                success_display_data,
+                import_results.get('errors', []),
+                self
             )
+            result_dialog.setWindowTitle("Riepilogo Importazione Partite")
+            result_dialog.exec_()
+            
+            if self.elenco_comuni_widget_ref:
+                self.elenco_comuni_widget_ref.load_comuni_data()
 
         except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore:\n\n{e}")
+            self.logger.error(f"Errore imprevisto durante l'importazione CSV delle partite: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Importazione", f"Si è verificato un errore non gestito: {e}")
         finally:
             QApplication.restoreOverrideCursor()
-
-# --- Fine Classe CatastoMainWindow ---
-
-    
-
 print("[FASE 3] Fine definizione classe CatastoMainWindow.")
 def run_gui_app():
     try:
@@ -1523,66 +1519,60 @@ def run_gui_app():
                     gui_logger.info("Login utente annullato. Uscita dall'applicazione.")
                     sys.exit(0)
             
-            else: # Inizializzazione pool fallita: Gestisci errori di connessione/autenticazione
+            else: # Inizializzazione pool fallita: Gestione errori migliorata
                 main_window_instance.pool_initialized_successful = False
                 db_target_name_failed = current_db_config_values.get("dbname", "N/D")
                 host_failed = current_db_config_values.get("host", "N/D")
-                gui_logger.error(f"FALLIMENTO inizializzazione pool principale per DB '{db_target_name_failed}' su host '{host_failed}'.")
-
+                user_failed = current_db_config_values.get("user", "N/D")
                 
-                
-                error_details_from_db_manager = db_manager_gui.get_last_connect_error_details() if hasattr(db_manager_gui, 'get_last_connect_error_details') else {}
-                pgcode = error_details_from_db_manager.get('pgcode')
-                pgerror_msg = error_details_from_db_manager.get('pgerror')
+                # Ora questo metodo esiste e funziona
+                error_details = db_manager_gui.get_last_connect_error_details() or {}
+                pgcode = error_details.get('pgcode')
+                pgerror_msg = error_details.get('pgerror')
 
-                if pgcode == '28P01' or ("password fallita" in str(pgerror_msg).lower() if pgerror_msg else False): # Codice per password sbagliata
+                # Controlliamo i codici di errore specifici di PostgreSQL
+                if pgcode == '28P01': # Codice per "authentication_failure"
                     QMessageBox.critical(None, "Errore Autenticazione Database",
-                                        "La password fornita per l'utente del database è sbagliata. "
-                                        "Verificare la password e riprovare.",
-                                        QMessageBox.Ok)
-                elif pgcode == '08001' or ("timed out" in str(pgerror_msg).lower() if pgerror_msg else False) or ("connessione rifiutata" in str(pgerror_msg).lower() if pgerror_msg else False): # Codici per problemi di connessione
-                    QMessageBox.critical(None, "Errore Connessione Database",
-                                        f"Impossibile connettersi al database '{db_target_name_failed}' su '{host_failed}'. "
-                                        "Il server potrebbe non essere in esecuzione, il firewall potrebbe bloccare la connessione, o l'indirizzo/porta sono errati. "
-                                        "Verificare la configurazione del server PostgreSQL e del firewall.",
-                                        QMessageBox.Ok)
-                else:
-                    # Caso di fallback per errori generici o "DB non trovato"
-                    db_exists_on_server = False
-                    try:
-                        db_exists_on_server = db_manager_gui.check_database_exists(
-                            db_target_name_failed, current_db_config_values.get("user"), current_db_config_values.get("password")
-                        )
-                    except Exception as e:
-                        gui_logger.warning(f"Errore durante la verifica esistenza DB per modalità Admin Offline: {e}", exc_info=True)
-                        db_exists_on_server = False # Se la verifica fallisce, assumi non esista o sia inaccessibile
-
-                    if not db_exists_on_server and host_failed.lower() in ["localhost", "127.0.0.1"]:
-                        gui_logger.warning(f"DB '{db_target_name_failed}' non trovato su server locale. Avvio in modalità setup limitata (admin_offline).")
-                        QMessageBox.information(None, "Database Non Trovato",
-                                                f"Il database '{db_target_name_failed}' non sembra esistere sul server locale.\n"
-                                                "L'applicazione verrà avviata in modalità limitata per permettere la creazione e configurazione del database tramite il tab 'Sistema -> Amministrazione DB'.")
-
-                        main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
-                        main_window_instance.logged_in_user_id = 0
-                        main_window_instance.current_session_id = str(uuid.uuid4())
-                        
-                        main_window_instance.perform_initial_setup(
-                            db_manager_gui,
-                            main_window_instance.logged_in_user_id,
-                            main_window_instance.logged_in_user_info,
-                            main_window_instance.current_session_id
-                        )
-                        app.exec_() # Avvia il loop degli eventi per la modalità offline
-                        sys.exit(0)
-                    else: # Errore generico di connessione o DB remoto non raggiungibile
-                        QMessageBox.critical(None, "Errore Connessione Database",
-                                            f"Errore generico di connessione al database. "
-                                            "Verificare che il server sia raggiungibile, che le credenziali siano corrette e che il database esista.",
-                                            QMessageBox.Ok)
+                                         f"Autenticazione fallita per l'utente '{user_failed}'.\n\n"
+                                         "Verificare che l'username e la password inseriti siano corretti.",
+                                         QMessageBox.Ok)
                 
-                continue # Torna all'inizio del loop esterno per riaprire il DBConfigDialog con gli ultimi valori inseriti/salvati
-
+                elif pgcode == '3D000': # Codice per "invalid_catalog_name" (DB non trovato)
+                    QMessageBox.critical(None, "Errore Database",
+                                         f"Il database con nome '{db_target_name_failed}' non è stato trovato sul server '{host_failed}'.\n\n"
+                                         "Verificare che il nome del database sia corretto o crearlo se necessario.",
+                                         QMessageBox.Ok)
+                    # Qui possiamo inserire la logica per la modalità setup
+                    if host_failed.lower() in ["localhost", "127.0.0.1"]:
+                        reply = QMessageBox.question(None, "Modalità Setup",
+                                                     f"Il database '{db_target_name_failed}' non esiste localmente.\n"
+                                                     "Vuoi avviare l'applicazione in modalità di configurazione limitata per creare e impostare il database?",
+                                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                        if reply == QMessageBox.Yes:
+                             main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
+                             main_window_instance.logged_in_user_id = 0
+                             main_window_instance.current_session_id = str(uuid.uuid4())
+                             main_window_instance.perform_initial_setup(db_manager_gui, 0, main_window_instance.logged_in_user_info, main_window_instance.current_session_id)
+                             app.exec_()
+                             sys.exit(0)
+                
+                elif pgcode and pgcode.startswith('08'): # Codici per errori di connessione (es. 08001, 08006)
+                    QMessageBox.critical(None, "Errore Connessione al Server",
+                                         f"Impossibile stabilire una connessione con il server PostgreSQL all'indirizzo '{host_failed}'.\n\n"
+                                         "Possibili cause:\n"
+                                         "- Il server non è in esecuzione.\n"
+                                         "- L'indirizzo IP o la porta sono errati.\n"
+                                         "- Un firewall sta bloccando la connessione.",
+                                         QMessageBox.Ok)
+                
+                else: # Fallback per tutti gli altri errori
+                    QMessageBox.critical(None, "Errore Sconosciuto",
+                                         "Si è verificato un errore imprevisto durante la connessione al database.\n\n"
+                                         f"Dettagli: {pgerror_msg}",
+                                         QMessageBox.Ok)
+                
+                # Dopo aver mostrato l'errore, il loop 'while' continuerà, riaprendo il dialogo di configurazione
+                continue # Torna all'inizio del loop esterno per riaprire DBConfigDialog e riprovare
         # --- Fine del flusso di avvio ---
 
         # Se l'applicazione è arrivata qui, significa che il setup è stato completato e la main_window_instance è stata mostrata.

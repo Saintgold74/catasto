@@ -36,11 +36,12 @@ from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal
 
 
 
-from app_utils import (
+from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
-)
-#from app_utils import SETTINGS_DB_PASS
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
+    COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
+    COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
+    NUOVE_ETICHETTE_POSSESSORI)
 
 
 
@@ -66,8 +67,7 @@ from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_es
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
 
-NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome",
-                              "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
+
 
 # Importazione del gestore DB e eccezioni
 try:
@@ -1620,6 +1620,147 @@ class InserimentoLocalitaWidget(QWidget):
             # La tabella è già stata pulita, quindi apparirà vuota.
 
         self.localita_table.setSortingEnabled(True)  # Riabilita sorting
+# In gui_widgets.py, aggiungi questa nuova classe
+
+# In gui_widgets.py, sostituisci la vecchia classe InserimentoPartitaWidget con questa:
+
+class InserimentoPartitaWidget(QWidget):
+    import_csv_requested = pyqtSignal()
+
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self._initUI()
+        self.load_initial_data() # Carichiamo i dati necessari come i comuni
+
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        form_group = QGroupBox("Dati Nuova Partita")
+        form_layout = QFormLayout(form_group)
+        form_layout.setSpacing(10)
+        
+        # --- CAMPI DEL FORM AGGIORNATI SECONDO LO SCHEMA ---
+        self.comune_combo = QComboBox()
+        form_layout.addRow("Comune (*):", self.comune_combo)
+
+        self.numero_partita_spin = QSpinBox()
+        self.numero_partita_spin.setRange(1, 999999)
+        form_layout.addRow("Numero Partita (*):", self.numero_partita_spin)
+
+        self.suffisso_edit = QLineEdit()
+        self.suffisso_edit.setPlaceholderText("Es. bis, A (opzionale)")
+        self.suffisso_edit.setMaxLength(20)
+        form_layout.addRow("Suffisso Partita:", self.suffisso_edit)
+
+        self.data_impianto_edit = QDateEdit(calendarPopup=True)
+        self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_impianto_edit.setDate(QDate.currentDate())
+        form_layout.addRow("Data Impianto (*):", self.data_impianto_edit)
+
+        # NUOVO: Campo per data_chiusura (opzionale)
+        self.data_chiusura_check = QCheckBox("Imposta data chiusura")
+        self.data_chiusura_check.toggled.connect(self._toggle_data_chiusura)
+        self.data_chiusura_edit = QDateEdit(calendarPopup=True)
+        self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_chiusura_edit.setEnabled(False) # Inizia disabilitato
+        data_chiusura_layout = QHBoxLayout()
+        data_chiusura_layout.addWidget(self.data_chiusura_check)
+        data_chiusura_layout.addWidget(self.data_chiusura_edit)
+        form_layout.addRow("Data Chiusura:", data_chiusura_layout)
+        
+        # CORRETTO: Campo per numero_provenienza (testuale)
+        self.numero_provenienza_edit = QLineEdit()
+        self.numero_provenienza_edit.setPlaceholderText("Numero o testo di riferimento (opzionale)")
+        self.numero_provenienza_edit.setMaxLength(50)
+        form_layout.addRow("Numero Provenienza:", self.numero_provenienza_edit)
+
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["principale", "secondaria"])
+        form_layout.addRow("Tipo (*):", self.tipo_combo)
+
+        self.stato_combo = QComboBox()
+        self.stato_combo.addItems(["attiva", "inattiva"])
+        form_layout.addRow("Stato (*):", self.stato_combo)
+
+        # Pulsanti di azione per il form manuale
+        btn_salva = QPushButton("Salva Nuova Partita")
+        btn_salva.clicked.connect(self._salva_partita)
+        btn_pulisci = QPushButton("Pulisci Campi")
+        btn_pulisci.clicked.connect(self._pulisci_campi)
+        manual_actions_layout = QHBoxLayout()
+        manual_actions_layout.addStretch()
+        manual_actions_layout.addWidget(btn_salva)
+        manual_actions_layout.addWidget(btn_pulisci)
+        form_layout.addRow(manual_actions_layout)
+        main_layout.addWidget(form_group)
+
+        # Sezione per l'importazione CSV
+        import_group = QGroupBox("Importazione Massiva")
+        import_layout = QVBoxLayout(import_group)
+        import_button = QPushButton("📂 Importa Partite da File CSV...")
+        import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        import_button.clicked.connect(self.import_csv_requested.emit)
+        import_layout.addWidget(import_button)
+        main_layout.addWidget(import_group)
+
+        main_layout.addStretch()
+        self.setLayout(main_layout)
+
+    def load_initial_data(self):
+        """Metodo per caricare i dati necessari, come la lista dei comuni."""
+        try:
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            self.comune_combo.clear()
+            self.comune_combo.addItem("--- Seleziona un comune ---", None)
+            for id_comune, nome in comuni:
+                self.comune_combo.addItem(nome, id_comune)
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare l'elenco dei comuni:\n{e}")
+    
+    def _toggle_data_chiusura(self, checked):
+        """Abilita o disabilita il QDateEdit per la data di chiusura."""
+        self.data_chiusura_edit.setEnabled(checked)
+        if checked:
+            self.data_chiusura_edit.setDate(QDate.currentDate())
+        else:
+            self.data_chiusura_edit.setDate(QDate()) # Data nulla
+
+    def _pulisci_campi(self):
+        self.comune_combo.setCurrentIndex(0)
+        self.numero_partita_spin.setValue(1)
+        self.suffisso_edit.clear()
+        self.data_impianto_edit.setDate(QDate.currentDate())
+        self.data_chiusura_check.setChecked(False) # Disattiva e resetta la data chiusura
+        self.numero_provenienza_edit.clear()
+        self.tipo_combo.setCurrentIndex(0)
+        self.stato_combo.setCurrentIndex(0)
+        
+    def _salva_partita(self):
+        comune_id = self.comune_combo.currentData()
+        if not comune_id:
+            QMessageBox.warning(self, "Dati Mancanti", "È necessario selezionare un comune.")
+            return
+
+        # Recupera i dati dai campi, inclusi i nuovi
+        data_chiusura = self.data_chiusura_edit.date().toPyDate() if self.data_chiusura_check.isChecked() else None
+        numero_provenienza = self.numero_provenienza_edit.text().strip() or None
+
+        try:
+            new_id = self.db_manager.create_partita(
+                comune_id=comune_id,
+                numero_partita=self.numero_partita_spin.value(),
+                tipo=self.tipo_combo.currentText(),
+                stato=self.stato_combo.currentText(),
+                data_impianto=self.data_impianto_edit.date().toPyDate(),
+                suffisso_partita=self.suffisso_edit.text().strip() or None,
+                data_chiusura=data_chiusura, # Passa il nuovo valore
+                numero_provenienza=numero_provenienza # Passa il nuovo valore
+            )
+            QMessageBox.information(self, "Successo", f"Partita creata con successo con ID: {new_id}.")
+            self._pulisci_campi()
+        except (DBMError, DBUniqueConstraintError, DBDataError) as e:
+            QMessageBox.critical(self, "Errore Salvataggio", f"Impossibile salvare la partita:\n{e}")
 
 
 class RegistrazioneProprietaWidget(QWidget):

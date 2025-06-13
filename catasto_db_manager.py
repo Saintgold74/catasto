@@ -3331,7 +3331,41 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore ricerca fuzzy località: {e}", exc_info=True)
             return []
+    # Inserisci questo metodo all'interno della classe CatastoDBManager in catasto_db_manager.py
 
+    def _search_possessori_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
+        """Ricerca fuzzy interna per i possessori, restituendo tutti i campi necessari."""
+        sql = f"""
+            SELECT
+                p.id AS entity_id,
+                p.nome_completo AS display_text,
+                'Comune: ' || c.nome || ' | Partite: ' || COALESCE(ps.num_partite, 0) AS detail_text,
+                greatest(similarity(p.nome_completo, %s), similarity(p.cognome_nome, %s)) AS similarity_score,
+                CASE
+                    WHEN similarity(p.nome_completo, %s) > similarity(p.cognome_nome, %s) THEN 'nome_completo'
+                    ELSE 'cognome_nome'
+                END AS search_field,
+                p.nome_completo,
+                c.nome as comune_nome,
+                COALESCE(ps.num_partite, 0) as num_partite
+            FROM {self.schema}.possessore p
+            JOIN {self.schema}.comune c ON p.comune_id = c.id
+            LEFT JOIN (
+                SELECT possessore_id, COUNT(*) as num_partite
+                FROM {self.schema}.partita_possessore
+                GROUP BY possessore_id
+            ) ps ON p.id = ps.possessore_id
+            WHERE greatest(similarity(p.nome_completo, %s), similarity(p.cognome_nome, %s)) >= %s
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        try:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(sql, (query, query, query, query, query, query, threshold, limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore ricerca fuzzy possessori: {e}", exc_info=True)
+            return []
     def _search_immobili_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
         """Ricerca fuzzy interna per gli immobili, includendo il suffisso della partita."""
         # --- MODIFICA: Aggiunto pa.suffisso_partita e aggiornato detail_text ---
@@ -3366,24 +3400,30 @@ class CatastoDBManager:
             return []
         
     def _search_variazioni_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per le variazioni (su tipo e note)."""
+        """Ricerca fuzzy interna per le variazioni (su tipo e nominativo di riferimento)."""
+        # --- CORREZIONE: Sostituisce v.note (inesistente) con v.nominativo_riferimento (esistente) ---
         sql = f"""
             SELECT
                 v.id AS entity_id,
                 'Variazione ' || v.tipo || ' del ' || TO_CHAR(v.data_variazione, 'DD/MM/YYYY') AS display_text,
-                'Partita Origine: ' || po.numero_partita || ' (' || co.nome || ')' AS detail_text,
-                greatest(similarity(v.tipo, %s), similarity(v.note, %s)) AS similarity_score,
+                'Rif: ' || COALESCE(v.nominativo_riferimento, 'N/D') || ' | Partita Origine: ' || po.numero_partita AS detail_text,
+                greatest(
+                    similarity(v.tipo, %s),
+                    similarity(v.nominativo_riferimento, %s)
+                ) AS similarity_score,
                 CASE
-                    WHEN similarity(v.tipo, %s) > similarity(v.note, %s) THEN 'tipo'
-                    ELSE 'note'
+                    WHEN similarity(v.tipo, %s) > similarity(v.nominativo_riferimento, %s) THEN 'tipo'
+                    ELSE 'nominativo_riferimento'
                 END AS search_field,
                 v.tipo,
                 v.data_variazione,
-                COALESCE(v.note, '') AS descrizione
+                v.nominativo_riferimento AS descrizione
             FROM {self.schema}.variazione v
             LEFT JOIN {self.schema}.partita po ON v.partita_origine_id = po.id
-            LEFT JOIN {self.schema}.comune co ON po.comune_id = co.id
-            WHERE greatest(similarity(v.tipo, %s), similarity(v.note, %s)) >= %s
+            WHERE greatest(
+                    similarity(v.tipo, %s),
+                    similarity(v.nominativo_riferimento, %s)
+                ) >= %s
             ORDER BY similarity_score DESC
             LIMIT %s;
         """
@@ -3394,7 +3434,6 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore ricerca fuzzy variazioni: {e}", exc_info=True)
             return []
-
     def _search_contratti_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
         """Ricerca fuzzy interna per i contratti (su tipo, notaio, note)."""
         sql = f"""

@@ -58,6 +58,22 @@ ON partita USING gin(to_tsvector('simple', numero_partita::text));
 CREATE INDEX IF NOT EXISTS idx_gin_partite_suffisso 
 ON partita USING gin(to_tsvector('italian', COALESCE(suffisso_partita, '')));
 
+-- Eseguire questi comandi sul database PostgreSQL per migliorare le performance
+
+-- Per la tabella 'variazione'
+CREATE INDEX idx_gin_variazione_tipo ON catasto.variazione USING gin (tipo gin_trgm_ops);
+CREATE INDEX idx_gin_variazione_note ON catasto.variazione USING gin (note gin_trgm_ops);
+
+-- Per la tabella 'contratto'
+CREATE INDEX idx_gin_contratto_tipo ON catasto.contratto USING gin (tipo gin_trgm_ops);
+CREATE INDEX idx_gin_contratto_notaio ON catasto.contratto USING gin (notaio gin_trgm_ops);
+CREATE INDEX idx_gin_contratto_note ON catasto.contratto USING gin (note gin_trgm_ops);
+
+-- Per la tabella 'partita'
+CREATE INDEX idx_gin_partita_tipo ON catasto.partita USING gin (tipo gin_trgm_ops);
+CREATE INDEX idx_gin_partita_suffisso ON catasto.partita USING gin (suffisso_partita gin_trgm_ops);
+
+
 -- ========================================================================
 -- 2. FUNZIONI DI RICERCA FUZZY AMPLIATE
 -- ========================================================================

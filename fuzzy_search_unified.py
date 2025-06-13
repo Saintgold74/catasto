@@ -28,14 +28,19 @@ from PyQt5.QtWidgets import (
     QSlider, QCheckBox, QComboBox, QProgressBar, QFrame, QHeaderView,
     QMessageBox, QApplication, QFileDialog, QDialog, QSpinBox,
     QSplitter, QScrollArea, QFormLayout, QDialogButtonBox, QSpacerItem,
-    QSizePolicy
+    QSizePolicy,QMessageBox, QApplication, QFileDialog, QDialog 
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
+# --- AGGIUNGERE QUESTE IMPORTAZIONI ---
+from dialogs import PartitaDetailsDialog, ModificaPossessoreDialog, ModificaLocalitaDialog
+# Assumiamo che esista un ModificaImmobileDialog, se non c'è lo gestiremo nel fallback
+try:
+    from dialogs import ModificaImmobileDialog
+except ImportError:
+    ModificaImmobileDialog = None # Fallback se non esiste
+# --- FINE AGGIUNTE ---
 
-# --- MODIFICA: Rimosse le importazioni differenziate per GIN, non più necessarie. ---
-# Assumiamo che, se disponibile, l'estensione GIN (base o expanded) venga gestita
-# dal DB Manager e che il widget chiami i metodi attesi.
 
 # ========================================================================
 # THREAD UNIFICATO PER RICERCHE IN BACKGROUND
@@ -129,7 +134,8 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._setup_signals()
         self._check_gin_status()
 
-    # --- MODIFICA: Unico metodo per creare l'interfaccia (basato sulla versione 'expanded') ---
+  
+
     def _init_ui(self):
         """Configura l'interfaccia utente unificata."""
         main_layout = QVBoxLayout(self)
@@ -187,52 +193,53 @@ class UnifiedFuzzySearchWidget(QWidget):
         search_layout.addLayout(controls_row)
         main_layout.addWidget(search_frame)
 
-        # === CHECKBOXES PER TIPI DI RICERCA ===
+        # === CHECKBOXES PER TIPI DI RICERCA (SEZIONE CORRETTA E COMPLETA) ===
         types_layout = QHBoxLayout()
         types_group = QGroupBox("Cerca in:")
         types_group_layout = QHBoxLayout(types_group)
+        
         self.search_possessori_cb = QCheckBox("👥 Possessori")
         self.search_possessori_cb.setChecked(True)
         types_group_layout.addWidget(self.search_possessori_cb)
+        
         self.search_localita_cb = QCheckBox("🏘️ Località")
         self.search_localita_cb.setChecked(True)
         types_group_layout.addWidget(self.search_localita_cb)
+        
         self.search_immobili_cb = QCheckBox("🏢 Immobili")
         self.search_immobili_cb.setChecked(True)
         types_group_layout.addWidget(self.search_immobili_cb)
+        
         self.search_variazioni_cb = QCheckBox("📋 Variazioni")
         self.search_variazioni_cb.setChecked(True)
         types_group_layout.addWidget(self.search_variazioni_cb)
+        
         self.search_contratti_cb = QCheckBox("📄 Contratti")
         self.search_contratti_cb.setChecked(True)
         types_group_layout.addWidget(self.search_contratti_cb)
+        
         self.search_partite_cb = QCheckBox("📊 Partite")
         self.search_partite_cb.setChecked(True)
         types_group_layout.addWidget(self.search_partite_cb)
+        
         types_layout.addWidget(types_group)
         main_layout.addLayout(types_layout)
 
-        # === AREA RISULTATI ===
+        # === AREA RISULTATI (COMPLETA) ===
         self.results_tabs = QTabWidget()
         self.results_tabs.setMinimumHeight(400)
         main_layout.addWidget(self.results_tabs, 1)
 
-        self.unified_table = self._create_table_widget(["Tipo", "Nome/Descrizione", "Dettagli", "Similarità", "Campo"], [0, 1, 2], 3)
+        self.unified_table = self._create_table_widget(["Tipo", "Nome/Descrizione", "Dettagli", "Similarità", "Campo"], [1, 2], 3)
         self.results_tabs.addTab(self.unified_table, "🔍 Tutti")
 
         self.possessori_table = self._create_table_widget(["Nome Completo", "Comune", "Partite", "Similitud."], [0], 3)
         self.results_tabs.addTab(self.possessori_table, "👥 Possessori")
 
-        self.localita_table = self._create_table_widget(["Nome", "Comune", "Immobili", "Similitud."], [0], 3)
-        self.results_tabs.addTab(self.localita_table, "🏘️ Località")
+        self.localita_table = self._create_table_widget(["Nome", "Tipo", "Civico", "Comune", "Immobili", "Similitud."], [0, 3], 5)
+        self.results_tabs.addTab(self.localita_table, "📍 Località")
         
-        # --- MODIFICA QUESTA RIGA ---
-        self.immobili_table = self._create_table_widget(
-            ["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], # Aggiunto "Suffisso"
-            [1, 4],  # Indici colonne da espandere (Classificazione e Comune)
-            5        # L'indice della colonna 'Similitud.' ora è 5
-        )
-        # --- FINE MODIFICA --
+        self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], [1, 4], 5)
         self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
 
         self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3)
@@ -241,7 +248,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.contratti_table = self._create_table_widget(["Tipo", "Data", "Partita", "Similitud."], [0], 3)
         self.results_tabs.addTab(self.contratti_table, "📄 Contratti")
 
-        self.partite_table = self._create_table_widget(["Numero", "Tipo", "Comune", "Similitud."], [2], 3)
+        self.partite_table = self._create_table_widget(["Numero", "Suffisso", "Tipo", "Comune", "Similitud."], [3], 4)
         self.results_tabs.addTab(self.partite_table, "📊 Partite")
         
         # === STATUS BAR ===
@@ -288,7 +295,7 @@ class UnifiedFuzzySearchWidget(QWidget):
 
         # Checkbox
         for cb in [self.search_possessori_cb, self.search_localita_cb, self.search_immobili_cb,
-                   self.search_variazioni_cb, self.search_contratti_cb, self.search_partite_cb]:
+                   self.search_variazioni_cb, self.search_contratti_cb, self.search_partite_cb]: # AGGIUNTE NUOVE CHECKBOX
             cb.toggled.connect(self._trigger_search_if_text)
 
         # Double-click
@@ -352,10 +359,13 @@ class UnifiedFuzzySearchWidget(QWidget):
             'search_possessori': self.search_possessori_cb.isChecked(),
             'search_localita': self.search_localita_cb.isChecked(),
             'search_immobili': self.search_immobili_cb.isChecked(),
+            # --- AGGIUNGERE QUESTE OPZIONI ---
             'search_variazioni': self.search_variazioni_cb.isChecked(),
             'search_contratti': self.search_contratti_cb.isChecked(),
             'search_partite': self.search_partite_cb.isChecked(),
         }
+
+        
 
         self.search_btn.setEnabled(False)
         self.stats_label.setText("Ricerca in corso...")
@@ -430,9 +440,18 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._populate_table(self.possessori_table, results_by_type.get('possessore', []), 
             lambda p: [p.get('nome_completo', ''), p.get('comune_nome', ''), p.get('num_partite', 0), f"{p.get('similarity_score', 0):.3f}"])
         
-        self._populate_table(self.localita_table, results_by_type.get('localita', []), 
-            lambda l: [l.get('nome', ''), l.get('comune_nome', ''), l.get('num_immobili', 0), f"{l.get('similarity_score', 0):.3f}"])
-        
+        # --- MODIFICA QUESTA CHIAMATA ---
+        self._populate_table(self.localita_table, results_by_type.get('localita', []),
+            lambda l: [
+                l.get('nome', ''),
+                l.get('tipo', '') or '',      # Aggiunto
+                l.get('civico', '') or '',    # Aggiunto
+                l.get('comune_nome', ''),
+                l.get('num_immobili', 0),
+                f"{l.get('similarity_score', 0):.3f}"
+            ]
+        )
+        # --- FINE MODIFICA ---
         # --- MODIFICA QUESTA CHIAMATA ---
         self._populate_table(self.immobili_table, results_by_type.get('immobile', []), 
             lambda i: [
@@ -446,14 +465,15 @@ class UnifiedFuzzySearchWidget(QWidget):
         )
         # --- FINE MODIFICA ---
 
+        # --- AGGIUNGERE QUESTE CHIAMATE ---
         self._populate_table(self.variazioni_table, results_by_type.get('variazione', []), 
             lambda v: [v.get('tipo', ''), v.get('data_variazione', ''), v.get('descrizione', ''), f"{v.get('similarity_score', 0):.3f}"])
 
         self._populate_table(self.contratti_table, results_by_type.get('contratto', []), 
-            lambda c: [c.get('tipo', ''), c.get('data_stipula', ''), c.get('numero_partita', ''), f"{c.get('similarity_score', 0):.3f}"])
+            lambda c: [c.get('tipo', ''), c.get('data_contratto', ''), c.get('numero_partita', ''), f"{c.get('similarity_score', 0):.3f}"])
 
         self._populate_table(self.partite_table, results_by_type.get('partita', []), 
-            lambda pt: [pt.get('numero_partita', ''), pt.get('tipo_partita', ''), pt.get('comune_nome', ''), f"{pt.get('similarity_score', 0):.3f}"])
+            lambda pt: [pt.get('numero_partita', ''), pt.get('suffisso_partita', '') or '', pt.get('tipo_partita', ''), pt.get('comune_nome', ''), f"{pt.get('similarity_score', 0):.3f}"])
 
     def _update_tab_counters(self, results_by_type: Dict[str, List]):
         """Aggiorna i contatori nei titoli dei tab."""
@@ -462,6 +482,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.results_tabs.setTabText(1, f"👥 Possessori ({len(results_by_type.get('possessore', []))})")
         self.results_tabs.setTabText(2, f"🏘️ Località ({len(results_by_type.get('localita', []))})")
         self.results_tabs.setTabText(3, f"🏢 Immobili ({len(results_by_type.get('immobile', []))})")
+        # --- AGGIUNGERE QUESTE RIGHE ---
         self.results_tabs.setTabText(4, f"📋 Variazioni ({len(results_by_type.get('variazione', []))})")
         self.results_tabs.setTabText(5, f"📄 Contratti ({len(results_by_type.get('contratto', []))})")
         self.results_tabs.setTabText(6, f"📊 Partite ({len(results_by_type.get('partita', []))})")
@@ -471,7 +492,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         tables = [
             self.unified_table, self.possessori_table, self.localita_table, 
             self.immobili_table, self.variazioni_table, self.contratti_table, 
-            self.partite_table
+            self.partite_table # AGGIUNTE NUOVE TABELLE
         ]
         for table in tables:
             table.setRowCount(0)
@@ -495,17 +516,89 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._clear_results()
         self.stats_label.setText("Pronto")
 
+    # In fuzzy_search_unified.py, dentro la classe UnifiedFuzzySearchWidget
+
     def _on_unified_double_click(self, index):
-        """Gestisce il doppio click nella tabella unificata."""
-        if not index.isValid(): return
-        item_data = self.unified_table.item(index.row(), 0).data(Qt.UserRole)
-        if isinstance(item_data, dict):
-            entity_type = item_data.get('type')
-            full_data = item_data.get('data', {})
-            # Mostra un dialogo con i dettagli JSON
-            details_text = json.dumps(full_data, indent=2, ensure_ascii=False, default=str)
-            QMessageBox.information(self, f"Dettagli - {entity_type.title()}", f"<pre>{details_text}</pre>")
+        """
+        Gestisce il doppio click nella tabella unificata, aprendo un dialogo
+        di dettaglio appropriato in base al tipo di entità.
+        """
+        if not index.isValid():
+            return
             
+        item_con_dati = self.unified_table.item(index.row(), 0)
+        if not item_con_dati:
+            return
+
+        full_item_data = item_con_dati.data(Qt.UserRole)
+        if not isinstance(full_item_data, dict):
+            return
+
+        entity_type = full_item_data.get('type')
+        entity_data = full_item_data.get('data', {})
+        entity_id = entity_data.get('entity_id')
+
+        if not entity_type or not entity_id:
+            QMessageBox.warning(self, "Errore Dati", "Impossibile recuperare tipo o ID dell'entità selezionata.")
+            return
+
+        self.logger.info(f"Doppio click su entità di tipo '{entity_type}' con ID {entity_id}.")
+
+        # --- Logica di smistamento per aprire il dialogo corretto ---
+
+        if entity_type == 'partita':
+            # Per PartitaDetailsDialog serve il dizionario completo dei dettagli
+            full_details = self.db_manager.get_partita_details(entity_id)
+            if full_details:
+                dialog = PartitaDetailsDialog(full_details, self)
+                dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la partita ID {entity_id}.")
+        
+        elif entity_type == 'possessore':
+            # Riusiamo il dialogo di modifica, che mostra già tutti i dettagli
+            dialog = ModificaPossessoreDialog(self.db_manager, entity_id, self)
+            dialog.exec_()
+            # Se il dialogo viene accettato (modifiche salvate), rieseguiamo la ricerca
+            if dialog.result() == QDialog.Accepted:
+                self._perform_search()
+
+        elif entity_type == 'localita':
+            # Riusiamo il dialogo di modifica. Dobbiamo recuperare il comune_id.
+            localita_details = self.db_manager.get_localita_details(entity_id)
+            if localita_details and localita_details.get('comune_id'):
+                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.get('comune_id'), self)
+                dialog.exec_()
+                if dialog.result() == QDialog.Accepted:
+                    self._perform_search()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la località ID {entity_id}.")
+
+        elif entity_type == 'immobile' and ModificaImmobileDialog:
+             # Riusiamo il dialogo di modifica. Dobbiamo recuperare il comune_id della partita a cui appartiene.
+            immobile_details = self.db_manager.get_immobile_details(entity_id)
+            if immobile_details and immobile_details.get('partita_id'):
+                partita_details = self.db_manager.get_partita_details(immobile_details.get('partita_id'))
+                if partita_details and partita_details.get('comune_id'):
+                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.get('comune_id'), self)
+                    dialog.exec_()
+                    if dialog.result() == QDialog.Accepted:
+                        self._perform_search()
+                else:
+                    QMessageBox.warning(self, "Errore Dati", f"Impossibile determinare il comune per l'immobile ID {entity_id}.")
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per l'immobile ID {entity_id}.")
+
+        else:
+            # Fallback per tutti gli altri tipi: mostra un popup formattato e leggibile
+            testo_formattato = f"<h3>Dettagli - {entity_type.title()} ID: {entity_id}</h3>"
+            testo_formattato += "<table border='0' cellspacing='5'>"
+            for key, value in entity_data.items():
+                chiave_formattata = key.replace('_', ' ').title()
+                testo_formattato += f"<tr><td><b>{chiave_formattata}:</b></td><td>{value}</td></tr>"
+            testo_formattato += "</table>"
+            
+            QMessageBox.information(self, f"Dettagli - {entity_type.title()}", testo_formattato)
     # --- METODI PER EXPORT (da implementare o semplificare) ---
     def _export_results(self):
         if not self.current_results or not self.current_results.get('total_results', 0) > 0:

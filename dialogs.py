@@ -24,6 +24,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot
+from PyQt5.QtCore import QDate, Qt # Assicurati di importare Qt
+from PyQt5.QtWidgets import QDateEdit
 
 # Importazione commentata (da abilitare se necessario)
 # from PyQt5.QtSvgWidgets import QSvgWidget
@@ -1052,14 +1054,16 @@ class ModificaPartitaDialog(QDialog):
 
         self.data_impianto_edit = QDateEdit()
         self.data_impianto_edit.setCalendarPopup(True)
-        self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_impianto_edit.setDisplayFormat("dd.MM.yyyy") # Formato di visualizzazione comune in Italia
         self.data_impianto_edit.setDate(QDate())
         form_layout_generali.addRow("Data Impianto:", self.data_impianto_edit)
-
+        
         self.data_chiusura_edit = QDateEdit()
         self.data_chiusura_edit.setCalendarPopup(True)
         self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
         self.data_chiusura_edit.setDate(QDate())
+        form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
+
         form_layout_generali.addRow("Data Chiusura:", self.data_chiusura_edit)
 
         self.numero_provenienza_spinbox = QSpinBox()

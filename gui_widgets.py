@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget)
+                             QVBoxLayout, QWidget,QProgressDialog)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot
 
 # Importazione commentata (da abilitare se necessario)
@@ -80,9 +80,19 @@ except ImportError:
 class ElencoComuniWidget(QWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
-        # Inizializza il logger per questa classe, se non hai un logger globale preferito
-        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}") 
+        # Stampa di debug visibile nella console all'avvio
+        print("--- DEBUG: Inizializzazione di ElencoComuniWidget ---")
+        
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        
+        if db_manager:
+            self.db_manager = db_manager
+            self.logger.info(f"Widget inizializzato CORRETTAMENTE con DBManager (ID Oggetto: {id(self.db_manager)})")
+        else:
+            self.db_manager = None
+            self.logger.error("ERRORE CRITICO: ElencoComuniWidget inizializzato SENZA un DBManager valido!")
+            QMessageBox.critical(self, "Errore Widget", "Il widget dei comuni non ha ricevuto il gestore del database.")
+            return
 
         layout = QVBoxLayout(self)
 
@@ -132,89 +142,64 @@ class ElencoComuniWidget(QWidget):
         layout.addWidget(comuni_group)
         self.setLayout(layout)
 
+         # Chiamata esplicita per caricare i dati
+        self.logger.info("Chiamata a load_comuni_data() da __init__.")
         self.load_comuni_data()
 
+    # In gui_widgets.py, dentro la classe ElencoComuniWidget
+
     def load_comuni_data(self):
-        logging.getLogger("CatastoGUI").info(f"ElencoComuniWidget ({id(self)}): Esecuzione di load_comuni_data().") # Log per tracciare la chiamata
-        self.comuni_table.setRowCount(0)
+        self.logger.info(">>> ESECUZIONE DI load_comuni_data...")
         self.comuni_table.setSortingEnabled(False)
+        self.comuni_table.setRowCount(0)
+
         try:
-            comuni_list = self.db_manager.get_all_comuni_details() # Assicurati che questo metodo restituisca tutti i comuni
-            if comuni_list:
-                self.comuni_table.setRowCount(len(comuni_list))
-                for row_idx, comune in enumerate(comuni_list):
-                    col = 0
-                    self.comuni_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(comune.get('id', ''))))
-                    col += 1
-                    self.comuni_table.setItem(
-                        row_idx, col, QTableWidgetItem(comune.get('nome_comune', '')))
-                    col += 1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(
-                        comune.get('codice_catastale', '')))
-                    col += 1
-                    self.comuni_table.setItem(
-                        row_idx, col, QTableWidgetItem(comune.get('provincia', '')))
-                    col += 1
+            if not self.db_manager:
+                self.logger.error("load_comuni_data chiamato ma self.db_manager è None!")
+                return
 
-                    data_ist = comune.get('data_istituzione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(data_ist) if data_ist else ''))
-                    col += 1
+            self.logger.info(">>> Chiamata a db_manager.get_all_comuni_details() in corso...")
+            comuni_list = self.db_manager.get_all_comuni_details()
+            
+            # Stampa e log fondamentali per il debug
+            self.logger.info(f"--- RISULTATO RICEVUTO da db_manager: Tipo={type(comuni_list)}, Lunghezza={len(comuni_list) if comuni_list is not None else 'None'} ---")
+            print(f"DEBUG UI - Dati ricevuti: {comuni_list}")
 
-                    data_soppr = comune.get('data_soppressione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(data_soppr) if data_soppr else ''))
-                    col += 1
+            if not comuni_list:
+                self.logger.warning("Nessun comune restituito dal DB manager per la visualizzazione.")
+                # Mostra un messaggio all'utente direttamente nella tabella
+                self.comuni_table.setRowCount(1)
+                item = QTableWidgetItem("Nessun comune trovato nel database.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.comuni_table.setItem(0, 0, item)
+                self.comuni_table.setSpan(0, 0, 1, self.comuni_table.columnCount())
+                return
+            self.logger.info(f">>> Inizio ciclo FOR per popolare la tabella con {len(comuni_list)} elementi.")
+            self.comuni_table.setRowCount(len(comuni_list))
+            for row_idx, comune in enumerate(comuni_list):
+                # L'uso di .get() è sicuro e previene crash se una chiave dovesse mancare
+                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(comune.get('id', ''))))
+                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(comune.get('nome_comune', '')))
+                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(comune.get('codice_catastale', '')))
+                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(comune.get('provincia', '')))
+                
+                data_ist = comune.get('data_istituzione')
+                self.comuni_table.setItem(row_idx, 4, QTableWidgetItem(str(data_ist) if data_ist else ''))
+                
+                data_soppr = comune.get('data_soppressione')
+                self.comuni_table.setItem(row_idx, 5, QTableWidgetItem(str(data_soppr) if data_soppr else ''))
+                
+                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(comune.get('note', '')))
+            
+            self.comuni_table.resizeColumnsToContents()
+            self.logger.info(">>> Fine ciclo FOR.")
 
-                    self.comuni_table.setItem(
-                        row_idx, col, QTableWidgetItem(comune.get('note', '')))
-                    col += 1
-
-                self.comuni_table.resizeColumnsToContents()
-                logging.getLogger("CatastoGUI").info(f"ElencoComuniWidget: Tabella comuni aggiornata con {len(comuni_list)} elementi.")
-            else:
-                logging.getLogger("CatastoGUI").info("ElencoComuniWidget: Nessun comune trovato nel database per l'aggiornamento.")
-
-        except AttributeError as ae:  # Se get_all_comuni_details non esiste
-            logging.getLogger("CatastoGUI").error(
-                f"Attributo mancante nel db_manager: {ae}. Assicurati che 'get_all_comuni_details' esista.")
-            QMessageBox.critical(
-                self, "Errore Caricamento Dati", f"Funzione dati comuni non trovata: {ae}")
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
+            self.logger.error(f"Errore imprevisto durante il popolamento della tabella comuni: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore imprevisto: {e}")
         finally:
             self.comuni_table.setSortingEnabled(True)
-         # Assicurati che chiami self.db_manager.get_all_comuni_details()
-        self.logger.info(f"ElencoComuniWidget ({id(self)}): Esecuzione di load_comuni_data().")
-        self.comuni_table.setRowCount(0)
-        self.comuni_table.setSortingEnabled(False)
-        try:
-            comuni_list = self.db_manager.get_all_comuni_details() #
-            if comuni_list:
-                self.comuni_table.setRowCount(len(comuni_list))
-                for row_idx, comune in enumerate(comuni_list):
-                    col = 0
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(comune.get('id', '')))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('nome_comune', ''))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('codice_catastale', ''))); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('provincia', ''))); col+=1
-                    data_ist = comune.get('data_istituzione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_ist) if data_ist else '')); col+=1
-                    data_soppr = comune.get('data_soppressione')
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(str(data_soppr) if data_soppr else '')); col+=1
-                    self.comuni_table.setItem(row_idx, col, QTableWidgetItem(comune.get('note', ''))); col+=1
-                self.comuni_table.resizeColumnsToContents()
-            else:
-                self.logger.info("Nessun comune trovato nel database.")
-        except Exception as e:
-            self.logger.error(f"Errore durante il caricamento dei comuni: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore: {e}")
-        finally:
-            self.comuni_table.setSortingEnabled(True)
+            self.logger.info(">>> load_comuni_data terminato.")
 
     def apply_filter(self):
         """Filtra le righe della tabella in base al testo inserito."""
@@ -1501,21 +1486,35 @@ class InserimentoPossessoreWidget(QWidget):
             
         self.nome_completo_edit.setText(nome_completo_generato.strip())
 
-    def _load_comuni_for_combo(self): # Come prima
+    def _load_comuni_for_combo(self):
+        """
+        Carica e popola il QComboBox con l'elenco dei comuni dal database in modo sicuro.
+        """
         try:
-            # Assumendo che self.db_manager sia già inizializzato
-            self.comuni_list_data = self.db_manager.get_comuni() # Metodo che restituisce lista di dict [{'id': X, 'nome': 'Y', 'provincia': 'Z'}]
-            self.comune_combo.clear()
+            self.comune_combo.clear() # Pulisce l'elenco prima di ricaricarlo
+            
+            # self.db_manager.get_comuni() è già stato refattorizzato e funziona
+            self.comuni_list_data = self.db_manager.get_comuni() 
+            
             if self.comuni_list_data:
+                self.comune_combo.setEnabled(True)
+                self.comune_combo.addItem("--- Seleziona un comune ---", userData=None)
                 for comune_data in self.comuni_list_data:
+                    # Crea una stringa chiara per l'utente
                     display_text = f"{comune_data.get('nome', 'N/D')} ({comune_data.get('provincia', 'N/P')})"
-                    self.comune_combo.addItem(display_text, userData=comune_data.get('id'))
+                    # Associa l'ID del comune all'elemento, senza visualizzarlo
+                    comune_id = comune_data.get('id')
+                    self.comune_combo.addItem(display_text, userData=comune_id)
             else:
-                self.comune_combo.addItem("Nessun comune nel DB", userData=None)
+                # Gestisce il caso in cui non ci siano comuni nel DB
+                self.comune_combo.addItem("Nessun comune registrato", userData=None)
+                self.comune_combo.setEnabled(False)
+                
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(f"Errore caricamento comuni per InserimentoPossessoreWidget: {e}", exc_info=True)
+            self.logger.error(f"Errore critico durante il caricamento dei comuni nel ComboBox: {e}", exc_info=True)
             self.comune_combo.clear()
             self.comune_combo.addItem("Errore caricamento comuni", userData=None)
+            self.comune_combo.setEnabled(False)
 
     def _pulisci_campi_possessore(self):
         """Pulisce i campi del form possessore."""
@@ -3933,7 +3932,7 @@ class StatisticheWidget(QWidget):
         self.immobili_table.setAlternatingRowColors(True)
         self.immobili_table.horizontalHeader().setStretchLastSection(True)
 
-        immobili_layout.addWidget(filter_layout)
+        immobili_layout.addLayout(filter_layout)
         immobili_layout.addWidget(self.refresh_immobili_button)
         immobili_layout.addWidget(self.immobili_table)
 

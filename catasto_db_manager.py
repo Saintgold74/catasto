@@ -494,25 +494,54 @@ class CatastoDBManager:
             # In caso di errore, restituisce una lista vuota per non bloccare la UI
             return []
     
-    def get_all_comuni_details(self) -> List[Dict[str, Any]]:
-        """Recupera i dettagli disponibili di tutti i comuni."""
-        # CORREZIONE: La query ora include tutte le colonne che la UI si aspetta.
-        # CORREZIONE: ORDER BY usa la colonna reale 'nome' invece dell'alias 'nome_comune' per massima compatibilità.
-        query = f"""
-            SELECT id, nome AS nome_comune, provincia, regione, 
-                codice_catastale, data_istituzione, data_soppressione, note
-            FROM {self.schema}.comune ORDER BY nome;
+    # In catasto_db_manager.py, dentro la classe CatastoDBManager
+    def get_partita_data_for_export(self, partita_id: int) -> Optional[Dict[str, Any]]:
         """
+        Recupera i dati di una partita per l'esportazione chiamando una funzione SQL,
+        in modo sicuro e transazionale.
+        """
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            self.logger.error(f"get_partita_data_for_export: ID partita non valido: {partita_id}")
+            return None
+            
+        query = f"SELECT {self.schema}.esporta_partita_json(%s) AS partita_data;"
+        
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
+                    self.logger.debug(f"Esecuzione get_partita_data_for_export per ID partita: {partita_id}")
+                    cur.execute(query, (partita_id,))
+                    result = cur.fetchone()
+                    
+                    if result and result['partita_data'] is not None:
+                        self.logger.info(f"Dati per esportazione recuperati per partita ID {partita_id}.")
+                        return result['partita_data']
+                    else:
+                        self.logger.warning(f"Nessun dato trovato per partita ID {partita_id} o il risultato era NULL.")
+                        return None
+                        
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_partita_data_for_export (ID: {partita_id}): {e}", exc_info=True)
+            return None # Restituisce None in caso di qualsiasi errore
+    def get_all_comuni_details(self):
+        self.logger.info(">>> ESECUZIONE di get_all_comuni_details...")
+        # Query aggiornata per selezionare solo le colonne esistenti e utili
+        query = """
+            SELECT id, nome AS nome_comune, provincia, regione,
+                   data_creazione, data_modifica
+            FROM catasto.comune ORDER BY nome;
+        """
+        self.logger.info(f"Query in esecuzione:\n\t\t\t{query}")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query)
                     results = cur.fetchall()
-                    self.logger.info(f"Recuperati {len(results)} comuni per get_all_comuni_details.")
-                    return [dict(row) for row in results]
-        except Exception as e:
-            self.logger.error(f"Errore DB in get_all_comuni_details: {e}", exc_info=True)
-            return []
+                    self.logger.info(f"--- RISULTATO RICEVUTO da db_manager: Tipo={type(results)}, Lunghezza={len(results)} ---")
+                    return results
+        except (Exception, psycopg2.Error) as error:
+            self.logger.error(f"Errore DB in get_all_comuni_details: {error}", exc_info=True)
+            return [] # Restituisci una lista vuota in caso di errore
     def get_elenco_comuni_semplice(self) -> List[Tuple]:
         """
         Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
@@ -2230,56 +2259,34 @@ class CatastoDBManager:
 
     # Metodo ESISTENTE da MODIFICARE
     def logout_user(self, user_id: int, session_id: str, ip_address: Optional[str]) -> bool:
-        conn = None
+        """
+        Esegue il logout di un utente chiamando la procedura di logout e pulendo
+        le variabili di sessione in modo transazionale e sicuro.
+        """
         try:
-            conn = self._get_connection()
-            with conn.cursor() as cur:
-                call_proc_str = f"CALL {self.schema}.logout_utente_sessione(%s, %s, %s, %s);"
-                params = (
-                    user_id, 
-                    session_id,
-                    ip_address, 
-                    self.application_name
-                )
-                self.logger.debug(f"Chiamata a procedura catasto.logout_utente_sessione per utente {user_id}, sessione {session_id[:8]}...")
-                cur.execute(call_proc_str, params)
+            with self._get_connection() as conn:
+                # Esegui tutte le operazioni all'interno della stessa transazione
+                with conn.cursor() as cur:
+                    # 1. Chiama la procedura per registrare il logout nel database
+                    call_proc_str = f"CALL {self.schema}.logout_utente_sessione(%s, %s, %s, %s);"
+                    params = (user_id, session_id, ip_address, self.application_name)
+                    self.logger.debug(f"Chiamata a logout_utente_sessione per utente {user_id}, sessione {session_id[:8]}...")
+                    cur.execute(call_proc_str, params)
 
-                # La procedura logout_utente_sessione aggiorna la tabella sessioni_accesso.
-                # Ora, puliamo le variabili di audit SULLA STESSA CONNESSIONE prima del commit.
-                self._clear_audit_session_variables_with_conn(conn)
+                    # 2. Pulisce le variabili di audit sulla stessa connessione
+                    self.logger.debug("Pulizia delle variabili di sessione per l'audit.")
+                    cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
+                    cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
+            
+            # Il commit è automatico qui se tutte le operazioni hanno successo
+            self.logger.info(f"Logout per utente ID {user_id}, sessione {session_id[:8]}... completato.")
+            return True
 
-                # Esegui il commit se tutto è andato bene fino a qui
-                conn.commit() 
-                self.logger.info(f"Logout per utente ID {user_id}, sessione {session_id[:8]}... completato e variabili audit pulite.")
-                return True
-        except psycopg2.OperationalError as op_err: # Cattura specificamente OperationalError
-            self.logger.error(f"Errore OPERAZIONALE DB durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {op_err}", exc_info=True)
-            # Qui la connessione è quasi certamente chiusa dal server.
-            # Non tentare rollback o putconn, ma chiudi forzatamente se possibile.
-            if conn and not conn.closed:
-                try:
-                    conn.close() # Tenta una chiusura pulita se non è già chiusa
-                    self.logger.warning(f"Connessione {id(conn)} chiusa forzatamente dopo OperationalError.")
-                except Exception as close_err:
-                    self.logger.error(f"Errore durante la chiusura forzata della connessione dopo OperationalError: {close_err}")
-            return False # Indica che il logout al server è fallito
-        except psycopg2.Error as e: # Cattura altri errori psycopg2 (es. InterfaceError se non è già stato chiuso)
-            self.logger.error(f"Errore DB generico durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {e}", exc_info=True)
-            if conn and not conn.closed:
-                try:
-                    conn.rollback() # Tenta il rollback solo se la connessione è ancora aperta
-                    self.logger.warning(f"Rollback eseguito per connessione {id(conn)} dopo errore DB.")
-                except Exception as rb_err:
-                    self.logger.error(f"Errore durante il rollback dopo errore DB: {rb_err}")
-            return False
         except Exception as e:
-            self.logger.error(f"Errore Python generico durante il logout dell'utente {user_id} (sessione {session_id[:8]}...): {e}", exc_info=True)
-            # Nessun rollback necessario per errori Python che non sono DB-specifici
+            # Il rollback è automatico in caso di qualsiasi errore
+            self.logger.error(f"Errore durante il processo di logout per l'utente {user_id}: {e}", exc_info=True)
+            # Non rilanciamo l'eccezione, ma restituiamo False per indicare un fallimento non bloccante.
             return False
-        finally:
-            pass
-        
-
     def check_permission(self, utente_id: int, permesso_nome: str) -> bool:
         """Chiama la funzione SQL ha_permesso."""
         try:
@@ -3037,20 +3044,7 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB impostando variabili audit: {e}", exc_info=True)
             return False
 
-    def _clear_audit_session_variables_with_conn(self, conn_target):
-        """Metodo helper per pulire le variabili di sessione usando una connessione esistente. Chiamato da logout_user."""
-        if not conn_target or conn_target.closed:
-            self.logger.warning("_clear_audit_session_variables_with_conn chiamata con connessione non valida o chiusa.")
-            return
-        try:
-            with conn_target.cursor() as cur:
-                cur.execute("RESET catasto.app_user_id;")
-                cur.execute("RESET catasto.session_id;")
-                # Non fare commit qui, è parte della transazione del chiamante (logout_user)
-            self.logger.debug("Variabili di sessione audit resettate (usando connessione esistente per logout).")
-        except Exception as e:
-            self.logger.error(f"Errore durante il reset delle variabili di sessione audit con connessione esistente: {e}", exc_info=True)
-            # Non sollevare eccezione per non interrompere il logout principale
+    
     def execute_sql_from_file(self, file_path: str) -> Tuple[bool, str]:
         """Esegue uno script SQL da un file in modo sicuro, gestendo l'autocommit."""
         if not os.path.exists(file_path):
@@ -3093,19 +3087,6 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB resettando variabili audit: {e}", exc_info=True)
             return False
 
-    def _clear_audit_session_variables_with_conn(self, conn_target): # Questo è per il logout
-        """Helper per pulire le variabili di sessione audit usando una connessione esistente."""
-        if not conn_target or conn_target.closed:
-            self.logger.warning("_clear_audit_session_variables_with_conn chiamata con connessione non valida.")
-            return
-        try:
-            with conn_target.cursor() as cur:
-                cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
-                cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
-                # Il commit è gestito dal chiamante (logout_user)
-            self.logger.debug("Variabili di sessione audit resettate (connessione esistente).")
-        except Exception as e:
-            self.logger.error(f"Errore resettando variabili audit con connessione esistente: {e}", exc_info=True)
     def aggiungi_documento_storico(self, titolo: str, tipo_documento: str, percorso_file: str,
                               descrizione: Optional[str] = None, anno: Optional[int] = None,
                               periodo_id: Optional[int] = None, 

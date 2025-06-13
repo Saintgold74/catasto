@@ -1250,10 +1250,7 @@ class CatastoMainWindow(QMainWindow):
             self.logged_in_user_info = None
             self.current_session_id = None  # IMPORTANTE: Resetta l'ID sessione
 
-            # Non è necessario chiamare db_manager.clear_session_app_user() qui perché
-            # db_manager.logout_user() dovrebbe già chiamare _clear_audit_session_variables_with_conn()
-            # sulla connessione usata per aggiornare sessioni_accesso.
-
+            # Aggiorna l'interfaccia utente
             self.user_status_label.setText("Utente: Nessuno")
             # Potresti voler cambiare lo stato del DB qui, ma di solito rimane "Connesso"
             # self.db_status_label.setText("Database: Connesso (Logout effettuato)")
@@ -1287,18 +1284,12 @@ class CatastoMainWindow(QMainWindow):
                     self.db_manager.logout_user(
                         self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
                 else:
-                    # Se non c'è un utente loggato specifico o una sessione, ma il pool è attivo,
-                    # potremmo comunque voler tentare una pulizia generica delle variabili di sessione sulla connessione usata per questo.
-                    # Tuttavia, senza una sessione specifica, _clear_audit_session_variables_with_conn non ha senso.
-                    # clear_audit_session_variables() (quella che prende una nuova connessione dal pool) potrebbe essere chiamata,
-                    # ma è meno critica qui se non c'è una sessione utente attiva da invalidare.
-                    # La cosa più importante è che logout_user chiami _clear_audit_session_variables_with_conn.
+                    # Se non c'è un utente loggato, ma il pool è attivo, logga un messaggio informativo
+                    logging.getLogger("CatastoGUI").info(
+                        "Chiusura applicazione: nessun utente loggato, ma il pool di connessioni era attivo.")
                     self.logger.info(
                         "Nessun utente/sessione attiva da loggare out esplicitamente, ma il pool era attivo.")
-                    # Se db_manager.clear_audit_session_variables() è progettato per essere chiamato in modo sicuro
-                    # anche se non c'è una sessione utente specifica (es. resetta per la prossima connessione),
-                    # potresti chiamarlo. Altrimenti, è meglio affidarsi alla pulizia fatta da logout_user.
-                    # self.db_manager.clear_audit_session_variables() # VALUTARE SE NECESSARIO QUI
+                   
 
             # Chiudi sempre il pool se esiste
             self.db_manager.close_pool()

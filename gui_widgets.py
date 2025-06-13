@@ -3921,82 +3921,48 @@ class StatisticheWidget(QWidget):
         filter_layout.addWidget(self.comune_filter_display)
         filter_layout.addWidget(self.clear_filter_button)
 
-        self.refresh_immobili_button = QPushButton("Aggiorna Dati")
-        self.refresh_immobili_button.clicked.connect(
-            self.refresh_immobili_tipologia)
+        self.refresh_immobili_button = QPushButton("Aggiorna Statistiche Immobili")
+        self.refresh_immobili_button.clicked.connect(self.refresh_immobili_tipologia)
 
         self.immobili_table = QTableWidget()
         self.immobili_table.setColumnCount(6)
         self.immobili_table.setHorizontalHeaderLabels([
-            "Comune", "Classificazione", "Numero Immobili",
+            "Comune", "Classificazione", "Numero Immobili", 
             "Totale Piani", "Totale Vani", "Media Vani/Immobile"
         ])
         self.immobili_table.setAlternatingRowColors(True)
         self.immobili_table.horizontalHeader().setStretchLastSection(True)
 
-        immobili_layout.addLayout(filter_layout)
+        immobili_layout.addWidget(filter_layout)
         immobili_layout.addWidget(self.refresh_immobili_button)
         immobili_layout.addWidget(self.immobili_table)
 
         immobili_tab.setLayout(immobili_layout)
         tabs.addTab(immobili_tab, "Immobili per Tipologia")
 
-        # Tab Manutenzione Viste (o rinominalo "Manutenzione Database")
-        manutenzione_tab = QWidget()
-        # Layout verticale per questo tab
-        manutenzione_layout = QVBoxLayout(manutenzione_tab)
+        # Tab per Aggiornamento Viste Materializzate (SPOSTATO QUI)
+        viste_tab = QWidget()
+        viste_layout = QVBoxLayout()
 
-        self.btn_verifica_integrita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton),
-                                                  " Verifica Integrità Database")
-        self.btn_verifica_integrita.setToolTip(
-            "Esegue controlli di integrità sul database.")
-        self.btn_verifica_integrita.clicked.connect(
-            self._esegui_verifica_integrita)
-        manutenzione_layout.addWidget(
-            self.btn_verifica_integrita)  # AGGIUNTO NUOVO PULSANTE
-
-        self.update_views_button = QPushButton(
-            "Aggiorna Tutte le Viste Materializzate")
+        viste_layout.addWidget(QLabel("Aggiornamento Viste Materializzate"))
+        viste_layout.addWidget(QLabel("Le viste materializzate migliorano le performance delle statistiche aggregando i dati."))
+        
+        self.update_views_button = QPushButton("Aggiorna Tutte le Viste Materializzate")
         self.update_views_button.clicked.connect(self.update_all_views)
-        manutenzione_layout.addWidget(self.update_views_button)
+        self.update_views_button.setToolTip("Aggiorna tutte le viste materializzate del database per migliorare le performance delle statistiche")
+        viste_layout.addWidget(self.update_views_button)
 
-        self.maintenance_button = QPushButton(
-            "Esegui Manutenzione DB (ANALYZE)")
-        self.maintenance_button.clicked.connect(self.run_maintenance)
-        manutenzione_layout.addWidget(self.maintenance_button)
-
-        manutenzione_layout.addSpacing(15)  # Un po' di spazio
-
-        manutenzione_layout.addWidget(
-            QLabel("Log Operazioni di Manutenzione:"))
+        viste_layout.addSpacing(15)
+        viste_layout.addWidget(QLabel("Log Operazioni:"))
+        
         self.status_text = QTextEdit()
         self.status_text.setReadOnly(True)
-        self.status_text.setFixedHeight(150)  # O più se necessario
-        manutenzione_layout.addWidget(self.status_text)
+        self.status_text.setFixedHeight(200)
+        viste_layout.addWidget(self.status_text)
 
-        manutenzione_layout.addStretch(1)  # Spinge tutto in alto
-        # manutenzione_tab.setLayout(manutenzione_layout) # Non serve se passato al costruttore QVBoxLayout
-
-        # Rinominato il tab per chiarezza
-        tabs.addTab(manutenzione_tab, "Manutenzione Database")
-        # --- NUOVO PULSANTE ---
-        self.btn_verifica_integrita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogApplyButton),  # Scegli un'icona adatta
-                                                  " Verifica Integrità Database")
-        self.btn_verifica_integrita.setToolTip(
-            "Esegue controlli di integrità sul database e riporta i risultati.")
-        self.btn_verifica_integrita.clicked.connect(
-            self._esegui_verifica_integrita)
-
-        self.status_text = QTextEdit()
-        self.status_text.setReadOnly(True)
-
-        manutenzione_layout.addWidget(self.update_views_button)
-        manutenzione_layout.addWidget(self.maintenance_button)
-        manutenzione_layout.addWidget(QLabel("Log Operazioni:"))
-        manutenzione_layout.addWidget(self.status_text)
-
-        manutenzione_tab.setLayout(manutenzione_layout)
-        tabs.addTab(manutenzione_tab, "Manutenzione Viste")
+        viste_layout.addStretch(1)
+        viste_tab.setLayout(viste_layout)
+        tabs.addTab(viste_tab, "Aggiornamento Viste")
 
         layout.addWidget(tabs)
         self.setLayout(layout)
@@ -4009,10 +3975,9 @@ class StatisticheWidget(QWidget):
         """Aggiorna la tabella delle statistiche per comune."""
         self.stats_comune_table.setRowCount(0)
 
-        if not self.db_manager or not self.db_manager.pool:  # <-- CONTROLLO AGGIUNTO
+        if not self.db_manager or not self.db_manager.pool:
             logging.getLogger("CatastoGUI").warning(
                 "StatisticheWidget: Pool DB non inizializzato. Impossibile caricare statistiche comuni.")
-            # Opzionale: mostra messaggio nella tabella
             self.stats_comune_table.setRowCount(1)
             item_msg = QTableWidgetItem(
                 "Database non pronto per caricare le statistiche.")
@@ -4044,7 +4009,6 @@ class StatisticheWidget(QWidget):
                     i, 6, QTableWidgetItem(str(s.get('totale_immobili', 0))))
 
             self.stats_comune_table.resizeColumnsToContents()
-
             self.log_status("Statistiche comuni aggiornate.")
 
     def filter_immobili_per_comune(self):
@@ -4068,7 +4032,7 @@ class StatisticheWidget(QWidget):
         """Aggiorna la tabella degli immobili per tipologia."""
         self.immobili_table.setRowCount(0)
 
-        if not self.db_manager or not self.db_manager.pool:  # <-- CONTROLLO AGGIUNTO
+        if not self.db_manager or not self.db_manager.pool:
             logging.getLogger("CatastoGUI").warning(
                 "StatisticheWidget: Pool DB non inizializzato. Impossibile caricare statistiche immobili.")
             self.immobili_table.setRowCount(1)
@@ -4121,83 +4085,33 @@ class StatisticheWidget(QWidget):
 
     def update_all_views(self):
         """Aggiorna tutte le viste materializzate."""
-        self.log_status(
-            "Avvio aggiornamento di tutte le viste materializzate...")
+        self.log_status("Avvio aggiornamento di tutte le viste materializzate...")
 
         if self.db_manager.refresh_materialized_views():
             self.log_status("Aggiornamento viste completato con successo.")
 
-            # Aggiorna le tabelle
+            # Aggiorna le tabelle delle statistiche
             self.refresh_stats_comune()
             self.refresh_immobili_tipologia()
         else:
-            self.log_status(
-                "ERRORE: Aggiornamento viste non riuscito. Controlla i log.")
+            self.log_status("ERRORE: Aggiornamento viste non riuscito. Controlla i log.")
 
-    def run_maintenance(self):
-        """Esegue la manutenzione generale del database."""
-        self.log_status("Avvio manutenzione database (ANALYZE)...")
-
-        if self.db_manager.run_database_maintenance():
-            self.log_status("Manutenzione database completata con successo.")
-        else:
-            self.log_status(
-                "ERRORE: Manutenzione database non riuscita. Controlla i log.")
-
-    def _esegui_verifica_integrita(self):
-        if not self.db_manager or not self.db_manager.pool:
-            QMessageBox.warning(self, "Database Non Pronto",
-                                "Il database principale non è configurato o il pool non è attivo.")
-            self.log_status(
-                "Tentativo di verifica integrità fallito: pool DB non attivo.")
-            return
-
-        self.log_status("Avvio verifica integrità database...")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            problemi_trovati, messaggi = self.db_manager.verifica_integrita_database_gui()
-
-            # Logga tutti i messaggi ricevuti
-            if messaggi:
-                self.log_status("--- Risultato Verifica Integrità ---")
-                for linea in messaggi.splitlines():
-                    # Usa il metodo esistente per loggare nel QTextEdit
-                    self.log_status(linea)
-                self.log_status("--- Fine Risultato Verifica Integrità ---")
-
-            if problemi_trovati:
-                QMessageBox.warning(self, "Verifica Integrità",
-                                    "La verifica di integrità ha rilevato potenziali problemi o errori.\n"
-                                    "Consultare il log operazioni per i dettagli.")
-            else:
-                QMessageBox.information(self, "Verifica Integrità",
-                                        "Verifica di integrità completata.\n"
-                                        "Consultare il log operazioni per eventuali messaggi dalla procedura.")
-        except DBMError as e:  # Se verifica_integrita_database_gui solleva DBMError per errori DB
-            # Assumendo che log_status possa prendere 'error'
-            self.log_status(
-                f"ERRORE CRITICO durante la verifica integrità: {e}", error=True)
-            QMessageBox.critical(
-                self, "Errore Verifica Integrità", f"Errore database: {e}")
-        except Exception as e:
-            self.log_status(
-                f"ERRORE IMPREVISTO durante la verifica integrità: {e}", error=True)
-            logging.getLogger("CatastoGUI").error(
-                "Errore imprevisto in _esegui_verifica_integrita", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto",
-                                 f"Errore di sistema: {e}")
-        finally:
-            QApplication.restoreOverrideCursor()
-
-    # Modifica log_status per accettare un flag di errore (opzionale)
-    def log_status(self, message: str, error: bool = False):  # Aggiunto parametro error
+    def log_status(self, message, error=False):
+        """Aggiunge un messaggio al log delle operazioni con timestamp."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        formatted_message = f"[{timestamp}] {message}"
+        
         if error:
-            self.status_text.append(
-                f"<font color='red'>[{timestamp}] {message}</font>")
+            self.status_text.append(f"<font color='red'>{formatted_message}</font>")
         else:
-            self.status_text.append(f"[{timestamp}] {message}")
-
+            self.status_text.append(formatted_message)
+        
+        # Scorri automaticamente verso il basso
+        self.status_text.verticalScrollBar().setValue(
+            self.status_text.verticalScrollBar().maximum())
+        
+        # Forza l'aggiornamento della UI
+        QApplication.processEvents()
 
 class GestioneUtentiWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, current_user_info: Optional[Dict], parent=None):
@@ -5270,579 +5184,6 @@ class BackupRestoreWidget(QWidget):
         self.process.setProperty("is_restore_operation", True)
         self.process.start(executable, args)
 
-class AdminDBOperationsWidget(QWidget):
-    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        self.current_process: Optional[QProcess] = None
-        self.script_base_path = os.path.join(
-            os.path.dirname(__file__), "sql_scripts")
-
-        self._initUI()
-        self._update_admin_buttons_state()  # Nuovo metodo per aggiornare stato pulsanti
-
-    def _initUI(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(15)
-
-        # --- 0. Sezione Creazione Database (Solo se il DB non esiste) ---
-        # Questo pulsante sarà abilitato/disabilitato in base allo stato del pool
-        create_db_group = QGroupBox(
-            "0. Creazione Database Principale ('catasto_storico')")
-        create_db_layout = QVBoxLayout(create_db_group)
-        self.btn_run_create_database = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_CommandLink), " Crea Database 'catasto_storico'")
-        self.btn_run_create_database.setToolTip(
-            "Esegue lo script '01_creazione-database.sql' per creare il database principale.\nRichiede credenziali utente PostgreSQL con privilegi di creazione database.")
-        self.btn_run_create_database.clicked.connect(
-            self._run_script_crea_database)
-        create_db_layout.addWidget(self.btn_run_create_database)
-        create_db_layout.addWidget(
-            QLabel("<i>Eseguire solo se il database 'catasto_storico' non esiste.</i>"))
-        main_layout.addWidget(create_db_group)
-
-        # --- 1. Sezione Configurazione Iniziale ---
-        config_group = QGroupBox(
-            "1. Setup Struttura Database (Tabelle, Funzioni, ecc.)")
-        config_layout = QVBoxLayout(config_group)
-        self.btn_run_initial_setup = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_MediaPlay), " Esegui Script Configurazione Struttura")
-        self.btn_run_initial_setup.setToolTip(
-            "Esegue script SQL per creare tabelle, viste, funzioni, ecc. (dopo creazione DB)")
-        self.btn_run_initial_setup.clicked.connect(
-            self._run_all_config_scripts)
-        config_layout.addWidget(self.btn_run_initial_setup)
-        config_layout.addWidget(QLabel(
-            "<i>Eseguire dopo che il database 'catasto_storico' è stato creato e il pool è attivo.</i>"))
-        main_layout.addWidget(config_group)
-
-        # --- 2. Sezione Carico Dati SQL ---
-        load_sql_group = QGroupBox(
-            "2. Caricamento Dati di Esempio (Script SQL)")
-        load_sql_layout = QVBoxLayout(load_sql_group)
-        self.btn_run_sql_data_load = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_ArrowUp), " Esegui Script Caricamento Dati SQL")
-        self.btn_run_sql_data_load.setToolTip(
-            "Esegue lo script SQL ('04_dati_stress_test.sql') per popolare il DB.")
-        self.btn_run_sql_data_load.clicked.connect(
-            self._run_sql_data_load_script)
-        load_sql_layout.addWidget(self.btn_run_sql_data_load)
-        main_layout.addWidget(load_sql_group)
-
-        # --- 3. Sezione Popolamento Dati Python ---
-        populate_py_group = QGroupBox("3. Popolamento Dati Guidato (Python)")
-        populate_py_layout = QVBoxLayout(populate_py_group)
-        self.btn_run_python_populate = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_ArrowRight), " Esegui Popolamento Dati Python")
-        self.btn_run_python_populate.setToolTip(
-            "Genera e inserisce dati di esempio usando la logica Python dell'applicazione.")
-        self.btn_run_python_populate.clicked.connect(
-            self._run_python_data_population)
-        populate_py_layout.addWidget(self.btn_run_python_populate)
-        main_layout.addWidget(populate_py_group)
-
-        # --- 4. Sezione Cancellazione DB ---
-        delete_db_group = QGroupBox("Operazioni Distruttive")
-        delete_db_layout = QVBoxLayout(delete_db_group)
-        self.btn_run_db_wipe = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_TrashIcon), " Esegui Script Cancellazione Database")
-        self.btn_run_db_wipe.setStyleSheet(
-            "QPushButton { background-color: #d9534f; border-color: #d43f3a; color: white; } QPushButton:hover { background-color: #c9302c; } QPushButton:pressed { background-color: #ac2925; }")
-        self.btn_run_db_wipe.setToolTip(
-            "ATTENZIONE: Esegue lo script 'drop_db.sql' per cancellare il database specificato.")
-        self.btn_run_db_wipe.clicked.connect(self._run_db_deletion_script)
-        delete_db_layout.addWidget(self.btn_run_db_wipe)
-        delete_db_layout.addWidget(QLabel(
-            "<font color='red'><b>ATTENZIONE MASSIMA: Operazioni altamente distruttive. Richiederanno multiple conferme.</b></font>"))
-        main_layout.addWidget(delete_db_group)
-
-        self.output_log = QTextEdit()  # Definisci l'attributo qui
-        self.output_log.setReadOnly(True)
-        self.output_log.setLineWrapMode(QTextEdit.NoWrap)
-        self.output_log.setFixedHeight(200)
-        main_layout.addWidget(QLabel("Log Operazioni Amministrazione DB:"))
-        main_layout.addWidget(self.output_log, 1)
-        main_layout.addStretch(1)
-        self.setLayout(main_layout)
-
-    def _log_output(self, message: str, error: bool = False):
-        """Aggiunge un messaggio al QTextEdit self.output_log con timestamp."""
-        if not hasattr(self, 'output_log'):  # Controllo di sicurezza
-            print(f"FALLBACK LOG (output_log non trovato): {message}")
-            return
-
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        formatted_message = f"[{timestamp}] {message.strip()}"
-        if error:
-            self.output_log.append(
-                f"<font color='red'>{formatted_message}</font>")
-        else:
-            self.output_log.append(formatted_message)
-        # Per forzare l'aggiornamento della UI durante operazioni lunghe
-        QApplication.processEvents()
-
-    def _disable_all_buttons(self, disable: bool):
-        """Abilita o disabilita tutti i pulsanti principali di operazione del widget."""
-        self.btn_run_create_database.setEnabled(not disable)
-        self.btn_run_initial_setup.setEnabled(not disable)
-        self.btn_run_sql_data_load.setEnabled(not disable)
-        self.btn_run_python_populate.setEnabled(not disable)
-        self.btn_run_db_wipe.setEnabled(not disable)
-        # Se ci sono altri pulsanti da gestire, aggiungili qui.
-        # Lo stato finale dei pulsanti verrà poi ridefinito da _update_admin_buttons_state
-        # quando l'operazione è finita, ma questo serve per il blocco durante l'operazione.
-
-    def _update_admin_buttons_state(self):
-        """Abilita/disabilita i pulsanti in base allo stato del pool del DB principale."""
-        pool_is_active = self.db_manager and self.db_manager.pool is not None
-
-        # Il pulsante "Crea Database" è abilitato se il pool NON è attivo (implica che il DB potrebbe non esistere)
-        self.btn_run_create_database.setEnabled(not pool_is_active)
-
-        # Gli altri pulsanti di configurazione/popolamento sono abilitati SOLO SE il pool è attivo
-        self.btn_run_initial_setup.setEnabled(pool_is_active)
-        self.btn_run_sql_data_load.setEnabled(pool_is_active)
-        self.btn_run_python_populate.setEnabled(pool_is_active)
-
-        # Il pulsante di cancellazione è sempre abilitato (con le sue conferme),
-        # ma la sua logica gestirà lo stato del pool (lo chiuderà se attivo).
-        self.btn_run_db_wipe.setEnabled(True)
-
-    def _run_script_crea_database(self):
-        self.output_log.clear()
-        # Lo script che contiene "CREATE DATABASE catasto_storico;"
-        script_name = "01_creazione-database.sql"
-        script_path = os.path.join(self.script_base_path, script_name)
-
-        if not os.path.exists(script_path):
-            QMessageBox.critical(
-                self, "Script Mancante", f"Lo script di creazione database '{script_name}' non è stato trovato in:\n{script_path}")
-            self._log_output(
-                f"ERRORE: Script '{script_name}' non trovato.", error=True)
-            return
-
-        # Dovrebbe essere "catasto_storico"
-        target_dbname = self.db_manager.get_current_dbname()
-        if not target_dbname:
-            QMessageBox.critical(self, "Errore Configurazione",
-                                 "Nome del database target non definito nel DBManager.")
-            return
-
-        reply = QMessageBox.question(self, "Conferma Creazione Database",
-                                     f"Stai per eseguire lo script '{script_name}' per creare il database '{target_dbname}'.\n"
-                                     "Questa operazione fallirà se il database esiste già (lo script dovrebbe gestire `IF NOT EXISTS` se possibile, o psql lo farà).\n"
-                                     "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.No:
-            self._log_output("Creazione database annullata dall'utente.")
-            return
-
-        # Disabilita pulsanti durante l'operazione
-        self._disable_all_buttons(True)
-        # Per CREATE DATABASE, ci si connette a 'postgres'
-        self._execute_sql_script_list_via_psql(
-            script_names=[script_name],
-            operation_name=f"Creazione Database '{target_dbname}'",
-            dbname_override="postgres"
-        )
-        # _execute_sql_script_list_via_psql ora chiama _handle_script_finished che riabilita i pulsanti
-
-        # Dopo questo, tentare di inizializzare il pool principale
-        self._log_output(
-            "Tentativo di inizializzazione del pool per il database principale...")
-        QApplication.processEvents()
-        if self.db_manager.initialize_main_pool():
-            self._log_output(
-                "Pool per il database principale ('{target_dbname}') inizializzato con successo!", error=False)
-            QMessageBox.information(
-                self, "Successo", f"Database '{target_dbname}' creato (o già esistente) e pool inizializzato.\nPuoi procedere con la configurazione delle tabelle e delle funzioni.")
-            # Aggiorna la status bar nella finestra principale
-            main_window = self.window().window()  # Trova la CatastoMainWindow
-            if isinstance(main_window, QMainWindow) and hasattr(main_window, 'db_status_label'):
-                main_window.db_status_label.setText(
-                    f"Database: Connesso ({target_dbname})")
-            self._update_admin_buttons_state()  # Aggiorna stato pulsanti
-        else:
-            self._log_output(
-                f"FALLITO inizializzazione pool per il database '{target_dbname}' dopo tentativo di creazione.", error=True)
-            QMessageBox.critical(
-                self, "Errore Pool", f"Database '{target_dbname}' potrebbe essere stato creato, ma è fallita l'inizializzazione del pool di connessione. Controllare i log.")
-            self._update_admin_buttons_state()  # Aggiorna stato pulsanti
-
-    def _run_all_config_scripts(self):
-        if not self.db_manager.pool:  # Controllo cruciale
-            QMessageBox.warning(self, "Database Non Pronto",
-                                "Il database principale non è ancora stato creato/connesso o il pool non è inizializzato.\n"
-                                "Eseguire prima 'Crea Database' se necessario.")
-            return
-
-        config_scripts = [  # Script da 02 in poi
-            "02_creazione-schema-tabelle.sql", "03_funzioni-procedure.sql",
-            "07_user-management.sql", "19_creazione_tabella_sessioni.sql",
-            "18_funzioni_trigger_audit.sql",
-            "08_advanced-reporting.sql","09_backup-system.sql",
-            "10_performance-optimization.sql","11_advanced-cadastral-features.sql",
-            "12_procedure_crud.sql","13_workflow_integrati.sql",
-            "14_report_functions.sql", "16_advanced_search.sql",
-            "17_funzione_ricerca_immobili.sql", "15_integration_audit_users.sql",
-            "05_query-test.sql"
-            
-        ]
-        reply = QMessageBox.question(self, "Conferma Configurazione Struttura",
-                                     "Stai per eseguire gli script per definire tabelle, funzioni, viste, ecc. nel database.\n"
-                                     "Assicurati che il database sia vuoto o che gli script siano rieseguibili.\n"
-                                     "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            # Questi script verranno eseguiti sul database target (catasto_storico)
-            # quindi dbname_override non è necessario (userà il dbname del pool)
-            self._execute_sql_script_list_via_psql(
-                config_scripts, "Configurazione Struttura Database")
-
-    def _run_sql_data_load_script(self):
-        if not self.db_manager.pool:
-            QMessageBox.warning(self, "Database Non Pronto",
-                                "Il pool principale non è attivo. Eseguire prima la creazione/configurazione del DB.")
-            return
-
-        data_load_scripts = ["04_dati_stress_test.sql"]
-        reply = QMessageBox.question(self, "Conferma Caricamento Dati SQL",
-                                     f"Stai per eseguire lo script '{data_load_scripts[0]}'.\nProcedere?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self._execute_sql_script_list_via_psql(
-                data_load_scripts, "Caricamento Dati da SQL")
-
-    def _execute_sql_script_list_via_psql(self, script_names: List[str], operation_name: str, dbname_override: Optional[str] = None):
-        """
-        Esegue una lista di script SQL sequenzialmente usando psql.
-        dbname_override: se specificato, psql si connetterà a questo database (es. "postgres" per CREATE/DROP DATABASE).
-                         Altrimenti, usa il database principale configurato nel db_manager.
-        """
-        self._disable_all_buttons(
-            True)  # Disabilita i pulsanti durante l'intera sequenza
-        self.output_log.clear()
-        self._log_output(f"Avvio operazione: {operation_name}...")
-
-        if not self.db_manager:  # Non dovrebbe accadere se la UI è ben gestita
-            self._log_output(
-                "ERRORE CRITICO: DB Manager non disponibile.", error=True)
-            self._disable_all_buttons(False)
-            self._update_admin_buttons_state()
-            return
-
-        # Recupera dettagli connessione
-        conn_params = self.db_manager.get_connection_parameters()  # Chiamata corretta
-        db_user_main = conn_params.get(
-            "user", "postgres")  # Utente del DB principale
-        db_host = conn_params.get("host", "localhost")
-        db_port = str(conn_params.get("port", "5432"))
-
-        # Determina il database target e l'utente per l'autenticazione
-        # Per CREATE/DROP DATABASE, ci connettiamo a 'postgres' con le credenziali fornite
-        # Per altri script, ci connettiamo al DB target con le credenziali fornite
-
-        target_db_for_psql = dbname_override if dbname_override else self.db_manager.get_current_dbname()
-
-        if not target_db_for_psql:
-            QMessageBox.critical(self, "Errore Configurazione",
-                                 f"Nome del database di destinazione per {operation_name} non specificato o non recuperabile.")
-            self._log_output(
-                f"ERRORE: Nome database non specificato per {operation_name}.", error=True)
-            self._disable_all_buttons(False)
-            self._update_admin_buttons_state()
-            return
-
-        # Chiedi la password per l'utente che eseguirà lo script (solitamente l'utente del DB principale o un superuser)
-        # Se dbname_override è 'postgres', l'utente è probabilmente 'postgres' o un altro superuser.
-        # Se dbname_override è None, l'utente è quello del DB principale.
-        utente_per_connessione_psql = db_user_main
-        if dbname_override and dbname_override.lower() == "postgres" and db_user_main.lower() != "postgres":
-            # Se si sta creando/droppando un DB e l'utente di default non è 'postgres',
-            # si potrebbe voler chiedere esplicitamente le credenziali di 'postgres' o di un superuser.
-            # Per ora, usiamo l'utente principale, assumendo abbia i privilegi necessari sul DB di manutenzione.
-            risposta = QMessageBox.question(self, "Conferma Utente",
-                                            f"L'operazione '{operation_name}' sarà eseguita sul database '{target_db_for_psql}' "
-                                            f"utilizzando l'utente '{db_user_main}'. Questo utente ha i privilegi necessari?",
-                                            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-            if risposta == QMessageBox.No:
-                self._log_output(
-                    f"{operation_name} annullato: utente '{db_user_main}' potrebbe non avere privilegi sufficienti.", error=True)
-                self._disable_all_buttons(False)
-                self._update_admin_buttons_state()
-                return
-
-        password, ok = QInputDialog.getText(self, f"Autenticazione DB per {operation_name}",
-                                            f"Inserisci la password per l'utente '{utente_per_connessione_psql}' "
-                                            f"per connettersi al database '{target_db_for_psql}' (su host {db_host}):",
-                                            QLineEdit.Password)
-        if not ok:
-            self._log_output(
-                f"{operation_name} annullato: dialogo password chiuso.")
-            self._disable_all_buttons(False)
-            self._update_admin_buttons_state()
-            return
-        # Per alcune operazioni (come DROP DB con psql), PGPASSWORD potrebbe non essere necessario se l'autenticazione è peer/trust
-        # ma è meglio fornirla se richiesta. Se password è vuota, psql potrebbe chiederla interattivamente (non va bene per QProcess).
-        # La cancellazione su 'postgres' potrebbe non aver bisogno di password utente
-        if not password.strip() and operation_name not in ["Cancellazione Database"]:
-            QMessageBox.warning(
-                self, "Password Mancante", "La password non può essere vuota per questa operazione.")
-            self._log_output(
-                f"{operation_name} fallito: password non fornita.", error=True)
-            self._disable_all_buttons(False)
-            self._update_admin_buttons_state()
-            return
-
-        psql_exe = self.db_manager._resolve_executable_path(
-            user_provided_path="", default_name="psql.exe")
-        if not psql_exe:
-            QMessageBox.critical(self, "Errore Prerequisito",
-                                 "L'eseguibile 'psql.exe' non è stato trovato. Specificare il percorso nelle impostazioni dell'applicazione (se disponibili) o assicurarsi che sia nel PATH di sistema.")
-            self._log_output("ERRORE: psql.exe non trovato.", error=True)
-            self._disable_all_buttons(False)
-            self._update_admin_buttons_state()
-            return
-
-        all_scripts_successful = True
-        for script_name in script_names:
-            script_path = os.path.join(self.script_base_path, script_name)
-            if not os.path.exists(script_path):
-                self._log_output(
-                    f"ERRORE: Script '{script_name}' non trovato in {script_path}", error=True)
-                all_scripts_successful = False
-                break
-
-            # Nuova istanza di QProcess per ogni script
-            self.current_process = QProcess(self)
-            # Collega i segnali per catturare output
-            # Usiamo lambda per passare script_name al gestore di output/errore
-            self.current_process.readyReadStandardOutput.connect(
-                lambda sp=script_name: self._log_output(f"[{sp}] STDOUT: {self.current_process.readAllStandardOutput().data().decode(sys.stdout.encoding or 'utf-8', errors='replace')}"))
-            self.current_process.readyReadStandardError.connect(
-                lambda sp=script_name: self._log_output(f"[{sp}] STDERR: {self.current_process.readAllStandardError().data().decode(sys.stderr.encoding or 'utf-8', errors='replace')}", error=True))
-
-            args = ["-U", utente_per_connessione_psql, "-h", db_host, "-p", db_port,
-                    "-d", target_db_for_psql, "-f", script_path, "-v", "ON_ERROR_STOP=1"]
-
-            process_env = self.current_process.processEnvironment()
-            if password.strip():  # Solo se la password è stata fornita
-                process_env.insert("PGPASSWORD", password)
-            self.current_process.setProcessEnvironment(process_env)
-
-            self._log_output(
-                f"Esecuzione script: '{script_name}' sul database '{target_db_for_psql}'...")
-            # Mostra il comando
-            self._log_output(f"Comando: {psql_exe} {' '.join(args)}")
-            QApplication.processEvents()
-
-            self.current_process.start(psql_exe, args)
-
-            # Attendi indefinitamente
-            if not self.current_process.waitForFinished(-1):
-                err_msg = f"Timeout o errore nell'attesa del completamento dello script '{script_name}'."
-                self._log_output(err_msg, error=True)
-                QMessageBox.critical(self, "Errore Esecuzione Script", err_msg)
-                self.current_process.kill()
-                all_scripts_successful = False
-                break
-
-            exit_code = self.current_process.exitCode()
-            exit_status = self.current_process.exitStatus()
-            QApplication.processEvents()  # Per assicurare che tutto l'output sia catturato
-
-            if exit_status == QProcess.CrashExit or exit_code != 0:
-                msg = f"FALLITO: Script '{script_name}' terminato con errore (Codice: {exit_code}, Stato Qt: {exit_status}). Operazione '{operation_name}' interrotta."
-                self._log_output(msg, error=True)
-                # Non mostriamo QMessageBox qui, sarà fatto alla fine dal chiamante o da _handle_script_finished_summary
-                all_scripts_successful = False
-                break
-            else:
-                self._log_output(
-                    f"SUCCESSO (comando terminato): Script '{script_name}' completato con codice 0.")
-
-            self.current_process = None  # Rilascia riferimento per il prossimo script
-
-        self._handle_script_finished_summary(
-            all_scripts_successful, operation_name)
-
-    def _handle_script_finished_summary(self, all_successful: bool, operation_name: str):
-        """Chiamato dopo che tutti gli script in una lista sono stati processati (o uno è fallito)."""
-        self._log_output(f"<hr>Operazione '{operation_name}' completata.")
-        if all_successful:
-            QMessageBox.information(self, "Operazione Completata",
-                                    f"L'operazione '{operation_name}' sembra essere stata completata con successo.\n"
-                                    "Controllare il log per dettagli e possibili errori specifici degli script SQL.")
-        else:
-            QMessageBox.warning(self, "Operazione Interrotta o Fallita",
-                                f"L'operazione '{operation_name}' è stata interrotta o uno o più script sono falliti.\n"
-                                "Controllare il log per i dettagli.")
-
-        self._disable_all_buttons(False)
-        # Aggiorna lo stato dei pulsanti in base al pool
-        self._update_admin_buttons_state()
-
-    # ... (resto dei metodi: _run_initial_setup_script, _run_sql_data_load_script,
-    #      _run_python_data_population, _run_db_deletion_script) ...
-    # Assicurati che questi metodi ora chiamino _execute_sql_script_list_via_psql
-    # e che _run_db_deletion_script gestisca correttamente la chiusura del pool PRIMA
-    # di chiamare _execute_sql_script_list_via_psql per lo script drop_db.sql.
-
-    def _run_python_data_population(self):
-        if not self.db_manager.pool:
-            QMessageBox.warning(self, "Database Non Pronto",
-                                "Il pool principale non è attivo. Eseguire prima la creazione/configurazione del DB.")
-            return
-
-        self.output_log.clear()
-        self._log_output(
-            "Avvio popolamento dati di esempio guidato da Python...")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        self._disable_all_buttons(True)
-
-        try:
-            num_comuni_creati = 0
-            num_comuni_da_creare, ok = QInputDialog.getInt(
-                self, "Popolamento Python", "Quanti comuni di esempio vuoi creare?", 2, 1, 10, 1)
-            if not ok:
-                self._log_output("Popolamento annullato.", error=True)
-            else:
-                for i in range(num_comuni_da_creare):
-                    nome_comune_esempio = f"Comune Python Demo {i+1}"
-                    prov_esempio = f"P{i % 5+1}"
-                    reg_esempio = "Regione Demo Python"
-                    # O prendilo da self.main_window.logged_in_user_info se disponibile
-                    utente_attuale_per_log = "admin_setup"
-
-                    try:
-                        # Usa il metodo del DBManager che ora usa il pool
-                        comune_id = self.db_manager.aggiungi_comune(
-                            nome_comune=nome_comune_esempio, provincia=prov_esempio, regione=reg_esempio,
-                            periodo_id=1,  # Assumendo che il periodo ID 1 esista dopo il setup
-                            utente=utente_attuale_per_log
-                        )
-                        if comune_id:
-                            self._log_output(
-                                f"Creato Comune: '{nome_comune_esempio}' (ID: {comune_id})")
-                            num_comuni_creati += 1
-                        # else: aggiungi_comune solleverà eccezione in caso di fallimento
-                    except (DBMError, DBUniqueConstraintError, DBDataError) as e_comune:
-                        self._log_output(
-                            f"Fallita creazione Comune '{nome_comune_esempio}': {e_comune}", error=True)
-                    QApplication.processEvents()
-
-                message = f"Popolamento Python completato.\nComuni creati: {num_comuni_creati}"
-                self._log_output(message)
-                QMessageBox.information(
-                    self, "Popolamento Completato", message)
-
-        except Exception as e:  # Cattura qualsiasi altra eccezione
-            self._log_output(
-                f"ERRORE imprevisto durante il popolamento Python: {e}", error=True)
-            logging.getLogger("CatastoGUI").critical(
-                "Errore imprevisto popolamento Python", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Popolamento Imprevisto", f"Errore: {e}")
-        finally:
-            self._disable_all_buttons(False)
-            QApplication.restoreOverrideCursor()
-            # Ri-abilita i pulsanti in base allo stato del pool
-            self._update_admin_buttons_state()
-
-    def _run_db_deletion_script(self):
-        # ... (logica di conferma e chiamata a _execute_sql_script_list_via_psql
-        #      con dbname_override="postgres" e gestione chiusura pool come definito prima) ...
-        script_name = "drop_db.sql"
-        script_path = os.path.join(self.script_base_path, script_name)
-        if not os.path.exists(script_path):
-            QMessageBox.critical(self, "Script Mancante",
-                                 f"Script '{script_name}' non trovato.")
-            return
-
-        dbname_corrente = self.db_manager.get_current_dbname()
-        if not dbname_corrente:
-            QMessageBox.critical(
-                self, "Errore", "Nome DB target non recuperabile.")
-            return
-
-        reply1 = QMessageBox.critical(self, "ATTENZIONE MASSIMA - CANCELLAZIONE!",
-                                      f"Stai per eseguire '{script_name}' che tenterà di CANCELLARE il database '{dbname_corrente}'.\n"
-                                      "<b>OPERAZIONE IRREVERSIBILE. PERDITA DI TUTTI I DATI.</b>\n"
-                                      "Procedere?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply1 == QMessageBox.No:
-            self._log_output("Cancellazione DB annullata.")
-            return
-
-        testo_conferma, ok = QInputDialog.getText(self, "Conferma Finale Cancellazione",
-                                                  f"Per confermare la cancellazione di '{dbname_corrente}', digita il suo nome ESATTO:")
-        if not ok:
-            self._log_output("Cancellazione DB annullata.")
-            return
-        if testo_conferma.strip() != dbname_corrente:
-            QMessageBox.critical(self, "Conferma Fallita",
-                                 "Nome DB non corrispondente. Annullato.")
-            self._log_output(
-                "Cancellazione DB annullata: nome conferma errato.", error=True)
-            return
-
-        self._disable_all_buttons(True)  # Disabilita pulsanti
-        # Importante: chiudere il pool PRIMA di tentare il drop del database a cui potrebbe essere connesso
-        if self.db_manager.pool:
-            self._log_output(
-                f"Chiusura del pool di connessioni per '{dbname_corrente}' prima della cancellazione...")
-            self.db_manager.close_pool()  # Ora db_manager.pool è None
-            self._log_output("Pool principale chiuso.")
-
-        self._execute_sql_script_list_via_psql(
-            script_names=[script_name],
-            operation_name=f"Cancellazione Database '{dbname_corrente}'",
-            dbname_override="postgres"
-        )
-        # _execute_sql_script_list_via_psql chiamerà _handle_script_finished che riabiliterà i pulsanti
-        # e aggiornerà lo stato
-        self._log_output(
-            f"ATTENZIONE: Database '{dbname_corrente}' dovrebbe essere stato cancellato. L'applicazione potrebbe necessitare di riavvio.", error=True)
-        # Aggiorna stato pulsanti (Crea DB dovrebbe essere abilitato ora)
-        self._update_admin_buttons_state()
-        # Aggiorna status bar nella finestra principale per riflettere che il DB non esiste più
-        main_window = self.window().window()  # Trova la CatastoMainWindow
-        if isinstance(main_window, QMainWindow) and hasattr(main_window, 'db_status_label'):
-            main_window.db_status_label.setText(
-                f"Database: NON ESISTENTE ({dbname_corrente})")
-        if isinstance(main_window, QMainWindow) and hasattr(main_window, 'update_ui_based_on_role'):
-            # Simula uno stato di admin_offline per riflettere la UI
-            main_window.pool_initialized_successfully = False  # Fondamentale
-            main_window.logged_in_user_info = {
-                'ruolo': 'admin_offline'}  # Forza la modalità limitata
-            main_window.update_ui_based_on_role()
-
-    def _handle_script_finished(self, exit_code, exit_status, operation_name: str):
-        self.output_log.append(
-            f"<hr>DEBUG Processo '{operation_name}' terminato. ExitCode: {exit_code}, ExitStatus: {exit_status}<hr>")
-        success_message_box_needed = False
-        if exit_status == QProcess.CrashExit:
-            msg = f"ERRORE CRITICO: Processo {operation_name} terminato inaspettatamente (crash)."
-            self._log_output(msg, error=True)
-            QMessageBox.critical(self, "Errore Processo", msg)
-        elif exit_code != 0:
-            msg = f"FALLITO: Processo {operation_name} terminato con codice d'errore: {exit_code}. Controllare output."
-            self._log_output(msg, error=True)
-            QMessageBox.warning(self, "Operazione Fallita", msg)
-        else:
-            msg = f"SUCCESSO (comando terminato): Processo {operation_name} completato con codice 0. Verificare l'output per errori specifici dello script SQL."
-            self._log_output(msg)
-            success_message_box_needed = True
-
-        # Se l'operazione era CANCELLAZIONE DB e ha avuto successo (exit_code 0)
-        # il pool principale è già stato chiuso in _run_db_deletion_script PRIMA di chiamare psql.
-        # Se era CREAZIONE DB e ha avuto successo, tentiamo di inizializzare il pool principale.
-        # (Questo è già gestito in _run_script_crea_database dopo la chiamata a _execute_sql_script_list_via_psql)
-
-        if success_message_box_needed and operation_name != f"Creazione Database '{self.db_manager.get_current_dbname()}'" and operation_name != f"Cancellazione Database '{self.db_manager.get_current_dbname()}'":
-            QMessageBox.information(self, "Operazione Completata", msg)
-
-        self._disable_all_buttons(False)  # Riabilita sempre i pulsanti
-        self._update_admin_buttons_state()  # Aggiorna lo stato in base al pool
-        self.current_process = None  # Resetta riferimento al processo
 
 class RegistraConsultazioneWidget(QWidget):
     def __init__(self, db_manager: 'CatastoDBManager',

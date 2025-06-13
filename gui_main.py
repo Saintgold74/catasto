@@ -8,7 +8,7 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys,bcrypt
-from fuzzy_search_unified import UnifiedFuzzySearchWidget
+from fuzzy_search_unified import UnifiedFuzzySearchWidget, add_fuzzy_search_tab_to_main_window
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -48,7 +48,7 @@ from gui_widgets import (
     RicercaPossessoriWidget, RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
-    GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, AdminDBOperationsWidget,
+    GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  # Aggiunto se non c'era
 )
 from gui_widgets import DBConfigDialog
@@ -506,7 +506,7 @@ class CatastoMainWindow(QMainWindow):
         self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
         self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None
         self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None
-        self.admin_db_ops_widget_ref: Optional[AdminDBOperationsWidget] = None
+        
 
         self.initUI()
 
@@ -585,12 +585,7 @@ class CatastoMainWindow(QMainWindow):
         logging.getLogger("CatastoGUI").info(
             ">>> CatastoMainWindow: Chiamata a setup_tabs")
         self.setup_tabs()
-        # Integrazione ricerca fuzzy ampliata
-        try:
-            fuzzy_widget = integrate_expanded_fuzzy_search_widget(self, self.db_manager)
-            print("✅ Ricerca fuzzy ampliata integrata con successo")
-        except Exception as e:
-            print(f"⚠️ Errore integrazione ricerca fuzzy: {e}")
+        
         logging.getLogger("CatastoGUI").info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
         self.update_ui_based_on_role()
@@ -865,10 +860,7 @@ class CatastoMainWindow(QMainWindow):
             self.sistema_sub_tabs.addTab(
                 self.backup_restore_widget_ref, "Backup/Ripristino DB")
 
-            self.admin_db_ops_widget_ref = AdminDBOperationsWidget(
-                self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(
-                self.admin_db_ops_widget_ref, "Amministrazione DB")
+            
         else:
             error_label = QLabel(
                 "DB Manager non disponibile per i widget di sistema.")

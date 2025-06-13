@@ -321,7 +321,7 @@ class UnifiedFuzzySearchWidget(QWidget):
             self._perform_search()
 
     def _perform_search(self):
-        """Esegue la ricerca vera e propria."""
+        """Esegue la ricerca vera e propria, gestendo il thread precedente."""
         query_text = self.search_edit.text().strip()
         if len(query_text) < 3:
             return
@@ -330,10 +330,15 @@ class UnifiedFuzzySearchWidget(QWidget):
             QMessageBox.warning(self, "Errore", "Sistema di ricerca fuzzy non disponibile.")
             return
 
-        # Interrompi il thread precedente se è in esecuzione
+        # --- MODIFICA CRUCIALE: Gestione del thread esistente ---
         if self.search_thread and self.search_thread.isRunning():
-            self.search_thread.terminate()
-            self.search_thread.wait()
+            self.logger.debug("Ricerca precedente ancora in corso. Tentativo di fermarla.")
+            self.search_thread.quit()  # Chiede al thread di terminare in modo pulito
+            self.search_thread.wait(500) # Attende al massimo 500ms
+            if self.search_thread.isRunning():
+                self.logger.warning("Il thread precedente non si è fermato in tempo, terminazione forzata.")
+                self.search_thread.terminate() # Estrema ratio
+                self.search_thread.wait()
 
         search_options = {
             'threshold': self.precision_slider.value() / 100.0,
@@ -547,3 +552,49 @@ class UnifiedFuzzySearchWidget(QWidget):
                         entity.get('search_field', ''),
                         entity.get('entity_id', '')
                     ])
+
+# ========================================================================
+# FUNZIONI DI INTEGRAZIONE
+# ========================================================================
+
+def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
+    """
+    Aggiunge il tab di ricerca fuzzy alla finestra principale.
+    
+    Args:
+        main_window: Istanza di CatastoMainWindow
+        mode: 'compact' o 'expanded'
+        
+    Returns:
+        bool: True se aggiunto con successo, False altrimenti
+    """
+    try:
+        if not hasattr(main_window, 'db_manager') or not main_window.db_manager:
+            if hasattr(main_window, 'logger'):
+                main_window.logger.warning("Database manager non disponibile per ricerca fuzzy")
+            else:
+                print("❌ Database manager non disponibile per ricerca fuzzy")
+            return False
+            
+        # Crea il widget di ricerca fuzzy
+        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, mode, main_window)
+        
+        # Aggiunge il tab alla finestra principale
+        tab_index = main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
+        
+        if hasattr(main_window, 'logger'):
+            main_window.logger.info(f"Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+        else:
+            print(f"✅ Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+        
+        return True
+        
+    except Exception as e:
+        if hasattr(main_window, 'logger'):
+            main_window.logger.error(f"Errore aggiunta tab ricerca fuzzy: {e}")
+        else:
+            print(f"❌ Errore aggiunta tab ricerca fuzzy: {e}")
+        
+        import traceback
+        traceback.print_exc()
+        return False

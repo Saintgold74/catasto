@@ -652,180 +652,6 @@ class RicercaPartiteWidget(QWidget):
         else:
             print("Operazione di modifica annullata dall'utente.")
 
-class RicercaPossessoriWidget(QWidget):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-
-        main_layout = QVBoxLayout(self)
-
-        # --- Gruppo per i Criteri di Ricerca ---
-        search_criteria_group = QGroupBox("Criteri di Ricerca Possessori")
-        criteria_layout = QGridLayout(search_criteria_group)
-
-        # ... (campi di ricerca come prima: self.search_term_edit, self.similarity_threshold_spinbox, self.search_button) ...
-        criteria_layout.addWidget(
-            QLabel("Termine di ricerca (nome, cognome, ecc.):"), 0, 0)
-        self.search_term_edit = QLineEdit()
-        self.search_term_edit.setPlaceholderText(
-            "Inserisci parte del nome o altri termini...")
-        criteria_layout.addWidget(self.search_term_edit, 0, 1, 1, 2)
-
-        criteria_layout.addWidget(
-            QLabel("Soglia di similarità (0.0 - 1.0):"), 1, 0)
-        self.similarity_threshold_spinbox = QDoubleSpinBox()
-        self.similarity_threshold_spinbox.setMinimum(0.0)
-        self.similarity_threshold_spinbox.setMaximum(1.0)
-        self.similarity_threshold_spinbox.setSingleStep(0.05)
-        self.similarity_threshold_spinbox.setValue(0.3)
-        criteria_layout.addWidget(self.similarity_threshold_spinbox, 1, 1)
-
-        self.search_button = QPushButton("Cerca Possessori")
-        self.search_button.setIcon(
-            QApplication.style().standardIcon(QStyle.SP_DialogApplyButton))
-        self.search_button.clicked.connect(self._perform_search)
-        criteria_layout.addWidget(self.search_button, 1, 2)
-
-        main_layout.addWidget(search_criteria_group)
-
-        # --- Tabella per i Risultati ---
-        self.results_table = QTableWidget()
-        self.results_table.setColumnCount(7)
-        self.results_table.setHorizontalHeaderLabels([
-            "ID", "Nome Completo", "Cognome Nome", "Paternità", "Comune Rif.", "Similarità", "Num. Partite"
-        ])
-        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.results_table.setSelectionMode(
-            QTableWidget.SingleSelection)  # Assicurati sia SingleSelection
-        self.results_table.setAlternatingRowColors(True)
-        self.results_table.horizontalHeader().setStretchLastSection(True)
-        self.results_table.itemSelectionChanged.connect(
-            self._aggiorna_stato_pulsanti_azione)  # Nuovo collegamento
-        self.results_table.itemDoubleClicked.connect(
-            self.apri_modifica_possessore_selezionato)  # Modifica al doppio click
-
-        main_layout.addWidget(self.results_table)
-
-        # --- Pulsanti di Azione sotto la Tabella ---
-        action_layout = QHBoxLayout()
-        self.btn_modifica_possessore = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_FileDialogDetailedView), "Modifica Selezionato")
-        self.btn_modifica_possessore.setToolTip(
-            "Modifica i dati del possessore selezionato")
-        self.btn_modifica_possessore.clicked.connect(
-            self.apri_modifica_possessore_selezionato)
-        self.btn_modifica_possessore.setEnabled(
-            False)  # Inizialmente disabilitato
-        action_layout.addWidget(self.btn_modifica_possessore)
-        action_layout.addStretch()  # Spinge i pulsanti a sinistra o distribuisce lo spazio
-        main_layout.addLayout(action_layout)
-
-        self.setLayout(main_layout)
-
-    def _aggiorna_stato_pulsanti_azione(self):
-        """Abilita/disabilita i pulsanti di azione in base alla selezione nella tabella."""
-        has_selection = bool(self.results_table.selectedItems())
-        self.btn_modifica_possessore.setEnabled(has_selection)
-
-    def _get_selected_possessore_id(self) -> Optional[int]:
-        """Restituisce l'ID del possessore attualmente selezionato nella tabella dei risultati."""
-        selected_items = self.results_table.selectedItems()
-        if not selected_items:
-            return None
-
-        current_row = self.results_table.currentRow()
-        if current_row < 0:
-            return None
-
-        id_item = self.results_table.item(current_row, 0)  # Colonna ID
-        if id_item and id_item.text().isdigit():
-            return int(id_item.text())
-        return None
-
-    # Può essere chiamato da pulsante o doppio click
-    def apri_modifica_possessore_selezionato(self):
-        possessore_id = self._get_selected_possessore_id()
-        if possessore_id is not None:
-            # Istanziamo e apriamo ModificaPossessoreDialog
-            dialog = ModificaPossessoreDialog(
-                self.db_manager, possessore_id, self)
-            if dialog.exec_() == QDialog.Accepted:
-                # Se il dialogo è stato accettato (cioè le modifiche sono state salvate),
-                # ricarichiamo i risultati della ricerca per riflettere le modifiche.
-                # Questo potrebbe richiedere di rieseguire l'ultima ricerca o di aggiornare la riga.
-                # Per semplicità, rieseguiamo l'ultima ricerca se i criteri sono ancora validi.
-                QMessageBox.information(
-                    self, "Modifica Possessore", "Modifiche al possessore salvate con successo.")
-                self._perform_search()  # Riesegue l'ultima ricerca per aggiornare la tabella
-        else:
-            QMessageBox.warning(
-                self, "Nessuna Selezione", "Per favore, seleziona un possessore dalla tabella da modificare.")
-
-    def _perform_search(self):
-        # ... (la tua logica esistente per _perform_search) ...
-        search_term = self.search_term_edit.text().strip()
-        similarity_threshold = self.similarity_threshold_spinbox.value()
-
-        # Evita ricerca vuota se il widget non è visibile la prima volta
-        if not search_term and not self.isVisible():
-            self.results_table.setRowCount(0)
-            self._aggiorna_stato_pulsanti_azione()
-            return
-        if not search_term and self.isVisible():  # Se visibile e si preme cerca senza termine
-            QMessageBox.information(
-                self, "Ricerca Possessori", "Inserire un termine di ricerca.")
-            self.results_table.setRowCount(0)
-            self._aggiorna_stato_pulsanti_azione()
-            return
-
-        try:
-            possessori = self.db_manager.ricerca_avanzata_possessori(
-                query_text=search_term,
-                similarity_threshold=similarity_threshold
-            )
-            self.results_table.setRowCount(0)
-            if not possessori:
-                QMessageBox.information(
-                    self, "Ricerca Possessori", "Nessun possessore trovato con i criteri specificati.")
-            else:
-                self.results_table.setRowCount(len(possessori))
-                for row_idx, possessore_data in enumerate(possessori):
-                    col = 0
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(possessore_data.get('id', 'N/D'))))
-                    col += 1
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore_data.get('nome_completo', 'N/D')))
-                    col += 1
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore_data.get('cognome_nome', 'N/D')))
-                    col += 1
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore_data.get('paternita', 'N/D')))
-                    col += 1
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore_data.get('comune_nome', 'N/D')))
-                    col += 1  # Nome del comune
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        f"{possessore_data.get('similarity', 0.0):.3f}"))
-                    col += 1
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(possessore_data.get('num_partite', 'N/D'))))
-                    col += 1
-                self.results_table.resizeColumnsToContents()
-
-        except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante la ricerca possessori (GUI - Consultazione): {e}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Ricerca", f"Si è verificato un errore durante la ricerca: {e}")
-        finally:
-            self._aggiorna_stato_pulsanti_azione()  # Aggiorna stato pulsanti dopo ricerca
-
-    # Rimuovi _show_possessore_details se non serve più o se è sostituito da apri_modifica_possessore_selezionato
-    # def _show_possessore_details(self, item: QTableWidgetItem): ...
-
 
 class RicercaAvanzataImmobiliWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
@@ -5348,10 +5174,12 @@ class RegistraConsultazioneWidget(QWidget):
 
 class LandingPageWidget(QWidget):
     # Definisci TUTTI i segnali che vengono emessi da questa pagina
+    apri_ricerca_globale_signal = pyqtSignal()
     apri_elenco_comuni_signal = pyqtSignal()
     apri_ricerca_partite_signal = pyqtSignal()
-    apri_ricerca_possessori_signal = pyqtSignal()
+    
     apri_registra_proprieta_signal = pyqtSignal()
+    apri_ricerca_globale_signal = pyqtSignal()
     apri_registra_possessore_signal = pyqtSignal()
     apri_registra_consultazione_signal = pyqtSignal()
     apri_report_proprieta_signal = pyqtSignal() # Questo era mancante
@@ -5461,12 +5289,12 @@ class LandingPageWidget(QWidget):
         btn_ricerca_partite = QPushButton("Ricerca Partite")
         btn_ricerca_partite.clicked.connect(self.apri_ricerca_partite_signal.emit)
         consultazione_layout.addWidget(btn_ricerca_partite)
-
+        
         btn_ricerca_possessori = QPushButton("Ricerca Possessori")
-        btn_ricerca_possessori.clicked.connect(self.apri_ricerca_possessori_signal.emit)
+        btn_ricerca_possessori.clicked.connect(self.apri_ricerca_globale_signal.emit)
         consultazione_layout.addWidget(btn_ricerca_possessori)
         grid_layout.addWidget(consultazione_group, 0, 0)
-
+        
         # Sezione Operazioni Comuni
         operazioni_group = QGroupBox("Operazioni Comuni")
         operazioni_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -5518,54 +5346,28 @@ class WelcomeScreen(QDialog):
         self.help_url = help_url
 
         self._init_ui()
-        #self.start_timer()
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(50, 50, 50, 50)
         main_layout.setSpacing(30)
 
-        # --- Sezione Logo (Modificata per Centratura) ---
-        # Creiamo un QHBoxLayout per centrare orizzontalmente il logo
         logo_horizontal_layout = QHBoxLayout()
-        logo_horizontal_layout.addStretch(1) # Spazio flessibile a sinistra per spingere al centro
+        logo_horizontal_layout.addStretch(1)
         
         self.logo_label = QLabel()
-        # Non è necessario self.logo_label.setAlignment(Qt.AlignCenter) se lo centriamo con QHBoxLayout e stretch
-        # ma non fa male averlo.
-        
         if self.logo_path and os.path.exists(self.logo_path):
             pixmap = QPixmap(self.logo_path)
             if not pixmap.isNull():
-                max_logo_height = 400 
-                max_logo_width = 700 
-                
-                scaled_pixmap = pixmap.scaled(max_logo_width, max_logo_height, 
-                                              Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                
+                scaled_pixmap = pixmap.scaled(700, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.logo_label.setPixmap(scaled_pixmap)
-                self.logo_label.setFixedSize(scaled_pixmap.size()) # Imposta la dimensione del QLabel
-                
-                self.logger.info(f"Logo caricato e scalato a {scaled_pixmap.width()}x{scaled_pixmap.height()} nella Welcome Screen.")
-            else:
-                self.logger.warning(f"QPixmap vuoto per il logo in Welcome Screen: {self.logo_path}")
-                self.logo_label.setText("Logo non caricato")
-                self.logo_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-                self.logo_label.setFixedSize(300, 300) 
+                self.logo_label.setFixedSize(scaled_pixmap.size())
         else:
-            self.logger.warning(f"Percorso logo non valido o file non trovato per Welcome Screen: {self.logo_path}")
             self.logo_label.setText("Logo non disponibile")
-            self.logo_label.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
-            self.logo_label.setFixedSize(300, 300) 
-            
-        logo_horizontal_layout.addWidget(self.logo_label) # Aggiungi il QLabel al layout orizzontale
-        logo_horizontal_layout.addStretch(1) # Spazio flessibile a destra per spingere al centro
-
-        # Aggiungi il layout orizzontale del logo al layout verticale principale
+        
+        logo_horizontal_layout.addWidget(self.logo_label)
+        logo_horizontal_layout.addStretch(1)
         main_layout.addLayout(logo_horizontal_layout)
-        # ... (resto del codice della _init_ui: titolo, sottotitolo, crediti, pulsante help) ...
-        # Assicurati che lo spaziatore tra il logo e il testo non sia troppo grande
-        # Sezioni Titolo App, Sottotitolo App, e Crediti e Pulsante Help.
-        # Devono essere aggiunti al main_layout.
 
         title_label = QLabel("Gestionale Catasto Storico")
         title_font = QFont("Segoe UI", 24, QFont.Bold)
@@ -5579,10 +5381,8 @@ class WelcomeScreen(QDialog):
         subtitle_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(subtitle_label)
 
-        # Spazio flessibile tra il sottotitolo e i crediti
         main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Sezione Crediti
         credits_label = QLabel(
             "Sviluppato da: Marco Santoro\n"
             "Copyright © 2025 - Tutti i diritti riservati\n"
@@ -5593,11 +5393,11 @@ class WelcomeScreen(QDialog):
         credits_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(credits_label)
 
-        # Sezione Link a Manuale/Help
         if self.help_url:
             help_button = QPushButton("Apri Manuale / Guida")
             help_button.setFont(QFont("Segoe UI", 12))
             help_button.setFixedSize(200, 40)
+            # --- CORREZIONE LOGICA: Il pulsante chiama SOLO la sua funzione specifica ---
             help_button.clicked.connect(self._open_help_url)
             
             help_button_layout = QHBoxLayout()
@@ -5605,36 +5405,14 @@ class WelcomeScreen(QDialog):
             help_button_layout.addWidget(help_button)
             help_button_layout.addStretch()
             main_layout.addLayout(help_button_layout)
-        else:
-            self.logger.info("Nessun URL di aiuto fornito, il pulsante manuale non sarà visualizzato.")
 
-
-        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)) # Spazio fisso in basso
-
-        # Stile per il dialogo (opzionale)
-        self.setStyleSheet("""
-            WelcomeScreen {
-                background-color: #f0f0f0;
-                border: 2px solid #0078D4;
-                border-radius: 10px;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QPushButton {
-                background-color: #0078D4;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 10px;
-            }
-            QPushButton:hover {
-                background-color: #005A9E;
-            }
-        """)
+        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed))
         self.setLayout(main_layout)
 
     def _open_help_url(self):
+        """
+        Questa funzione apre l'URL e NON deve chiudere il dialogo.
+        """
         if self.help_url:
             try:
                 QDesktopServices.openUrl(QUrl(self.help_url))
@@ -5643,23 +5421,17 @@ class WelcomeScreen(QDialog):
                 self.logger.error(f"Errore nell'apertura dell'URL: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore", f"Impossibile aprire il link al manuale: {e}")
 
-    """
-    def start_timer(self):
-        # Il timer chiuderà la splash screen automaticamente dopo un certo tempo
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True) # Si attiva una sola volta
-        self.timer.timeout.connect(self.accept) # Chiude il dialogo quando il timer scade
-        self.timer.start(5000) # 3000 ms = 3 secondi. Adatta il tempo se necessario.
-        self.logger.info("Timer per la Welcome Screen avviato (3 secondi).")
-    """
-    # --- NUOVO METODO: Gestisce il click del mouse ---
     def mousePressEvent(self, event):
         """
-        Chiude la WelcomeScreen quando si verifica un click del mouse.
+        Questa funzione gestisce il CLICK del mouse e DEVE SOLO chiudere il dialogo.
         """
-        # Verifica che il click sia stato con il tasto sinistro del mouse
         if event.button() == Qt.LeftButton:
             self.logger.info("Welcome Screen chiusa tramite click del mouse.")
-            self.accept() # Chiude il dialogo
-        # Se vuoi gestire anche altri tasti (es. destro, centrale), puoi aggiungere altri if/elif
-        # event.ignore() # Non è necessario chiamare ignore se l'evento è stato gestito
+            self.accept() # Comando per chiudere il dialogo con successo
+
+    def keyPressEvent(self, event):
+        """
+        Questa funzione gestisce la PRESSIONE di un tasto e DEVE SOLO chiudere il dialogo.
+        """
+        self.logger.info(f"Welcome Screen chiusa tramite pressione del tasto: {event.key()}")
+        self.accept() # Comando per chiudere il dialogo con successo

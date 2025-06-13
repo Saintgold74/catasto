@@ -22,10 +22,10 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget)
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
-from PyQt5.QtCore import QDate, Qt # Assicurati di importare Qt
-from PyQt5.QtWidgets import QDateEdit
+                             QVBoxLayout, QWidget,QDateEdit)
+from PyQt5.QtCore import Qt, QSettings, pyqtSlot,QDate
+
+
 
 # Importazione commentata (da abilitare se necessario)
 # from PyQt5.QtSvgWidgets import QSvgWidget

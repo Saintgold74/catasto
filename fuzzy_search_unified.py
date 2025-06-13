@@ -226,7 +226,13 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.localita_table = self._create_table_widget(["Nome", "Comune", "Immobili", "Similitud."], [0], 3)
         self.results_tabs.addTab(self.localita_table, "🏘️ Località")
         
-        self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Comune", "Similitud."], [1, 3], 4)
+        # --- MODIFICA QUESTA RIGA ---
+        self.immobili_table = self._create_table_widget(
+            ["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], # Aggiunto "Suffisso"
+            [1, 4],  # Indici colonne da espandere (Classificazione e Comune)
+            5        # L'indice della colonna 'Similitud.' ora è 5
+        )
+        # --- FINE MODIFICA --
         self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
 
         self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3)
@@ -427,8 +433,18 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._populate_table(self.localita_table, results_by_type.get('localita', []), 
             lambda l: [l.get('nome', ''), l.get('comune_nome', ''), l.get('num_immobili', 0), f"{l.get('similarity_score', 0):.3f}"])
         
+        # --- MODIFICA QUESTA CHIAMATA ---
         self._populate_table(self.immobili_table, results_by_type.get('immobile', []), 
-            lambda i: [i.get('natura', ''), i.get('classificazione', ''), i.get('numero_partita', ''), i.get('comune_nome', ''), f"{i.get('similarity_score', 0):.3f}"])
+            lambda i: [
+                i.get('natura', ''),
+                i.get('classificazione', ''),
+                i.get('numero_partita', ''),
+                i.get('suffisso_partita', '') or '', # Aggiunto il valore per la nuova colonna
+                i.get('comune_nome', ''),
+                f"{i.get('similarity_score', 0):.3f}"
+            ]
+        )
+        # --- FINE MODIFICA ---
 
         self._populate_table(self.variazioni_table, results_by_type.get('variazione', []), 
             lambda v: [v.get('tipo', ''), v.get('data_variazione', ''), v.get('descrizione', ''), f"{v.get('similarity_score', 0):.3f}"])

@@ -45,7 +45,7 @@ from catasto_db_manager import CatastoDBManager
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
     LandingPageWidget, ElencoComuniWidget, RicercaPartiteWidget,
-    RicercaPossessoriWidget, RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
+    RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
@@ -492,7 +492,7 @@ class CatastoMainWindow(QMainWindow):
         self.landing_page_widget: Optional[LandingPageWidget] = None
         self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
         self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
-        self.ricerca_possessori_widget_ref: Optional[RicercaPossessoriWidget] = None
+        
         self.ricerca_avanzata_immobili_widget_ref: Optional[RicercaAvanzataImmobiliWidget] = None
         self.inserimento_comune_widget_ref: Optional[InserimentoComuneWidget] = None
         self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
@@ -699,8 +699,8 @@ class CatastoMainWindow(QMainWindow):
                 lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Principale"))
             self.landing_page_widget.apri_ricerca_partite_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite"))
-            self.landing_page_widget.apri_ricerca_possessori_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Avanzata Possessori"))
+            self.landing_page_widget.apri_ricerca_globale_signal.connect(
+                lambda: self.activate_tab_and_sub_tab("Ricerca Globale", ""))
             self.landing_page_widget.apri_registra_proprieta_signal.connect(
                 lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registrazione Proprietà"))
             self.landing_page_widget.apri_registra_possessore_signal.connect(
@@ -724,10 +724,7 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs.addTab(
             self.ricerca_partite_widget_ref, "Ricerca Partite")
 
-        self.ricerca_possessori_widget_ref = RicercaPossessoriWidget(
-            self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(
-            self.ricerca_possessori_widget_ref, "Ricerca Avanzata Possessori")
+        
 
         self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(
             self.db_manager, self.consultazione_sub_tabs)
@@ -1424,6 +1421,12 @@ def run_gui_app():
     try:
         print("[FASE 4] Inizio esecuzione run_gui_app()")
         app = QApplication(sys.argv)
+        # --- MODIFICA QUI: Aggiungi la variabile per l'URL della guida ---
+        base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
+        logo_path_for_welcome = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
+        help_manual_url = "https://www.google.com/search?q=manuale+catasto_storico+online" # URL di esempio
+        # --- FINE MODIFICA ---
+
         print("[FASE 5] QApplication creata.")
         QApplication.setOrganizationName("ArchivioDiStatoSavona")
         QApplication.setApplicationName("CatastoStoricoApp")
@@ -1485,6 +1488,13 @@ def run_gui_app():
                 login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
                 if login_dialog.exec_() == QDialog.Accepted:
                     if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
+                         # --- MODIFICA QUI: Passa l'URL al costruttore ---
+                        welcome_screen = WelcomeScreen(
+                            parent=None,
+                            logo_path=logo_path_for_welcome,
+                            help_url=help_manual_url  # Passa la variabile
+                        )
+                        # --- FINE MODIFICA ---
                         # Login riuscito, mostra Welcome Screen
                         welcome_screen = WelcomeScreen(
                             parent=None,

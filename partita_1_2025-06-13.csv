@@ -1,0 +1,24 @@
+--- DETTAGLI PARTITA ---
+Id,1
+Tipo,principale
+Stato,attiva
+Comune Id,4
+Comune Nome,Comune Stress Test 1
+Data Chiusura,
+Data Impianto,1976-06-12
+Data Modifica,2025-06-12T19:28:34
+Data Creazione,2025-06-12T19:28:34
+Numero Partita,1001
+Suffisso Partita,
+Numero Provenienza,
+
+--- POSSESSORI ---
+Id,Quota,Titolo,Nome Completo
+8,,proprieta esclusiva,Possessore 1-1 Rossi
+
+--- IMMOBILI ---
+Id,Civico,Natura,Consistenza,Localita Nome,Classificazione
+2,61,Edificio Stress 2,114 mq,Via Stress 1-2,Classe Stress 3
+1,23,Edificio Stress 1,246 mq,Via Stress 1-13,Classe Stress 1
+3,4,Edificio Stress 3,117 mq,Via Stress 1-17,Classe Stress 4
+

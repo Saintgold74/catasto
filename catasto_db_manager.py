@@ -26,6 +26,20 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
+                             QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
+                             QDialog, QDialogButtonBox, QDoubleSpinBox,
+                             QFileDialog, QFormLayout, QFrame, QGridLayout,
+                             QGroupBox, QHBoxLayout, QHeaderView, QInputDialog,
+                             QLabel, QLineEdit, QListWidget, QListWidgetItem,
+                             QMainWindow, QMenu, QMessageBox, QProgressBar,
+                             QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
+                             QSpinBox, QStyle, QStyleFactory, QTabWidget,
+                             QTableWidget, QTableWidgetItem, QTextEdit,
+                             QVBoxLayout,QProgressDialog)
+from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
+                          QSize, QStandardPaths, Qt, QTimer, QUrl, 
+                          pyqtSignal)
 
 
 
@@ -3241,7 +3255,8 @@ class CatastoDBManager:
     # --- METODI DI RICERCA INTERNI (con correzione finale a DictCursor e partita_id) ---
 
     def _search_possessori_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per i possessori usando una connessione esistente."""
+        """Ricerca fuzzy interna per i possessori, restituendo tutti i campi necessari."""
+        # --- MODIFICA: Aggiunti i campi specifici (nome_completo, comune_nome, num_partite) al SELECT ---
         sql = f"""
             SELECT
                 p.id AS entity_id,
@@ -3251,7 +3266,10 @@ class CatastoDBManager:
                 CASE
                     WHEN similarity(p.nome_completo, %s) > similarity(p.cognome_nome, %s) THEN 'nome_completo'
                     ELSE 'cognome_nome'
-                END AS search_field
+                END AS search_field,
+                p.nome_completo,
+                c.nome as comune_nome,
+                COALESCE(ps.num_partite, 0) as num_partite
             FROM {self.schema}.possessore p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             LEFT JOIN (
@@ -3264,32 +3282,39 @@ class CatastoDBManager:
             LIMIT %s;
         """
         try:
-            # CORREZIONE N.1: Uso del DictCursor
             with conn.cursor(cursor_factory=DictCursor) as cur:
+                # I parametri sono ripetuti per ogni segnaposto '%' nella query
                 cur.execute(sql, (query, query, query, query, query, query, threshold, limit))
-                # La list comprehension ora funziona correttamente
                 return [dict(row) for row in cur.fetchall()]
         except Exception as e:
             self.logger.error(f"Errore ricerca fuzzy possessori: {e}", exc_info=True)
             return []
 
     def _search_localita_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per le località usando una connessione esistente."""
+        """Ricerca fuzzy interna per le località, restituendo tutti i campi necessari."""
+        # --- MODIFICA: Aggiunti i campi specifici (nome, comune_nome, num_immobili) al SELECT ---
         sql = f"""
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Comune: ' || c.nome || ' | Tipo: ' || l.tipo AS detail_text,
+                'Comune: ' || c.nome || ' | Immobili: ' || COALESCE(im.num_immobili, 0) AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
-                'nome' AS search_field
+                'nome' AS search_field,
+                l.nome,
+                c.nome as comune_nome,
+                COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
+            LEFT JOIN (
+                SELECT localita_id, COUNT(*) as num_immobili
+                FROM {self.schema}.immobile
+                GROUP BY localita_id
+            ) im ON l.id = im.localita_id
             WHERE similarity(l.nome, %s) >= %s
             ORDER BY similarity_score DESC
             LIMIT %s;
         """
         try:
-            # CORREZIONE N.1: Uso del DictCursor
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(sql, (query, query, threshold, limit))
                 return [dict(row) for row in cur.fetchall()]
@@ -3298,18 +3323,23 @@ class CatastoDBManager:
             return []
 
     def _search_immobili_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per gli immobili (su natura e classificazione)."""
-        # CORREZIONE N.2: i.id_partita -> i.partita_id
+        """Ricerca fuzzy interna per gli immobili, includendo il suffisso della partita."""
+        # --- MODIFICA: Aggiunto pa.suffisso_partita e aggiornato detail_text ---
         sql = f"""
             SELECT
                 i.id AS entity_id,
                 i.natura || ' - ' || i.classificazione AS display_text,
-                'Partita N: ' || pa.numero_partita || ' | Comune: ' || c.nome AS detail_text,
+                'Partita N: ' || pa.numero_partita || COALESCE(' (' || pa.suffisso_partita || ')', '') || ' | Comune: ' || c.nome AS detail_text,
                 greatest(similarity(i.natura, %s), similarity(i.classificazione, %s)) AS similarity_score,
                 CASE
                     WHEN similarity(i.natura, %s) > similarity(i.classificazione, %s) THEN 'natura'
                     ELSE 'classificazione'
-                END AS search_field
+                END AS search_field,
+                i.natura,
+                i.classificazione,
+                pa.numero_partita,
+                pa.suffisso_partita, -- AGGIUNTO
+                c.nome as comune_nome
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita pa ON i.partita_id = pa.id
             JOIN {self.schema}.comune c ON pa.comune_id = c.id
@@ -3318,7 +3348,6 @@ class CatastoDBManager:
             LIMIT %s;
         """
         try:
-            # CORREZIONE N.1: Uso del DictCursor
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(sql, (query, query, query, query, query, query, threshold, limit))
                 return [dict(row) for row in cur.fetchall()]

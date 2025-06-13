@@ -137,34 +137,38 @@ class UnifiedFuzzySearchWidget(QWidget):
   
 
     def _init_ui(self):
-        """Configura l'interfaccia utente unificata."""
+        """Configura l'interfaccia utente unificata con un layout robusto."""
+        # Layout principale dell'intero widget
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # === AREA RICERCA ===
+        # --- INIZIO NUOVA STRUTTURA ---
+        # 1. Creiamo un widget contenitore per tutti i contenuti tranne la status bar
+        content_container_widget = QWidget()
+        content_layout = QVBoxLayout(content_container_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+        # --- FINE NUOVA STRUTTURA ---
+
+        # === AREA RICERCA (da aggiungere al content_layout) ===
         search_frame = QFrame()
         search_frame.setFrameStyle(QFrame.StyledPanel)
         search_frame.setMaximumHeight(120)
         search_layout = QVBoxLayout(search_frame)
         search_layout.setContentsMargins(10, 8, 10, 8)
-
-        # Riga principale di ricerca
+        # ... (il codice interno di search_frame, search_row, controls_row rimane identico)
         search_row = QHBoxLayout()
         search_row.addWidget(QLabel("🔍"))
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Cerca in possessori, località, immobili, variazioni, contratti, partite...")
         search_row.addWidget(self.search_edit, 1)
-
         self.search_btn = QPushButton("Cerca")
         search_row.addWidget(self.search_btn)
-
         self.clear_btn = QPushButton("🗑️")
         self.clear_btn.setMaximumWidth(30)
         search_row.addWidget(self.clear_btn)
         search_layout.addLayout(search_row)
-
-        # Controlli avanzati
         controls_row = QHBoxLayout()
         controls_row.addWidget(QLabel("Soglia:"))
         self.precision_slider = QSlider(Qt.Horizontal)
@@ -172,93 +176,71 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.precision_slider.setValue(30)
         self.precision_slider.setMaximumWidth(100)
         controls_row.addWidget(self.precision_slider)
-
         self.precision_label = QLabel("0.30")
         self.precision_label.setMinimumWidth(30)
         controls_row.addWidget(self.precision_label)
-
         controls_row.addWidget(QLabel("Max Risultati:"))
         self.max_results_combo = QComboBox()
         self.max_results_combo.addItems(["50", "100", "200", "500"])
         self.max_results_combo.setCurrentText("100")
         self.max_results_combo.setMaximumWidth(70)
         controls_row.addWidget(self.max_results_combo)
-
         controls_row.addStretch()
-
         self.export_btn = QPushButton("📤 Export")
         self.export_btn.setEnabled(False)
         controls_row.addWidget(self.export_btn)
-        
         search_layout.addLayout(controls_row)
-        main_layout.addWidget(search_frame)
+        
+        content_layout.addWidget(search_frame) # AGGIUNTO AL CONTENT_LAYOUT
 
-        # === CHECKBOXES PER TIPI DI RICERCA (SEZIONE CORRETTA E COMPLETA) ===
+        # === CHECKBOXES (da aggiungere al content_layout) ===
         types_layout = QHBoxLayout()
         types_group = QGroupBox("Cerca in:")
         types_group_layout = QHBoxLayout(types_group)
-        
-        self.search_possessori_cb = QCheckBox("👥 Possessori")
-        self.search_possessori_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_possessori_cb)
-        
-        self.search_localita_cb = QCheckBox("🏘️ Località")
-        self.search_localita_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_localita_cb)
-        
-        self.search_immobili_cb = QCheckBox("🏢 Immobili")
-        self.search_immobili_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_immobili_cb)
-        
-        self.search_variazioni_cb = QCheckBox("📋 Variazioni")
-        self.search_variazioni_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_variazioni_cb)
-        
-        self.search_contratti_cb = QCheckBox("📄 Contratti")
-        self.search_contratti_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_contratti_cb)
-        
-        self.search_partite_cb = QCheckBox("📊 Partite")
-        self.search_partite_cb.setChecked(True)
-        types_group_layout.addWidget(self.search_partite_cb)
-        
+        # ... (tutte le checkbox vengono create e aggiunte a types_group_layout come prima) ...
+        self.search_possessori_cb = QCheckBox("👥 Possessori"); self.search_possessori_cb.setChecked(True); types_group_layout.addWidget(self.search_possessori_cb)
+        self.search_localita_cb = QCheckBox("🏘️ Località"); self.search_localita_cb.setChecked(True); types_group_layout.addWidget(self.search_localita_cb)
+        self.search_immobili_cb = QCheckBox("🏢 Immobili"); self.search_immobili_cb.setChecked(True); types_group_layout.addWidget(self.search_immobili_cb)
+        self.search_variazioni_cb = QCheckBox("📋 Variazioni"); self.search_variazioni_cb.setChecked(True); types_group_layout.addWidget(self.search_variazioni_cb)
+        self.search_contratti_cb = QCheckBox("📄 Contratti"); self.search_contratti_cb.setChecked(True); types_group_layout.addWidget(self.search_contratti_cb)
+        self.search_partite_cb = QCheckBox("📊 Partite"); self.search_partite_cb.setChecked(True); types_group_layout.addWidget(self.search_partite_cb)
         types_layout.addWidget(types_group)
-        main_layout.addLayout(types_layout)
 
-        # === AREA RISULTATI (COMPLETA) ===
+        content_layout.addLayout(types_layout) # AGGIUNTO AL CONTENT_LAYOUT
+
+        # === AREA RISULTATI (da aggiungere al content_layout) ===
         self.results_tabs = QTabWidget()
         self.results_tabs.setMinimumHeight(400)
-        main_layout.addWidget(self.results_tabs, 1)
+        # ... (tutta la creazione delle tabelle e l'aggiunta a results_tabs rimane identica) ...
+        self.unified_table = self._create_table_widget(["Tipo", "Nome/Descrizione", "Dettagli", "Similarità", "Campo"], [1, 2], 3); self.results_tabs.addTab(self.unified_table, "🔍 Tutti")
+        self.possessori_table = self._create_table_widget(["Nome Completo", "Comune", "Partite", "Similitud."], [0], 3); self.results_tabs.addTab(self.possessori_table, "👥 Possessori")
+        self.localita_table = self._create_table_widget(["Nome", "Tipo", "Civico", "Comune", "Immobili", "Similitud."], [0, 3], 5); self.results_tabs.addTab(self.localita_table, "📍 Località")
+        self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], [1, 4], 5); self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
+        self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3); self.results_tabs.addTab(self.variazioni_table, "📋 Variazioni")
+        self.contratti_table = self._create_table_widget(["Tipo", "Data", "Partita", "Similitud."], [0], 3); self.results_tabs.addTab(self.contratti_table, "📄 Contratti")
+        self.partite_table = self._create_table_widget(["Numero", "Suffisso", "Tipo", "Comune", "Similitud."], [3], 4); self.results_tabs.addTab(self.partite_table, "📊 Partite")
 
-        self.unified_table = self._create_table_widget(["Tipo", "Nome/Descrizione", "Dettagli", "Similarità", "Campo"], [1, 2], 3)
-        self.results_tabs.addTab(self.unified_table, "🔍 Tutti")
+        content_layout.addWidget(self.results_tabs) # AGGIUNTO AL CONTENT_LAYOUT
 
-        self.possessori_table = self._create_table_widget(["Nome Completo", "Comune", "Partite", "Similitud."], [0], 3)
-        self.results_tabs.addTab(self.possessori_table, "👥 Possessori")
+        # --- AGGIUNTA DEL CONTENITORE AL LAYOUT PRINCIPALE ---
+        # Diamo a tutto il blocco dei contenuti un fattore di stretch > 0
+        main_layout.addWidget(content_container_widget, 1)
 
-        self.localita_table = self._create_table_widget(["Nome", "Tipo", "Civico", "Comune", "Immobili", "Similitud."], [0, 3], 5)
-        self.results_tabs.addTab(self.localita_table, "📍 Località")
-        
-        self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], [1, 4], 5)
-        self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
-
-        self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3)
-        self.results_tabs.addTab(self.variazioni_table, "📋 Variazioni")
-
-        self.contratti_table = self._create_table_widget(["Tipo", "Data", "Partita", "Similitud."], [0], 3)
-        self.results_tabs.addTab(self.contratti_table, "📄 Contratti")
-
-        self.partite_table = self._create_table_widget(["Numero", "Suffisso", "Tipo", "Comune", "Similitud."], [3], 4)
-        self.results_tabs.addTab(self.partite_table, "📊 Partite")
-        
-        # === STATUS BAR ===
-        status_layout = QHBoxLayout()
+        # === STATUS BAR (ora separata e sicura) ===
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.StyledPanel)
+        status_frame.setFrameShadow(QFrame.Sunken)
+        status_frame.setMaximumHeight(30)
+        status_layout = QHBoxLayout(status_frame)
+        status_layout.setContentsMargins(5, 2, 5, 2)
         self.stats_label = QLabel("Inserire almeno 3 caratteri per iniziare")
         status_layout.addWidget(self.stats_label)
         status_layout.addStretch()
         self.indices_status_label = QLabel("Verifica indici...")
         status_layout.addWidget(self.indices_status_label)
-        main_layout.addLayout(status_layout)
+        
+        # Aggiungiamo la status bar al layout principale senza stretch
+        main_layout.addWidget(status_frame)
 
         self.search_edit.setFocus()
 

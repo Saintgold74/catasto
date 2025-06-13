@@ -3495,6 +3495,29 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore ricerca fuzzy partite: {e}", exc_info=True)
             return []
+    def verify_gin_indices(self) -> Dict[str, Any]:
+        """
+        Verifica la presenza di indici GIN per la ricerca testuale nello schema specificato.
+        Restituisce un dizionario con lo stato e il numero di indici trovati.
+        """
+        self.logger.info(f"Verifica degli indici GIN per lo schema '{self.schema}'...")
+        query = """
+            SELECT COUNT(*)
+            FROM pg_indexes
+            WHERE schemaname = %s AND indexdef LIKE '%% USING gin %%';
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (self.schema,))
+                    result = cur.fetchone()
+                    count = result[0] if result else 0
+                    self.logger.info(f"Trovati {count} indici GIN nello schema '{self.schema}'.")
+                    return {'status': 'OK', 'gin_indices': count}
+        except Exception as e:
+            self.logger.error(f"Errore durante la verifica degli indici GIN: {e}", exc_info=True)
+            return {'status': 'ERROR', 'message': str(e), 'gin_indices': 0}
+
     
         
 # --- Esempio di utilizzo minimale (invariato) ---

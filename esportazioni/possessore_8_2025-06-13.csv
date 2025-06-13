@@ -1,0 +1,36 @@
+--- DETTAGLI POSSESSORE ---
+Id,8
+Attivo,True
+Comune Id,4
+Paternita,fu Stress Test
+Comune Nome,Comune Stress Test 1
+Cognome Nome,Stress 1
+Data Modifica,2025-06-12T19:28:34
+Nome Completo,Possessore 1-1 Rossi
+Data Creazione,2025-06-12T19:28:34
+
+--- PARTITE ASSOCIATE ---
+Id,Tipo,Quota,Titolo,Comune Nome,Numero Partita,Suffisso Partita
+1,principale,,proprieta esclusiva,Comune Stress Test 1,1001,
+2,principale,,proprieta esclusiva,Comune Stress Test 1,1002,
+3,principale,,proprieta esclusiva,Comune Stress Test 1,1003,
+4,principale,,proprieta esclusiva,Comune Stress Test 1,1004,
+5,principale,,proprieta esclusiva,Comune Stress Test 1,1005,
+
+--- IMMOBILI ASSOCIATI (TRAMITE PARTITE) ---
+Id,Natura,Comune Nome,Localita Nome,Numero Partita
+1,Edificio Stress 1,Comune Stress Test 1,Via Stress 1-13,1001
+2,Edificio Stress 2,Comune Stress Test 1,Via Stress 1-2,1001
+3,Edificio Stress 3,Comune Stress Test 1,Via Stress 1-17,1001
+4,Edificio Stress 1,Comune Stress Test 1,Via Stress 1-11,1002
+5,Edificio Stress 2,Comune Stress Test 1,Via Stress 1-1,1002
+6,Edificio Stress 3,Comune Stress Test 1,Via Stress 1-12,1002
+7,Edificio Stress 1,Comune Stress Test 1,Via Stress 1-20,1003
+8,Edificio Stress 2,Comune Stress Test 1,Via Stress 1-10,1003
+9,Edificio Stress 3,Comune Stress Test 1,Via Stress 1-18,1003
+10,Edificio Stress 1,Comune Stress Test 1,Via Stress 1-15,1004
+11,Edificio Stress 2,Comune Stress Test 1,Via Stress 1-9,1004
+12,Edificio Stress 3,Comune Stress Test 1,Via Stress 1-16,1004
+13,Edificio Stress 1,Comune Stress Test 1,Via Stress 1-20,1005
+14,Edificio Stress 2,Comune Stress Test 1,Via Stress 1-16,1005
+15,Edificio Stress 3,Comune Stress Test 1,Via Stress 1-2,1005

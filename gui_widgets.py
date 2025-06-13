@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget,QProgressDialog)
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
+from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal 
 
 # Importazione commentata (da abilitare se necessario)
 # from PyQt5.QtSvgWidgets import QSvgWidget
@@ -1223,6 +1223,7 @@ class InserimentoComuneWidget(QWidget):
 
 
 class InserimentoPossessoreWidget(QWidget):
+    import_csv_requested = pyqtSignal()
     def __init__(self, db_manager: 'CatastoDBManager', parent=None): # Usa la stringa per il type hint se CatastoDBManager non è ancora definito/importato globalmente
         super().__init__(parent)
         self.db_manager = db_manager
@@ -1289,7 +1290,32 @@ class InserimentoPossessoreWidget(QWidget):
         main_layout.addLayout(button_layout)
 
         main_layout.addStretch()
-        self.setLayout(main_layout)
+        
+        # --- INIZIO BLOCCO AGGIUNTO ---
+
+        # Aggiungiamo una linea separatrice per pulizia visiva
+        linea_separatrice = QFrame()
+        linea_separatrice.setFrameShape(QFrame.HLine)
+        linea_separatrice.setFrameShadow(QFrame.Sunken)
+        form_layout.addWidget(linea_separatrice)
+
+        # Creiamo un gruppo per le azioni di importazione
+        import_group = QGroupBox("Azioni Aggiuntive")
+        import_layout = QVBoxLayout(import_group)
+
+        self.import_button = QPushButton("📂 Importa Possessori da CSV...")
+        self.import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.import_button.setToolTip("Apre una finestra per selezionare e importare un file CSV di possessori.")
+        
+        # Colleghiamo il click del pulsante all'emissione del nostro nuovo segnale
+        self.import_button.clicked.connect(self.import_csv_requested.emit)
+
+        import_layout.addWidget(self.import_button)
+        form_layout.addWidget(import_group)
+
+        # --- FINE BLOCCO AGGIUNTO ---
+
+        self.setLayout(form_layout)
         self._pulisci_campi_possessore() # Per impostare lo stato iniziale
 
     def _genera_e_imposta_nome_completo(self):

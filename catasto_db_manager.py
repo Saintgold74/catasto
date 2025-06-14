@@ -2143,23 +2143,22 @@ class CatastoDBManager:
             return None
 
     # --- Metodi Manutenzione e Ottimizzazione (Invariati rispetto a comune_id) ---
+# In catasto_db_manager.py, SOSTITUISCI il metodo refresh_materialized_views con questo:
 
-    
-    
     def refresh_materialized_views(self, show_success_message: bool = False) -> bool:
-        """Aggiorna tutte le viste materializzate del database."""
+        """Aggiorna tutte le viste materializzate del database in modo sicuro."""
         if not self.pool:
             self.logger.error("Pool di connessioni non inizializzato per refresh viste materializzate.")
+            QMessageBox.critical(None, "Errore", "Pool di connessioni non attivo. Impossibile aggiornare le viste.")
             return False
         
-        # Mostra dialog di progresso
-        progress_dialog = QProgressDialog("Aggiornamento viste materializzate in corso...", None, 0, 0)
+        progress_dialog = QProgressDialog("Aggiornamento viste materializzate in corso...", "Annulla", 0, 0, None)
         progress_dialog.setWindowModality(Qt.WindowModal)
-        progress_dialog.setAutoClose(False)
-        progress_dialog.setAutoReset(False)
+        progress_dialog.setCancelButton(None)
         progress_dialog.show()
         QApplication.processEvents()
 
+        # --- CORREZIONE QUI: Rimosso CONCURRENTLY per compatibilità universale ---
         query = f"""
             DO $$
             DECLARE
@@ -2174,28 +2173,34 @@ class CatastoDBManager:
                     || '.' || quote_ident(r.matviewname);
                 END LOOP;
             END $$;
-            """
+        """
+        # --- FINE CORREZIONE ---
+        
         try:
-            success = self._execute_query(query, script=True)
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    self.logger.info("Esecuzione dello script di aggiornamento per le viste materializzate...")
+                    cur.execute(query)
+            
             progress_dialog.close()
-            if success:
-                if show_success_message:
-                    QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
-                logging.info("Viste materializzate aggiornate con successo.")
-                return True
-            else:
-                return False
+            if show_success_message:
+                QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
+            
+            self.logger.info("Viste materializzate aggiornate con successo.")
+            return True
+            
+        except psycopg2.Error as db_err:
+            progress_dialog.close()
+            error_message = f"Errore DB durante l'aggiornamento delle viste: {db_err}"
+            self.logger.error(error_message, exc_info=True)
+            QMessageBox.critical(None, "Errore Aggiornamento Viste", error_message)
+            return False
         except Exception as e:
             progress_dialog.close()
-            logging.error(f"Errore critico durante l'aggiornamento delle viste: {e}")
-            QMessageBox.critical(None, "Errore Aggiornamento Viste", f"Impossibile aggiornare le viste materializzate: {e}")
+            error_message = f"Errore critico durante l'aggiornamento delle viste: {e}"
+            self.logger.error(error_message, exc_info=True)
+            QMessageBox.critical(None, "Errore Aggiornamento Viste", error_message)
             return False
-
-
-    
-
-    
-
     def get_optimization_suggestions(self) -> Optional[str]:
         """Chiama la funzione SQL suggerimenti_ottimizzazione (se esiste)."""
         logger.warning("La funzione SQL 'suggerimenti_ottimizzazione' potrebbe non essere definita o corretta.")

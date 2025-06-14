@@ -41,6 +41,8 @@ from PyQt5.QtCore import Qt, QSettings, pyqtSlot
 # from PyQt5.QtSvgWidgets import QSvgWidget
 
 from catasto_db_manager import CatastoDBManager
+from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path
+import pandas as pd # Importa pandas
 
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
@@ -497,6 +499,7 @@ class CatastoMainWindow(QMainWindow):
         self.create_menu_bar()
 
         self.tabs = QTabWidget()
+        self.tabs.currentChanged.connect(self.handle_main_tab_changed) # <-- ASSICURATI CHE QUESTA RIGA ESISTA
         self.main_layout.addWidget(self.tabs)
         self.setCentralWidget(self.central_widget)
 
@@ -800,9 +803,10 @@ class CatastoMainWindow(QMainWindow):
         
 
         # --- 4. Tab Esportazioni ---
-        self.esportazioni_widget_ref = EsportazioniWidget(
-            self.db_manager, self)
-        self.tabs.addTab(self.esportazioni_widget_ref, "Esportazioni")
+        # --- CON QUESTA NUOVA ---
+        self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager, self.tabs)
+        self.tabs.addTab(self.esportazioni_widget_ref, "🗄️ Esportazioni Massive")
+        # --- FINE SOSTITUZIONE ---
 
         # --- 5. Tab Reportistica ---
         self.reportistica_widget_ref = ReportisticaWidget(
@@ -985,6 +989,43 @@ class CatastoMainWindow(QMainWindow):
         else:
             logging.getLogger("CatastoGUI").error(
                 "Impossibile trovare il tab principale 'Inserimento e Gestione'.")
+
+    def handle_main_tab_changed(self, index: int):
+        """
+        Gestisce il cambio di tab e carica i dati per il widget appena visualizzato.
+        Questo implementa il "lazy loading" per evitare caricamenti non necessari all'avvio.
+        """
+        # Ignora l'azione se il database non è ancora pronto (es. in modalità setup)
+        if not self.db_manager or not self.db_manager.pool:
+            self.logger.warning(f"Cambio tab all'indice {index} ignorato: il pool del DB non è attivo.")
+            return
+
+        current_main_widget = self.tabs.widget(index)
+        if current_main_widget is None:
+            return
+
+        # Il nostro widget da caricare potrebbe essere il widget principale o un sotto-widget in un sotto-tab
+        widget_to_load = None
+
+        # Controlla se il widget del tab principale contiene a sua volta dei QTabWidget (i nostri sotto-tab)
+        sub_tab_widgets = current_main_widget.findChildren(QTabWidget)
+        if sub_tab_widgets:
+            # Se sì, prendi il widget attualmente visibile nel sotto-tab
+            sub_tab_container = sub_tab_widgets[0]
+            widget_to_load = sub_tab_container.currentWidget()
+        else:
+            # Altrimenti, il widget da caricare è il widget del tab principale stesso
+            widget_to_load = current_main_widget
+
+        # Infine, se abbiamo trovato un widget valido, controlliamo se ha il nostro metodo
+        # per il caricamento dei dati e, in caso affermativo, lo chiamiamo.
+        if widget_to_load and hasattr(widget_to_load, 'load_initial_data'):
+            try:
+                # Chiamiamo il metodo per caricare i suoi dati
+                widget_to_load.load_initial_data()
+            except Exception as e:
+                self.logger.error(f"Errore durante il lazy loading del widget '{widget_to_load.__class__.__name__}': {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Caricamento Widget", f"Impossibile caricare i dati per la sezione selezionata:\n{e}")
 
     def update_ui_based_on_role(self):
         self.logger.info(

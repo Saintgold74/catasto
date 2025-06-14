@@ -760,6 +760,59 @@ def _get_default_export_path(default_filename: str) -> str:
     
     # Unisce il percorso della cartella con il nome del file suggerito
     return os.path.join(full_dir_path, default_filename)
+if FPDF_AVAILABLE:
+    class BulkReportPDF(FPDF):
+        """
+        Classe PDF specializzata per creare report tabellari lunghi
+        con intestazioni ripetute su ogni pagina.
+        """
+        def __init__(self, orientation='L', unit='mm', format='A4', report_title="Report Dati"):
+            super().__init__(orientation, unit, format) # 'L' per Landscape, più adatto a tabelle
+            self.report_title = report_title
+            self.headers = []
+            self.col_widths = []
+
+        def header(self):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 10, self.report_title, 0, 1, 'C')
+            self.ln(5)
+            # Stampa l'intestazione della tabella su ogni pagina
+            if self.headers:
+                self.set_font('Helvetica', 'B', 8)
+                self.set_fill_color(230, 230, 230)
+                for i, header in enumerate(self.headers):
+                    self.cell(self.col_widths[i], 7, header, 1, 0, 'C', 1)
+                self.ln()
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'I', 8)
+            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
+
+        def print_table(self, headers, data):
+            if not data: return
+            
+            self.headers = headers
+            # Calcola larghezza colonne (semplice divisione)
+            effective_width = self.w - self.l_margin - self.r_margin
+            self.col_widths = [effective_width / len(headers)] * len(headers)
+            
+            self.set_font('Helvetica', '', 8)
+            self.add_page()
+            
+            for row in data:
+                # Controlla se c'è spazio per la riga, altrimenti vai a pagina nuova
+                if self.get_y() + 6 > self.page_break_trigger:
+                    self.add_page()
+
+                for i, header in enumerate(headers):
+                    # Usiamo .get(header) se i dati sono dict, o l'indice se sono liste/tuple
+                    if isinstance(row, dict):
+                        cell_value = str(row.get(header, ''))
+                    else:
+                        cell_value = str(row[i]) if i < len(row) else ''
+                    self.cell(self.col_widths[i], 6, cell_value, 1, 0, 'L')
+                self.ln()
 
 
 

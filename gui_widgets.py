@@ -2,6 +2,8 @@
 import os,csv,sys,logging,json
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
+from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path
+import pandas as pd # Importa pandas
 
 # Importazioni PyQt5
 # Importazioni necessarie (QSvgWidget già dovrebbe esserci dalla risposta precedente)
@@ -28,7 +30,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget,QProgressDialog)
+                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal 
 
 # Importazione commentata (da abilitare se necessario)
@@ -3225,228 +3227,252 @@ class EsportazioniWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.selected_partita_id_export: Optional[int] = None
-        self.selected_possessore_id_export: Optional[int] = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self._data_loaded = False
 
+        self._initUI()
+
+    def _initUI(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
 
-        # Sotto-Tab
-        sub_tabs = QTabWidget()
+        selection_group = QGroupBox("Selezione Dati da Esportare")
+        selection_layout = QFormLayout(selection_group)
+        selection_layout.setSpacing(10)
 
-        # Sotto-tab Esporta Partita
-        esporta_partita_widget = QWidget()
-        ep_layout = QVBoxLayout(esporta_partita_widget)
+        self.export_type_combo = QComboBox()
+        self.export_type_combo.addItems(["Elenco Possessori", "Elenco Partite"])
+        selection_layout.addRow("Tipo di Esportazione:", self.export_type_combo)
 
-        ep_input_group = QGroupBox("Seleziona Partita da Esportare")
-        ep_input_layout = QGridLayout(ep_input_group)
-        ep_input_layout.addWidget(QLabel("ID Partita:"), 0, 0)
-        self.partita_id_export_edit = QSpinBox()
-        self.partita_id_export_edit.setMinimum(1)
-        self.partita_id_export_edit.setMaximum(999999)
-        ep_input_layout.addWidget(self.partita_id_export_edit, 0, 1)
-        self.btn_cerca_partita_export = QPushButton("Cerca Partita...")
-        self.btn_cerca_partita_export.clicked.connect(
-            self._cerca_partita_per_export)
-        ep_input_layout.addWidget(self.btn_cerca_partita_export, 0, 2)
-        self.partita_info_export_label = QLabel("Nessuna partita selezionata.")
-        ep_input_layout.addWidget(self.partita_info_export_label, 1, 0, 1, 3)
-        ep_layout.addWidget(ep_input_group)
+        self.comune_filter_combo = QComboBox()
+        selection_layout.addRow("Filtra per Comune (*):", self.comune_filter_combo)
+        
+        main_layout.addWidget(selection_group)
 
-        ep_btn_layout = QHBoxLayout()
-        self.btn_export_partita_json = QPushButton("Esporta JSON")
-        self.btn_export_partita_json.clicked.connect(
-            self._handle_export_partita_json)
-        self.btn_export_partita_csv = QPushButton("Esporta CSV")
-        self.btn_export_partita_csv.clicked.connect(
-            self._handle_export_partita_csv)
-        self.btn_export_partita_pdf = QPushButton("Esporta PDF")
-        self.btn_export_partita_pdf.clicked.connect(
-            self._handle_export_partita_pdf)
-        self.btn_export_partita_pdf.setEnabled(
-            FPDF_AVAILABLE)  # Disabilita se FPDF non c'è
-        ep_btn_layout.addWidget(self.btn_export_partita_json)
-        ep_btn_layout.addWidget(self.btn_export_partita_csv)
-        ep_btn_layout.addWidget(self.btn_export_partita_pdf)
-        ep_layout.addLayout(ep_btn_layout)
-        ep_layout.addStretch()
-        sub_tabs.addTab(esporta_partita_widget, "Esporta Partita")
+        format_group = QGroupBox("Formato di Esportazione")
+        format_layout = QHBoxLayout(format_group)
+        format_layout.setSpacing(10)
 
-        # Sotto-tab Esporta Possessore
-        esporta_possessore_widget = QWidget()
-        eposs_layout = QVBoxLayout(esporta_possessore_widget)
+        self.btn_export_csv = QPushButton("Esporta in CSV")
+        self.btn_export_csv.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.btn_export_csv.clicked.connect(self._handle_export_csv)
+        format_layout.addWidget(self.btn_export_csv)
+        
+        # --- NUOVI PULSANTI ---
+        self.btn_export_xls = QPushButton("Esporta in XLS (Excel)")
+        self.btn_export_xls.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.btn_export_xls.clicked.connect(self._handle_export_xls)
+        format_layout.addWidget(self.btn_export_xls)
 
-        eposs_input_group = QGroupBox("Seleziona Possessore da Esportare")
-        eposs_input_layout = QGridLayout(eposs_input_group)
-        eposs_input_layout.addWidget(QLabel("ID Possessore:"), 0, 0)
-        self.possessore_id_export_edit = QSpinBox()
-        self.possessore_id_export_edit.setMinimum(1)
-        self.possessore_id_export_edit.setMaximum(999999)
-        eposs_input_layout.addWidget(self.possessore_id_export_edit, 0, 1)
-        self.btn_cerca_possessore_export = QPushButton("Cerca Possessore...")
-        self.btn_cerca_possessore_export.clicked.connect(
-            self._cerca_possessore_per_export)
-        eposs_input_layout.addWidget(self.btn_cerca_possessore_export, 0, 2)
-        self.possessore_info_export_label = QLabel(
-            "Nessun possessore selezionato.")
-        eposs_input_layout.addWidget(
-            self.possessore_info_export_label, 1, 0, 1, 3)
-        eposs_layout.addWidget(eposs_input_group)
+        self.btn_export_pdf = QPushButton("Esporta in PDF")
+        self.btn_export_pdf.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.btn_export_pdf.clicked.connect(self._handle_export_pdf)
+        self.btn_export_pdf.setEnabled(FPDF_AVAILABLE)
+        format_layout.addWidget(self.btn_export_pdf)
+        # --- FINE NUOVI PULSANTI ---
+        
+        format_layout.addStretch()
+        main_layout.addWidget(format_group)
 
-        eposs_btn_layout = QHBoxLayout()
-        self.btn_export_poss_json = QPushButton("Esporta JSON")
-        self.btn_export_poss_json.clicked.connect(
-            self._handle_export_possessore_json)
-        self.btn_export_poss_csv = QPushButton("Esporta CSV")
-        self.btn_export_poss_csv.clicked.connect(
-            self._handle_export_possessore_csv)
-        self.btn_export_poss_pdf = QPushButton("Esporta PDF")
-        self.btn_export_poss_pdf.clicked.connect(
-            self._handle_export_possessore_pdf)
-        self.btn_export_poss_pdf.setEnabled(
-            FPDF_AVAILABLE)  # Disabilita se FPDF non c'è
-        eposs_btn_layout.addWidget(self.btn_export_poss_json)
-        eposs_btn_layout.addWidget(self.btn_export_poss_csv)
-        eposs_btn_layout.addWidget(self.btn_export_poss_pdf)
-        eposs_layout.addLayout(eposs_btn_layout)
-        eposs_layout.addStretch()
-        sub_tabs.addTab(esporta_possessore_widget, "Esporta Possessore")
+        self.status_log = QTextEdit()
+        self.status_log.setReadOnly(True)
+        
+        # --- SEZIONE MODIFICATA: Log di stato ---
+        # Sostituiamo QTextEdit con QTextBrowser per una gestione dei link più robusta
+        self.status_log = QTextBrowser()
+        self.status_log.setPlaceholderText("I messaggi di stato dell'esportazione appariranno qui...")
+        
+        # QTextBrowser è già di sola lettura di default, non serve setReadOnly(True)
+        
+        # Questo metodo ESISTE su QTextBrowser e ci dà il controllo sui click
+        self.status_log.setOpenLinks(False)
+        
+        # Il segnale anchorClicked è garantito su QTextBrowser
+        self.status_log.anchorClicked.connect(self._open_export_file_link)
+        
+        main_layout.addWidget(self.status_log, 1)
 
-        main_layout.addWidget(sub_tabs)
+        self.setLayout(main_layout)
+        # --- FINE SEZIONE MODIFICATA ---
 
-    def _cerca_partita_per_export(self):
-        # Assumendo che PartitaSearchDialog esista e sia simile a quello per i report
-        dialog = PartitaSearchDialog(self.db_manager, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
-            self.selected_partita_id_export = dialog.selected_partita_id
-            self.partita_id_export_edit.setValue(
-                self.selected_partita_id_export)
-            # Potrebbe mostrare nome comune e numero partita
-            partita_details = self.db_manager.get_partita_details(
-                self.selected_partita_id_export)
-            if partita_details:
-                self.partita_info_export_label.setText(
-                    f"Selezionata: N. {partita_details.get('numero_partita')} (Comune: {partita_details.get('comune_nome')})")
-            else:
-                self.partita_info_export_label.setText("Partita non trovata.")
-        else:
-            self.selected_partita_id_export = None
-            self.partita_info_export_label.setText(
-                "Nessuna partita selezionata.")
+        main_layout.addWidget(self.status_log, 1)
 
-    def _handle_export_partita_json(self):
-        partita_id = self.partita_id_export_edit.value()
-        if partita_id > 0:
-            gui_esporta_partita_json(self, self.db_manager, partita_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Partita valido.")
+        self.setLayout(main_layout)
 
-    def _handle_export_partita_csv(self):
-        partita_id = self.partita_id_export_edit.value()
-        if partita_id > 0:
-            gui_esporta_partita_csv(self, self.db_manager, partita_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Partita valido.")
+    # I metodi load_initial_data, _get_export_parameters, _fetch_data_for_export, _handle_export_csv
+    # rimangono invariati rispetto alla versione precedente. Li includo per completezza.
 
-    def _handle_export_partita_pdf(self):
-        partita_id = self.partita_id_export_edit.value()
-        if partita_id > 0:
-            gui_esporta_partita_pdf(self, self.db_manager, partita_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Partita valido.")
+    def load_initial_data(self):
+        if self._data_loaded: return
+        try:
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            self.comune_filter_combo.clear()
+            # Rimuovo l'opzione "Tutti i Comuni" per ora, per semplicità
+            self.comune_filter_combo.addItem("--- Seleziona un Comune ---", None)
+            for id_comune, nome in comuni:
+                self.comune_filter_combo.addItem(nome, id_comune)
+            self._data_loaded = True
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare l'elenco dei comuni:\n{e}")
 
-    def _cerca_possessore_per_export(self):
-        logging.getLogger("CatastoGUI").info(
-            ">>> _cerca_possessore_per_export: Metodo chiamato.")
+    def _get_export_parameters(self):
+        export_type = self.export_type_combo.currentText()
+        comune_id = self.comune_filter_combo.currentData()
+        comune_name = self.comune_filter_combo.currentText()
+        if comune_id is None:
+            QMessageBox.warning(self, "Selezione Mancante", "Per favore, seleziona un comune.")
+            return None, None, None
+        return export_type, comune_id, comune_name
 
-        dialog = PossessoreSelectionDialog(
-            db_manager=self.db_manager,
-            comune_id=None,  # Per ricerca globale
-            parent=self
-        )
-        dialog.setWindowTitle("Seleziona Possessore per Esportazione")
+    def _fetch_data_for_export(self, export_type, comune_id):
+        self.status_log.append(f"Recupero dati per '{export_type}' del comune ID {comune_id}...")
+        QApplication.processEvents()
+        if export_type == "Elenco Possessori":
+            return self.db_manager.get_possessori_by_comune(comune_id)
+        elif export_type == "Elenco Partite":
+            return self.db_manager.get_partite_by_comune(comune_id)
+        return None
 
-        if dialog.exec_() == QDialog.Accepted:
-            # --- MODIFICA QUI ---
-            if hasattr(dialog, 'selected_possessore') and \
-               dialog.selected_possessore and \
-               isinstance(dialog.selected_possessore, dict) and \
-               dialog.selected_possessore.get('id') is not None:
+    def _handle_export_csv(self):
+        export_type, comune_id, comune_name = self._get_export_parameters()
+        if not export_type: return
+        data = self._fetch_data_for_export(export_type, comune_id)
+        if not data:
+            QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per i criteri selezionati.")
+            return
+        type_slug = export_type.lower().replace(" ", "_")
+        default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.csv"
+        full_default_path = _get_default_export_path(default_filename_base)
+        filename, _ = QFileDialog.getSaveFileName(self, f"Esporta {export_type} in CSV", full_default_path, "File CSV (*.csv)")
+        if not filename: return
+        try:
+            headers = data[0].keys()
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=headers, delimiter=';')
+                writer.writeheader()
+                writer.writerows(data)
+            #QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
+            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
+            # 1. Converti il percorso del file in un URL valido
+            file_url = QUrl.fromLocalFile(filename).toString()
+            
+            # 2. Ottieni solo il nome del file per la visualizzazione
+            base_name = os.path.basename(filename)
 
-                self.selected_possessore_id_export = dialog.selected_possessore.get(
-                    'id')
-                self.possessore_id_export_edit.setValue(
-                    self.selected_possessore_id_export)
-
-                nome_completo_sel = dialog.selected_possessore.get(
-                    'nome_completo', 'N/D')
-                # Per il nome del comune, potremmo dover fare una chiamata separata se non è già in selected_possessore
-                # o se get_possessore_full_details lo restituisce in modo più affidabile.
-                # Il dizionario 'selected_possessore' dovrebbe contenere anche 'comune_riferimento_nome' se
-                # la query in PossessoreSelectionDialog (get_possessori_by_comune o search_possessori_by_term_globally)
-                # lo include con un JOIN alla tabella comuni.
-                # Altrimenti, recuperiamo i dettagli completi.
-
-                comune_nome_sel = dialog.selected_possessore.get(
-                    'comune_riferimento_nome', None)
-                if comune_nome_sel is None:  # Fallback se non presente in selected_possessore
-                    details = self.db_manager.get_possessore_full_details(
-                        self.selected_possessore_id_export)
-                    if details:
-                        comune_nome_sel = details.get(
-                            'comune_riferimento_nome', 'N/D')
-                    else:
-                        comune_nome_sel = 'N/D (dettagli non trovati)'
-
-                self.possessore_info_export_label.setText(
-                    f"Selezionato: {nome_completo_sel} (Comune Rif.: {comune_nome_sel}, ID: {self.selected_possessore_id_export})"
-                )
-                logging.getLogger("CatastoGUI").info(
-                    f"_cerca_possessore_per_export: Possessore selezionato ID {self.selected_possessore_id_export}")
-
-            else:  # selected_possessore non impostato o ID mancante
-                self.selected_possessore_id_export = None
-                self.possessore_id_export_edit.setValue(0)
-                self.possessore_info_export_label.setText(
-                    "Nessun possessore selezionato o ID non valido.")
-                logging.getLogger("CatastoGUI").warning(
-                    "_cerca_possessore_per_export: Dialogo accettato ma 'selected_possessore' o il suo 'id' non validi.")
+            # 3. Crea la stringa HTML con il link
+            success_message = (
+                f"<font color='green'>Esportazione CSV completata con successo: "
+                f"<a href='{file_url}'>{base_name}</a></font>"
+            )
+            
+            # 4. Aggiungi il messaggio HTML al log
+            self.status_log.append(success_message)
+            QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
             # --- FINE MODIFICA ---
-        else:  # Dialogo annullato
-            # Non resettare necessariamente la selezione precedente se l'utente annulla
-            if self.selected_possessore_id_export is None:  # Resetta solo se non c'era già una selezione valida
-                self.possessore_id_export_edit.setValue(0)
-                self.possessore_info_export_label.setText(
-                    "Nessun possessore selezionato.")
-            logging.getLogger("CatastoGUI").info(
-                "_cerca_possessore_per_export: Dialogo selezione annullato.")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file CSV:\n{e}")
 
-    def _handle_export_possessore_json(self):
-        possessore_id = self.possessore_id_export_edit.value()
-        if possessore_id > 0:
-            gui_esporta_possessore_json(self, self.db_manager, possessore_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Possessore valido.")
+    # --- NUOVI METODI PER XLS E PDF ---
 
-    def _handle_export_possessore_csv(self):
-        possessore_id = self.possessore_id_export_edit.value()
-        if possessore_id > 0:
-            gui_esporta_possessore_csv(self, self.db_manager, possessore_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Possessore valido.")
+    def _handle_export_xls(self):
+        export_type, comune_id, comune_name = self._get_export_parameters()
+        if not export_type: return
+        
+        data = self._fetch_data_for_export(export_type, comune_id)
+        if not data:
+            QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
+            return
 
-    def _handle_export_possessore_pdf(self):
-        possessore_id = self.possessore_id_export_edit.value()
-        if possessore_id > 0:
-            gui_esporta_possessore_pdf(self, self.db_manager, possessore_id)
-        else:
-            QMessageBox.warning(self, "Selezione Mancante",
-                                "Inserisci o cerca un ID Possessore valido.")
-            # Non fare self.reject() qui, permette un altro tentativo o l'uscita manuale
+        type_slug = export_type.lower().replace(" ", "_")
+        default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.xlsx"
+        full_default_path = _get_default_export_path(default_filename_base)
+
+        filename, _ = QFileDialog.getSaveFileName(self, f"Esporta {export_type} in Excel", full_default_path, "File Excel (*.xlsx)")
+        if not filename: return
+            
+        try:
+            df = pd.DataFrame(data)
+            df.to_excel(filename, index=False, engine='openpyxl')
+            self.status_log.append(f"<font color='green'>Esportazione Excel completata con successo in: {filename}</font>")
+            #QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
+            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
+            # 1. Converti il percorso del file in un URL valido
+            file_url = QUrl.fromLocalFile(filename).toString()
+            
+            # 2. Ottieni solo il nome del file per la visualizzazione
+            base_name = os.path.basename(filename)
+
+            # 3. Crea la stringa HTML con il link
+            success_message = (
+                f"<font color='green'>Esportazione XLS completata con successo: "
+                f"<a href='{file_url}'>{base_name}</a></font>"
+            )
+            
+            # 4. Aggiungi il messaggio HTML al log
+            self.status_log.append(success_message)
+            QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
+            # --- FINE MODIFICA ---
+        except ImportError:
+            self.logger.error("La libreria 'pandas' o 'openpyxl' non è installata.")
+            QMessageBox.critical(self, "Libreria Mancante", "L'esportazione in Excel richiede le librerie 'pandas' e 'openpyxl'.\nInstallale con il comando: pip install pandas openpyxl")
+        except Exception as e:
+            self.logger.error(f"Errore durante l'esportazione Excel di '{export_type}': {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file Excel:\n{e}")
+
+    def _handle_export_pdf(self):
+        export_type, comune_id, comune_name = self._get_export_parameters()
+        if not export_type: return
+        
+        data = self._fetch_data_for_export(export_type, comune_id)
+        if not data:
+            QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
+            return
+
+        type_slug = export_type.lower().replace(" ", "_")
+        default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.pdf"
+        full_default_path = _get_default_export_path(default_filename_base)
+        
+        filename, _ = QFileDialog.getSaveFileName(self, f"Esporta {export_type} in PDF", full_default_path, "File PDF (*.pdf)")
+        if not filename: return
+
+        try:
+            pdf_title = f"{export_type} - Comune di {comune_name}"
+            pdf = BulkReportPDF(report_title=pdf_title)
+            
+            headers = list(data[0].keys())
+            
+            # Converte i dati in una lista di liste per la tabella PDF
+            data_rows = [[str(row.get(h, '')) for h in headers] for row in data]
+            
+            pdf.print_table(headers, data_rows)
+            pdf.output(filename)
+            
+            self.status_log.append(f"<font color='green'>Esportazione PDF completata con successo in: {filename}</font>")
+            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
+            # 1. Converti il percorso del file in un URL valido
+            file_url = QUrl.fromLocalFile(filename).toString()
+            
+            # 2. Ottieni solo il nome del file per la visualizzazione
+            base_name = os.path.basename(filename)
+
+            # 3. Crea la stringa HTML con il link
+            success_message = (
+                f"<font color='green'>Esportazione PDF completata con successo: "
+                f"<a href='{file_url}'>{base_name}</a></font>"
+            )
+            
+            # 4. Aggiungi il messaggio HTML al log
+            self.status_log.append(success_message)
+            QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
+            # --- FINE MODIFICA ---
+        except Exception as e:
+            self.logger.error(f"Errore durante l'esportazione PDF di '{export_type}': {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file PDF:\n{e}")
+    def _open_export_file_link(self, url: QUrl):
+        """Apre il file locale puntato dall'URL cliccato nel log."""
+        self.logger.info(f"Tentativo di aprire il file dal link: {url.toLocalFile()}")
+        QDesktopServices.openUrl(url)
 
 
 class ReportisticaWidget(QWidget):

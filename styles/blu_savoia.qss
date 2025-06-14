@@ -1,0 +1,97 @@
+/* Stile "Blu Savoia" */
+QWidget {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10pt;
+    color: #212529; /* Testo quasi nero */
+}
+
+QMainWindow, QDialog {
+    background-color: #F8F9FA; /* Sfondo principale leggermente grigio */
+}
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #D3D3D3; /* Bordo grigio chiaro */
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+}
+
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QComboBox {
+    background-color: #FFFFFF;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QComboBox:focus {
+    border-color: #357EC7; /* Blu Savoia per il focus */
+}
+
+QPushButton {
+    background-color: #357EC7; /* Blu Savoia */
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    min-width: 100px;
+}
+
+QPushButton:hover {
+    background-color: #2a6ead;
+}
+
+QPushButton:pressed {
+    background-color: #215a8c;
+}
+
+QPushButton:disabled {
+    background-color: #A9A9A9;
+    color: #E0E0E0;
+}
+
+QTabWidget::pane {
+    border-top: 2px solid #D3D3D3;
+    padding: 10px;
+    background-color: #FFFFFF;
+}
+
+QTabBar::tab {
+    background: #E9ECEF;
+    border: 1px solid #D3D3D3;
+    border-bottom: none;
+    padding: 8px 15px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    border-color: #D3D3D3;
+    font-weight: bold;
+}
+
+QTableWidget {
+    border: 1px solid #D3D3D3;
+    gridline-color: #E0E0E0;
+    background-color: #FFFFFF;
+}
+
+QHeaderView::section {
+    background-color: #E6F7FF; /* Azzurro chiaro per header tabelle */
+    padding: 5px;
+    border: 1px solid #D3D3D3;
+    font-weight: bold;
+}
+
+QTableWidget::item:selected {
+    background-color: #7FB3D5; /* Blu medio per selezione */
+    color: white;
+}

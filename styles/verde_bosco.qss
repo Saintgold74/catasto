@@ -1,0 +1,97 @@
+/* Stile "Verde Bosco" */
+QWidget {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10pt;
+    color: #4E4E4E; /* Testo grigio scuro/marrone */
+}
+
+QMainWindow, QDialog {
+    background-color: #F5F5DC; /* Sfondo beige */
+}
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #A9A9A9; /* Bordo grigio medio */
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+}
+
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QComboBox {
+    background-color: #FFFFF0; /* Avorio */
+    border: 1px solid #C3C3C3;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QComboBox:focus {
+    border-color: #4CAF50; /* Verde principale per il focus */
+}
+
+QPushButton {
+    background-color: #4CAF50; /* Verde principale */
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    min-width: 100px;
+}
+
+QPushButton:hover {
+    background-color: #45a049;
+}
+
+QPushButton:pressed {
+    background-color: #388E3C;
+}
+
+QPushButton:disabled {
+    background-color: #A9A9A9;
+    color: #E0E0E0;
+}
+
+QTabWidget::pane {
+    border-top: 2px solid #A9A9A9;
+    padding: 10px;
+    background-color: #FFFFF0; /* Avorio */
+}
+
+QTabBar::tab {
+    background: #E8E4D5; /* Beige più scuro */
+    border: 1px solid #A9A9A9;
+    border-bottom: none;
+    padding: 8px 15px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background: #FFFFF0;
+    border-color: #A9A9A9;
+    font-weight: bold;
+}
+
+QTableWidget {
+    border: 1px solid #A9A9A9;
+    gridline-color: #D3D3D3;
+    background-color: #FFFFF0;
+}
+
+QHeaderView::section {
+    background-color: #A5D6A7; /* Verde pastello per header tabelle */
+    padding: 5px;
+    border: 1px solid #A9A9A9;
+    font-weight: bold;
+}
+
+QTableWidget::item:selected {
+    background-color: #8FBC8F; /* Verde medio per selezione */
+    color: white;
+}

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -15,16 +16,17 @@ import uuid  # Se usato per session_id in modalità offline
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
 # Importazioni PyQt5
-from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
-                          QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal)
+from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
+                          QSize, QStandardPaths, Qt, QTimer, QUrl,
+                          pyqtSignal,pyqtSlot)
 
-from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
+from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont,
                          QIcon, QPalette, QPixmap)
 
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
-from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
+import pandas as pd  # Importa pandas per la gestione dei DataFrame
+from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplication, # <-- AGGIUNTO QActionGroup
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
                              QFileDialog, QFormLayout, QFrame, QGridLayout,
@@ -35,13 +37,12 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget)
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
+# --- FINE MODIFICA ---
 
-# Importazione commentata (da abilitare se necessario)
-# from PyQt5.QtSvgWidgets import QSvgWidget
+
 
 from catasto_db_manager import CatastoDBManager
-from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path
+from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address
 import pandas as pd # Importa pandas
 
 # Dai nuovi moduli che creeremo:
@@ -54,14 +55,14 @@ from gui_widgets import (
     RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget, RicercaPartiteWidget
 )
 from gui_widgets import DBConfigDialog
-from dialogs import DettaglioPartitaDialog,CSVImportResultDialog
+from dialogs import CSVImportResultDialog
 
 from custom_widgets import QPasswordLineEdit
 from app_utils import FPDF_AVAILABLE
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,SETTINGS_DB_PASSWORD,
     COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
     COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
     NUOVE_ETICHETTE_POSSESSORI)
@@ -106,178 +107,68 @@ except ImportError:
                              "Non è possibile importare CatastoDBManager. "
                              "Assicurati che catasto_db_manager.py sia accessibile.")
         sys.exit(1)
+        
+# =============================================================================
+# CONFIGURAZIONE LOGGER GLOBALE (DA INSERIRE QUI)
+# =============================================================================
+# Definiamo e configuriamo il logger una sola volta a livello di modulo.
+gui_logger = logging.getLogger("CatastoGUI")
+gui_logger.setLevel(logging.INFO) # O logging.DEBUG per più dettagli
+
+# Controlliamo se ci sono già handler per evitare duplicati
+if not gui_logger.hasHandlers():
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    
+    # Handler per il file di log
+    file_handler = logging.FileHandler("catasto_gui.log", mode='a', encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter(log_format))
+    gui_logger.addHandler(file_handler)
+    
+    # Handler per la console (utile durante lo sviluppo)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    gui_logger.addHandler(console_handler)
+# =============================================================================
+
 
 # --- Stylesheet Moderno (senza icone custom sui pulsanti principali) ---
-MODERN_STYLESHEET = """
-    * {
-        font-family: Segoe UI, Arial, sans-serif; /* Font più moderno, fallback a sans-serif */
-        font-size: 10pt;
-        color: #333333; /* Testo scuro di default */
-    }
-    QMainWindow {
-        background-color: #F4F4F4; /* Sfondo principale grigio molto chiaro */
-    }
-    QWidget {
-        background-color: #F4F4F4;
-    }
-    QLabel {
-        color: #202020;
-        background-color: transparent;
-        padding: 2px;
-    }
-    QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QDateTimeEdit, QComboBox {
-        background-color: #FFFFFF;
-        color: #333333;
-        border: 1px solid #CCCCCC;
-        border-radius: 4px;
-        padding: 5px;
-        selection-background-color: #0078D4; /* Blu per selezione testo */
-        selection-color: white;
-    }
-    QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, 
-    QDoubleSpinBox:focus, QDateEdit:focus, QDateTimeEdit:focus, QComboBox:focus {
-        border: 1px solid #0078D4; /* Bordo blu quando in focus */
-        /* box-shadow: 0 0 3px #0078D4; /* Leggera ombra esterna (potrebbe non funzionare su tutte le piattaforme Qt) */
-    }
-    QLineEdit[readOnly="true"], QTextEdit[readOnly="true"] {
-        background-color: #E9E9E9;
-        color: #505050;
-    }
-    QPushButton {
-        background-color: #0078D4; /* Blu Microsoft come colore primario */
-        color: white;
-        border: none; /* No bordo per un look più flat */
-        border-radius: 4px;
-        padding: 8px 15px;
-        font-weight: bold;
-        min-width: 80px;
-    }
-    QPushButton:hover {
-        background-color: #005A9E; /* Blu più scuro per hover */
-    }
-    QPushButton:pressed {
-        background-color: #004C8A; /* Ancora più scuro per pressed */
-    }
-    QPushButton:disabled {
-        background-color: #BDBDBD;
-        color: #757575;
-    }
-    QTabWidget::pane {
-        border-top: 1px solid #D0D0D0;
-        background-color: #FFFFFF; /* Sfondo bianco per il contenuto dei tab */
-        padding: 5px;
-    }
-    QTabBar::tab {
-        background: #E0E0E0;
-        color: #424242;
-        border: 1px solid #D0D0D0;
-        border-bottom: none; /* Il bordo inferiore è gestito dal pane o dal tab selezionato */
-        border-top-left-radius: 4px;
-        border-top-right-radius: 4px;
-        padding: 7px 12px;
-        margin-right: 2px;
-    }
-    QTabBar::tab:hover {
-        background: #D0D0D0;
-    }
-    QTabBar::tab:selected {
-        background: #FFFFFF; /* Stesso colore del pane */
-        color: #0078D4;     /* Colore d'accento per il testo del tab selezionato */
-        font-weight: bold;
-        border-color: #D0D0D0;
-        /* Rimuovi il bordo inferiore del tab selezionato per farlo fondere con il pane */
-        border-bottom-color: #FFFFFF; 
-    }
-    QTableWidget {
-        gridline-color: #E0E0E0;
-        background-color: #FFFFFF;
-        alternate-background-color: #F9F9F9;
-        selection-background-color: #60AFFF; /* Blu più chiaro per selezione tabella */
-        selection-color: #FFFFFF;
-        border: 1px solid #D0D0D0;
-    }
-    QHeaderView::section {
-        background-color: #F0F0F0;
-        color: #333333;
-        padding: 5px;
-        border: 1px solid #D0D0D0;
-        border-bottom-width: 1px; 
-        font-weight: bold;
-    }
-    QComboBox::drop-down {
-        border: none;
-        background: transparent;
-        width: 20px;
-    }
-    QComboBox::down-arrow {
-        image: url(:/qt-project.org/styles/commonstyle/images/standardbutton-arrow-down-16.png); /* Freccia standard di Qt */
-    }
-    QComboBox QAbstractItemView { /* Lista a discesa */
-        border: 1px solid #D0D0D0;
-        selection-background-color: #0078D4;
-        selection-color: white;
-        background-color: white;
-        padding: 2px;
-    }
-    QGroupBox {
-        background-color: #FFFFFF;
-        border: 1px solid #D0D0D0;
-        border-radius: 4px;
-        margin-top: 1.5ex; /* Spazio per il titolo */
-        padding: 10px;
-        font-weight: bold;
-    }
-    QGroupBox::title {
-        subcontrol-origin: margin;
-        subcontrol-position: top left;
-        padding: 0 5px 0 5px;
-        left: 10px;
-        color: #0078D4; /* Titolo del GroupBox con colore d'accento */
-    }
-    QCheckBox {
-        spacing: 5px;
-    }
-    QCheckBox::indicator {
-        width: 16px; height: 16px;
-        border: 1px solid #B0B0B0; border-radius: 3px;
-        background-color: white;
-    }
-    QCheckBox::indicator:checked {
-        background-color: #0078D4; border-color: #005A9E;
-        /* Per un checkmark SVG (richiede Qt 5.15+ o gestione via QIcon) */
-        /* image: url(path/to/checkmark.svg) */
-    }
-    QStatusBar {
-        background-color: #E0E0E0;
-        color: #333333;
-    }
-    QMenuBar { background-color: #E0E0E0; color: #333333; }
-    QMenuBar::item:selected { background: #C0C0C0; }
-    QMenu { background-color: #FFFFFF; border: 1px solid #B0B0B0; color: #333333;}
-    QMenu::item:selected { background-color: #0078D4; color: white; }
-"""
-print("[FASE 1] Importazioni completate.")
+def get_available_styles() -> List[str]:
+    """
+    Scansiona la sottocartella 'styles' e restituisce una lista dei file .qss trovati.
+    """
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        styles_dir = os.path.join(base_dir, "styles")
+        if os.path.exists(styles_dir):
+            # Restituisce solo i file che finiscono con .qss
+            return [f for f in os.listdir(styles_dir) if f.endswith('.qss')]
+        else:
+            return []
+    except Exception as e:
+        gui_logger.error(f"Errore nella scansione della cartella stili: {e}")
+        return []
+def load_stylesheet(filename: str) -> str:
+    """
+    Carica un file di stylesheet dalla sottocartella 'styles'.
+    Restituisce il contenuto come stringa o una stringa vuota se non trovato.
+    """
+    try:
+        # Costruisce un percorso relativo alla posizione dello script
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(base_dir, "styles", filename)
+        
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                gui_logger.info(f"Caricato stylesheet: {path}")
+                return f.read()
+        else:
+            gui_logger.warning(f"File stylesheet non trovato: {path}")
+            return ""
+    except Exception as e:
+        gui_logger.error(f"Errore durante il caricamento dello stylesheet '{filename}': {e}")
+        return ""
+# In gui_main.py, aggiungi questo nuovo metodo alla classe CatastoMainWindow
 
-
-# --- Configurazione Logger (assicurati sia definito prima del suo uso) ---
-gui_logger = logging.getLogger("CatastoGUI")
-if not gui_logger.hasHandlers():
-    # ... (configurazione handler come prima) ...
-    # Aggiunto filename e lineno
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-    gui_log_handler = logging.FileHandler(
-        "catasto_gui.log", mode='a', encoding='utf-8')  # Aggiunto encoding e mode
-    gui_log_handler.setFormatter(logging.Formatter(log_format))
-    gui_logger.addHandler(gui_log_handler)
-    # Imposta a DEBUG per più dettagli durante lo sviluppo
-    gui_logger.setLevel(logging.DEBUG)
-
-    # Esempio di Console Handler (per debug durante lo sviluppo)
-    # if not getattr(sys, 'frozen', False): # Per non mostrare in console se è un eseguibile frozen
-    #    console_handler = logging.StreamHandler(sys.stdout)
-    #    console_handler.setFormatter(logging.Formatter(log_format))
-    #    gui_logger.addHandler(console_handler)
-client_ip_address_gui: str = "127.0.0.1"
 
 def _hash_password(password: str) -> str:
         """Genera un hash sicuro per la password usando bcrypt."""
@@ -302,10 +193,14 @@ def _verify_password(stored_hash: str, provided_password: str) -> bool:
             return False
 
 class LoginDialog(QDialog):
-    def __init__(self, db_manager: CatastoDBManager, parent=None):
+    # --- INIZIO MODIFICA 1 ---
+    # Aggiungiamo 'client_ip' come parametro all'init
+    def __init__(self, db_manager: CatastoDBManager, client_ip: str, parent=None):
         super(LoginDialog, self).__init__(parent)
         self.db_manager = db_manager
+        self.client_ip = client_ip # Salviamo l'IP come attributo dell'istanza
         self.logged_in_user_id: Optional[int] = None
+    # --- FINE MODIFICA 1 ---
         self.logged_in_user_info: Optional[Dict] = None
         # NUOVO attributo per conservare l'UUID
         self.current_session_id_from_dialog: Optional[str] = None
@@ -395,16 +290,16 @@ class LoginDialog(QDialog):
 
         if login_success and user_id_app is not None:
             try:
-                # Chiamata a register_access (modificato in db_manager)
-                # Ora dovrebbe restituire l'UUID della sessione
+                 # --- INIZIO MODIFICA 2 ---
+                # Usiamo self.client_ip invece della variabile globale non definita
                 session_uuid_returned = self.db_manager.register_access(
-                    user_id=user_id_app,  # Passa l'ID dell'utente dell'applicazione
+                    user_id=user_id_app,
                     action='login',
                     esito=True,
-                    # Assumendo che client_ip_address_gui sia definita globalmente o accessibile
-                    indirizzo_ip=client_ip_address_gui,
+                    indirizzo_ip=self.client_ip, # <-- USA L'ATTRIBUTO DI ISTANZA
                     application_name='CatastoAppGUI'
                 )
+                # --- FINE MODIFICA 2 ---
 
                 if session_uuid_returned:
                     self.logged_in_user_id = user_id_app
@@ -467,7 +362,7 @@ class CatastoMainWindow(QMainWindow):
         self.sistema_sub_tabs = QTabWidget()  # Deve essere inizializzato qui
 
         # Riferimenti ai widget specifici, inizializzati a None
-        self.landing_page_widget: Optional[LandingPageWidget] = None
+        
         self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
         self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
         
@@ -612,69 +507,86 @@ class CatastoMainWindow(QMainWindow):
 
     # All'interno della classe CatastoMainWindow in prova.py
 
+    # In gui_main.py, SOSTITUISCI il metodo create_menu_bar con questo
+
     def create_menu_bar(self):
-        """
-        Crea e popola la barra dei menu principale dell'applicazione.
-        Versione compatibile con PyQt5.
-        """
         menu_bar = self.menuBar()
 
-        # --- 1. Crea i Menu Principali ---
         file_menu = menu_bar.addMenu("&File")
         settings_menu = menu_bar.addMenu("&Impostazioni")
-        # --- AGGIUNGERE QUESTO NUOVO MENU ---
         help_menu = menu_bar.addMenu("&Help")
-        # --- FINE AGGIUNTA ---
         
-        # --- 2. Definisci TUTTE le Azioni ---
-
-        # Azione per importare da CSV
-        import_action = QAction("Importa Possessori da CSV...", self)
-        import_action.setStatusTip("Importa una lista di possessori da un file CSV")
-        import_action.triggered.connect(self._import_possessori_csv) # Assicurati che il metodo _import_possessori_csv esista nella classe
-
+        # --- Azioni per il menu File ---
+        import_possessori_action = QAction("Importa Possessori da CSV...", self)
+        import_possessori_action.triggered.connect(self._import_possessori_csv)
         import_partite_action = QAction("Importa Partite da CSV...", self)
-        import_partite_action.setStatusTip("Importa una lista di partite da un file CSV")
         import_partite_action.triggered.connect(self._import_partite_csv)
-        # Azione per uscire
-        exit_action = QAction(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
-        exit_action.setStatusTip("Chiudi l'applicazione")
+        exit_action = QAction(self.style().standardIcon(QStyle.SP_DialogCloseButton), "&Esci", self)
         exit_action.triggered.connect(self.close)
-
-        # Azione per la configurazione del DB
-        config_db_action = QAction(QApplication.style().standardIcon(QStyle.SP_ComputerIcon), "Configurazione &Database...", self)
-        config_db_action.setStatusTip("Modifica i parametri di connessione al database")
-        config_db_action.triggered.connect(self._apri_dialogo_configurazione_db) # Assicurati che anche questo metodo esista
-
-        # --- 3. Aggiungi le Azioni ai Menu nell'ordine desiderato ---
-
-        # Aggiungi azioni al menu "File"
-        file_menu.addAction(import_action)
-        file_menu.addSeparator()
-        file_menu.addAction(exit_action)
+        
+        file_menu.addAction(import_possessori_action)
         file_menu.addAction(import_partite_action)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
         
-        # --- AGGIUNGERE QUESTA NUOVA AZIONE ---
-        config_refresh_action = QAction("Impostazioni di Aggiornamento Dati...", self)
-        config_refresh_action.setStatusTip("Configura la soglia di tempo per l'aggiornamento delle viste")
-        config_refresh_action.triggered.connect(self._apri_dialogo_impostazioni_aggiornamento)
-        # --- FINE AGGIUNTA ---
-
-        # Aggiungi le azioni al menu "Impostazioni"
-        settings_menu.addAction(config_db_action)
-        settings_menu.addSeparator() # Separatore per pulizia
-        settings_menu.addAction(config_refresh_action) # Aggiungiamo la nuova azione al menu
+        # --- Azioni per il menu Impostazioni ---
+        config_db_action = QAction(self.style().standardIcon(QStyle.SP_ComputerIcon), "Configurazione &Database...", self)
+        config_db_action.triggered.connect(self._apri_dialogo_configurazione_db)
         
-        # --- AGGIUNGERE QUESTA NUOVA AZIONE PER L'HELP ---
+        config_refresh_action = QAction("Impostazioni di Aggiornamento Dati...", self)
+        config_refresh_action.triggered.connect(self._apri_dialogo_impostazioni_aggiornamento)
+        
+        settings_menu.addAction(config_db_action)
+        settings_menu.addAction(config_refresh_action)
+        settings_menu.addSeparator()
+
+        # --- NUOVA SEZIONE: Menu dinamico per i temi ---
+        style_menu = settings_menu.addMenu("Cambia Tema Grafico")
+        
+        self.style_action_group = QActionGroup(self) # Garantisce che solo un'opzione sia selezionata
+        self.style_action_group.setExclusive(True)
+
+        available_styles = get_available_styles()
+        settings = QSettings()
+        current_style = settings.value("UI/CurrentStyle", "meridiana_style.qss", type=str)
+
+        for style_file in available_styles:
+            style_name = style_file.replace('_', ' ').replace('.qss', '').title()
+            action = QAction(style_name, self, checkable=True)
+            action.triggered.connect(lambda checked, file=style_file: self._change_stylesheet(file))
+            
+            if style_file == current_style:
+                action.setChecked(True) # Seleziona il tema attualmente in uso
+
+            style_menu.addAction(action)
+            self.style_action_group.addAction(action)
+        # --- FINE NUOVA SEZIONE ---
+
+        # --- Azione per il menu Help ---
         show_manual_action = QAction("Visualizza Manuale Utente...", self)
-        show_manual_action.setStatusTip("Apre il manuale utente dell'applicazione (PDF)")
         show_manual_action.triggered.connect(self._apri_manuale_utente)
         help_menu.addAction(show_manual_action)
-        # --- FINE AGGIUNTA ---
 
+    def _change_stylesheet(self, filename: str):
+        """Carica, applica e salva il nuovo stylesheet selezionato."""
+        self.logger.info(f"Cambio tema grafico richiesto: {filename}")
+        
+        # 'load_stylesheet' è già definita in gui_main.py
+        new_stylesheet = load_stylesheet(filename)
+        
+        if new_stylesheet:
+            # Applica lo stile all'intera applicazione
+            QApplication.instance().setStyleSheet(new_stylesheet)
+            
+            # Salva la scelta nelle impostazioni per caricarla al prossimo avvio
+            settings = QSettings()
+            settings.setValue("UI/CurrentStyle", filename)
+            
+            QMessageBox.information(self, "Cambio Tema", f"Tema '{filename.replace('.qss', '').title()}' applicato con successo.")
+        else:
+            QMessageBox.warning(self, "Errore Tema", f"Impossibile caricare il file di stile '{filename}'.")
 
+    # --- FINE AGGIUNTA METODO MANCANTE -
     def create_status_bar_content(self):
         status_frame = QFrame()
         status_frame.setFrameShape(QFrame.StyledPanel)
@@ -715,13 +627,12 @@ class CatastoMainWindow(QMainWindow):
         self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
         self.tabs.addTab(self.dashboard_widget, "🏠 Home / Dashboard")
         
-        # Collega i segnali della dashboard ai metodi corretti
+        # Collega il nuovo segnale del dashboard allo slot della main window che gestisce la ricerca
+        self.dashboard_widget.ricerca_globale_richiesta.connect(self.avvia_ricerca_globale_da_dashboard)
+        
+        # Collega i segnali della dashboard per la navigazione
         self.dashboard_widget.go_to_tab_signal.connect(
-            lambda main_tab, sub_tab: self.activate_tab_and_sub_tab(main_tab, sub_tab, False)
-        )
-        if hasattr(self, 'avvia_ricerca_globale_da_dashboard'):
-             self.dashboard_widget.search_button.clicked.connect(self.dashboard_widget._avvia_ricerca_globale)
-
+            lambda main_tab, sub_tab: self.activate_tab_and_sub_tab(main_tab, sub_tab, False))
         # --- 2. Tab Consultazione e Modifica ---
         consultazione_contenitore = QWidget()
         layout_consultazione = QVBoxLayout(consultazione_contenitore)
@@ -739,10 +650,10 @@ class CatastoMainWindow(QMainWindow):
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
             self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
 
-
         # --- 4. Tab Inserimento e Gestione ---
         inserimento_contenitore = QWidget()
         layout_inserimento = QVBoxLayout(inserimento_contenitore)
+        utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
 
         self.inserimento_comune_widget_ref = InserimentoComuneWidget(
             parent=self.inserimento_sub_tabs,  # Parent è il QTabWidget interno
@@ -782,9 +693,7 @@ class CatastoMainWindow(QMainWindow):
                 pass
             self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.connect(
                 lambda partita_id, comune_id: self._handle_partita_creata_per_operazioni(
-                    partita_id, comune_id, self.operazioni_partita_widget_ref
-                )
-            )
+                    partita_id, comune_id, self.operazioni_partita_widget_ref))
             self.logger.info(
                 "Segnale 'partita_creata_per_operazioni_collegate' connesso.")
         else:
@@ -1500,209 +1409,114 @@ class CatastoMainWindow(QMainWindow):
 
 def run_gui_app():
     try:
-        print("[FASE 4] Inizio esecuzione run_gui_app()")
         app = QApplication(sys.argv)
-        
-        base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
-        logo_path_for_welcome = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
-        
-        manuale_utente_path = os.path.join(base_dir_app, "resources", "manuale_utente.pdf")
-        
-
-        print("[FASE 5] QApplication creata.")
         QApplication.setOrganizationName("ArchivioDiStatoSavona")
-        QApplication.setApplicationName("CatastoStoricoApp")
-        app.setStyleSheet(MODERN_STYLESHEET)
+        QApplication.setApplicationName("Meridiana") # o CatastoStoricoApp
+        client_ip_address_gui = get_local_ip_address()
+        gui_logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
 
-        settings = QSettings(QSettings.IniFormat, QSettings.UserScope,
-                            "ArchivioDiStatoSavona", "CatastoStoricoApp")
-
+        settings = QSettings()
+        current_style_file = settings.value("UI/CurrentStyle", "meridiana_style.qss", type=str)
+        stylesheet = load_stylesheet(current_style_file)
+        if stylesheet:
+            app.setStyleSheet(stylesheet)
+        # --- FINE MODIFICA ---
+        
+        gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
         db_manager_gui: Optional[CatastoDBManager] = None
         main_window_instance = CatastoMainWindow()
-        print("[FASE 6] Istanza di CatastoMainWindow creata.")
 
-        base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
-        logo_path_for_welcome = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
-        help_manual_url = "https://www.google.com/search?q=manuale+catasto_storico+online"
+        # --- NUOVO FLUSSO DI AVVIO ---
 
-        # --- Nuovo Flusso di Avvio Semplificato ---
-        while True: # Loop esterno che si ripete finché la connessione al DB principale non ha successo O l'utente esce/va in Admin Offline
-            gui_logger.info("Avvio nuovo ciclo di connessione DB.")
-            
-            # 1. Apri il dialogo di configurazione DB. Questo dialogo è ora l'unico punto per modificare le impostazioni.
-            # I valori iniziali del dialogo verranno caricati da QSettings, usando i default_preset_config se non salvati.
-            config_dialog = DBConfigDialog(parent=None, allow_test_connection=True)
-            
-            if config_dialog.exec_() != QDialog.Accepted:
-                # Se l'utente annulla la configurazione DB, esci dall'applicazione.
-                gui_logger.info("Configurazione Database annullata dall'utente. Uscita dall'applicazione.")
-                sys.exit(0)
-            
-            # L'utente ha cliccato "Salva e Connetti" nel dialogo.
-            # Recupera i valori CORRENTI dal dialogo, inclusa la password che è stata inserita.
-            current_db_config_values = config_dialog.get_config_values(include_password=True)
-
-            # 2. Istanzia/Re-istanzia DBManager e tenta inizializzazione pool con i valori ottenuti.
-            if db_manager_gui: # Chiudi il pool precedente se esiste
-                db_manager_gui.close_pool()
-            
-            db_manager_gui = CatastoDBManager(
-                dbname=current_db_config_values["dbname"],
-                user=current_db_config_values["user"],
-                password=current_db_config_values["password"],
-                host=current_db_config_values["host"],
-                port=current_db_config_values["port"],
-                schema=current_db_config_values["schema"],
-                application_name=f"CatastoAppGUI_{current_db_config_values['dbname']}",
-                log_level=gui_logger.level
-            )
-            main_window_instance.db_manager = db_manager_gui
-            main_window_instance.pool_initialized_successful = False # Resetta lo stato per questo tentativo
-
-
-            # 3. Tentativo di inizializzare il pool principale
-            if db_manager_gui.initialize_main_pool():
-                main_window_instance.pool_initialized_successful = True
-                print("[FASE 7] Eseguito main_win.show().")
-                gui_logger.info(f"Pool per DB '{current_db_config_values['dbname']}' inizializzato con successo.")
-                
-                # --- CONNESSO CON SUCCESSO: PROCEDI AL LOGIN UTENTE ---
-                login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
-                if login_dialog.exec_() == QDialog.Accepted:
-                    # --- MODIFICA QUI: Passa il percorso del file locale ---
-                    welcome_screen = WelcomeScreen(
-                        parent=None,
-                        logo_path=logo_path_for_welcome,
-                        help_url=manuale_utente_path  # Usa la nuova variabile
-                    )
-                    # --- FINE MODIFICA ---
-                    if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
-                         # --- MODIFICA QUI: Passa l'URL al costruttore ---
-                        welcome_screen = WelcomeScreen(
-                            parent=None,
-                            logo_path=logo_path_for_welcome,
-                            help_url=manuale_utente_path  # Passa la variabile
-                        )
-                        # --- FINE MODIFICA ---
-                        
-                        welcome_screen_result = welcome_screen.exec_()
-
-                        if welcome_screen_result == QDialog.Accepted:
-                            gui_logger.info("Welcome Screen chiusa (Accepted).")
-                            main_window_instance.perform_initial_setup(
-                                db_manager_gui,
-                                login_dialog.logged_in_user_id,
-                                login_dialog.logged_in_user_info,
-                                login_dialog.current_session_id_from_dialog
-                            )
-                            break # Esci dal loop esterno (setup completo e successo)
-
-                        else: # Welcome Screen chiusa non "Accepted" (es. utente chiude X)
-                            gui_logger.info("Welcome Screen chiusa (non Accepted). Uscita dall'applicazione.")
-                            sys.exit(0)
-                    else: # Errore interno di LoginDialog (dati mancanti dopo accettazione)
-                        QMessageBox.critical(None, "Errore Login Interno", "Dati di login non validi dopo l'autenticazione. Riprovare.")
-                        continue # Torna all'inizio del loop esterno per riaprire DBConfigDialog e riprovare
-                else: # LoginDialog annullato
-                    gui_logger.info("Login utente annullato. Uscita dall'applicazione.")
-                    sys.exit(0)
-            
-            else: # Inizializzazione pool fallita: Gestione errori migliorata
-                main_window_instance.pool_initialized_successful = False
-                db_target_name_failed = current_db_config_values.get("dbname", "N/D")
-                host_failed = current_db_config_values.get("host", "N/D")
-                user_failed = current_db_config_values.get("user", "N/D")
-                
-                # Ora questo metodo esiste e funziona
-                error_details = db_manager_gui.get_last_connect_error_details() or {}
-                pgcode = error_details.get('pgcode')
-                pgerror_msg = error_details.get('pgerror')
-
-                # Controlliamo i codici di errore specifici di PostgreSQL
-                if pgcode == '28P01': # Codice per "authentication_failure"
-                    QMessageBox.critical(None, "Errore Autenticazione Database",
-                                         f"Autenticazione fallita per l'utente '{user_failed}'.\n\n"
-                                         "Verificare che l'username e la password inseriti siano corretti.",
-                                         QMessageBox.Ok)
-                
-                elif pgcode == '3D000': # Codice per "invalid_catalog_name" (DB non trovato)
-                    QMessageBox.critical(None, "Errore Database",
-                                         f"Il database con nome '{db_target_name_failed}' non è stato trovato sul server '{host_failed}'.\n\n"
-                                         "Verificare che il nome del database sia corretto o crearlo se necessario.",
-                                         QMessageBox.Ok)
-                    # Qui possiamo inserire la logica per la modalità setup
-                    if host_failed.lower() in ["localhost", "127.0.0.1"]:
-                        reply = QMessageBox.question(None, "Modalità Setup",
-                                                     f"Il database '{db_target_name_failed}' non esiste localmente.\n"
-                                                     "Vuoi avviare l'applicazione in modalità di configurazione limitata per creare e impostare il database?",
-                                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                        if reply == QMessageBox.Yes:
-                             main_window_instance.logged_in_user_info = {'ruolo': 'admin_offline', 'id': 0, 'username': 'admin_setup', 'nome_completo': 'Admin Setup DB'}
-                             main_window_instance.logged_in_user_id = 0
-                             main_window_instance.current_session_id = str(uuid.uuid4())
-                             main_window_instance.perform_initial_setup(db_manager_gui, 0, main_window_instance.logged_in_user_info, main_window_instance.current_session_id)
-                             app.exec_()
-                             sys.exit(0)
-                
-                elif pgcode and pgcode.startswith('08'): # Codici per errori di connessione (es. 08001, 08006)
-                    QMessageBox.critical(None, "Errore Connessione al Server",
-                                         f"Impossibile stabilire una connessione con il server PostgreSQL all'indirizzo '{host_failed}'.\n\n"
-                                         "Possibili cause:\n"
-                                         "- Il server non è in esecuzione.\n"
-                                         "- L'indirizzo IP o la porta sono errati.\n"
-                                         "- Un firewall sta bloccando la connessione.",
-                                         QMessageBox.Ok)
-                
-                else: # Fallback per tutti gli altri errori
-                    QMessageBox.critical(None, "Errore Sconosciuto",
-                                         "Si è verificato un errore imprevisto durante la connessione al database.\n\n"
-                                         f"Dettagli: {pgerror_msg}",
-                                         QMessageBox.Ok)
-                
-                # Dopo aver mostrato l'errore, il loop 'while' continuerà, riaprendo il dialogo di configurazione
-                continue # Torna all'inizio del loop esterno per riaprire DBConfigDialog e riprovare
-        # --- Fine del flusso di avvio ---
-
-        # Se l'applicazione è arrivata qui, significa che il setup è stato completato e la main_window_instance è stata mostrata.
-        gui_logger.info("Setup iniziale completato. Avvio loop eventi dell'applicazione...")
-        try:
-            exit_code = app.exec_()
-            gui_logger.info(f"Loop eventi applicazione terminato con codice: {exit_code}")
-        except Exception as e_exec:
-            gui_logger.critical(f"Errore imprevisto durante app.exec_(): {e_exec}", exc_info=True)
-            if db_manager_gui:
-                db_manager_gui.close_pool()
-            sys.exit(1)
-
-        if db_manager_gui:
-            db_manager_gui.close_pool()
+        # 1. TENTATIVO DI CONNESSIONE AUTOMATICA
+        gui_logger.info("Tentativo di connessione automatica con le impostazioni salvate...")
+        saved_config = {
+            "host": settings.value(SETTINGS_DB_HOST, "localhost", type=str),
+            "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
+            "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico", type=str),
+            "user": settings.value(SETTINGS_DB_USER, "postgres", type=str),
+            "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto", type=str),
+            "password": settings.value(SETTINGS_DB_PASSWORD, "", type=str) # Legge la password salvata
+        }
         
-        sys.exit(getattr(app, 'returnCode', 0) if hasattr(app, 'returnCode') else 0)
+        # Prova a connettere solo se sono presenti i dati essenziali
+        if saved_config["dbname"] and saved_config["user"]:
+            db_manager_gui = CatastoDBManager(**saved_config)
+            if db_manager_gui.initialize_main_pool():
+                main_window_instance.db_manager = db_manager_gui
+                main_window_instance.pool_initialized_successful = True
+                gui_logger.info("Connessione automatica riuscita.")
+            else:
+                db_manager_gui = None # Resetta se fallisce
+        
+        # 2. FALLBACK A CONFIGURAZIONE MANUALE se la connessione automatica è fallita
+        if not db_manager_gui or not db_manager_gui.pool:
+            gui_logger.warning("Connessione automatica fallita. Apertura dialogo di configurazione manuale.")
+            QMessageBox.information(None, "Configurazione Database", "Impossibile connettersi con le impostazioni salvate. Apriamo la configurazione.")
+
+            while True: # Loop per riprovare la configurazione manuale
+                config_dialog = DBConfigDialog(parent=None)
+                if config_dialog.exec_() != QDialog.Accepted:
+                    gui_logger.info("Configurazione manuale annullata. Uscita.")
+                    sys.exit(0)
+
+                current_config = config_dialog.get_config_values(include_password=True)
+                db_manager_gui = CatastoDBManager(**current_config)
+                
+                if db_manager_gui.initialize_main_pool():
+                    main_window_instance.db_manager = db_manager_gui
+                    main_window_instance.pool_initialized_successful = True
+                    gui_logger.info("Connessione manuale riuscita.")
+                    break # Esce dal loop di configurazione
+                else:
+                    # Mostra l'errore specifico e il loop continuerà, riaprendo il dialogo
+                    error_details = db_manager_gui.get_last_connect_error_details() or {}
+                    pgcode = error_details.get('pgcode')
+                    pgerror_msg = error_details.get('pgerror')
+                    # (Qui la logica if/elif per mostrare l'errore specifico che abbiamo già scritto)
+                    if pgcode == '28P01': QMessageBox.critical(None, "Errore Autenticazione", "Password o utente errati."); #... etc
+                    else: QMessageBox.critical(None, "Errore Connessione", f"Impossibile connettersi.\n{pgerror_msg}")
+
+        # 3. SE LA CONNESSIONE (auto o manuale) è OK, PROCEDI CON IL LOGIN UTENTE
+        # --- INIZIO MODIFICA ---
+        # Passiamo la variabile 'client_ip_address_gui' al costruttore del LoginDialog
+        login_dialog = LoginDialog(db_manager_gui, client_ip_address_gui, parent=main_window_instance)
+        # --- FINE MODIFICA ---
+        if login_dialog.exec_() != QDialog.Accepted:
+            gui_logger.info("Login utente annullato. Uscita.")
+            sys.exit(0)
+
+        # 4. LOGIN UTENTE OK, MOSTRA WELCOME SCREEN E AVVIA L'APP
+        base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
+        logo_path = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
+        manuale_path = os.path.join(base_dir_app, "resources", "manuale_utente.pdf")
+        
+        welcome_screen = WelcomeScreen(parent=None, logo_path=logo_path, help_url=manuale_path)
+        if welcome_screen.exec_() != QDialog.Accepted:
+            gui_logger.info("Welcome screen chiusa. Uscita.")
+            sys.exit(0)
+            
+        main_window_instance.perform_initial_setup(
+            db_manager_gui,
+            login_dialog.logged_in_user_id,
+            login_dialog.logged_in_user_info,
+            login_dialog.current_session_id_from_dialog
+        )
+        
+        gui_logger.info("Setup completato. Avvio loop eventi.")
+        sys.exit(app.exec_())
+
     except Exception as e:
-        # Questo blocco catturerà qualsiasi errore non visto
+        # Blocco di gestione crash (invariato)
         logging.basicConfig(filename='crash_report.log', level=logging.DEBUG)
         logging.exception("CRASH IMPREVISTO ALL'AVVIO:")
-        print(f"ERRORE CRITICO: Un crash imprevisto ha bloccato l'avvio. Controlla il file crash_report.log. Dettagli: {e}")
-        input("Premi Invio per chiudere...") # Mette in pausa per farti leggere l'errore
-
+        QMessageBox.critical(None, "Errore Critico", f"Errore fatale: {e}\nControlla crash_report.log.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     print("[FASE 4] Inizio blocco di esecuzione __main__.")
     
-    # Configurazione del logger
-    if not logging.getLogger("CatastoGUI").hasHandlers():
-        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-        logging.basicConfig(
-            level=logging.INFO,
-            format=log_format,
-            handlers=[
-                logging.FileHandler('catasto_gui.log', encoding='utf-8'),
-                logging.StreamHandler()
-            ]
-        )
-    
-    gui_logger = logging.getLogger("CatastoGUI")
     
     # Importa qui per evitare importazioni circolari (se necessario)
     import traceback

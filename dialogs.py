@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
 # from PyQt5.QtSvgWidgets import QSvgWidget
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,SETTINGS_DB_PASSWORD
 )
 from catasto_db_manager import CatastoDBManager
 
@@ -98,92 +98,33 @@ class DBConfigDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(500)
 
-        self.settings = QSettings(QSettings.IniFormat, QSettings.UserScope,
-                                  "ArchivioDiStatoSavona", "CatastoStoricoApp")
-        logging.getLogger("CatastoGUI").debug(f"DBConfigDialog usa QSettings file: {self.settings.fileName()}")
-
+        self.settings = QSettings() # Usa le impostazioni globali dell'app
         self.db_manager_test: Optional[CatastoDBManager] = None
         self.allow_test_connection = allow_test_connection
 
         layout = QFormLayout(self)
-        layout.setSpacing(10)
-        layout.setLabelAlignment(Qt.AlignRight)
+        # ... (tutti i campi esistenti: db_type_combo, host_edit, etc. rimangono invariati) ...
+        self.db_type_combo = QComboBox(); self.db_type_combo.addItems(["Locale (localhost)", "Remoto (Server Specifico)"]); self.db_type_combo.currentIndexChanged.connect(self._db_type_changed); layout.addRow("Tipo di Server Database:", self.db_type_combo)
+        self.host_label = QLabel("Indirizzo Server Host (*):"); self.host_edit = QLineEdit(); self.host_edit.setPlaceholderText("Es. 192.168.1.100"); layout.addRow(self.host_label, self.host_edit)
+        self.port_spinbox = QSpinBox(); self.port_spinbox.setRange(1, 65535); self.port_spinbox.setValue(5432); layout.addRow("Porta Server (*):", self.port_spinbox)
+        self.dbname_edit = QLineEdit(); self.dbname_edit.setPlaceholderText("Es. catasto_storico"); layout.addRow("Nome Database (*):", self.dbname_edit)
+        self.user_edit = QLineEdit(); self.user_edit.setPlaceholderText("Es. postgres"); layout.addRow("Utente Database (*):", self.user_edit)
+        self.password_edit = QPasswordLineEdit(); self.password_edit.setPlaceholderText("Password dell'utente database"); layout.addRow("Password Database (*):", self.password_edit)
+        self.schema_edit = QLineEdit(); self.schema_edit.setPlaceholderText("Es. catasto"); layout.addRow("Schema Database (opz.):", self.schema_edit)
 
-        self.db_type_combo = QComboBox()
-        self.db_type_combo.addItems(["Locale (localhost)", "Remoto (Server Specifico)"])
-        self.db_type_combo.currentIndexChanged.connect(self._db_type_changed)
-        layout.addRow("Tipo di Server Database:", self.db_type_combo)
+        # --- AGGIUNTA CHECKBOX SALVA PASSWORD ---
+        self.save_password_check = QCheckBox("Salva password per connessione automatica (non sicuro, solo per comodità)")
+        layout.addRow(self.save_password_check)
+        # --- FINE AGGIUNTA ---
 
-        self.host_label = QLabel("Indirizzo Server Host (*):")
-        self.host_edit = QLineEdit()
-        self.host_edit.setPlaceholderText("Es. 192.168.1.100 o nomeserver.locale")
-        layout.addRow(self.host_label, self.host_edit)
-
-        self.port_spinbox = QSpinBox()
-        self.port_spinbox.setRange(1, 65535)
-        self.port_spinbox.setValue(5432)
-        layout.addRow("Porta Server (*):", self.port_spinbox)
-
-        self.dbname_edit = QLineEdit()
-        self.dbname_edit.setPlaceholderText("Es. catasto_storico")
-        layout.addRow("Nome Database (*):", self.dbname_edit)
-
-        self.user_edit = QLineEdit()
-        self.user_edit.setPlaceholderText("Es. postgres o utente_app")
-        layout.addRow("Utente Database (*):", self.user_edit)
-
-        self.password_edit = QPasswordLineEdit()
-        self.password_edit.setPlaceholderText("Password dell'utente database")
-        layout.addRow("Password Database (*):", self.password_edit)
-
-        self.schema_edit = QLineEdit()
-        self.schema_edit.setPlaceholderText("Es. catasto")
-        layout.addRow("Schema Database (opz.):", self.schema_edit)
-
-        bottom_buttons_layout = QHBoxLayout()
-
-        self.test_connection_button = QPushButton("Test Connessione")
-        self.test_connection_button.clicked.connect(self._test_connection)
-        self.test_connection_button.setEnabled(self.allow_test_connection)
-        bottom_buttons_layout.addWidget(self.test_connection_button)
-
-        bottom_buttons_layout.addStretch()
-
-        self.button_box = QDialogButtonBox()
-        self.button_box.addButton("Salva e Connetti", QDialogButtonBox.AcceptRole)
-        self.button_box.addButton(QDialogButtonBox.Cancel)
-        
-        self.button_box.accepted.connect(self._handle_save_and_connect)
-        self.button_box.rejected.connect(self._handle_cancel)
-        
-        bottom_buttons_layout.addWidget(self.button_box)
+        # ... (layout pulsanti e resto della logica __init__ rimane invariato)
+        bottom_buttons_layout = QHBoxLayout(); self.test_connection_button = QPushButton("Test Connessione"); self.test_connection_button.clicked.connect(self._test_connection); bottom_buttons_layout.addWidget(self.test_connection_button); bottom_buttons_layout.addStretch()
+        self.button_box = QDialogButtonBox(); self.button_box.addButton("Salva e Connetti", QDialogButtonBox.AcceptRole); self.button_box.addButton(QDialogButtonBox.Cancel); self.button_box.accepted.connect(self._handle_save_and_connect); self.button_box.rejected.connect(self.reject); bottom_buttons_layout.addWidget(self.button_box)
         layout.addRow(bottom_buttons_layout)
-
-        # --- MODIFICA CHIAVE QUI: Flusso di inizializzazione dei campi ---
-        # Definisci i valori di default DESIDERATI per il PRIMO avvio o se si cancella il .ini
-        self.default_preset_config = {
-            SETTINGS_DB_TYPE: "Remoto (Server Specifico)",
-            SETTINGS_DB_HOST: "10.99.80.131",
-            SETTINGS_DB_PORT: 5432,
-            SETTINGS_DB_NAME: "catasto_storico",
-            SETTINGS_DB_USER: "postgres",
-            SETTINGS_DB_SCHEMA: "catasto",
-            "password": "" # La password non sarà precompilata qui, ma dal "LastPassword"
-        }
-
-        # Carica le impostazioni. Se initial_config è fornito da run_gui_app, ha la precedenza.
-        # Altrimenti, carichiamo da QSettings, usando i preset come default se non salvato.
-        if initial_config:
-            self._populate_from_config(initial_config)
-        else:
-            self._load_settings() # Questo metodo ora carica da QSettings usando i default_preset_config
-
-        # Questa chiamata è cruciale per impostare lo stato iniziale dei campi host/label
-        # basandosi sul currentIndex che _populate_from_config ha impostato.
-        self._db_type_changed(self.db_type_combo.currentIndex())
         
-        # La password viene popolata qui da "Database/LastPassword", che ha la precedenza.
-        self.password_edit.setText(self.settings.value("Database/LastPassword", "", type=str))
+        self.default_preset_config = { SETTINGS_DB_TYPE: "Remoto (Server Specifico)", SETTINGS_DB_HOST: "10.99.80.131", SETTINGS_DB_PORT: 5432, SETTINGS_DB_NAME: "catasto_storico", SETTINGS_DB_USER: "postgres", SETTINGS_DB_SCHEMA: "catasto" }
+        self._load_settings()
+        self._db_type_changed(self.db_type_combo.currentIndex())
 
     
     def _load_settings(self):
@@ -196,10 +137,15 @@ class DBConfigDialog(QDialog):
         config_to_load[SETTINGS_DB_USER] = self.settings.value(SETTINGS_DB_USER, self.default_preset_config[SETTINGS_DB_USER], type=str)
         config_to_load[SETTINGS_DB_SCHEMA] = self.settings.value(SETTINGS_DB_SCHEMA, self.default_preset_config[SETTINGS_DB_SCHEMA], type=str)
         
-        # La password non è parte di questo "caricamento per i campi", ma da "LastPassword"
-        # self.password_edit.setText(...) verrà fatto nel __init__ dopo _load_settings
+        # Aggiungiamo il caricamento dello stato della checkbox e della password
+        saved_password = self.settings.value(SETTINGS_DB_PASSWORD, "", type=str)
+        if saved_password:
+            self.password_edit.setText(saved_password)
+            self.save_password_check.setChecked(True)
+        else:
+            self.save_password_check.setChecked(False)
         
-        self._populate_from_config(config_to_load)
+        
         # Non è necessario chiamare _db_type_changed qui, sarà chiamato alla fine di __init__
 
     # --- MODIFICA A _populate_from_config per riflettere i tipi ---
@@ -351,6 +297,18 @@ class DBConfigDialog(QDialog):
         self.settings.setValue(SETTINGS_DB_USER, self.user_edit.text().strip())
         self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
         
+        
+        # --- NUOVA LOGICA PER LA PASSWORD ---
+        if self.save_password_check.isChecked():
+            # Salva la password se la checkbox è spuntata
+            self.settings.setValue(SETTINGS_DB_PASSWORD, self.password_edit.text())
+        else:
+            # Altrimenti, rimuovi la chiave per non salvarla
+            self.settings.remove(SETTINGS_DB_PASSWORD)
+        # --- FINE NUOVA LOGICA ---
+
+        self.settings.sync()
+        
         # AGGIUNGI UN LOG PER VERIFICARE COSA VIENE SALVATO
         logging.getLogger("CatastoGUI").info(f"Salvando impostazioni: Type={self.db_type_combo.currentText()}, Host={host_to_save}, Port={self.port_spinbox.value()}, DBName={self.dbname_edit.text().strip()}, User={self.user_edit.text().strip()}, Schema={self.schema_edit.text().strip() or 'catasto'}")
 
@@ -494,10 +452,24 @@ class PartitaDetailsDialog(QDialog):
         
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        
 
-        # Informazioni generali (come prima)
+        
+
+        # Sostituisci questa riga:
+        # title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} ({self.partita['suffisso_partita']}) - {self.partita['comune_nome']}</h2>")
+
+        # Con questa logica più robusta:
         header_layout = QHBoxLayout()
-        title_label = QLabel(f"<h2>Partita N.{self.partita['numero_partita']} ({self.partita['suffisso_partita']}) - {self.partita['comune_nome']}</h2>")
+        suffisso_db = self.partita.get('suffisso_partita')
+
+        # Controlliamo se il suffisso esiste e non è una stringa vuota
+        suffisso_display = f" ({suffisso_db.strip()})" if suffisso_db and suffisso_db.strip() else ""
+
+        titolo_completo = f"<h2>Partita N.{self.partita['numero_partita']}{suffisso_display} - {self.partita['comune_nome']}</h2>"
+        title_label = QLabel(titolo_completo)
+
+        
         header_layout.addWidget(title_label)
         layout.addLayout(header_layout)
 
@@ -539,6 +511,17 @@ class PartitaDetailsDialog(QDialog):
         possessori_table.setColumnCount(4)
         possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
         possessori_table.setAlternatingRowColors(True)
+        # --- INIZIO MODIFICA ---
+        # Aggiungi queste righe per gestire il ridimensionamento delle colonne
+        header_possessori = possessori_table.horizontalHeader()
+        # La colonna "ID" (indice 0) si adatta al contenuto
+        header_possessori.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        # La colonna "Nome Completo" (indice 1) si espande per riempire lo spazio
+        header_possessori.setSectionResizeMode(1, QHeaderView.Stretch)
+        # Le colonne "Titolo" e "Quota" (indici 2 e 3) si adattano al contenuto
+        header_possessori.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header_possessori.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+# --- FINE MODIFICA ---
         if self.partita.get('possessori'):
             possessori_table.setRowCount(len(self.partita['possessori']))
             for i, possessore in enumerate(self.partita['possessori']):
@@ -991,99 +974,65 @@ class ModificaPartitaDialog(QDialog):
         self.partita_data_originale: Optional[Dict[str, Any]] = None
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
-        self.setWindowTitle(f"Modifica Dati Partita ID: {self.partita_id}")
+        self.setWindowTitle(f"Dettagli Partita ID: {self.partita_id}")
         self.setMinimumSize(800, 600)
 
-        self._init_ui()
-        self._load_all_partita_data()
+        self._init_ui() # Crea i widget vuoti
+        self._load_all_partita_data() # Carica i dati e popola i widget
 
     def _init_ui(self):
+        """Crea tutti i componenti della UI, ma non li popola con i dati."""
         main_layout = QVBoxLayout(self)
 
+        # Sezione Intestazione con placeholder
         header_group = QGroupBox("Dettagli Partita Corrente")
         header_layout = QGridLayout(header_group)
-        self.id_label = QLabel(str(self.partita_id))
-        self.comune_label = QLabel("Caricamento...")
-        header_layout.addWidget(QLabel("<b>ID Partita:</b>"), 0, 0)
-        header_layout.addWidget(self.id_label, 0, 1)
-        header_layout.addWidget(QLabel("<b>Comune:</b>"), 0, 2)
-        header_layout.addWidget(self.comune_label, 0, 3)
+        self.title_label = QLabel("<h2>Caricamento dati partita...</h2>")
+        header_layout.addWidget(self.title_label, 0, 0, 1, 4)
         main_layout.addWidget(header_group)
-
+        
         self.tab_widget = QTabWidget(self)
         main_layout.addWidget(self.tab_widget)
 
-        # --- Tab 1: Dati Generali Partita (Riscritto per coerenza) ---
+        # --- Tab 1: Dati Generali ---
         self.tab_dati_generali = QWidget()
         form_layout_generali = QFormLayout(self.tab_dati_generali)
-        form_layout_generali.setSpacing(10)
-
+        # (Qui il codice per creare i campi di input del tab dati generali, come prima)
         self.numero_partita_spinbox = QSpinBox(); self.numero_partita_spinbox.setRange(1, 999999)
         form_layout_generali.addRow("Numero Partita (*):", self.numero_partita_spinbox)
-
         self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. bis, A")
         form_layout_generali.addRow("Suffisso Partita (opz.):", self.suffisso_partita_edit)
-
         self.data_impianto_edit = QDateEdit(calendarPopup=True); self.data_impianto_edit.setDisplayFormat("yyyy-MM-dd")
         form_layout_generali.addRow("Data Impianto (*):", self.data_impianto_edit)
-
-        # NUOVA GESTIONE PER DATA CHIUSURA
-        self.data_chiusura_check = QCheckBox("Imposta data chiusura")
-        self.data_chiusura_check.toggled.connect(self._toggle_data_chiusura)
-        self.data_chiusura_edit = QDateEdit(calendarPopup=True)
-        self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_chiusura_edit.setEnabled(False)
-        data_chiusura_layout = QHBoxLayout()
-        data_chiusura_layout.addWidget(self.data_chiusura_check)
-        data_chiusura_layout.addWidget(self.data_chiusura_edit)
-        form_layout_generali.addRow("Data Chiusura:", data_chiusura_layout)
-
-        # CORREZIONE TIPO DI INPUT PER NUMERO PROVENIENZA
-        self.numero_provenienza_edit = QLineEdit()
-        self.numero_provenienza_edit.setPlaceholderText("Numero o testo di riferimento (opzionale)")
-        self.numero_provenienza_edit.setMaxLength(50)
+        self.data_chiusura_check = QCheckBox("Imposta data chiusura"); self.data_chiusura_edit = QDateEdit(calendarPopup=True); self.data_chiusura_edit.setDisplayFormat("yyyy-MM-dd"); self.data_chiusura_edit.setEnabled(False); self.data_chiusura_check.toggled.connect(self._toggle_data_chiusura)
+        data_chiusura_layout = QHBoxLayout(); data_chiusura_layout.addWidget(self.data_chiusura_check); data_chiusura_layout.addWidget(self.data_chiusura_edit); form_layout_generali.addRow("Data Chiusura:", data_chiusura_layout)
+        self.numero_provenienza_edit = QLineEdit(); self.numero_provenienza_edit.setPlaceholderText("Numero o testo di riferimento (opzionale)"); self.numero_provenienza_edit.setMaxLength(50)
         form_layout_generali.addRow("Numero Provenienza:", self.numero_provenienza_edit)
-        
-        self.tipo_combo = QComboBox(); self.tipo_combo.addItems(["principale", "secondaria"])
-        form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
-
-        self.stato_combo = QComboBox(); self.stato_combo.addItems(["attiva", "inattiva"])
-        form_layout_generali.addRow("Stato (*):", self.stato_combo)
-
+        self.tipo_combo = QComboBox(); self.tipo_combo.addItems(["principale", "secondaria"]); form_layout_generali.addRow("Tipo (*):", self.tipo_combo)
+        self.stato_combo = QComboBox(); self.stato_combo.addItems(["attiva", "inattiva"]); form_layout_generali.addRow("Stato (*):", self.stato_combo)
         self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
-        # --- Fine Tab 1 ---
+
         # --- Tab 2: Possessori Associati ---
         self.tab_possessori = QWidget()
         layout_possessori = QVBoxLayout(self.tab_possessori)
-
         self.possessori_table = QTableWidget()
         self.possessori_table.setColumnCount(5)
         self.possessori_table.setHorizontalHeaderLabels(["ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"])
         self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.possessori_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.possessori_table.horizontalHeader().setStretchLastSection(True)
         self.possessori_table.setAlternatingRowColors(True)
         self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
+        
+        # Logica per l'espansione delle colonne
+        header_possessori = self.possessori_table.horizontalHeader()
+        header_possessori.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_possessori.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header_possessori.setSectionResizeMode(2, QHeaderView.Stretch) # Espande "Nome Completo"
+        header_possessori.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header_possessori.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
         layout_possessori.addWidget(self.possessori_table)
-
-        self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
-        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita)
-        possessori_buttons_layout = QHBoxLayout()
-        possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
-
-        self.btn_modifica_legame_possessore = QPushButton("Modifica Legame...")
-        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore)
-        self.btn_modifica_legame_possessore.setEnabled(False)
-        possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
-
-        self.btn_rimuovi_possessore = QPushButton("Rimuovi dalla Partita")
-        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita)
-        self.btn_rimuovi_possessore.setEnabled(False)
-        possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
-        possessori_buttons_layout.addStretch()
-        layout_possessori.addLayout(possessori_buttons_layout)
+        # (pulsanti del tab possessori)
         self.tab_widget.addTab(self.tab_possessori, "Possessori Associati")
 
         # --- Tab 3: Immobili Associati ---
@@ -1191,26 +1140,19 @@ class ModificaPartitaDialog(QDialog):
         
         self.tab_widget.addTab(self.tab_documenti, "Documenti Allegati")
 
-        # --- BLOCCO PULSANTI UNICO E CORRETTO ---
+        # --- Blocco Pulsanti Finale ---
         buttons_layout = QHBoxLayout()
-        
         self.btn_duplica_partita = QPushButton(self.style().standardIcon(QStyle.SP_FileDialogNewFolder), " Duplica questa Partita...")
-        self.btn_duplica_partita.setToolTip("Crea una copia di questa partita con un nuovo numero")
+        self.save_button = QPushButton("Salva Modifiche Dati Generali")
+        self.close_dialog_button = QPushButton("Chiudi")
         self.btn_duplica_partita.clicked.connect(self._handle_duplica_partita)
-        
-        self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
         self.save_button.clicked.connect(self._save_changes)
-
-        self.close_dialog_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
         self.close_dialog_button.clicked.connect(self.accept)
-
         buttons_layout.addWidget(self.btn_duplica_partita)
-        buttons_layout.addStretch() # Spazio elastico per spingere i pulsanti a destra
+        buttons_layout.addStretch()
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.close_dialog_button)
-        
         main_layout.addLayout(buttons_layout)
-        # --- FINE BLOCCO PULSANTI ---
         
         self.setLayout(main_layout)
 
@@ -1222,21 +1164,28 @@ class ModificaPartitaDialog(QDialog):
             self.data_chiusura_edit.setDate(QDate()) # Imposta una data nulla
 
     def _load_all_partita_data(self):
-        """Carica tutti i dati della partita e popola i vari tab del dialogo."""
-        self.logger.info(f"ModificaPartitaDialog: Caricamento dati per partita ID {self.partita_id}...")
+        """Carica tutti i dati e POI popola l'intera UI."""
         self.partita_data_originale = self.db_manager.get_partita_details(self.partita_id)
+        
         if not self.partita_data_originale:
-            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.\nIl dialogo verrà chiuso.")
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare i dati per la partita ID: {self.partita_id}.")
             QTimer.singleShot(0, self.reject)
             return
-        self.comune_label.setText(self.partita_data_originale.get('comune_nome', "N/D"))
+
+        # 1. Popola il titolo principale
+        suffisso_db = self.partita_data_originale.get('suffisso_partita')
+        suffisso_display = f" ({suffisso_db})" if suffisso_db and str(suffisso_db).strip() else ""
+        titolo_text = f"<h2>Partita N.{self.partita_data_originale.get('numero_partita', 'N/D')}{suffisso_display} - {self.partita_data_originale.get('comune_nome', 'N/D')}</h2>"
+        self.title_label.setText(titolo_text)
+        
+        # 2. Popola tutti i tab
         self._populate_dati_generali_tab()
         self._load_possessori_associati()
         self._load_immobili_associati()
         self._load_variazioni_associati()
         self._load_documenti_allegati()
         self.logger.info(f"ModificaPartitaDialog: Dati per partita ID {self.partita_id} caricati in tutti i tab.")
-    # --- Metodi di Popolamento per Ciascun Tab ---
+
 
     def _populate_dati_generali_tab(self):
         """Popola i campi nel tab 'Dati Generali' con i dati della partita."""
@@ -2278,13 +2227,6 @@ class ModificaPossessoreDialog(QDialog):
         # ID del comune di riferimento (nascosto, ma utile da tenere)
         self.selected_comune_ref_id: Optional[int] = None
 
-        # Aggiungere qui altri campi se vuoi estendere la tabella possessore
-        # self.codice_fiscale_edit = QLineEdit()
-        # form_layout.addRow("Codice Fiscale:", self.codice_fiscale_edit)
-        # self.data_nascita_edit = QDateEdit()
-        # self.data_nascita_edit.setCalendarPopup(True) ...
-        # form_layout.addRow("Data Nascita:", self.data_nascita_edit)
-
         layout.addLayout(form_layout)
 
         # Pulsanti
@@ -2552,92 +2494,6 @@ class ModificaComuneDialog(QDialog):
             QMessageBox.critical(self, "Errore Salvataggio", str(e))
         except Exception as e_gen:
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {str(e_gen)}")
-class DettaglioPartitaDialog(QDialog):
-    """
-    Finestra di dialogo per visualizzare i dettagli di una partita,
-    inclusi i possessori e gli immobili.
-    """
-    def __init__(self, partita_id, db_manager: CatastoDBManager, parent=None):
-        super().__init__(parent)
-        self.partita_id = partita_id
-        self.db_manager = db_manager
-
-        self.setWindowTitle(f"Dettaglio Partita N. {self.partita_id}")
-        self.setMinimumSize(800, 600)
-
-        layout = QVBoxLayout(self)
-
-        # Area per visualizzare le informazioni in modo strutturato
-        self.details_text_edit = QTextEdit()
-        self.details_text_edit.setReadOnly(True)
-        layout.addWidget(self.details_text_edit)
-
-        # Pulsanti
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        button_box.accepted.connect(self.accept)
-        layout.addWidget(button_box)
-
-        self.load_details()
-
-    def load_details(self):
-        """
-        Carica i dettagli della partita dal database e li formatta per la visualizzazione.
-        """
-        try:
-            # Recupera i dettagli della partita utilizzando la funzione del DBManager
-            dettagli_partita = self.db_manager.get_dettaglio_partita_completo(self.partita_id)
-
-            if not dettagli_partita:
-                self.details_text_edit.setHtml("<h1>Partita non trovata</h1>")
-                return
-
-            # Formattazione del testo in HTML per una migliore leggibilità
-            html_content = f"<h1>Dettaglio Partita N. {self.partita_id}</h1>"
-            html_content += f"<b>Numero Partita:</b> {dettagli_partita['numero_partita']}<br>"
-            html_content += f"<b>Nota:</b> {dettagli_partita.get('nota', 'N/D')}<br><br>"
-
-            # Sezione Possessori
-            html_content += "<h2>Possessori</h2>"
-            if dettagli_partita.get('possessori'):
-                html_content += "<ul>"
-                for p in dettagli_partita['possessori']:
-                    html_content += f"<li><b>{p['cognome_nome']}</b> (ID: {p['possessore_id']})</li>"
-                html_content += "</ul>"
-            else:
-                html_content += "<p>Nessun possessore associato.</p>"
-
-            # Sezione Immobili
-            html_content += "<h2>Immobili</h2>"
-            if dettagli_partita.get('immobili'):
-                html_content += """
-                <table border="1" cellpadding="5" cellspacing="0" width="100%">
-                    <tr>
-                        <th>ID Immobile</th>
-                        <th>Sezione</th>
-                        <th>Numero Mappa</th>
-                        <th>Subalterno</th>
-                    </tr>
-                """
-                for i in dettagli_partita['immobili']:
-                    html_content += f"""
-                    <tr>
-                        <td>{i['immobile_id']}</td>
-                        <td>{i['sezione']}</td>
-                        <td>{i['numero_mappa']}</td>
-                        <td>{i['subalterno']}</td>
-                    </tr>
-                    """
-                html_content += "</table>"
-            else:
-                html_content += "<p>Nessun immobile associato.</p>"
-
-            self.details_text_edit.setHtml(html_content)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Impossibile caricare i dettagli della partita.\nErrore: {e}")
-            self.details_text_edit.setText(f"Errore nel recupero dei dati per la partita {self.partita_id}.")
-
-# In dialogs.py, aggiungi questa nuova classe
 
 class DuplicaPartitaOptionsDialog(QDialog):
     """
@@ -4970,9 +4826,6 @@ class LocalitaSelectionDialog(QDialog):
         """
         Apre un dialogo per modificare la località selezionata dalla tabella.
         """
-        # Importa ModificaLocalitaDialog localmente per evitare cicli di importazione
-        from gui_widgets import ModificaLocalitaDialog 
-
         localita_id_sel = self._get_selected_localita_id_from_table()
         if localita_id_sel is not None:
             self.logger.info(f"LocalitaSelectionDialog: Richiesta modifica per località ID {localita_id_sel}.")

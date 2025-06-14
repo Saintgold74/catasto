@@ -12,6 +12,7 @@ SET search_path TO catasto, public; -- Aggiunto public per le estensioni
 -- Estensioni necessarie
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public; -- O catasto se preferito
 CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA public;   -- O catasto se preferito
+CREATE EXTENSION IF NOT EXISTS "system_stats" WITH SCHEMA public; -- O catasto se preferito
 
 
 -- 1. Estensione per la gestione di periodi storici

@@ -1,8 +1,5 @@
-import logging
-import bcrypt
-import csv
-import json
-import os
+import logging,socket ,bcrypt,json, csv, os
+
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
@@ -206,8 +203,34 @@ if FPDF_AVAILABLE:
             self.multi_cell(0, 5, text_content)
             self.ln()
 
-# --- Funzioni di esportazione adattate per GUI ---
+def get_local_ip_address() -> str:
+    """
+    Trova l'indirizzo IP locale della macchina sulla rete.
 
+    Utilizza un trucco standard: crea un socket UDP e si connette a un IP
+    esterno (senza inviare dati) per determinare quale indirizzo IP locale
+    il sistema operativo userebbe.
+    Restituisce '127.0.0.1' come fallback in caso di errore (es. macchina offline).
+    """
+    s = None
+    try:
+        # Crea un socket UDP (veloce e non richiede una vera e propria connessione)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Connettiti a un server DNS pubblico (non invia alcun dato)
+        # L'indirizzo non deve essere necessariamente raggiungibile
+        s.connect(('8.8.8.8', 80))
+        # Ottieni l'indirizzo IP del "nostro" lato del socket
+        ip_address = s.getsockname()[0]
+    except Exception:
+        # Se si verifica un errore (es. nessuna connessione di rete),
+        # restituisci l'indirizzo di loopback come fallback.
+        ip_address = '127.0.0.1'
+    finally:
+        # Chiudi sempre il socket
+        if s:
+            s.close()
+    return ip_address
+# --- Funzioni di esportazione adattate per GUI ---
 
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo

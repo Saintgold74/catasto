@@ -1651,13 +1651,30 @@ class CatastoDBManager:
                                  immobili_da_trasferire_ids: Optional[List[int]] = None, 
                                  note_variazione: Optional[str] = None,
                                  suffisso_nuova_partita: Optional[str] = None) -> bool:
-        """Chiama la procedura SQL catasto.registra_passaggio_proprieta in modo transazionale."""
+        """Chiama la procedura SQL catasto.registra_passaggio_proprieta in modo transazionale e con cast espliciti."""
         try:
             nuovi_possessori_jsonb = json.dumps(nuovi_possessori_list) if nuovi_possessori_list else None
             
-            call_proc_str = f"CALL {self.schema}.registra_passaggio_proprieta(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::JSON, %s::INTEGER[], %s);"
-            # NOTA: La firma della procedura deve accettare un suffisso come 4° parametro.
-            # Ho rimosso i cast ::TEXT non necessari se i tipi sono corretti.
+            # --- MODIFICA CHIAVE: Aggiunti cast espliciti per tutti i tipi che possono essere NULL ---
+            # Questo garantisce che PostgreSQL riceva i tipi corretti anche per i valori None.
+            call_proc_str = f"""
+                CALL {self.schema}.registra_passaggio_proprieta(
+                    %s,                    -- p_partita_origine_id INTEGER
+                    %s,                    -- p_comune_id_nuova_partita INTEGER
+                    %s,                    -- p_numero_nuova_partita INTEGER
+                    %s::VARCHAR(20),       -- p_suffisso_nuova_partita VARCHAR(20)
+                    %s::TEXT,              -- p_tipo_variazione TEXT
+                    %s,                    -- p_data_variazione DATE
+                    %s::TEXT,              -- p_tipo_contratto TEXT
+                    %s,                    -- p_data_contratto DATE
+                    %s::TEXT,              -- p_notaio TEXT
+                    %s::TEXT,              -- p_repertorio TEXT
+                    %s::JSONB,             -- p_nuovi_possessori_json JSONB
+                    %s::INTEGER[],         -- p_immobili_da_trasferire_ids INTEGER[]
+                    %s::TEXT               -- p_note_variazione TEXT
+                );
+            """
+            
             params = (
                 partita_origine_id, comune_id_nuova_partita, numero_nuova_partita, suffisso_nuova_partita,
                 tipo_variazione, data_variazione, tipo_contratto, data_contratto,
@@ -1669,7 +1686,6 @@ class CatastoDBManager:
                     self.logger.info(f"Tentativo di registrare passaggio proprietà da Partita ID {partita_origine_id}...")
                     cur.execute(call_proc_str, params)
             
-            # Il commit è automatico qui
             self.logger.info("Passaggio di proprietà registrato con successo tramite procedura.")
             return True
         except psycopg2.Error as db_err:
@@ -2452,7 +2468,43 @@ class CatastoDBManager:
             return False
         except psycopg2.Error as db_err: logger.error(f"Errore DB verifica permesso '{permesso_nome}' per utente ID {utente_id}: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python verifica permesso '{permesso_nome}' per utente ID {utente_id}: {e}"); return False
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
 
+    # In catasto_db_manager.py, all'interno della classe CatastoDBManager
+
+    def get_recent_session_logs(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Recupera gli ultimi N eventi di sessione (login, logout, etc.)
+        unendo le informazioni con i nomi degli utenti.
+        """
+        self.logger.info(f"Recupero degli ultimi {limit} log di sessione.")
+        
+        # --- INIZIO MODIFICA DEFINITIVA ---
+        # La query ora usa i nomi corretti delle colonne: 'data_login' e 'indirizzo_ip'
+        query = f"""
+            SELECT
+                sa.data_login,
+                sa.azione,
+                sa.esito,
+                sa.indirizzo_ip,
+                u.username,
+                u.nome_completo
+            FROM {self.schema}.sessioni_accesso sa
+            LEFT JOIN {self.schema}.utente u ON sa.utente_id = u.id
+            ORDER BY sa.data_login DESC
+            LIMIT %s;
+        """
+        # --- FINE MODIFICA DEFINITIVA ---
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (limit,))
+                    results = [dict(row) for row in cur.fetchall()]
+                    return results
+        except Exception as e:
+            self.logger.error(f"Errore durante il recupero dei log di sessione recenti: {e}", exc_info=True)
+            return []
     def get_utenti(self, solo_attivi: Optional[bool] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco di utenti in modo sicuro, con filtro opzionale."""
         query = f"SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM {self.schema}.utente"
@@ -3604,9 +3656,11 @@ class CatastoDBManager:
             self.logger.error(f"Errore ricerca fuzzy contratti: {e}", exc_info=True)
             return []
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo _search_partite_fuzzy_internal
+
     def _search_partite_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per le partite (su numero, tipo, stato), ora più completa."""
-        # --- MODIFICA: Migliorato display_text, detail_text e aggiunti campi stato, data_impianto ---
+        """Ricerca fuzzy interna per le partite, ora include l'elenco dei possessori."""
+        # --- MODIFICA: Aggiunto JOIN con possessori e aggregazione con string_agg ---
         sql = f"""
             SELECT
                 p.id AS entity_id,
@@ -3623,14 +3677,21 @@ class CatastoDBManager:
                 p.tipo as tipo_partita,
                 c.nome as comune_nome,
                 p.stato,
-                p.data_impianto
+                p.data_impianto,
+                -- Aggrega i nomi dei possessori in una singola stringa separata da virgola
+                string_agg(pos.nome_completo, ', ') AS possessori_concatenati
             FROM {self.schema}.partita p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
+            -- LEFT JOIN per includere anche le partite senza possessori
+            LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
+            LEFT JOIN {self.schema}.possessore pos ON pp.possessore_id = pos.id
             WHERE greatest(
                     similarity(CAST(p.numero_partita AS TEXT), %s),
                     similarity(p.tipo, %s),
                     similarity(p.suffisso_partita, %s)
                 ) >= %s
+            -- Raggruppa per i campi della partita per permettere l'aggregazione dei possessori
+            GROUP BY p.id, c.nome
             ORDER BY similarity_score DESC
             LIMIT %s;
         """

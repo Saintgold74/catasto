@@ -1084,91 +1084,73 @@ class InserimentoPossessoreWidget(QWidget):
         self.comuni_list_data: List[Dict[str, Any]] = []
         # self.selected_comune_id: Optional[int] = None # Se lo usi, assicurati sia gestito
 
+        self._initUI()
+    def _initUI(self):
         main_layout = QVBoxLayout(self)
 
         form_group = QGroupBox("Dati del Nuovo Possessore")
-        form_layout = QGridLayout(form_group) # Usiamo QGridLayout per più flessibilità
+        form_layout = QGridLayout(form_group)
+        
+        # --- AGGIUNTA CHIAVE QUI: Imposta l'espansione della colonna dei campi ---
+        # Dice al layout di dare tutto lo spazio orizzontale extra alla colonna 1 (la seconda)
+        form_layout.setColumnStretch(1, 1)
+        # --- FINE AGGIUNTA ---
 
-        # 1. Cognome e Nome (diventa l'input primario per queste info)
+        # Riga 0: Cognome e Nome
         form_layout.addWidget(QLabel("Cognome e Nome (*):"), 0, 0)
-        self.cognome_nome_edit = QLineEdit() # Questo era opzionale, ora è primario
+        self.cognome_nome_edit = QLineEdit()
         self.cognome_nome_edit.setPlaceholderText("Es. Rossi Mario, Bianchi Giovanni")
-        form_layout.addWidget(self.cognome_nome_edit, 0, 1, 1, 2) # Span su 2 colonne
+        form_layout.addWidget(self.cognome_nome_edit, 0, 1) # Rimosso lo span
 
-        # 2. Paternità
+        # Riga 1: Paternità
         form_layout.addWidget(QLabel("Paternità (es. fu Carlo):"), 1, 0)
         self.paternita_edit = QLineEdit()
-        form_layout.addWidget(self.paternita_edit, 1, 1, 1, 2) # Span su 2 colonne
+        form_layout.addWidget(self.paternita_edit, 1, 1)
 
-        # 3. Pulsante per Generare Nome Completo
+        # Riga 2: Pulsante Genera
         self.btn_genera_nome_completo = QPushButton("Genera Nome Completo")
         self.btn_genera_nome_completo.setToolTip("Genera il Nome Completo dai campi Cognome/Nome e Paternità")
         self.btn_genera_nome_completo.clicked.connect(self._genera_e_imposta_nome_completo)
-        form_layout.addWidget(self.btn_genera_nome_completo, 2, 1, 1, 1) # Posizionato sotto i campi di input
+        form_layout.addWidget(self.btn_genera_nome_completo, 2, 1, Qt.AlignLeft) # Allineato a sinistra
 
-        # 4. Nome Completo (ora principalmente generato, ma può essere editabile per correzioni)
+        # Riga 3: Nome Completo
         form_layout.addWidget(QLabel("Nome Completo (generato) (*):"), 3, 0)
         self.nome_completo_edit = QLineEdit()
         self.nome_completo_edit.setPlaceholderText("Verrà generato o inserire manualmente se necessario")
-        form_layout.addWidget(self.nome_completo_edit, 3, 1, 1, 2) # Span su 2 colonne
+        form_layout.addWidget(self.nome_completo_edit, 3, 1)
 
-        # 5. Comune di Riferimento (come prima)
+        # Riga 4: Comune
         form_layout.addWidget(QLabel("Comune di Riferimento (*):"), 4, 0)
         self.comune_combo = QComboBox()
-        self._load_comuni_for_combo()
-        form_layout.addWidget(self.comune_combo, 4, 1, 1, 2) # Span su 2 colonne
+        # La popolazione del combo avviene in un altro metodo (lazy loading)
+        form_layout.addWidget(self.comune_combo, 4, 1)
 
-        # 6. Checkbox Attivo (come prima)
+        # Riga 5: Attivo
         self.attivo_checkbox = QCheckBox("Attivo")
         self.attivo_checkbox.setChecked(True)
-        form_layout.addWidget(self.attivo_checkbox, 5, 0, 1, 3) # Span su 3 colonne
-
-        # Rimuovi il vecchio campo "Cognome Nome (opzionale, per ricerca)" se non serve più come input separato
-        # Se il campo cognome_nome nel DB è distinto da nome_completo e serve per ricerca,
-        # allora lo si può popolare automaticamente quando si genera nome_completo o lo si salva.
-
+        form_layout.addWidget(self.attivo_checkbox, 5, 1)
+        
         main_layout.addWidget(form_group)
 
-        self.save_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogSaveButton), "Salva Nuovo Possessore")
-        self.save_button.clicked.connect(self._salva_possessore)
+        # Azioni Aggiuntive (Importazione)
+        import_group = QGroupBox("Azioni Aggiuntive")
+        import_layout = QHBoxLayout(import_group)
+        self.import_button = QPushButton("📂 Importa Possessori da CSV..."); self.import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton)); self.import_button.setToolTip("Apre una finestra per selezionare e importare un file CSV di possessori."); self.import_button.clicked.connect(self.import_csv_requested.emit)
+        self.info_button_possessori = QPushButton("Info Formato"); self.info_button_possessori.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion)); self.info_button_possessori.clicked.connect(self._mostra_info_formato_csv)
+        import_layout.addWidget(self.import_button); import_layout.addWidget(self.info_button_possessori); import_layout.addStretch()
+        main_layout.addWidget(import_group)
         
-        self.clear_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogDiscardButton), "Pulisci Campi")
-        self.clear_button.clicked.connect(self._pulisci_campi_possessore)
-
+        # Pulsanti Salva e Pulisci
         button_layout = QHBoxLayout()
+        self.save_button = QPushButton("Salva Nuovo Possessore"); self.save_button.clicked.connect(self._salva_possessore)
+        self.clear_button = QPushButton("Pulisci Campi"); self.clear_button.clicked.connect(self._pulisci_campi_possessore)
         button_layout.addStretch()
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.clear_button)
         main_layout.addLayout(button_layout)
-
-        main_layout.addStretch()
         
-        # Creiamo un gruppo per le azioni di importazione
-        import_group = QGroupBox("Azioni Aggiuntive")
-        # --- MODIFICA QUI: usiamo un QHBoxLayout per mettere i pulsanti in linea ---
-        import_layout = QHBoxLayout(import_group)
-
-        self.import_button = QPushButton("📂 Importa Possessori da CSV...")
-        self.import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.import_button.setToolTip("Apre una finestra per selezionare e importare un file CSV di possessori.")
-        self.import_button.clicked.connect(self.import_csv_requested.emit)
-
-        # Creiamo il nuovo pulsante di aiuto
-        self.info_button_possessori = QPushButton("Info Formato")
-        self.info_button_possessori.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion))
-        self.info_button_possessori.clicked.connect(self._mostra_info_formato_csv)
-        
-        import_layout.addWidget(self.import_button)
-        import_layout.addWidget(self.info_button_possessori)
-        import_layout.addStretch()
-        # --- FINE MODIFICA ---
-        form_layout.addWidget(import_group)
-
-        # --- FINE BLOCCO AGGIUNTO ---
-
-        self.setLayout(form_layout)
+        main_layout.addStretch(1) # Aggiunge uno spazio elastico in fondo
+        self.setLayout(main_layout)
         self._pulisci_campi_possessore() # Per impostare lo stato iniziale
     def _mostra_info_formato_csv(self):
         """Mostra un dialogo con le informazioni sul formato CSV per i possessori."""
@@ -4931,6 +4913,10 @@ class RegistraConsultazioneWidget(QWidget):
 class DashboardWidget(QWidget):
     # Segnali per navigare ad altri tab (manteniamo la logica)
     go_to_tab_signal = pyqtSignal(str, str) # Segnale emetterà (nome_tab_principale, nome_sotto_tab)
+    # --- INIZIO MODIFICA ---
+    # Definiamo il nuovo segnale che trasporterà una stringa (il testo della ricerca)
+    ricerca_globale_richiesta = pyqtSignal(str)
+    # --- FINE MODIFICA ---
 
     def __init__(self, db_manager: 'CatastoDBManager', current_user_info: Optional[Dict], parent=None):
         super().__init__(parent)
@@ -4975,14 +4961,20 @@ class DashboardWidget(QWidget):
         # 4. Attività Recenti e Azioni Rapide
         bottom_layout = QHBoxLayout()
         
-        recent_activity_group = QGroupBox("Attività Recenti nel Database")
+        recent_activity_group = QGroupBox("Attività Utenti Recenti") # Titolo più appropriato
         recent_activity_layout = QVBoxLayout(recent_activity_group)
-        self.audit_table = QTableWidget(); self.audit_table.setColumnCount(4)
-        self.audit_table.setHorizontalHeaderLabels(["Data/Ora", "Utente", "Azione", "Dettagli"])
+        self.audit_table = QTableWidget()
+        
+        # --- INIZIO MODIFICA ---
+        # Cambiamo le colonne per mostrare le informazioni della sessione
+        self.audit_table.setColumnCount(5)
+        self.audit_table.setHorizontalHeaderLabels(["Data/Ora", "Utente", "Azione", "Esito", "Indirizzo IP"])
+        # --- FINE MODIFICA ---
+
         self.audit_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.audit_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         recent_activity_layout.addWidget(self.audit_table)
-        bottom_layout.addWidget(recent_activity_group, 2) # Diamo più spazio a questa sezione
+        bottom_layout.addWidget(recent_activity_group, 2)
 
         actions_group = QGroupBox("Azioni Rapide")
         actions_layout = QVBoxLayout(actions_group)
@@ -5002,26 +4994,39 @@ class DashboardWidget(QWidget):
         card.setMinimumHeight(100)
         return card
 
+    # In gui_widgets.py, nel metodo DashboardWidget.load_initial_data
+
     def load_initial_data(self):
         """Carica tutti i dati necessari per la dashboard."""
         self.logger.info("Caricamento dati per la Dashboard...")
-        # Carica statistiche
+        # La parte delle statistiche rimane invariata
         stats = self.db_manager.get_dashboard_stats()
         self.stat_comuni_label.setText(f"<h3>Comuni</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_comuni', 0)}</p>")
         self.stat_partite_label.setText(f"<h3>Partite</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_partite', 0)}</p>")
         self.stat_possessori_label.setText(f"<h3>Possessori</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_possessori', 0)}</p>")
         self.stat_immobili_label.setText(f"<h3>Immobili</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_immobili', 0)}</p>")
 
-        # Carica ultimi log di audit
-        logs, _ = self.db_manager.get_audit_logs(page=1, page_size=5) # Prende solo gli ultimi 5
-        self.audit_table.setRowCount(len(logs))
-        for row, log in enumerate(logs):
-            ts = log.get('timestamp'); ts_str = ts.strftime("%d/%m/%y %H:%M") if ts else "N/D"
-            dettagli = f"{log.get('tabella', '')} ID: {log.get('record_id', '')}"
+        # Carica gli ultimi log di sessione
+        session_logs = self.db_manager.get_recent_session_logs(limit=5)
+        
+        self.audit_table.setRowCount(len(session_logs))
+        for row, log in enumerate(session_logs):
+            # --- INIZIO MODIFICA DEFINITIVA ---
+            # Usiamo le chiavi corrette ('data_login' e 'indirizzo_ip') restituite dalla query
+            ts = log.get('data_login')
+            ts_str = ts.strftime("%d/%m/%y %H:%M") if ts else "N/D"
+
+            user_display = log.get('nome_completo') or log.get('username', 'N/D')
+            action_display = log.get('azione', 'N/D').replace('_', ' ').title()
+            esito_display = "Successo" if log.get('esito') else "Fallito"
+
             self.audit_table.setItem(row, 0, QTableWidgetItem(ts_str))
-            self.audit_table.setItem(row, 1, QTableWidgetItem(log.get('utente', 'N/D')))
-            self.audit_table.setItem(row, 2, QTableWidgetItem(log.get('operazione', '')))
-            self.audit_table.setItem(row, 3, QTableWidgetItem(dettagli))
+            self.audit_table.setItem(row, 1, QTableWidgetItem(user_display))
+            self.audit_table.setItem(row, 2, QTableWidgetItem(action_display))
+            self.audit_table.setItem(row, 3, QTableWidgetItem(esito_display))
+            self.audit_table.setItem(row, 4, QTableWidgetItem(log.get('indirizzo_ip', 'N/D'))) # <-- Colonna corretta
+            # --- FINE MODIFICA DEFINITIVA ---
+            
         self.audit_table.resizeColumnsToContents()
 
     def _avvia_ricerca_globale(self):
@@ -5029,9 +5034,11 @@ class DashboardWidget(QWidget):
         testo_ricerca = self.search_edit.text().strip()
         if not testo_ricerca:
             return
-        # Emettiamo un segnale speciale che la main window può intercettare
-        if hasattr(self.parent(), 'parent') and hasattr(self.parent().parent(), 'avvia_ricerca_globale_da_dashboard'):
-            self.parent().parent().avvia_ricerca_globale_da_dashboard(testo_ricerca)
+            
+        # --- INIZIO MODIFICA ---
+        # Sostituisci la vecchia logica con una singola riga che emette il segnale
+        self.ricerca_globale_richiesta.emit(testo_ricerca)
+        # --- FINE MODIFICA ---
 class WelcomeScreen(QDialog):
     def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
         super().__init__(parent)

@@ -236,13 +236,16 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.possessori_table = self._create_table_widget(["Nome Completo", "Comune", "Partite", "Similitud."], [0], 3); self.results_tabs.addTab(self.possessori_table, "👥 Possessori")
         self.localita_table = self._create_table_widget(["Nome", "Tipo", "Civico", "Comune", "Immobili", "Similitud."], [0, 3], 5); self.results_tabs.addTab(self.localita_table, "📍 Località")
         self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], [1, 4], 5); self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
-        self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3); self.results_tabs.addTab(self.variazioni_table, "📋 Variazioni")
+        self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Rif. e Partita Origine", "Similitud."], [2], 3)
+        self.results_tabs.addTab(self.variazioni_table, "📋 Variazioni")
         self.contratti_table = self._create_table_widget(["Tipo", "Data", "Partita", "Similitud."], [0], 3); self.results_tabs.addTab(self.contratti_table, "📄 Contratti")
+        # --- MODIFICA QUESTA RIGA ---
         self.partite_table = self._create_table_widget(
-            ["Numero", "Suffisso", "Tipo", "Stato", "Data Impianto", "Comune", "Similitud."], # Aggiunte nuove colonne
-            [5],  # Indice della colonna 'Comune' da espandere
-            6     # L'indice della colonna 'Similitud.' ora è 6
-        ) 
+            ["Numero", "Suffisso", "Possessori", "Tipo", "Stato", "Data Impianto", "Comune", "Similitud."],
+            [2, 6],  # Indici delle colonne da espandere (Possessori e Comune)
+            7        # L'indice della colonna 'Similitud.' ora è 7
+        )
+        # --- FINE MODIFICA --- 
         self.results_tabs.addTab(self.partite_table, "📊 Partite")
 
         content_layout.addWidget(self.results_tabs) # AGGIUNTO AL CONTENT_LAYOUT
@@ -487,26 +490,28 @@ class UnifiedFuzzySearchWidget(QWidget):
         )
         # --- FINE MODIFICA ---
 
-        # --- AGGIUNGERE QUESTE CHIAMATE ---
-        self._populate_table(self.variazioni_table, results_by_type.get('variazione', []), 
-            lambda v: [v.get('tipo', ''), v.get('data_variazione', ''), v.get('descrizione', ''), f"{v.get('similarity_score', 0):.3f}"])
+        self._populate_table(self.variazioni_table, results_by_type.get('variazione', []),
+            lambda v: [
+                v.get('tipo', ''),
+                v.get('data_variazione', ''),
+                v.get('detail_text', ''), # Usa detail_text per la nuova colonna
+                f"{v.get('similarity_score', 0):.3f}"])
 
         self._populate_table(self.contratti_table, results_by_type.get('contratto', []), 
             lambda c: [c.get('tipo', ''), c.get('data_contratto', ''), c.get('numero_partita', ''), f"{c.get('similarity_score', 0):.3f}"])
 
-        # --- MODIFICA QUESTA CHIAMATA ---
         self._populate_table(self.partite_table, results_by_type.get('partita', []), 
             lambda pt: [
                 pt.get('numero_partita', ''),
                 pt.get('suffisso_partita', '') or '',
+                pt.get('possessori_concatenati', '') or '', # NUOVA COLONNA
                 pt.get('tipo_partita', ''),
-                pt.get('stato', ''),  # NUOVO
-                str(pt.get('data_impianto', '')) if pt.get('data_impianto') else '', # NUOVO
+                pt.get('stato', ''),
+                str(pt.get('data_impianto', '')) if pt.get('data_impianto') else '',
                 pt.get('comune_nome', ''),
                 f"{pt.get('similarity_score', 0):.3f}"
             ]
         )
-        # --- FINE MODIFICA ---
     def _update_tab_counters(self, results_by_type: Dict[str, List]):
         """Aggiorna i contatori nei titoli dei tab."""
         # --- MODIFICA: La logica di base_index non è più necessaria ---

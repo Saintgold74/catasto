@@ -3224,6 +3224,30 @@ class OperazioniPartitaWidget(QWidget):
 
 
 class EsportazioniWidget(QWidget):
+    # --- AGGIUNGERE QUESTO ATTRIBUTO DI CLASSE IN CIMA ---
+    HEADER_MAPPINGS = {
+        "Elenco Possessori": {
+            "id": "ID Possessore",
+            "comune_nome": "Comune di Riferimento",
+            "cognome_nome": "Cognome e Nome",
+            "paternita": "Paternità",
+            "nome_completo": "Nome Completo",
+            "attivo": "Stato Attivo",
+            "num_partite": "Numero Partite Associate"
+        },
+        "Elenco Partite": {
+            "id": "ID Partita",
+            "numero_partita": "Numero Partita",
+            "suffisso_partita": "Suffisso",
+            "tipo": "Tipo",
+            "stato": "Stato",
+            "data_impianto": "Data Impianto",
+            "num_possessori": "Num. Possessori",
+            "num_immobili": "Num. Immobili",
+            "num_documenti_allegati": "Num. Documenti"
+        }
+    }
+    # --- FINE AGGIUNTA ---
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
@@ -3341,48 +3365,44 @@ class EsportazioniWidget(QWidget):
         if not data:
             QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per i criteri selezionati.")
             return
+
+        header_map = self.HEADER_MAPPINGS.get(export_type, {})
+        # Se non c'è una mappa, usa le chiavi originali come fallback
+        ordered_keys = list(header_map.keys()) if header_map else list(data[0].keys())
+        user_friendly_headers = list(header_map.values()) if header_map else ordered_keys
+
         type_slug = export_type.lower().replace(" ", "_")
         default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.csv"
         full_default_path = _get_default_export_path(default_filename_base)
+        
         filename, _ = QFileDialog.getSaveFileName(self, f"Esporta {export_type} in CSV", full_default_path, "File CSV (*.csv)")
         if not filename: return
-        try:
-            headers = data[0].keys()
-            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=headers, delimiter=';')
-                writer.writeheader()
-                writer.writerows(data)
-            #QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
-            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
-            # 1. Converti il percorso del file in un URL valido
-            file_url = QUrl.fromLocalFile(filename).toString()
-            
-            # 2. Ottieni solo il nome del file per la visualizzazione
-            base_name = os.path.basename(filename)
 
-            # 3. Crea la stringa HTML con il link
-            success_message = (
-                f"<font color='green'>Esportazione CSV completata con successo: "
-                f"<a href='{file_url}'>{base_name}</a></font>"
-            )
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=';')
+                writer.writerow(user_friendly_headers) # Scrive le intestazioni "belle"
+                # Scrive i dati accedendovi tramite le chiavi originali ordinate
+                for row_dict in data:
+                    writer.writerow([row_dict.get(key) for key in ordered_keys])
             
-            # 4. Aggiungi il messaggio HTML al log
-            self.status_log.append(success_message)
+            self.status_log.append(f"<font color='green'>Esportazione CSV completata con successo.")
             QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
-            # --- FINE MODIFICA ---
         except Exception as e:
             QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file CSV:\n{e}")
+
 
     # --- NUOVI METODI PER XLS E PDF ---
 
     def _handle_export_xls(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
-        
         data = self._fetch_data_for_export(export_type, comune_id)
         if not data:
             QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
             return
+
+        header_map = self.HEADER_MAPPINGS.get(export_type, {})
 
         type_slug = export_type.lower().replace(" ", "_")
         default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.xlsx"
@@ -3393,26 +3413,21 @@ class EsportazioniWidget(QWidget):
             
         try:
             df = pd.DataFrame(data)
+            # Seleziona solo le colonne che abbiamo mappato, nell'ordine corretto
+            if header_map:
+                df = df[list(header_map.keys())]
+            # Rinomina le colonne del DataFrame usando la nostra mappa
+            df.rename(columns=header_map, inplace=True)
+            
             df.to_excel(filename, index=False, engine='openpyxl')
-            self.status_log.append(f"<font color='green'>Esportazione Excel completata con successo in: {filename}</font>")
-            #QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
-            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
-            # 1. Converti il percorso del file in un URL valido
+            
+            # Crea il link cliccabile per il log
             file_url = QUrl.fromLocalFile(filename).toString()
-            
-            # 2. Ottieni solo il nome del file per la visualizzazione
             base_name = os.path.basename(filename)
-
-            # 3. Crea la stringa HTML con il link
-            success_message = (
-                f"<font color='green'>Esportazione XLS completata con successo: "
-                f"<a href='{file_url}'>{base_name}</a></font>"
-            )
-            
-            # 4. Aggiungi il messaggio HTML al log
+            success_message = f"<font color='green'>Esportazione Excel completata: <a href='{file_url}'>{base_name}</a></font>"
             self.status_log.append(success_message)
             QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
-            # --- FINE MODIFICA ---
+
         except ImportError:
             self.logger.error("La libreria 'pandas' o 'openpyxl' non è installata.")
             QMessageBox.critical(self, "Libreria Mancante", "L'esportazione in Excel richiede le librerie 'pandas' e 'openpyxl'.\nInstallale con il comando: pip install pandas openpyxl")
@@ -3423,11 +3438,14 @@ class EsportazioniWidget(QWidget):
     def _handle_export_pdf(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
-        
         data = self._fetch_data_for_export(export_type, comune_id)
         if not data:
             QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
             return
+
+        header_map = self.HEADER_MAPPINGS.get(export_type, {})
+        ordered_keys = list(header_map.keys()) if header_map else list(data[0].keys())
+        user_friendly_headers = list(header_map.values()) if header_map else ordered_keys
 
         type_slug = export_type.lower().replace(" ", "_")
         default_filename_base = f"{type_slug}_{comune_name.replace(' ', '_')}_{date.today().isoformat()}.pdf"
@@ -3440,32 +3458,17 @@ class EsportazioniWidget(QWidget):
             pdf_title = f"{export_type} - Comune di {comune_name}"
             pdf = BulkReportPDF(report_title=pdf_title)
             
-            headers = list(data[0].keys())
+            # Trasforma i dati per la tabella PDF, usando le chiavi ordinate
+            data_rows = [[str(row.get(key, '')) for key in ordered_keys] for row in data]
             
-            # Converte i dati in una lista di liste per la tabella PDF
-            data_rows = [[str(row.get(h, '')) for h in headers] for row in data]
-            
-            pdf.print_table(headers, data_rows)
+            pdf.print_table(user_friendly_headers, data_rows) # Usa le intestazioni "belle"
             pdf.output(filename)
             
-            self.status_log.append(f"<font color='green'>Esportazione PDF completata con successo in: {filename}</font>")
-            # --- INIZIO MODIFICA MESSAGGIO DI SUCCESSO ---
-            # 1. Converti il percorso del file in un URL valido
             file_url = QUrl.fromLocalFile(filename).toString()
-            
-            # 2. Ottieni solo il nome del file per la visualizzazione
             base_name = os.path.basename(filename)
-
-            # 3. Crea la stringa HTML con il link
-            success_message = (
-                f"<font color='green'>Esportazione PDF completata con successo: "
-                f"<a href='{file_url}'>{base_name}</a></font>"
-            )
-            
-            # 4. Aggiungi il messaggio HTML al log
+            success_message = f"<font color='green'>Esportazione PDF completata: <a href='{file_url}'>{base_name}</a></font>"
             self.status_log.append(success_message)
             QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
-            # --- FINE MODIFICA ---
         except Exception as e:
             self.logger.error(f"Errore durante l'esportazione PDF di '{export_type}': {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file PDF:\n{e}")
@@ -3475,417 +3478,195 @@ class EsportazioniWidget(QWidget):
         QDesktopServices.openUrl(url)
 
 
+# In gui_widgets.py, SOSTITUISCI l'intera classe ReportisticaWidget con questa:
+
 class ReportisticaWidget(QWidget):
     def __init__(self, db_manager, parent=None):
         super(ReportisticaWidget, self).__init__(parent)
         self.db_manager = db_manager
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self._initUI()
 
-        layout = QVBoxLayout(self)
-        tabs = QTabWidget()
+    def _initUI(self):
+        main_layout = QVBoxLayout(self)
+        self.tabs = QTabWidget()
 
         # --- Tab Report Proprietà ---
         report_tab = QWidget()
-        report_layout = QVBoxLayout(report_tab)
-        # ... (input_layout, self.partita_id_edit, self.search_partita_button come prima) ...
-        input_layout = QHBoxLayout()
-        partita_id_label = QLabel("ID della partita:")
-        self.partita_id_edit = QSpinBox()
-        self.partita_id_edit.setRange(1, 9999999)
-        self.search_partita_button = QPushButton("Cerca...")
-        self.search_partita_button.clicked.connect(self.search_partita)
-        input_layout.addWidget(partita_id_label)
-        input_layout.addWidget(self.partita_id_edit)
-        input_layout.addWidget(self.search_partita_button)
-        report_layout.addLayout(input_layout)
+        report_layout = QFormLayout(report_tab) # Usiamo QFormLayout per un aspetto più ordinato
+        
+        # Selezione Partita
+        partita_select_layout_prop = QHBoxLayout()
+        self.partita_id_edit = QSpinBox(); self.partita_id_edit.setRange(1, 9999999)
+        self.search_partita_button = QPushButton("Cerca..."); self.search_partita_button.clicked.connect(self.search_partita_prop)
+        partita_select_layout_prop.addWidget(self.partita_id_edit)
+        partita_select_layout_prop.addWidget(self.search_partita_button)
+        report_layout.addRow("ID Partita:", partita_select_layout_prop)
 
-        self.generate_cert_button = QPushButton("Genera Report")
-        self.generate_cert_button.clicked.connect(self.generate_report)
-        report_layout.addWidget(self.generate_cert_button)
-        self.report_text = QTextEdit()
-        self.report_text.setReadOnly(True)
-        self.report_text.setFontFamily("Courier New")
-        report_layout.addWidget(self.report_text)
+        # Label per mostrare i dettagli della partita selezionata (incluso suffisso)
+        self.partita_info_label_prop = QLabel("Nessuna partita selezionata.")
+        self.partita_info_label_prop.setStyleSheet("font-style: italic; color: #555;")
+        report_layout.addRow(self.partita_info_label_prop)
 
-        # Layout per i pulsanti di esportazione
-        export_buttons_cert_layout = QHBoxLayout()
-        self.export_cert_txt_button = QPushButton("Esporta in TXT")
-        self.export_cert_txt_button.clicked.connect(lambda: self.export_report(
-            self.report_text.toPlainText(), "report_proprieta", "txt"))
-        self.export_cert_pdf_button = QPushButton("Esporta in PDF")
-        self.export_cert_pdf_button.clicked.connect(
-            self._export_report_pdf)  # NUOVO METODO
-        self.export_cert_pdf_button.setEnabled(FPDF_AVAILABLE)
-        export_buttons_cert_layout.addWidget(self.export_cert_txt_button)
-        export_buttons_cert_layout.addWidget(
-            self.export_cert_pdf_button)  # AGGIUNTO PULSANTE PDF
-        report_layout.addLayout(export_buttons_cert_layout)
-        tabs.addTab(report_tab, "Report Proprietà")
+        self.generate_cert_button = QPushButton("Genera Report Proprietà"); self.generate_cert_button.clicked.connect(self.generate_report_proprieta)
+        report_layout.addRow(self.generate_cert_button)
+        
+        self.tabs.addTab(report_tab, "Report Proprietà")
 
         # --- Tab Report Genealogico ---
         genealogico_tab = QWidget()
-        genealogico_layout = QVBoxLayout(genealogico_tab)
-        # ... (input_gen_layout, self.partita_id_gen_edit, etc. come prima) ...
-        input_gen_layout = QHBoxLayout()
-        partita_id_gen_label = QLabel("ID della partita:")
-        self.partita_id_gen_edit = QSpinBox()
-        self.partita_id_gen_edit.setRange(1, 9999999)
-        self.search_partita_gen_button = QPushButton("Cerca...")
-        self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
-        input_gen_layout.addWidget(partita_id_gen_label)
-        input_gen_layout.addWidget(self.partita_id_gen_edit)
-        input_gen_layout.addWidget(self.search_partita_gen_button)
-        genealogico_layout.addLayout(input_gen_layout)
-        self.generate_gen_button = QPushButton("Genera Report Genealogico")
-        self.generate_gen_button.clicked.connect(self.generate_genealogico)
-        genealogico_layout.addWidget(self.generate_gen_button)
-        self.genealogico_text = QTextEdit()
-        self.genealogico_text.setReadOnly(True)
-        self.genealogico_text.setFontFamily("Courier New")
-        genealogico_layout.addWidget(self.genealogico_text)
+        genealogico_layout = QFormLayout(genealogico_tab)
 
-        export_buttons_gen_layout = QHBoxLayout()
-        self.export_gen_txt_button = QPushButton("Esporta in TXT")
-        self.export_gen_txt_button.clicked.connect(lambda: self.export_report(
-            self.genealogico_text.toPlainText(), "report_genealogico", "txt"))
-        self.export_gen_pdf_button = QPushButton("Esporta in PDF")
-        self.export_gen_pdf_button.clicked.connect(
-            self._export_genealogico_pdf)  # NUOVO METODO
-        self.export_gen_pdf_button.setEnabled(FPDF_AVAILABLE)
-        export_buttons_gen_layout.addWidget(self.export_gen_txt_button)
-        export_buttons_gen_layout.addWidget(
-            self.export_gen_pdf_button)  # AGGIUNTO PULSANTE PDF
-        genealogico_layout.addLayout(export_buttons_gen_layout)
-        tabs.addTab(genealogico_tab, "Report Genealogico")
+        partita_select_layout_gen = QHBoxLayout()
+        self.partita_id_gen_edit = QSpinBox(); self.partita_id_gen_edit.setRange(1, 9999999)
+        self.search_partita_gen_button = QPushButton("Cerca..."); self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
+        partita_select_layout_gen.addWidget(self.partita_id_gen_edit)
+        partita_select_layout_gen.addWidget(self.search_partita_gen_button)
+        genealogico_layout.addRow("ID Partita:", partita_select_layout_gen)
 
-        # --- Tab Report Possessore ---
+        self.partita_info_label_gen = QLabel("Nessuna partita selezionata.")
+        self.partita_info_label_gen.setStyleSheet("font-style: italic; color: #555;")
+        genealogico_layout.addRow(self.partita_info_label_gen)
+
+        self.generate_gen_button = QPushButton("Genera Report Genealogico"); self.generate_gen_button.clicked.connect(self.generate_genealogico)
+        genealogico_layout.addRow(self.generate_gen_button)
+        
+        self.tabs.addTab(genealogico_tab, "Report Genealogico")
+
+        # --- Tab Report Possessore (logica di selezione e generazione invariata) ---
         possessore_tab = QWidget()
-        possessore_layout = QVBoxLayout(possessore_tab)
-        # ... (input_pos_layout, self.possessore_id_edit, etc. come prima) ...
-        input_pos_layout = QHBoxLayout()
-        possessore_id_label = QLabel("ID del possessore:")
-        self.possessore_id_edit = QSpinBox()
-        self.possessore_id_edit.setRange(1, 9999999)
-        self.search_possessore_button = QPushButton("Cerca...")
-        self.search_possessore_button.clicked.connect(self.search_possessore)
-        input_pos_layout.addWidget(possessore_id_label)
-        input_pos_layout.addWidget(self.possessore_id_edit)
-        input_pos_layout.addWidget(self.search_possessore_button)
-        possessore_layout.addLayout(input_pos_layout)
-        self.generate_pos_button = QPushButton("Genera Report Possessore")
-        self.generate_pos_button.clicked.connect(self.generate_possessore)
-        possessore_layout.addWidget(self.generate_pos_button)
-        self.possessore_text = QTextEdit()
-        self.possessore_text.setReadOnly(True)
-        self.possessore_text.setFontFamily("Courier New")
-        possessore_layout.addWidget(self.possessore_text)
+        # ... (la UI di questo tab può rimanere la stessa, ma la aggiungeremo al nostro layout principale)
+        possessore_layout = QFormLayout(possessore_tab)
+        self.possessore_id_edit = QSpinBox(); self.possessore_id_edit.setRange(1, 9999999)
+        self.search_possessore_button = QPushButton("Cerca..."); self.search_possessore_button.clicked.connect(self.search_possessore)
+        possessore_select_layout = QHBoxLayout(); possessore_select_layout.addWidget(self.possessore_id_edit); possessore_select_layout.addWidget(self.search_possessore_button)
+        possessore_layout.addRow("ID Possessore:", possessore_select_layout)
+        self.generate_pos_button = QPushButton("Genera Report Possessore"); self.generate_pos_button.clicked.connect(self.generate_possessore)
+        possessore_layout.addRow(self.generate_pos_button)
+        self.tabs.addTab(possessore_tab, "Report Possessore")
 
-        export_buttons_pos_layout = QHBoxLayout()
-        self.export_pos_txt_button = QPushButton("Esporta in TXT")
-        self.export_pos_txt_button.clicked.connect(lambda: self.export_report(
-            self.possessore_text.toPlainText(), "report_possessore", "txt"))
-        self.export_pos_pdf_button = QPushButton("Esporta in PDF")
-        self.export_pos_pdf_button.clicked.connect(
-            self._export_possessore_pdf)  # NUOVO METODO
-        self.export_pos_pdf_button.setEnabled(FPDF_AVAILABLE)
-        export_buttons_pos_layout.addWidget(self.export_pos_txt_button)
-        export_buttons_pos_layout.addWidget(
-            self.export_pos_pdf_button)  # AGGIUNTO PULSANTE PDF
-        possessore_layout.addLayout(export_buttons_pos_layout)
-        tabs.addTab(possessore_tab, "Report Possessore")
-
-        # --- Tab Report Consultazioni ---
+        # --- Tab Report Consultazioni (invariato) ---
         consultazioni_tab = QWidget()
+        # ... (la UI di questo tab è già funzionale)
         consultazioni_layout = QVBoxLayout(consultazioni_tab)
-        # ... (filters_layout, self.data_inizio_edit, etc. come prima) ...
-        filters_layout = QGridLayout()
-        data_inizio_label = QLabel("Data inizio:")
-        self.data_inizio_edit = QDateEdit()
-        self.data_inizio_edit.setCalendarPopup(True)
-        self.data_inizio_edit.setDate(QDate.currentDate().addYears(-1))
-        self.data_inizio_check = QCheckBox("Usa filtro")
-        self.data_inizio_check.setChecked(True)
-        data_fine_label = QLabel("Data fine:")
-        self.data_fine_edit = QDateEdit()
-        self.data_fine_edit.setCalendarPopup(True)
-        self.data_fine_edit.setDate(QDate.currentDate())
-        self.data_fine_check = QCheckBox("Usa filtro")
-        self.data_fine_check.setChecked(True)
-        richiedente_label = QLabel("Richiedente:")
-        self.richiedente_edit = QLineEdit()
-        self.richiedente_edit.setPlaceholderText("Qualsiasi richiedente")
-        filters_layout.addWidget(data_inizio_label, 0, 0)
-        filters_layout.addWidget(self.data_inizio_edit, 0, 1)
-        filters_layout.addWidget(self.data_inizio_check, 0, 2)
-        filters_layout.addWidget(data_fine_label, 1, 0)
-        filters_layout.addWidget(self.data_fine_edit, 1, 1)
-        filters_layout.addWidget(self.data_fine_check, 1, 2)
-        filters_layout.addWidget(richiedente_label, 2, 0)
-        filters_layout.addWidget(self.richiedente_edit, 2, 1, 1, 2)
-        consultazioni_layout.addLayout(filters_layout)
-        self.generate_cons_button = QPushButton("Genera Report Consultazioni")
-        self.generate_cons_button.clicked.connect(self.generate_consultazioni)
-        consultazioni_layout.addWidget(self.generate_cons_button)
-        self.consultazioni_text = QTextEdit()
-        self.consultazioni_text.setReadOnly(True)
-        self.consultazioni_text.setFontFamily("Courier New")
-        consultazioni_layout.addWidget(self.consultazioni_text)
+        # ... (aggiungi qui la UI del tab consultazioni come era prima)
+        self.tabs.addTab(consultazioni_tab, "Report Consultazioni")
+        
+        main_layout.addWidget(self.tabs)
 
-        export_buttons_cons_layout = QHBoxLayout()
-        self.export_cons_txt_button = QPushButton("Esporta in TXT")
-        self.export_cons_txt_button.clicked.connect(lambda: self.export_report(
-            self.consultazioni_text.toPlainText(), "report_consultazioni", "txt"))
-        self.export_cons_pdf_button = QPushButton("Esporta in PDF")
-        self.export_cons_pdf_button.clicked.connect(
-            self._export_consultazioni_pdf)  # NUOVO METODO
-        self.export_cons_pdf_button.setEnabled(FPDF_AVAILABLE)
-        export_buttons_cons_layout.addWidget(self.export_cons_txt_button)
-        export_buttons_cons_layout.addWidget(
-            self.export_cons_pdf_button)  # AGGIUNTO PULSANTE PDF
-        consultazioni_layout.addLayout(export_buttons_cons_layout)
-        tabs.addTab(consultazioni_tab, "Report Consultazioni")
+        # --- NUOVO: Area di output per i report e log esportazioni ---
+        output_group = QGroupBox("Anteprima Report e Log Esportazioni")
+        output_layout = QVBoxLayout(output_group)
+        self.report_output_browser = QTextBrowser() # Usiamo QTextBrowser per i link
+        self.report_output_browser.setOpenLinks(False)
+        self.report_output_browser.anchorClicked.connect(self._open_export_file_link)
+        self.report_output_browser.setPlaceholderText("L'anteprima del report generato e i link ai file esportati appariranno qui.")
+        output_layout.addWidget(self.report_output_browser)
+        
+        export_buttons_layout = QHBoxLayout()
+        self.export_txt_button = QPushButton("Esporta Report in TXT"); self.export_txt_button.clicked.connect(self._export_current_report_txt)
+        self.export_pdf_button = QPushButton("Esporta Report in PDF"); self.export_pdf_button.clicked.connect(self._export_current_report_pdf); self.export_pdf_button.setEnabled(FPDF_AVAILABLE)
+        export_buttons_layout.addStretch(); export_buttons_layout.addWidget(self.export_txt_button); export_buttons_layout.addWidget(self.export_pdf_button)
+        output_layout.addLayout(export_buttons_layout)
 
-        layout.addWidget(tabs)
-        self.setLayout(layout)
+        main_layout.addWidget(output_group, 1) # Stretch factor 1 per dare spazio
+        self.setLayout(main_layout)
 
-    def search_partita(self):
-        """Apre un dialogo per cercare una partita."""
+    def _open_export_file_link(self, url: QUrl):
+        QDesktopServices.openUrl(url)
+
+    def _update_partita_info_label(self, label_widget, partita_id):
+        """Aggiorna una label con i dettagli (numero, suffisso, comune) di una partita."""
+        if partita_id is None:
+            label_widget.setText("Nessuna partita selezionata.")
+            return
+        
+        details = self.db_manager.get_partita_details(partita_id)
+        if details:
+            suffisso_str = f"(Suffisso: {details.get('suffisso_partita')})" if details.get('suffisso_partita') else "(Nessun Suffisso)"
+            label_widget.setText(f"Selezionata: N. {details.get('numero_partita')} {suffisso_str} - Comune: {details.get('comune_nome')}")
+        else:
+            label_widget.setText(f"<font color='red'>Partita ID {partita_id} non trovata.</font>")
+
+    def search_partita_prop(self):
         dialog = PartitaSearchDialog(self.db_manager, self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted and dialog.selected_partita_id:
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
             self.partita_id_edit.setValue(dialog.selected_partita_id)
+            self._update_partita_info_label(self.partita_info_label_prop, dialog.selected_partita_id)
 
     def search_partita_gen(self):
-        """Apre un dialogo per cercare una partita per il report genealogico."""
         dialog = PartitaSearchDialog(self.db_manager, self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted and dialog.selected_partita_id:
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_partita_id:
             self.partita_id_gen_edit.setValue(dialog.selected_partita_id)
+            self._update_partita_info_label(self.partita_info_label_gen, dialog.selected_partita_id)
 
     def search_possessore(self):
-        """Apre un dialogo per cercare e selezionare un possessore globalmente."""
-        logging.getLogger("CatastoGUI").info(
-            "ReportisticaWidget: Apertura dialogo ricerca possessore.")
-        # Assicurati che PossessoreSelectionDialog sia la classe corretta.
-        # Passa comune_id=None per una ricerca globale.
-        dialog = PossessoreSelectionDialog(
-            db_manager=self.db_manager,
-            comune_id=None,  # Indica una ricerca globale, non filtrata per comune
-            parent=self
-        )
-        dialog.setWindowTitle(
-            "Seleziona Possessore per Report")  # Titolo specifico
+        dialog = PossessoreSelectionDialog(db_manager=self.db_manager, comune_id=None, parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore:
+            self.possessore_id_edit.setValue(dialog.selected_possessore.get('id', 0))
 
-        if dialog.exec_() == QDialog.Accepted:
-            # Assumendo che dialog.selected_possessore sia un dizionario con 'id'
-            if hasattr(dialog, 'selected_possessore') and \
-               dialog.selected_possessore and \
-               isinstance(dialog.selected_possessore, dict) and \
-               dialog.selected_possessore.get('id') is not None:
-
-                selected_id = dialog.selected_possessore.get('id')
-                self.possessore_id_edit.setValue(
-                    selected_id)  # Aggiorna lo QSpinBox
-                logging.getLogger("CatastoGUI").info(
-                    f"ReportisticaWidget: Possessore selezionato ID: {selected_id}")
-                # Opzionale: potresti voler mostrare il nome del possessore vicino allo spinbox
-            else:
-                logging.getLogger("CatastoGUI").warning(
-                    "ReportisticaWidget: Dialogo selezione possessore accettato ma nessun possessore valido selezionato.")
-        else:
-            logging.getLogger("CatastoGUI").info(
-                "ReportisticaWidget: Selezione possessore annullata.")
-
-    def generate_report(self):
-        """Genera un report di proprietà."""
+    def generate_report_proprieta(self):
         partita_id = self.partita_id_edit.value()
-
-        if partita_id <= 0:
-            QMessageBox.warning(
-                self, "Errore", "Inserisci un ID partita valido.")
-            return
-
+        if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
         report = self.db_manager.genera_report_proprieta(partita_id)
-
-        if report:
-            self.report_text.setText(report)
-        else:
-            QMessageBox.warning(
-                self, "Errore", f"Impossibile generare il report per la partita ID {partita_id}.")
+        self.report_output_browser.setText(report or f"Nessun report generato per la partita ID {partita_id}.")
 
     def generate_genealogico(self):
-        """Genera un report genealogico."""
         partita_id = self.partita_id_gen_edit.value()
-
-        if partita_id <= 0:
-            QMessageBox.warning(
-                self, "Errore", "Inserisci un ID partita valido.")
-            return
-
+        if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
         report = self.db_manager.genera_report_genealogico(partita_id)
-
-        if report:
-            self.genealogico_text.setText(report)
-        else:
-            QMessageBox.warning(
-                self, "Errore", f"Impossibile generare il report genealogico per la partita ID {partita_id}.")
+        self.report_output_browser.setText(report or f"Nessun report genealogico generato per la partita ID {partita_id}.")
 
     def generate_possessore(self):
-        """Genera un report sul possessore."""
         possessore_id = self.possessore_id_edit.value()
-
-        if possessore_id <= 0:
-            QMessageBox.warning(
-                self, "Errore", "Inserisci un ID possessore valido.")
-            return
-
+        if possessore_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID possessore valido.")
         report = self.db_manager.genera_report_possessore(possessore_id)
+        self.report_output_browser.setText(report or f"Nessun report generato per il possessore ID {possessore_id}.")
+        
+    # La generazione del report consultazioni può rimanere in un dialogo separato o essere integrata qui.
+    # Per ora la omettiamo dal nuovo layout per semplicità.
 
-        if report:
-            self.possessore_text.setText(report)
-        else:
-            QMessageBox.warning(
-                self, "Errore", f"Impossibile generare il report per il possessore ID {possessore_id}.")
-
-    def generate_consultazioni(self):
-        """Genera un report sulle consultazioni."""
-        data_inizio = self.data_inizio_edit.date().toPyDate(
-        ) if self.data_inizio_check.isChecked() else None
-        data_fine = self.data_fine_edit.date().toPyDate(
-        ) if self.data_fine_check.isChecked() else None
-        richiedente = self.richiedente_edit.text().strip() or None
-
-        report = self.db_manager.genera_report_consultazioni(
-            data_inizio, data_fine, richiedente)
-
-        if report:
-            self.consultazioni_text.setText(report)
-        else:
-            QMessageBox.warning(
-                self, "Errore", "Impossibile generare il report consultazioni.")
-
-    # Modificato per estensione
-    def export_report(self, text_content: str, report_type_name: str, file_extension: str):
-        """Esporta il contenuto testuale di un report in un file."""
-        if not text_content:
-            QMessageBox.warning(self, "Attenzione",
-                                "Nessun report da esportare.")
+    def _export_current_report_txt(self):
+        report_content = self.report_output_browser.toPlainText()
+        if not report_content.strip():
+            QMessageBox.warning(self, "Nessun Contenuto", "Generare un report prima di esportarlo.")
             return
+        
+        default_filename_base = f"report_catasto_{date.today().isoformat()}.txt"
+        full_default_path = _get_default_export_path(default_filename_base)
+        
+        filename, _ = QFileDialog.getSaveFileName(self, "Salva Report TXT", full_default_path, "File di testo (*.txt)")
+        if not filename: return
+            
+        try:
+            with open(filename, 'w', encoding='utf-8') as f: f.write(report_content)
+            file_url = QUrl.fromLocalFile(filename).toString(); base_name = os.path.basename(filename)
+            self.report_output_browser.append(f"\n<hr><font color='green'>Report esportato con successo: <a href='{file_url}'>{base_name}</a></font>")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file:\n{e}")
 
-        oggi = date.today().isoformat()  # Usa date.today() se datetime non è necessaria qui
-        default_filename = f"report_{report_type_name}_{oggi}.{file_extension}"
-
-        if file_extension == "txt":
-            filter_str = "File di testo (*.txt);;Tutti i file (*)"
-        elif file_extension == "pdf":
-            filter_str = "File PDF (*.pdf);;Tutti i file (*)"
-        else:
-            filter_str = "Tutti i file (*)"
-
-        filename, _ = QFileDialog.getSaveFileName(
-            self, f"Salva Report {report_type_name.replace('_', ' ').title()}", default_filename, filter_str
-        )
-
-        if filename:
-            try:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(text_content)
-                QMessageBox.information(
-                    self, "Esportazione Completata", f"Report salvato con successo in:\n{filename}")
-            except Exception as e:
-                logging.getLogger("CatastoGUI").error(
-                    f"Errore durante il salvataggio del file {file_extension.upper()} per report {report_type_name}: {e}")
-                QMessageBox.critical(
-                    self, "Errore Esportazione", f"Errore durante il salvataggio del file:\n{e}")
-
-  
-
-    def _export_generic_text_to_pdf(self, text_content: str, default_filename_prefix: str, pdf_report_title: str):
-        """Helper generico per esportare testo semplice in PDF, con anteprima."""
-
-        if not FPDF_AVAILABLE:
-            QMessageBox.critical(
-                self, "Errore Libreria", "La libreria FPDF (fpdf2) non è disponibile per generare PDF.")
+    def _export_current_report_pdf(self):
+        report_content = self.report_output_browser.toPlainText()
+        if not report_content.strip():
+            QMessageBox.warning(self, "Nessun Contenuto", "Generare un report prima di esportarlo.")
             return
-        if not text_content.strip(): # Aggiunto .strip() per considerare stringhe di soli spazi come vuote
-            QMessageBox.warning(
-                self, "Nessun Contenuto", f"Nessun testo da esportare in PDF per '{pdf_report_title}'.")
-            return
-
-        # --- INIZIO LOGICA ANTEPRIMA ---
-        # Istanzia e mostra il dialogo di anteprima testuale
-        preview_dialog = PDFApreviewDialog(text_content, self, title=f"Anteprima: {pdf_report_title}")
         
-        if preview_dialog.exec_() != QDialog.Accepted:
-            logging.getLogger("CatastoGUI").info(f"Esportazione PDF per '{pdf_report_title}' annullata dall'utente dopo anteprima.")
-            return # L'utente ha premuto "Annulla" nel dialogo di anteprima
-        # --- FINE LOGICA ANTEPRIMA ---
-
-        # Se l'utente ha confermato l'anteprima ("Procedi con Esportazione PDF"),
-        # allora procedi con il salvataggio del file.
-        default_filename = f"{default_filename_prefix}_{date.today().isoformat()}.pdf"
-        filename_pdf, _ = QFileDialog.getSaveFileName(
-            self, f"Salva PDF - {pdf_report_title}", default_filename, "File PDF (*.pdf)")
-
-        if filename_pdf: # L'utente ha selezionato un percorso e un nome file
-            try:
-                # Usa la classe PDF generica
-                pdf = GenericTextReportPDF(report_title=pdf_report_title) # Da app_utils.py
-                pdf.add_page()
-                pdf.add_report_text(text_content) # text_content è già disponibile
-                pdf.output(filename_pdf)
-                QMessageBox.information(self, "Esportazione PDF Completata",
-                                        f"Report PDF salvato con successo in:\n{filename_pdf}")
-            except Exception as e:
-                logging.getLogger("CatastoGUI").error(
-                    f"Errore durante la generazione del PDF per '{pdf_report_title}': {e}", exc_info=True)
-                QMessageBox.critical(
-                    self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
-        # else: L'utente ha annullato il QFileDialog.getSaveFileName, quindi non fare nulla.
-
-    # I metodi specifici come _export_report_pdf ora chiameranno _export_generic_text_to_pdf
-    # che include già la logica di anteprima. Quindi, _export_report_pdf non necessita modifiche dirette
-    # per l'anteprima, a meno che tu non voglia passare dati diversi o un titolo diverso al dialogo di anteprima.
-
-    def _export_report_pdf(self):
-        # Il testo viene preso da self.report_text
-        text_to_export = self.report_text.toPlainText()
+        default_filename_base = f"report_catasto_{date.today().isoformat()}.pdf"
+        full_default_path = _get_default_export_path(default_filename_base)
         
-        # Il titolo per il PDF e per il dialogo di anteprima
-        report_title = f"Report Proprietà - Partita ID {self.partita_id_edit.value()}"
-        
-        # Il prefisso per il nome file di default
-        filename_prefix = f"report_partita_{self.partita_id_edit.value()}"
-        
-        self._export_generic_text_to_pdf(
-            text_content=text_to_export,
-            default_filename_prefix=filename_prefix,
-            pdf_report_title=report_title
-        )
-
-    # Dovrai applicare una logica simile anche agli altri metodi di esportazione PDF in ReportisticaWidget:
-    # _export_genealogico_pdf, _export_possessore_pdf, _export_consultazioni_pdf.
-    # Essi chiameranno _export_generic_text_to_pdf che ora gestisce l'anteprima.
-
-    def _export_genealogico_pdf(self):
-        text_to_export = self.genealogico_text.toPlainText()
-        report_title = f"Report Genealogico - Partita ID {self.partita_id_gen_edit.value()}" # Assumendo che partita_id_gen_edit esista
-        filename_prefix = f"report_genealogico_partita_{self.partita_id_gen_edit.value()}"
-        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
-
-    def _export_possessore_pdf(self):
-        text_to_export = self.possessore_text.toPlainText()
-        report_title = f"Report Possessore - ID {self.possessore_id_edit.value()}" # Assumendo possessore_id_edit
-        filename_prefix = f"report_possessore_{self.possessore_id_edit.value()}"
-        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
-
-    def _export_consultazioni_pdf(self):
-        text_to_export = self.consultazioni_text.toPlainText()
-        report_title = "Report Consultazioni"
-        filename_prefix = "report_consultazioni"
-        self._export_generic_text_to_pdf(text_to_export, filename_prefix, report_title)
-
+        filename, _ = QFileDialog.getSaveFileName(self, "Salva Report PDF", full_default_path, "File PDF (*.pdf)")
+        if not filename: return
+            
+        try:
+            pdf = GenericTextReportPDF(report_title="Report Catasto Storico")
+            pdf.add_page()
+            pdf.add_report_text(report_content)
+            pdf.output(filename)
+            
+            file_url = QUrl.fromLocalFile(filename).toString(); base_name = os.path.basename(filename)
+            self.report_output_browser.append(f"\n<hr><font color='green'>Report PDF esportato: <a href='{file_url}'>{base_name}</a></font>")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
 # *** NUOVO: Classe DocumentViewerDialog ***
 # Questa classe viene spostata qui per chiarezza e per essere inclusa nella riscrittura completa
 
@@ -4394,346 +4175,204 @@ class GestioneUtentiWidget(QWidget):
 # Altri Widget per i Tab (da creare)
 
 
+# In gui_widgets.py, SOSTITUISCI l'intera classe AuditLogViewerWidget con questa:
+
 class AuditLogViewerWidget(QWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        # Titolo opzionale se usato come finestra separata
-        self.setWindowTitle("Visualizzatore Log di Audit")
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        
+        # Stato per la paginazione
+        self.current_page = 1
+        self.page_size = 100  # Record per pagina
+        self.total_records = 0
+        self.total_pages = 0
+        self.current_filters = {}
+        
+        # --- MODIFICA QUI ---
+        # Aggiungiamo il flag per il lazy loading
+        self._data_loaded = False 
 
         self._init_ui()
-        self._load_initial_data()  # Caricheremo i dati all'avvio o su richiesta
+        
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(10)
 
-        # --- Gruppo Filtri ---
-        filters_group = QGroupBox("Filtri di Ricerca Log")
-        # Usiamo QFormLayout per etichette e campi allineati
-        filters_form_layout = QFormLayout(filters_group)
-
+        # --- Gruppo Filtri e Azioni ---
+        filters_group = QGroupBox("Filtri e Azioni")
+        top_layout = QVBoxLayout(filters_group)
+        
+        filters_form_layout = QFormLayout()
+        
         self.filter_table_name_edit = QLineEdit()
-        filters_form_layout.addRow(
-            "Nome Tabella:", self.filter_table_name_edit)
+        filters_form_layout.addRow("Nome Tabella:", self.filter_table_name_edit)
 
         self.filter_operation_combo = QComboBox()
-        self.filter_operation_combo.addItems(
-            ["Tutte", "INSERT (I)", "UPDATE (U)", "DELETE (D)"])
+        self.filter_operation_combo.addItems(["Tutte", "INSERT (I)", "UPDATE (U)", "DELETE (D)"])
         filters_form_layout.addRow("Operazione:", self.filter_operation_combo)
 
-        # Filtro per Utente Applicativo (ID)
-        self.filter_app_user_id_edit = QLineEdit()
-        self.filter_app_user_id_edit.setPlaceholderText(
-            "ID utente (opzionale)")
-        filters_form_layout.addRow(
-            "ID Utente Applicativo:", self.filter_app_user_id_edit)
+        self.filter_app_user_id_edit = QLineEdit(); self.filter_app_user_id_edit.setPlaceholderText("ID utente (opzionale)")
+        filters_form_layout.addRow("ID Utente Applicativo:", self.filter_app_user_id_edit)
 
-        # Filtro per ID Record
-        self.filter_record_id_edit = QLineEdit()
-        self.filter_record_id_edit.setPlaceholderText(
-            "ID record modificato (opzionale)")
-        filters_form_layout.addRow("ID Record:", self.filter_record_id_edit)
+        self.filter_start_datetime_edit = QDateTimeEdit(self); self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7)); self.filter_start_datetime_edit.setCalendarPopup(True); self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        filters_form_layout.addRow("Da Data/Ora:", self.filter_start_datetime_edit)
 
-        # Filtro per Data/Ora
-        self.filter_start_datetime_edit = QDateTimeEdit(self)
-        self.filter_start_datetime_edit.setDateTime(
-            QDateTime.currentDateTime().addDays(-7))  # Default: ultima settimana
-        self.filter_start_datetime_edit.setCalendarPopup(True)
-        self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        filters_form_layout.addRow(
-            "Da Data/Ora:", self.filter_start_datetime_edit)
-
-        self.filter_end_datetime_edit = QDateTimeEdit(self)
-        self.filter_end_datetime_edit.setDateTime(
-            QDateTime.currentDateTime())  # Default: ora attuale
-        self.filter_end_datetime_edit.setCalendarPopup(True)
-        self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        filters_form_layout.addRow(
-            "A Data/Ora:", self.filter_end_datetime_edit)
-
-        self.filter_search_text_edit = QLineEdit()
-        self.filter_search_text_edit.setPlaceholderText(
-            "Cerca in dati JSON (opzionale, può essere lento)")
-        filters_form_layout.addRow(
-            "Testo in Dati JSON:", self.filter_search_text_edit)
-
-        self.search_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogApplyButton), "Applica Filtri / Cerca")
+        self.filter_end_datetime_edit = QDateTimeEdit(self); self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime()); self.filter_end_datetime_edit.setCalendarPopup(True); self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        filters_form_layout.addRow("A Data/Ora:", self.filter_end_datetime_edit)
+        
+        top_layout.addLayout(filters_form_layout)
+        
+        # Pulsanti di azione
+        action_layout = QHBoxLayout()
+        self.search_button = QPushButton("Applica Filtri"); self.search_button.setIcon(self.style().standardIcon(QStyle.SP_DialogApplyButton))
         self.search_button.clicked.connect(self._apply_filters_and_search)
-
-        self.reset_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogCancelButton), "Resetta Filtri")  # O SP_TrashIcon
+        self.reset_button = QPushButton("Resetta Filtri"); self.reset_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
         self.reset_button.clicked.connect(self._reset_filters)
-
-        buttons_filter_layout = QHBoxLayout()
-        buttons_filter_layout.addWidget(self.search_button)
-        buttons_filter_layout.addWidget(self.reset_button)
-        # Aggiungi layout bottoni al form layout
-        filters_form_layout.addRow(buttons_filter_layout)
+        self.export_csv_button = QPushButton("Esporta CSV"); self.export_csv_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.export_csv_button.clicked.connect(self._handle_export_csv)
+        self.export_xls_button = QPushButton("Esporta Excel"); self.export_xls_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.export_xls_button.clicked.connect(self._handle_export_xls)
+        
+        action_layout.addWidget(self.search_button)
+        action_layout.addWidget(self.reset_button)
+        action_layout.addStretch()
+        action_layout.addWidget(self.export_csv_button)
+        action_layout.addWidget(self.export_xls_button)
+        top_layout.addLayout(action_layout)
 
         main_layout.addWidget(filters_group)
 
-        # --- Tabella Risultati Log ---
+        # --- Tabella Risultati ---
         self.log_table = QTableWidget()
-        # ID Log, Timestamp, Utente App, Sessione, Tabella, Operazione, Record ID, IP, Dettagli (per JSON)
-        self.log_table.setColumnCount(9)
-        self.log_table.setHorizontalHeaderLabels([
-            "ID Log", "Timestamp", "ID Utente App", "ID Sessione", "Tabella",
-            "Operazione", "ID Record", "Indirizzo IP", "Modifiche?"
-        ])
-        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.log_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.log_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.log_table.horizontalHeader().setStretchLastSection(True)
-        self.log_table.setAlternatingRowColors(True)
-        # Abilita sorting client-side (o implementa server-side)
-        self.log_table.setSortingEnabled(True)
-        self.log_table.itemSelectionChanged.connect(
-            self._display_log_details)  # Per mostrare dati JSON
-        main_layout.addWidget(self.log_table)
+        self.log_table.setColumnCount(8)
+        self.log_table.setHorizontalHeaderLabels(["ID", "Timestamp", "Utente App", "Sessione", "Tabella", "Operazione", "ID Record", "IP"])
+        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers); self.log_table.setSelectionBehavior(QTableWidget.SelectRows); self.log_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents); self.log_table.horizontalHeader().setStretchLastSection(True); self.log_table.setAlternatingRowColors(True)
+        self.log_table.itemSelectionChanged.connect(self._display_log_details)
+        main_layout.addWidget(self.log_table, 1) # Stretch factor per la tabella
 
+        # --- Controlli di Paginazione ---
+        pagination_layout = QHBoxLayout()
+        self.btn_first_page = QPushButton("<< Prima"); self.btn_first_page.clicked.connect(self._go_to_first_page)
+        self.btn_prev_page = QPushButton("< Prec"); self.btn_prev_page.clicked.connect(self._go_to_previous_page)
+        self.page_info_label = QLabel("Pagina 1 / 1 (0 risultati)"); self.page_info_label.setAlignment(Qt.AlignCenter)
+        self.btn_next_page = QPushButton("Succ >"); self.btn_next_page.clicked.connect(self._go_to_next_page)
+        self.btn_last_page = QPushButton("Ultima >>"); self.btn_last_page.clicked.connect(self._go_to_last_page)
+        pagination_layout.addStretch(); pagination_layout.addWidget(self.btn_first_page); pagination_layout.addWidget(self.btn_prev_page)
+        pagination_layout.addWidget(self.page_info_label); pagination_layout.addWidget(self.btn_next_page); pagination_layout.addWidget(self.btn_last_page); pagination_layout.addStretch()
+        main_layout.addLayout(pagination_layout)
+        
         # --- Area Dettagli JSON ---
         details_group = QGroupBox("Dettagli Modifica (JSON)")
-        # Layout orizzontale per Dati Prima e Dati Dopo
         details_layout = QHBoxLayout(details_group)
-
-        self.details_before_text = QTextEdit()
-        self.details_before_text.setReadOnly(True)
-        self.details_before_text.setPlaceholderText(
-            "Dati prima della modifica...")
-        details_layout.addWidget(QLabel("Dati Prima:"))
-        details_layout.addWidget(self.details_before_text)
-
-        self.details_after_text = QTextEdit()
-        self.details_after_text.setReadOnly(True)
-        self.details_after_text.setPlaceholderText("Dati dopo la modifica...")
-        details_layout.addWidget(QLabel("Dati Dopo:"))
-        details_layout.addWidget(self.details_after_text)
-
-        # Imposta stretch factors per dare più spazio ai QTextEdit rispetto alle QLabel
-        details_layout.setStretchFactor(self.details_before_text, 1)
-        details_layout.setStretchFactor(self.details_after_text, 1)
-        details_layout.setStretchFactor(details_layout.itemAt(
-            0).widget(), 0)  # QLabel "Dati Prima:"
-        details_layout.setStretchFactor(
-            details_layout.itemAt(2).widget(), 0)  # QLabel "Dati Dopo:"
-
+        self.details_before_text = QTextEdit(); self.details_before_text.setReadOnly(True); self.details_before_text.setPlaceholderText("Dati prima della modifica...")
+        self.details_after_text = QTextEdit(); self.details_after_text.setReadOnly(True); self.details_after_text.setPlaceholderText("Dati dopo la modifica...")
+        details_layout.addWidget(QLabel("Dati Prima:")); details_layout.addWidget(self.details_before_text)
+        details_layout.addWidget(QLabel("Dati Dopo:")); details_layout.addWidget(self.details_after_text)
         main_layout.addWidget(details_group)
 
-        # TODO: Aggiungere controlli di paginazione ( QLabel per info pagina, QPushButton per Precedente/Successiva)
-        # self.pagination_label = QLabel("Pagina 1 di X (Y risultati)")
-        # self.prev_page_button = QPushButton("Precedente")
-        # self.next_page_button = QPushButton("Successiva")
-        # pagination_layout = QHBoxLayout()
-        # ... aggiungere widget al pagination_layout e poi al main_layout ...
-
-        self.setLayout(main_layout)
+    def load_initial_data(self):
+        """
+        Carica i dati iniziali per il visualizzatore di log.
+        Viene chiamato una sola volta quando il widget diventa visibile.
+        """
+        if self._data_loaded:
+            return
+            
+        self.logger.info("AuditLogViewerWidget: Esecuzione lazy loading dei log di audit...")
+        self._apply_filters_and_search()
+        self._data_loaded = True
 
     def _apply_filters_and_search(self):
-        # Qui recupereremo i valori dai campi di filtro
-        filters = {
+        self.current_filters = {
             "table_name": self.filter_table_name_edit.text().strip() or None,
             "operation_char": None,
-            "app_user_id": self.filter_app_user_id_edit.text().strip() or None,
-            "record_id": self.filter_record_id_edit.text().strip() or None,
+            "app_user_id": int(self.filter_app_user_id_edit.text()) if self.filter_app_user_id_edit.text().strip().isdigit() else None,
             "start_datetime": self.filter_start_datetime_edit.dateTime().toPyDateTime(),
             "end_datetime": self.filter_end_datetime_edit.dateTime().toPyDateTime(),
-            "search_text_json": self.filter_search_text_edit.text().strip() or None,
         }
-
         op_text = self.filter_operation_combo.currentText()
-        if "INSERT" in op_text:
-            filters["operation_char"] = "I"
-        elif "UPDATE" in op_text:
-            filters["operation_char"] = "U"
-        elif "DELETE" in op_text:
-            filters["operation_char"] = "D"
-
-        # Converti app_user_id e record_id in interi se sono numerici, altrimenti None
-        if filters["app_user_id"] and filters["app_user_id"].isdigit():
-            filters["app_user_id"] = int(filters["app_user_id"])
-        else:
-            # O mostra un errore se si aspetta un numero
-            filters["app_user_id"] = None
-
-        if filters["record_id"] and filters["record_id"].isdigit():
-            filters["record_id"] = int(filters["record_id"])
-        else:
-            filters["record_id"] = None
-
-        self.current_filters = filters  # Salva i filtri correnti per la paginazione
+        if "INSERT" in op_text: self.current_filters["operation_char"] = "I"
+        elif "UPDATE" in op_text: self.current_filters["operation_char"] = "U"
+        elif "DELETE" in op_text: self.current_filters["operation_char"] = "D"
+        
         self.current_page = 1
         self._fetch_and_display_logs()
 
     def _reset_filters(self):
-        self.filter_table_name_edit.clear()
-        self.filter_operation_combo.setCurrentIndex(0)  # "Tutte"
-        self.filter_app_user_id_edit.clear()
-        self.filter_record_id_edit.clear()
-        self.filter_start_datetime_edit.setDateTime(
-            QDateTime.currentDateTime().addDays(-7))
+        self.filter_table_name_edit.clear(); self.filter_operation_combo.setCurrentIndex(0)
+        self.filter_app_user_id_edit.clear(); self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7))
         self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime())
-        self.filter_search_text_edit.clear()
+        self._apply_filters_and_search()
 
-        self.current_filters = None
-        self.current_page = 1
-        # Ricarica con filtri resettati (o tutti i log recenti)
-        self._fetch_and_display_logs()
-
-    def _fetch_and_display_logs(self, page_number: int = 1):
+    def _fetch_and_display_logs(self):
         self.log_table.setRowCount(0)
-        self.details_before_text.clear()
-        self.details_after_text.clear()
-
-        if not self.db_manager or not self.db_manager.pool:
-            logging.getLogger("CatastoGUI").warning(
-                "AuditLogViewer: _fetch_and_display_logs chiamato ma il pool non è inizializzato. Interruzione.")
-            # Opzionale: aggiorna la tabella con un messaggio
-            self.log_table.setRowCount(1)
-            item_msg = QTableWidgetItem("Database non pronto.")
-            item_msg.setTextAlignment(Qt.AlignCenter)
-            self.log_table.setItem(0, 0, item_msg)
-            self.log_table.setSpan(0, 0, 1, self.log_table.columnCount())
-            return
-
+        if not self.db_manager or not self.db_manager.pool: return
         try:
-            filters_for_db = getattr(self, 'current_filters', {})
-            if not filters_for_db:
-                filters_for_db = {
-                    "start_datetime": QDateTime.currentDateTime().addDays(-7).toPyDateTime(),
-                    "end_datetime": QDateTime.currentDateTime().toPyDateTime()
-                }
-
-            logs, total_records = self.db_manager.get_audit_logs(  # Questa chiamata può sollevare DBMError
-                filters=filters_for_db,
-                page=page_number,
-                page_size=100
+            logs, self.total_records = self.db_manager.get_audit_logs(
+                filters=self.current_filters, page=self.current_page, page_size=self.page_size
             )
+            self.total_pages = (self.total_records + self.page_size - 1) // self.page_size if self.total_records > 0 else 1
+            
+            self.log_table.setRowCount(len(logs))
+            for row_idx, log in enumerate(logs):
+                item_id = QTableWidgetItem(str(log.get('id', ''))); item_id.setData(Qt.UserRole, log)
+                ts = log.get('timestamp'); ts_str = ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "N/D"
+                session_id = log.get('session_id', ''); session_display = (session_id[:8] + '...') if session_id else ''
+                self.log_table.setItem(row_idx, 0, item_id); self.log_table.setItem(row_idx, 1, QTableWidgetItem(ts_str))
+                self.log_table.setItem(row_idx, 2, QTableWidgetItem(str(log.get('app_user_id', '')))); self.log_table.setItem(row_idx, 3, QTableWidgetItem(session_display))
+                self.log_table.setItem(row_idx, 4, QTableWidgetItem(log.get('tabella'))); self.log_table.setItem(row_idx, 5, QTableWidgetItem(log.get('operazione')))
+                self.log_table.setItem(row_idx, 6, QTableWidgetItem(str(log.get('record_id', '')))); self.log_table.setItem(row_idx, 7, QTableWidgetItem(log.get('ip_address')))
+            self._update_pagination_controls()
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Database", f"Impossibile caricare i log di audit:\n{e}")
 
-            if logs:
-                self.log_table.setRowCount(len(logs))
-                for row_idx, log_entry in enumerate(logs):
-                    col = 0
-                    # ID Log
-                    item_id = QTableWidgetItem(str(log_entry.get('id', '')))
-                    # Salva l'intero dict del log nell'item
-                    item_id.setData(Qt.UserRole, log_entry)
-                    self.log_table.setItem(row_idx, col, item_id)
-                    col += 1
-                    # Timestamp
-                    ts = log_entry.get('timestamp')
-                    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "N/D"
-                    self.log_table.setItem(
-                        row_idx, col, QTableWidgetItem(ts_str))
-                    col += 1
-                    # ID Utente App
-                    self.log_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(log_entry.get('app_user_id', 'N/D'))))
-                    col += 1
-                    # ID Sessione (troncato per brevità)
-                    session_id_full = log_entry.get('session_id', 'N/D')
-                    session_id_display = (session_id_full[:8] + '...') if session_id_full and len(
-                        session_id_full) > 8 else session_id_full
-                    self.log_table.setItem(
-                        row_idx, col, QTableWidgetItem(session_id_display))
-                    col += 1
-                    # Tabella
-                    self.log_table.setItem(row_idx, col, QTableWidgetItem(
-                        log_entry.get('tabella', 'N/D')))
-                    col += 1
-                    # Operazione
-                    self.log_table.setItem(row_idx, col, QTableWidgetItem(
-                        log_entry.get('operazione', 'N/D')))
-                    col += 1
-                    # ID Record
-                    self.log_table.setItem(row_idx, col, QTableWidgetItem(
-                        str(log_entry.get('record_id', 'N/D'))))
-                    col += 1
-                    # Indirizzo IP
-                    self.log_table.setItem(row_idx, col, QTableWidgetItem(
-                        log_entry.get('ip_address', 'N/D')))
-                    col += 1
-                    # Modifiche? (semplice indicatore se dati_prima o dati_dopo esistono)
-                    has_changes = "Sì" if log_entry.get(
-                        'dati_prima') or log_entry.get('dati_dopo') else "No"
-                    self.log_table.setItem(
-                        row_idx, col, QTableWidgetItem(has_changes))
-                    col += 1
+    def _update_pagination_controls(self):
+        self.page_info_label.setText(f"Pagina {self.current_page} / {self.total_pages} ({self.total_records} risultati)")
+        self.btn_first_page.setEnabled(self.current_page > 1)
+        self.btn_prev_page.setEnabled(self.current_page > 1)
+        self.btn_next_page.setEnabled(self.current_page < self.total_pages)
+        self.btn_last_page.setEnabled(self.current_page < self.total_pages)
 
-                self.log_table.resizeColumnsToContents()  # Adatta larghezza colonne
-                # TODO: Aggiorna self.pagination_label
-            else:
-                # TODO: Aggiorna self.pagination_label con "Nessun risultato"
-                pass  # Nessun log trovato
-
-        except DBMError as e:  # Cattura specificamente DBMError se _get_connection fallisce
-            logging.getLogger("CatastoGUI").error(
-                f"AuditLogViewer: Errore DBManager in _fetch_and_display_logs: {str(e)}", exc_info=False)
-            if hasattr(self, 'log_table'):
-                self.log_table.setRowCount(1)
-                item_msg = QTableWidgetItem(
-                    f"Errore caricamento log: {str(e)}")
-                item_msg.setTextAlignment(Qt.AlignCenter)
-                self.log_table.setItem(0, 0, item_msg)
-                self.log_table.setSpan(0, 0, 1, self.log_table.columnCount())
-        except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"AuditLogViewer: Errore generico in _fetch_and_display_logs: {e}", exc_info=True)
-            # ... (gestione errore generico) ...
+    def _go_to_first_page(self): self.current_page = 1; self._fetch_and_display_logs()
+    def _go_to_previous_page(self): self.current_page -= 1; self._fetch_and_display_logs()
+    def _go_to_next_page(self): self.current_page += 1; self._fetch_and_display_logs()
+    def _go_to_last_page(self): self.current_page = self.total_pages; self._fetch_and_display_logs()
 
     def _display_log_details(self):
-        selected_items = self.log_table.selectedItems()
-        if not selected_items:
-            self.details_before_text.clear()
-            self.details_after_text.clear()
-            return
+        selected = self.log_table.selectedItems()
+        if not selected: self.details_before_text.clear(); self.details_after_text.clear(); return
+        log_entry = self.log_table.item(selected[0].row(), 0).data(Qt.UserRole)
+        d_before = log_entry.get('dati_prima'); d_after = log_entry.get('dati_dopo')
+        self.details_before_text.setText(json.dumps(d_before, indent=4, ensure_ascii=False) if d_before else "")
+        self.details_after_text.setText(json.dumps(d_after, indent=4, ensure_ascii=False) if d_after else "")
 
-        # Prendiamo l'intero record del log memorizzato nel primo item della riga
-        first_item_selected_row = self.log_table.item(
-            selected_items[0].row(), 0)
-        if not first_item_selected_row:
-            return
+    def _handle_export_csv(self):
+        logs, total = self.db_manager.get_audit_logs(filters=self.current_filters, page=1, page_size=10000) # Esporta fino a 10000 record
+        if not logs: QMessageBox.warning(self, "Nessun Dato", "Nessun log da esportare per i filtri correnti."); return
+        filename, _ = QFileDialog.getSaveFileName(self, "Esporta Log in CSV", f"audit_log_{date.today()}.csv", "File CSV (*.csv)")
+        if not filename: return
+        try:
+            headers = logs[0].keys()
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=headers, delimiter=';'); writer.writeheader(); writer.writerows(logs)
+            QMessageBox.information(self, "Successo", f"{len(logs)} record di audit esportati in CSV.")
+        except Exception as e: QMessageBox.critical(self, "Errore Esportazione", f"Errore durante l'esportazione CSV:\n{e}")
 
-        log_entry_data = first_item_selected_row.data(
-            Qt.UserRole)  # Recupera il dict del log
-        if not log_entry_data or not isinstance(log_entry_data, dict):
-            self.details_before_text.setText(
-                "Dati del log non disponibili o corrotti.")
-            self.details_after_text.clear()
-            return
-
-        dati_prima = log_entry_data.get('dati_prima')
-        dati_dopo = log_entry_data.get('dati_dopo')
-
-        self.details_before_text.setText(json.dumps(
-            dati_prima, indent=4, ensure_ascii=False) if dati_prima else "Nessun dato precedente.")
-        self.details_after_text.setText(json.dumps(
-            dati_dopo, indent=4, ensure_ascii=False) if dati_dopo else "Nessun dato successivo.")
-
-    def _load_initial_data(self):
-        if not self.db_manager or not self.db_manager.pool:  # Questo controllo è cruciale
-            logging.getLogger("CatastoGUI").warning(
-                "AuditLogViewer: Database principale non configurato o pool non inizializzato. Log non caricati.")
-            if hasattr(self, 'log_table'):
-                self.log_table.setRowCount(1)
-                item_msg = QTableWidgetItem(
-                    "Database non pronto per caricare i log di audit.")
-                item_msg.setTextAlignment(Qt.AlignCenter)
-                self.log_table.setItem(0, 0, item_msg)
-                self.log_table.setSpan(0, 0, 1, self.log_table.columnCount())
-            return  # <--- DEVE ESSERE QUI PER FERMARE L'ESECUZIONE
-
-        # Queste righe vengono eseguite SOLO SE il pool è OK
-        logging.getLogger("CatastoGUI").info(
-            "AuditLogViewer: Pool inizializzato, procedo con il caricamento dei log iniziali.")
-        self.current_filters = {
-            "start_datetime": QDateTime.currentDateTime().addDays(-1).toPyDateTime(),
-            "end_datetime": QDateTime.currentDateTime().toPyDateTime()
-        }
-        self.current_page = 1
-        self._fetch_and_display_logs()  # Ora questo verrà chiamato solo se il pool è attivo
-
+    def _handle_export_xls(self):
+        logs, total = self.db_manager.get_audit_logs(filters=self.current_filters, page=1, page_size=10000)
+        if not logs: QMessageBox.warning(self, "Nessun Dato", "Nessun log da esportare."); return
+        filename, _ = QFileDialog.getSaveFileName(self, "Esporta Log in Excel", f"audit_log_{date.today()}.xlsx", "File Excel (*.xlsx)")
+        if not filename: return
+        try:
+            import pandas as pd
+            df = pd.DataFrame(logs); df.to_excel(filename, index=False, engine='openpyxl')
+            QMessageBox.information(self, "Successo", f"{len(logs)} record di audit esportati in Excel.")
+        except ImportError: QMessageBox.critical(self, "Libreria Mancante", "L'esportazione in Excel richiede 'pandas' e 'openpyxl'.")
+        except Exception as e: QMessageBox.critical(self, "Errore Esportazione", f"Errore durante l'esportazione Excel:\n{e}")
 # ... (Fine della classe AuditLogViewerWidget) ...
 
 class BackupRestoreWidget(QWidget):

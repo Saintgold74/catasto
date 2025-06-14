@@ -340,3 +340,26 @@ ON localita USING gin(to_tsvector('italian', nome));
 COMMENT ON INDEX idx_gin_immobili_natura IS 'Indice GIN per ricerca fuzzy nella natura degli immobili';
 COMMENT ON INDEX idx_gin_variazioni_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di variazione';
 COMMENT ON INDEX idx_gin_contratti_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di contratto';
+
+-- =====================================================================
+-- TABELLA PER I METADATI DELL'APPLICAZIONE
+-- Contiene chiavi/valori per impostazioni o stati, come l'ultimo
+-- aggiornamento delle viste materializzate.
+-- =====================================================================
+
+CREATE TABLE catasto.app_metadata (
+    key TEXT PRIMARY KEY,
+    value_timestamp TIMESTAMP WITH TIME ZONE,
+    value_text TEXT
+);
+
+COMMENT ON TABLE catasto.app_metadata IS 'Tabella chiave-valore per memorizzare metadati e stati dell''applicazione, come il timestamp dell''ultimo aggiornamento delle viste.';
+COMMENT ON COLUMN catasto.app_metadata.key IS 'La chiave univoca per il metadato (es. ''last_mv_refresh'').';
+COMMENT ON COLUMN catasto.app_metadata.value_timestamp IS 'Un valore di tipo timestamp associato alla chiave.';
+COMMENT ON COLUMN catasto.app_metadata.value_text IS 'Un valore di tipo testuale associato alla chiave.';
+
+
+-- Inserisce il valore di default per la chiave dell'aggiornamento delle viste.
+-- Questo previene errori al primo avvio dell'applicazione su un database pulito.
+INSERT INTO catasto.app_metadata (key, value_timestamp) 
+VALUES ('last_mv_refresh', '2000-01-01 00:00:00+00');

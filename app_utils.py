@@ -7,107 +7,50 @@ from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
 # Importazioni PyQt5
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                             QHBoxLayout, QPushButton, QLabel, QLineEdit,
-                             QComboBox,  QTabWidget, QMessageBox,
-                             QGroupBox, QGridLayout, QTableWidget,
-                             QTableWidgetItem, QDialog, QListWidget,
-                             QListWidgetItem, QFileDialog, QStyle, QSpinBox,
-                             QHeaderView, QFormLayout,)
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTextEdit
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QFrame, QHBoxLayout, QPushButton, QApplication, QStyle, QMessageBox
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
-from catasto_db_manager import CatastoDBManager, DBUniqueConstraintError, DBMError # Assumendo che sia nello stesso pacchetto o usa il path corretto
-from dialogs import LocalitaSelectionDialog,CSVApreviewDialog,PDFApreviewDialog
-# In app_utils.py, dopo le importazioni PyQt e standard:
-# Nessuna dipendenza ciclica dagli altri due moduli GUI (gui_main, gui_widgets) dovrebbe essere necessaria qui.
-# Questo modulo fornisce utility AGLI ALTRI.
-# Se necessario, importa CatastoDBManager per type hinting o usi diretti limitati:
-from config import (
-    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
-    COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
-    COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
-    NUOVE_ETICHETTE_POSSESSORI)
-# Importa FPDF se disponibile
+from PyQt5.QtWidgets import (QMessageBox, QFileDialog)
+from PyQt5.QtCore import QDate
+
+from catasto_db_manager import CatastoDBManager
+from dialogs import CSVApreviewDialog, PDFApreviewDialog
+
+# Importa FPDF e le sue utility, che ora funzioneranno grazie a fpdf2
 try:
     from fpdf import FPDF
-    from fpdf.enums import XPos, YPos
+    from fpdf.enums import XPos, YPos # Ora possiamo re-importare e usare questi
     FPDF_AVAILABLE = True
 except ImportError:
     FPDF_AVAILABLE = False
-    # class FPDF: pass # Fallback se si volessero istanziare le classi PDF anche senza fpdf
-    # ma è meglio gestire con FPDF_AVAILABLE
-    # Potrebbe essere utile definire classi PDF vuote qui se FPDF non è disponibile,
-    # per evitare NameError se il codice tenta di usarle condizionalmente.
+    # Definizioni fallback
+    class FPDF: pass
+    class PDFPartita: pass
+    class PDFPossessore: pass
+    class GenericTextReportPDF: pass
+    class BulkReportPDF: pass
 
-    class PDFPartita:
-        pass
+# --- Funzioni Helper ---
+def _get_default_export_path(default_filename: str) -> str:
+    export_dir_name = "esportazioni"
+    full_dir_path = os.path.abspath(export_dir_name)
+    os.makedirs(full_dir_path, exist_ok=True)
+    return os.path.join(full_dir_path, default_filename)
 
-    class PDFPossessore:
-        pass
+# --- Classi PDF (versione moderna con new_x e new_y) ---
 
-    class GenericTextReportPDF:
-        pass
-
-# Gestione Eccezioni DB (potrebbero essere importate da catasto_db_manager se si preferisce)
-# Se rimangono qui, assicurarsi che non ci siano conflitti se catasto_db_manager le definisce pure.
-# Idealmente, dovrebbero essere definite UNA SOLA VOLTA in catasto_db_manager e importate qui.
-# Per ora, manteniamo il fallback come nel suo codice originale.
-try:
-    from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
-except ImportError:
-    class DBMError(Exception):
-        pass
-
-    class DBUniqueConstraintError(DBMError):
-        pass
-
-    class DBNotFoundError(DBMError):
-        pass
-
-    class DBDataError(DBMError):
-        pass
-    # QMessageBox.warning(None, "Avviso Importazione", "Eccezioni DB personalizzate non trovate in app_utils.")
-        
-def format_full_name(first_name, last_name):
-    """Formatta nome e cognome in 'Cognome Nome', gestendo input non validi."""
-    if not isinstance(first_name, str) or not isinstance(last_name, str):
-        raise TypeError("First name and last name must be strings.")
-    
-    if not first_name and not last_name:
-        return ""
-    
-    # Rimuove spazi e mette in maiuscolo la prima lettera di ogni parola
-    last_name_formatted = last_name.strip().title()
-    first_name_formatted = first_name.strip().title()
-
-    # Unisce i nomi, gestendo il caso in cui uno dei due sia vuoto
-    full_name = f"{last_name_formatted} {first_name_formatted}".strip()
-    
-    return full_name
-
-
-# --- Classi PDF (da python_example.py) ---
 if FPDF_AVAILABLE:
     class PDFPartita(FPDF):
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, 'Dettaglio Partita Catastale', 0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.cell(0, 10, 'Dettaglio Partita Catastale', 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             self.ln(5)
 
         def footer(self):
             self.set_y(-15)
-            self.set_font('Helvetica', 'B', 8)  # Cambiato in Bold per coerenza
-            self.cell(0, 10, f'Pagina {self.page_no()}', border=0,
-                      align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.set_font('Helvetica', 'B', 8)
+            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, align='C')
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 6, title, 0, new_x=XPos.LMARGIN,
-                      new_y=YPos.NEXT, align='L')
+            self.cell(0, 6, title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
             self.ln(2)
 
         def chapter_body(self, data_dict):
@@ -115,18 +58,8 @@ if FPDF_AVAILABLE:
             page_width = self.w - self.l_margin - self.r_margin
             for key, value in data_dict.items():
                 text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
-                try:
-                    self.multi_cell(page_width, 5, text_to_write,
-                                    border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                except Exception as e:  # FPDFException non è definita se FPDF non è importato
-                    if "Not enough horizontal space" in str(e):
-                        logging.getLogger("CatastoGUI").warning(
-                            f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
-                        self.multi_cell(
-                            page_width, 5, f"{key.replace('_', ' ').title()}: [ERRORE DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    else:
-                        raise e
-            self.ln(2)  # Aggiungo un po' di spazio
+                self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.ln(2)
 
         def simple_table(self, headers, data_rows, col_widths_percent=None):
             self.set_font('Helvetica', 'B', 9)  # Header in grassetto
@@ -166,8 +99,7 @@ if FPDF_AVAILABLE:
     class PDFPossessore(FPDF):
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             self.ln(5)
 
         def footer(self):
@@ -253,17 +185,13 @@ if FPDF_AVAILABLE:
 
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, self.report_title, 0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-            self.ln(5)  # Spazio dopo l'header
+            self.cell(0, 10, self.report_title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.ln(5)
 
         def footer(self):
-            self.set_y(-15)  # Posizione a 1.5 cm dal fondo
+            self.set_y(-15)
             self.set_font('Helvetica', 'I', 8)
-            # {{nb}} è un alias per il numero totale di pagine
-            page_num_text = f'Pagina {self.page_no()} / {{nb}}'
-            self.cell(0, 10, page_num_text, border=0, align='C',
-                      new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
 
         def add_report_text(self, text_content: str):
             """Aggiunge il contenuto testuale del report al PDF."""

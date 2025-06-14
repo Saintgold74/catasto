@@ -494,6 +494,27 @@ class CatastoMainWindow(QMainWindow):
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
+        # --- INIZIO BLOCCO PER BARRA DI NOTIFICA ---
+        self.stale_data_bar = QFrame()
+        self.stale_data_bar.setObjectName("staleDataBar") # Per lo stile CSS
+        self.stale_data_bar.setStyleSheet("#staleDataBar { background-color: #FFF3CD; border: 1px solid #FFEEBA; border-radius: 4px; }")
+        stale_data_layout = QHBoxLayout(self.stale_data_bar)
+        stale_data_layout.setContentsMargins(10, 5, 10, 5)
+        
+        self.stale_data_label = QLabel("I dati delle statistiche potrebbero non essere aggiornati.")
+        self.stale_data_label.setStyleSheet("color: #664D03;")
+        
+        self.stale_data_refresh_btn = QPushButton("Aggiorna Ora")
+        self.stale_data_refresh_btn.setFixedWidth(100)
+        self.stale_data_refresh_btn.clicked.connect(self._handle_stale_data_refresh_click)
+        
+        stale_data_layout.addWidget(self.stale_data_label)
+        stale_data_layout.addStretch()
+        stale_data_layout.addWidget(self.stale_data_refresh_btn)
+        
+        self.main_layout.addWidget(self.stale_data_bar)
+        self.stale_data_bar.hide() # Nascondi la barra di default
+        # --- FINE BLOCCO PER BARRA DI NOTIFICA ---
 
         self.create_status_bar_content()
         self.create_menu_bar()
@@ -574,6 +595,9 @@ class CatastoMainWindow(QMainWindow):
         self.show()
         logging.getLogger("CatastoGUI").info(
             ">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
+         # --- AGGIUNGERE QUESTA CHIAMATA ALLA FINE ---
+        self.check_mv_refresh_status()
+        # --- FINE AGGIUNTA ---
 
     # All'interno della classe CatastoMainWindow in prova.py
 
@@ -617,14 +641,17 @@ class CatastoMainWindow(QMainWindow):
         file_menu.addAction(import_partite_action)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
-
-
-        # Aggiungi azioni al menu "Impostazioni"
-        settings_menu.addAction(config_db_action)
         
-        # Nota: Ho rimosso la parte relativa a "Nuovo Comune" che sembrava codice residuo
-        # e poteva causare confusione o errori. Se ti serve, può essere aggiunta
-        # di nuovo in modo strutturato.
+        # --- AGGIUNGERE QUESTA NUOVA AZIONE ---
+        config_refresh_action = QAction("Impostazioni di Aggiornamento Dati...", self)
+        config_refresh_action.setStatusTip("Configura la soglia di tempo per l'aggiornamento delle viste")
+        config_refresh_action.triggered.connect(self._apri_dialogo_impostazioni_aggiornamento)
+        # --- FINE AGGIUNTA ---
+
+        # Aggiungi le azioni al menu "Impostazioni"
+        settings_menu.addAction(config_db_action)
+        settings_menu.addSeparator() # Separatore per pulizia
+        settings_menu.addAction(config_refresh_action) # Aggiungiamo la nuova azione al menu
 
 
     def create_status_bar_content(self):
@@ -1453,6 +1480,73 @@ class CatastoMainWindow(QMainWindow):
             QMessageBox.critical(self, "Errore Importazione", f"Si è verificato un errore non gestito: {e}")
         finally:
             QApplication.restoreOverrideCursor()
+    def check_mv_refresh_status(self):
+        """
+        Controlla il timestamp dell'ultimo aggiornamento e mostra la barra di notifica se i dati sono obsoleti.
+        """
+        from datetime import timedelta, timezone
+        if not self.db_manager or not self.db_manager.pool: return
+        # --- MODIFICA QUI: Leggiamo il valore da QSettings ---
+        settings = QSettings()
+        threshold_hours = settings.value("General/StaleDataThresholdHours", 24, type=int)
+        # ----------------------------------------------------
+
+        last_refresh = self.db_manager.get_last_mv_refresh_timestamp()
+        if last_refresh is None:
+            # Se non c'è mai stato un refresh, consideriamo i dati obsoleti
+            self.stale_data_label.setText("I dati delle statistiche non sono mai stati aggiornati.")
+            self.stale_data_bar.show()
+            return
+        
+        # Usiamo la soglia personalizzata
+        staleness_threshold = timedelta(hours=threshold_hours)
+        time_since_refresh = datetime.now(timezone.utc) - last_refresh
+
+        if time_since_refresh > staleness_threshold:
+            hours_ago = int(time_since_refresh.total_seconds() / 3600)
+            # Mostriamo la soglia impostata nel messaggio
+            self.stale_data_label.setText(f"I dati delle statistiche non sono aggiornati da circa {hours_ago} ore (soglia: {threshold_hours} ore).")
+            self.stale_data_bar.show()
+        else:
+            self.stale_data_bar.hide()
+    def _apri_dialogo_impostazioni_aggiornamento(self):
+        """
+        Apre un dialogo per permettere all'utente di impostare la soglia (in ore)
+        per considerare i dati delle viste materializzate come obsoleti.
+        """
+        settings = QSettings()
+        
+        # Legge il valore corrente per mostrarlo come default (default a 24 se non esiste)
+        current_threshold = settings.value("General/StaleDataThresholdHours", 24, type=int)
+        
+        # Apre un dialogo per l'inserimento di un numero intero
+        new_threshold, ok = QInputDialog.getInt(
+            self,
+            "Soglia Aggiornamento Dati",
+            "Dopo quante ore i dati delle statistiche devono essere considerati obsoleti?",
+            value=current_threshold, # Valore di partenza
+            min=1,                 # Minimo 1 ora
+            max=720,               # Massimo 30 giorni (720 ore)
+            step=1                 # Incremento di 1
+        )
+        
+        # Se l'utente preme "OK" e il valore è valido
+        if ok:
+            # Salva il nuovo valore nelle impostazioni dell'applicazione
+            settings.setValue("General/StaleDataThresholdHours", new_threshold)
+            QMessageBox.information(self, "Impostazione Salvata",
+                                    f"La nuova soglia di {new_threshold} ore è stata salvata.\n"
+                                    "La modifica sarà effettiva al prossimo riavvio dell'applicazione.")
+
+
+    def _handle_stale_data_refresh_click(self):
+        """Gestisce il click sul pulsante 'Aggiorna Ora' della barra di notifica."""
+        # Nascondiamo subito la barra per dare un feedback immediato
+        self.stale_data_bar.hide()
+        
+        # Chiamiamo la funzione di refresh esistente, mostrando il messaggio di successo
+        self.db_manager.refresh_materialized_views(show_success_message=True)
+
 print("[FASE 3] Fine definizione classe CatastoMainWindow.")
 def run_gui_app():
     try:

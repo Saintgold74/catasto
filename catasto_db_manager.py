@@ -2181,8 +2181,11 @@ class CatastoDBManager:
                 with conn.cursor() as cur:
                     self.logger.info("Esecuzione dello script di aggiornamento per le viste materializzate...")
                     cur.execute(query)
-            
-            progress_dialog.close()
+                    # --- AGGIUNGERE QUESTA RIGA ALLA FINE DEL BLOCCO 'try' ---
+                    self.update_last_mv_refresh_timestamp() # Aggiorna il timestamp dopo il successo
+                    # --- FINE AGGIUNTA ---
+                
+                    progress_dialog.close()
             if show_success_message:
                 QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
             
@@ -2283,28 +2286,7 @@ class CatastoDBManager:
         except Exception as e: logger.error(f"Errore Python get_record_history: {e}"); return []
         return []
 
-    def genera_report_audit(self, tabella=None, data_inizio=None, data_fine=None,
-                          operazione=None, utente_db=None, app_user_id=None) -> str:
-        """Genera un report testuale basato sui log di audit filtrati."""
-        logs = self.get_audit_log(tabella, operazione, None, data_inizio, data_fine, utente_db, app_user_id, None, 1000)
-        if not logs: return "Nessun log di audit trovato per i criteri specificati."
-        report_lines = ["--- Report Audit ---", f"Periodo: {data_inizio or 'Inizio'} - {data_fine or 'Fine'}"]
-        if tabella: report_lines.append(f"Tabella: {tabella}")
-        if operazione: report_lines.append(f"Operazione: {operazione}")
-        if utente_db: report_lines.append(f"Utente DB: {utente_db}")
-        if app_user_id: report_lines.append(f"Utente App ID: {app_user_id}")
-        report_lines.append(f"Numero log: {len(logs)}"); report_lines.append("-" * 20)
-        op_map = {"I": "Inserimento", "U": "Aggiornamento", "D": "Cancellazione"}
-        for log in logs:
-            ts = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if log.get('timestamp') else 'N/D'
-            op = op_map.get(log.get('operazione'), '?'); tbl = log.get('tabella', '?'); rec_id = log.get('record_id', '?')
-            db_u = log.get('db_user', '?'); app_u = log.get('app_username', 'N/A')
-            # ID utente app non è nella vista v_audit_dettagliato di default, aggiungerlo se necessario
-            # app_u_id = f" (ID: {log['app_user_id']})" if log.get('app_user_id') is not None else ""
-            app_u_id = "" # Rimuovi per ora
-            sess = log.get('session_id', '-')[:8]; ip = log.get('ip_address', '-')
-            report_lines.append(f"{ts} | {op:<13} | Tab: {tbl:<15} | RecID: {rec_id:<5} | DB User: {db_u:<10} | App User: {app_u}{app_u_id} | Sess: {sess} | IP: {ip}")
-        return "\n".join(report_lines)
+    
 
     def create_user(self, username: str, password_hash: str, nome_completo: str, email: str, ruolo: str) -> bool:
         """Chiama la procedura SQL crea_utente in modo transazionale e sicuro."""
@@ -3659,6 +3641,38 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore durante la verifica degli indici GIN: {e}", exc_info=True)
             return {'status': 'ERROR', 'message': str(e), 'gin_indices': 0}
+    def get_last_mv_refresh_timestamp(self) -> Optional[datetime]:
+        """Recupera il timestamp dell'ultimo aggiornamento delle viste materializzate."""
+        query = f"SELECT value_timestamp FROM {self.schema}.app_metadata WHERE key = 'last_mv_refresh';"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    result = cur.fetchone()
+                    return result[0] if result else None
+        except psycopg2.errors.UndefinedTable:
+            self.logger.warning("Tabella 'app_metadata' non trovata. Creare la tabella per la funzionalità di refresh intelligente.")
+            return None # La tabella potrebbe non esistere ancora
+        except Exception as e:
+            self.logger.error(f"Errore nel recuperare il timestamp di refresh: {e}", exc_info=True)
+            return None
+
+    def update_last_mv_refresh_timestamp(self):
+        """Aggiorna il timestamp dell'ultimo refresh delle viste al tempo attuale (UTC)."""
+        # Usiamo un "UPSERT" per inserire la chiave se non esiste, o aggiornarla se esiste.
+        query = f"""
+            INSERT INTO {self.schema}.app_metadata (key, value_timestamp)
+            VALUES ('last_mv_refresh', NOW() at time zone 'utc')
+            ON CONFLICT (key) DO UPDATE SET value_timestamp = EXCLUDED.value_timestamp;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+            self.logger.info("Timestamp di aggiornamento viste materializzate aggiornato con successo.")
+        except Exception as e:
+            self.logger.error(f"Errore nell'aggiornare il timestamp di refresh: {e}", exc_info=True)
+
 
     
         

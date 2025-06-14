@@ -46,12 +46,12 @@ import pandas as pd # Importa pandas
 
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
-    LandingPageWidget, ElencoComuniWidget, RicercaPartiteWidget,
+    DashboardWidget, ElencoComuniWidget, RicercaPartiteWidget,
     RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget
+    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget, RicercaPartiteWidget
 )
 from gui_widgets import DBConfigDialog
 from dialogs import DettaglioPartitaDialog,CSVImportResultDialog
@@ -310,7 +310,7 @@ class LoginDialog(QDialog):
         # NUOVO attributo per conservare l'UUID
         self.current_session_id_from_dialog: Optional[str] = None
 
-        self.setWindowTitle("Login - Catasto Storico")
+        self.setWindowTitle("Login - Meridiana 1.0")
         self.setMinimumWidth(350)
         self.setModal(True)
 
@@ -444,7 +444,7 @@ class LoginDialog(QDialog):
 
 
 try:
-    from fuzzy_search_unified import ExpandedFuzzySearchWidget,CompactFuzzySearchWidget
+    from fuzzy_search_unified import UnifiedFuzzySearchWidget,UnifiedFuzzySearchThread
     FUZZY_SEARCH_AVAILABLE = True
 except ImportError as e:
     print(f"[INIT] Ricerca fuzzy non disponibile")
@@ -489,12 +489,11 @@ class CatastoMainWindow(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle(
-            "Gestionale Catasto Storico - Archivio di Stato Savona")
+        self.setWindowTitle("Meridiana 1.0 - Gestionale Catasto Storico")
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
-        # --- INIZIO BLOCCO PER BARRA DI NOTIFICA ---
+        
         self.stale_data_bar = QFrame()
         self.stale_data_bar.setObjectName("staleDataBar") # Per lo stile CSS
         self.stale_data_bar.setStyleSheet("#staleDataBar { background-color: #FFF3CD; border: 1px solid #FFEEBA; border-radius: 4px; }")
@@ -514,7 +513,7 @@ class CatastoMainWindow(QMainWindow):
         
         self.main_layout.addWidget(self.stale_data_bar)
         self.stale_data_bar.hide() # Nascondi la barra di default
-        # --- FINE BLOCCO PER BARRA DI NOTIFICA ---
+       
 
         self.create_status_bar_content()
         self.create_menu_bar()
@@ -526,9 +525,21 @@ class CatastoMainWindow(QMainWindow):
 
         self.statusBar().showMessage("Pronto.")
 
-    
-
-
+    def avvia_ricerca_globale_da_dashboard(self, testo: str):
+        # 1. Trova l'indice del tab "Ricerca Globale"
+        idx_ricerca = -1
+        for i in range(self.tabs.count()):
+            if "Ricerca Globale" in self.tabs.tabText(i):
+                idx_ricerca = i
+                break
+        
+        # 2. Se trovato, attivalo e imposta il testo della ricerca
+        if idx_ricerca != -1 and hasattr(self, 'fuzzy_search_widget'):
+            self.tabs.setCurrentIndex(idx_ricerca)
+            self.fuzzy_search_widget.search_edit.setText(testo)
+            self.fuzzy_search_widget._perform_search() # Avvia la ricerca
+        else:
+            self.logger.warning("Tentativo di avviare ricerca da dashboard ma il tab/widget non è stato trovato.")
     def perform_initial_setup(self, db_manager: CatastoDBManager,
                               # ID utente dell'applicazione
                               user_id: Optional[int],
@@ -611,6 +622,9 @@ class CatastoMainWindow(QMainWindow):
         # --- 1. Crea i Menu Principali ---
         file_menu = menu_bar.addMenu("&File")
         settings_menu = menu_bar.addMenu("&Impostazioni")
+        # --- AGGIUNGERE QUESTO NUOVO MENU ---
+        help_menu = menu_bar.addMenu("&Help")
+        # --- FINE AGGIUNTA ---
         
         # --- 2. Definisci TUTTE le Azioni ---
 
@@ -652,6 +666,13 @@ class CatastoMainWindow(QMainWindow):
         settings_menu.addAction(config_db_action)
         settings_menu.addSeparator() # Separatore per pulizia
         settings_menu.addAction(config_refresh_action) # Aggiungiamo la nuova azione al menu
+        
+        # --- AGGIUNGERE QUESTA NUOVA AZIONE PER L'HELP ---
+        show_manual_action = QAction("Visualizza Manuale Utente...", self)
+        show_manual_action.setStatusTip("Apre il manuale utente dell'applicazione (PDF)")
+        show_manual_action.triggered.connect(self._apri_manuale_utente)
+        help_menu.addAction(show_manual_action)
+        # --- FINE AGGIUNTA ---
 
 
     def create_status_bar_content(self):
@@ -680,68 +701,48 @@ class CatastoMainWindow(QMainWindow):
     
     def setup_tabs(self):
         if not self.db_manager:
-            self.logger.error(
-                "Tentativo di configurare i tab senza un db_manager.")
-            QMessageBox.critical(self, "Errore Critico",
-                                 "DB Manager non inizializzato.")
+            self.logger.error("Tentativo di configurare i tab senza un db_manager.")
             return
 
         self.tabs.clear()
 
-        
+        # Inizializza i contenitori per i sotto-tab
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
-        self.sistema_sub_tabs = QTabWidget()  # Assicurati sia inizializzato
+        self.sistema_sub_tabs = QTabWidget()
 
-        # --- 1. Landing Page (Primo Tab) ---
-        self.landing_page_widget = LandingPageWidget(self.tabs)
-        self.tabs.addTab(self.landing_page_widget, "🏠 Home")
-
-        if self.landing_page_widget:
-            self.landing_page_widget.apri_elenco_comuni_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Principale"))
-            self.landing_page_widget.apri_ricerca_partite_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Consultazione e Modifica", "Ricerca Partite"))
-            self.landing_page_widget.apri_ricerca_globale_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Ricerca Globale", ""))
-            self.landing_page_widget.apri_registra_proprieta_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registrazione Proprietà"))
-            self.landing_page_widget.apri_registra_possessore_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Nuovo Possessore"))
-            self.landing_page_widget.apri_registra_consultazione_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Inserimento e Gestione", "Registra Consultazione"))
-            # Correggi i nomi dei segnali per Reportistica, usando i nomi che hai dichiarato in gui_widgets.py
-            self.landing_page_widget.apri_report_proprieta_signal.connect(
-                lambda: self.activate_tab_and_sub_tab("Reportistica", "Report Proprietà", activate_report_sub_tab=True))
-            self.landing_page_widget.apri_report_genealogico_signal.connect(lambda: self.activate_tab_and_sub_tab(
-                "Reportistica", "Report Genealogico", activate_report_sub_tab=True))
+        # --- 1. NUOVA DASHBOARD COME PRIMO TAB ---
+        self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
+        self.tabs.addTab(self.dashboard_widget, "🏠 Home / Dashboard")
+        
+        # Collega i segnali della dashboard ai metodi corretti
+        self.dashboard_widget.go_to_tab_signal.connect(
+            lambda main_tab, sub_tab: self.activate_tab_and_sub_tab(main_tab, sub_tab, False)
+        )
+        if hasattr(self, 'avvia_ricerca_globale_da_dashboard'):
+             self.dashboard_widget.search_button.clicked.connect(self.dashboard_widget._avvia_ricerca_globale)
 
         # --- 2. Tab Consultazione e Modifica ---
-        self.elenco_comuni_widget_ref = ElencoComuniWidget(
-            self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(
-            self.elenco_comuni_widget_ref, "Principale")
-
-        self.ricerca_partite_widget_ref = RicercaPartiteWidget(
-            self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(
-            self.ricerca_partite_widget_ref, "Ricerca Partite")
-
+        consultazione_contenitore = QWidget()
+        layout_consultazione = QVBoxLayout(consultazione_contenitore)
+        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Principale")
+        self.ricerca_partite_widget_ref = RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_partite_widget_ref, "Ricerca Partite")
+        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
+        layout_consultazione.addWidget(self.consultazione_sub_tabs)
+        self.tabs.addTab(consultazione_contenitore, "Consultazione e Modifica")
         
+        # --- 3. Tab Ricerca Globale (Fuzzy) ---
+        if FUZZY_SEARCH_AVAILABLE and self.db_manager:
+            self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
+            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
 
-        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(
-            self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(
-            self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
 
-        self.tabs.addTab(self.consultazione_sub_tabs,
-                         "Consultazione e Modifica")
-
-        # --- 3. Tab Inserimento e Gestione ---
-        utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
-        inserimento_gestione_contenitore = QWidget()
-        layout_contenitore_inserimento = QVBoxLayout(
-            inserimento_gestione_contenitore)  # Corretto, ora usa il contenitore
+        # --- 4. Tab Inserimento e Gestione ---
+        inserimento_contenitore = QWidget()
+        layout_inserimento = QVBoxLayout(inserimento_contenitore)
 
         self.inserimento_comune_widget_ref = InserimentoComuneWidget(
             parent=self.inserimento_sub_tabs,  # Parent è il QTabWidget interno
@@ -753,39 +754,26 @@ class CatastoMainWindow(QMainWindow):
                 self.handle_comune_appena_inserito)
         except TypeError:
             pass  # Sollevato se il segnale non era connesso
-        self.inserimento_comune_widget_ref.comune_appena_inserito.connect(
-            self.handle_comune_appena_inserito)
-        self.inserimento_sub_tabs.addTab(
-            self.inserimento_comune_widget_ref, "Nuovo Comune")
+        self.inserimento_comune_widget_ref.comune_appena_inserito.connect(self.handle_comune_appena_inserito)
+        self.inserimento_sub_tabs.addTab(self.inserimento_comune_widget_ref, "Nuovo Comune")
 
-        self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(
-            self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(
-            self.inserimento_possessore_widget_ref, "Nuovo Possessore")
-        # --- AGGIUNGERE QUESTA CONNESSIONE ---
+        self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Nuovo Possessore")
+        
         self.inserimento_possessore_widget_ref.import_csv_requested.connect(self._import_possessori_csv)
-        # ------------------------------------
-        # --- AGGIUNGERE QUESTO BLOCCO ---
+        
         self.inserimento_partite_widget_ref = InserimentoPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(self.inserimento_partite_widget_ref, "Nuova Partita")
         self.inserimento_partite_widget_ref.import_csv_requested.connect(self._import_partite_csv)
-        # --- FINE BLOCCO ---
+      
+        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Nuova Località")
 
+        self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
 
-        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(
-            self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(
-            self.inserimento_localita_widget_ref, "Nuova Località")
-
-        self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(
-            self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(
-            self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
-
-        self.operazioni_partita_widget_ref = OperazioniPartitaWidget(
-            self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(
-            self.operazioni_partita_widget_ref, "Operazioni Partita")
+        self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni Partita")
 
         if self.registrazione_proprieta_widget_ref and self.operazioni_partita_widget_ref:
             try:  # Disconnetti prima di riconnettere per evitare connessioni multiple
@@ -807,94 +795,35 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.registra_consultazione_widget_ref, "Registra Consultazione")
-        self.logger.info("Tentativo di aggiungere il tab di Ricerca Globale Fuzzy.")
-        try:
-            # Qui usiamo la classe importata direttamente. Il costruttore ora non ha più 'mode'.
-            # Il parametro 'parent' è corretto, e il widget verrà aggiunto come ultimo tab.
-            self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
-            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
-            self.logger.info("Tab di Ricerca Globale Fuzzy aggiunto con successo.")
-        except Exception as e:
-            self.logger.error(f"Fallita l'aggiunta del tab di Ricerca Globale Fuzzy: {e}", exc_info=True)
-            # Mostra un placeholder se l'aggiunta fallisce
-            error_label = QLabel(f"Errore caricamento Ricerca Globale:\n{e}")
-            error_label.setAlignment(Qt.AlignCenter)
-            self.tabs.addTab(error_label, "🔍 Ricerca (Errore)")
-        
-        
-        # Aggiungi i sotto-tab al layout del contenitore
-        layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
-        # Aggiungi il contenitore come tab principale
-        self.tabs.addTab(inserimento_gestione_contenitore,
-                         "Inserimento e Gestione")
-        
-
-        # --- 4. Tab Esportazioni ---
-        # --- CON QUESTA NUOVA ---
+        self.logger.info("Tentativo di aggiungere il tab di Registra Consultazione.")
+       
+        layout_inserimento.addWidget(self.inserimento_sub_tabs)
+        self.tabs.addTab(inserimento_contenitore, "Inserimento e Gestione")
         self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager, self.tabs)
         self.tabs.addTab(self.esportazioni_widget_ref, "🗄️ Esportazioni Massive")
-        # --- FINE SOSTITUZIONE ---
 
-        # --- 5. Tab Reportistica ---
-        self.reportistica_widget_ref = ReportisticaWidget(
-            self.db_manager, self)
+        self.reportistica_widget_ref = ReportisticaWidget(self.db_manager, self)
         self.tabs.addTab(self.reportistica_widget_ref, "Reportistica")
 
-        # --- 6. Tab Statistiche e Viste Materializzate ---
         self.statistiche_widget_ref = StatisticheWidget(self.db_manager, self)
         self.tabs.addTab(self.statistiche_widget_ref, "Statistiche e Viste")
 
-        # --- 7. Tab Gestione Utenti (condizionale) ---
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
-            self.gestione_utenti_widget_ref = GestioneUtentiWidget(
-                self.db_manager, self.logged_in_user_info, self)
-            self.tabs.addTab(self.gestione_utenti_widget_ref,
-                             "Gestione Utenti")
-        else:
-            self.gestione_utenti_widget_ref = None
-
-        # --- 8. Tab Sistema ---
-        # Il contenitore per i sotto-tab di sistema
-        sistema_contenitore = QWidget()
-        # Assicurati che questo sia passato correttamente
-        layout_contenitore_sistema = QVBoxLayout(sistema_contenitore)
-
-        if self.db_manager:
-            self.audit_viewer_widget_ref = AuditLogViewerWidget(
-                self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(
-                self.audit_viewer_widget_ref, "Log di Audit")
-
-            self.backup_restore_widget_ref = BackupRestoreWidget(
-                self.db_manager, self.sistema_sub_tabs)
-            self.sistema_sub_tabs.addTab(
-                self.backup_restore_widget_ref, "Backup/Ripristino DB")
-
+            self.gestione_utenti_widget_ref = GestioneUtentiWidget(self.db_manager, self.logged_in_user_info, self)
+            self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
             
-        else:
-            error_label = QLabel(
-                "DB Manager non disponibile per i widget di sistema.")
-            error_label.setAlignment(Qt.AlignCenter)
-            self.sistema_sub_tabs.addTab(error_label, "Errore Sistema")
+            sistema_contenitore = QWidget()
+            layout_sistema = QVBoxLayout(sistema_contenitore)
+            self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log di Audit")
+            self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino DB")
+            layout_sistema.addWidget(self.sistema_sub_tabs)
+            self.tabs.addTab(sistema_contenitore, "Sistema")
 
-        # Aggiungi i sotto-tab al layout del contenitore
-        layout_contenitore_sistema.addWidget(self.sistema_sub_tabs)
-        # Aggiungi il contenitore come tab principale
-        self.tabs.addTab(sistema_contenitore, "Sistema")
-
-        # Imposta la Landing Page come tab attivo all'avvio
-                # === AGGIUNTA TAB RICERCA FUZZY ===
-        if FUZZY_SEARCH_AVAILABLE and self.db_manager:
-            try:
-                success = add_fuzzy_search_tab_to_main_window(self)
-                if success:
-                    print("✅ Tab ricerca fuzzy semplificato aggiunto")
-                else:
-                    print("⚠️ Errore aggiunta tab ricerca fuzzy")
-            except Exception as e:
-                print(f"⚠️ Errore ricerca fuzzy: {e}")
-
-    # Nuovo metodo per attivare i tab e sotto-tab
+        # Imposta la Dashboard come tab attivo all'avvio
+        self.tabs.setCurrentIndex(0)
+        self.logger.info("Setup dei tab completato.")
 
     # main_tab_name, sub_tab_name, activate_report_sub_tab (opzionale)
     @pyqtSlot(str, str, bool)
@@ -1546,17 +1475,39 @@ class CatastoMainWindow(QMainWindow):
         
         # Chiamiamo la funzione di refresh esistente, mostrando il messaggio di successo
         self.db_manager.refresh_materialized_views(show_success_message=True)
+    def _apri_manuale_utente(self):
+        """
+        Apre il file PDF del manuale utente situato nella cartella 'resources'.
+        """
+        try:
+            # Ricostruiamo il percorso del manuale
+            base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            manual_path = os.path.join(base_dir, "resources", "manuale_utente.pdf")
 
-print("[FASE 3] Fine definizione classe CatastoMainWindow.")
+            if os.path.exists(manual_path):
+                self.logger.info(f"Tentativo di aprire il manuale utente da: {manual_path}")
+                QDesktopServices.openUrl(QUrl.fromLocalFile(manual_path))
+            else:
+                self.logger.error(f"File del manuale non trovato al percorso: {manual_path}")
+                QMessageBox.warning(self, "Manuale Non Trovato",
+                                    "Il file del manuale utente (manuale_utente.pdf) non è stato trovato "
+                                    "nella cartella 'resources' dell'applicazione.")
+        except Exception as e:
+            self.logger.error(f"Errore imprevisto durante l'apertura del manuale: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile aprire il manuale:\n{e}")
+
+
+
 def run_gui_app():
     try:
         print("[FASE 4] Inizio esecuzione run_gui_app()")
         app = QApplication(sys.argv)
-        # --- MODIFICA QUI: Aggiungi la variabile per l'URL della guida ---
+        
         base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
         logo_path_for_welcome = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
-        help_manual_url = "https://www.google.com/search?q=manuale+catasto_storico+online" # URL di esempio
-        # --- FINE MODIFICA ---
+        
+        manuale_utente_path = os.path.join(base_dir_app, "resources", "manuale_utente.pdf")
+        
 
         print("[FASE 5] QApplication creata.")
         QApplication.setOrganizationName("ArchivioDiStatoSavona")
@@ -1618,20 +1569,22 @@ def run_gui_app():
                 # --- CONNESSO CON SUCCESSO: PROCEDI AL LOGIN UTENTE ---
                 login_dialog = LoginDialog(db_manager_gui, parent=main_window_instance)
                 if login_dialog.exec_() == QDialog.Accepted:
+                    # --- MODIFICA QUI: Passa il percorso del file locale ---
+                    welcome_screen = WelcomeScreen(
+                        parent=None,
+                        logo_path=logo_path_for_welcome,
+                        help_url=manuale_utente_path  # Usa la nuova variabile
+                    )
+                    # --- FINE MODIFICA ---
                     if login_dialog.logged_in_user_id is not None and login_dialog.current_session_id_from_dialog:
                          # --- MODIFICA QUI: Passa l'URL al costruttore ---
                         welcome_screen = WelcomeScreen(
                             parent=None,
                             logo_path=logo_path_for_welcome,
-                            help_url=help_manual_url  # Passa la variabile
+                            help_url=manuale_utente_path  # Passa la variabile
                         )
                         # --- FINE MODIFICA ---
-                        # Login riuscito, mostra Welcome Screen
-                        welcome_screen = WelcomeScreen(
-                            parent=None,
-                            logo_path=logo_path_for_welcome,
-                            help_url=help_manual_url
-                        )
+                        
                         welcome_screen_result = welcome_screen.exec_()
 
                         if welcome_screen_result == QDialog.Accepted:

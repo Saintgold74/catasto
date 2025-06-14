@@ -2,14 +2,9 @@
 import os,csv,sys,logging,json
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
-from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path
+from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, prompt_to_open_file
 import pandas as pd # Importa pandas
 
-# Importazioni PyQt5
-# Importazioni necessarie (QSvgWidget già dovrebbe esserci dalla risposta precedente)
-#from PyQt5.QtSvgWidgets import QSvgWidget
-# QByteArray non è più necessario se carichi da file
-# from PyQt5.QtCore import QByteArray
 # Importazioni PyQt5
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
@@ -946,12 +941,10 @@ class RicercaAvanzataImmobiliWidget(QWidget):
             QMessageBox.critical(self, "Errore Ricerca",
                                  f"Si è verificato un errore imprevisto: {e}")
 
+# In gui_widgets.py, SOSTITUISCI l'intera classe InserimentoComuneWidget con questa:
 
 class InserimentoComuneWidget(QWidget):
-    # Definisci il segnale a livello di classe
-    # Questo segnale emetterà l'ID del nuovo comune inserito (o True/False per successo generico)
-    comune_appena_inserito = pyqtSignal(int) # Emette l'ID del nuovo comune
-    # Oppure, se non vuoi passare l'ID: comune_appena_inserito = pyqtSignal()
+    comune_appena_inserito = pyqtSignal(int)
 
     def __init__(self, parent: Optional[QWidget] = None,
                  db_manager: Optional['CatastoDBManager'] = None,
@@ -959,270 +952,129 @@ class InserimentoComuneWidget(QWidget):
         super().__init__(parent)
         self.db_manager = db_manager
         self.utente_attuale_info = utente_attuale_info
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self._data_loaded = False
         self._initUI()
-        self._carica_elenco_periodi()
 
     def _initUI(self):
-        # ... (definizione di main_layout, form_group, form_layout_container, form_layout come prima) ...
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
         form_group = QGroupBox("Dati del Nuovo Comune")
-        form_layout_container = QVBoxLayout(form_group)
-        form_layout = QFormLayout()
+        form_layout = QFormLayout(form_group)
         form_layout.setSpacing(10)
-        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        # --- Campi del form aggiornati ---
         self.nome_comune_edit = QLineEdit()
-        self.provincia_edit = QLineEdit("SV")
-        self.provincia_edit.setMaxLength(2)
-        self.regione_edit = QLineEdit()
-        self.periodo_id_spinbox = QSpinBox()
-        self.periodo_id_spinbox.setMinimum(1)
-        self.periodo_id_spinbox.setMaximum(99999)
         form_layout.addRow("Nome Comune (*):", self.nome_comune_edit)
+        
+        self.provincia_edit = QLineEdit("SV")
+        self.provincia_edit.setMaxLength(100)
         form_layout.addRow("Provincia (*):", self.provincia_edit)
+
+        self.regione_edit = QLineEdit()
+        self.regione_edit.setMaxLength(100)
         form_layout.addRow("Regione (*):", self.regione_edit)
-        form_layout.addRow("Periodo ID (*):", self.periodo_id_spinbox)
-        form_layout_container.addLayout(form_layout)
+
+        self.codice_catastale_edit = QLineEdit()
+        self.codice_catastale_edit.setPlaceholderText("Es. A123 (opzionale)")
+        form_layout.addRow("Codice Catastale:", self.codice_catastale_edit)
+        
+        # --- NUOVA GESTIONE PER DATA ISTITUZIONE (FACOLTATIVA) ---
+        self.data_istituzione_check = QCheckBox("Imposta data istituzione")
+        self.data_istituzione_edit = QDateEdit(calendarPopup=True)
+        self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_istituzione_edit.setEnabled(False)
+        self.data_istituzione_check.toggled.connect(self.data_istituzione_edit.setEnabled) # Collega il check al campo data
+        data_istituzione_layout = QHBoxLayout(); data_istituzione_layout.addWidget(self.data_istituzione_check); data_istituzione_layout.addWidget(self.data_istituzione_edit)
+        form_layout.addRow("Data Istituzione:", data_istituzione_layout)
+        
+        # --- NUOVA GESTIONE PER DATA SOPPRESSIONE (FACOLTATIVA) ---
+        self.data_soppressione_check = QCheckBox("Imposta data soppressione")
+        self.data_soppressione_edit = QDateEdit(calendarPopup=True)
+        self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
+        self.data_soppressione_edit.setEnabled(False)
+        self.data_soppressione_check.toggled.connect(self.data_soppressione_edit.setEnabled)
+        data_soppressione_layout = QHBoxLayout(); data_soppressione_layout.addWidget(self.data_soppressione_check); data_soppressione_layout.addWidget(self.data_soppressione_edit)
+        form_layout.addRow("Data Soppressione:", data_soppressione_layout)
+
+        self.note_edit = QTextEdit()
+        self.note_edit.setFixedHeight(60)
+        form_layout.addRow("Note:", self.note_edit)
+        
+        self.periodo_combo = QComboBox()
+        form_layout.addRow("Periodo Storico:", self.periodo_combo)
+        
         main_layout.addWidget(form_group)
 
-        # --- Sezione Riepilogo Periodi Storici ---
-        periodi_riepilogo_group = QGroupBox("Riferimento Periodi Storici")
-        periodi_riepilogo_layout = QVBoxLayout(periodi_riepilogo_group)
-        periodi_riepilogo_layout.setSpacing(5)
-
-        # Layout per pulsanti sopra la tabella dei periodi
-        periodi_table_actions_layout = QHBoxLayout()
-        self.btn_dettaglio_modifica_periodo = QPushButton(QApplication.style(
-        ).standardIcon(QStyle.SP_FileDialogInfoView), " Dettagli/Modifica Periodo")
-        self.btn_dettaglio_modifica_periodo.setToolTip(
-            "Visualizza o modifica i dettagli del periodo storico selezionato")
-        self.btn_dettaglio_modifica_periodo.clicked.connect(
-            self._apri_dettaglio_modifica_periodo)
-        self.btn_dettaglio_modifica_periodo.setEnabled(
-            False)  # Inizialmente disabilitato
-        periodi_table_actions_layout.addWidget(
-            self.btn_dettaglio_modifica_periodo)
-        periodi_table_actions_layout.addStretch()
-        btn_aggiorna_periodi = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_BrowserReload), " Aggiorna Elenco")
-        btn_aggiorna_periodi.clicked.connect(self._carica_elenco_periodi)
-        periodi_table_actions_layout.addWidget(btn_aggiorna_periodi)
-        # Aggiungi layout azioni sopra la tabella
-        periodi_riepilogo_layout.addLayout(periodi_table_actions_layout)
-
-        self.periodi_table = QTableWidget()
-        self.periodi_table.setColumnCount(4)
-        self.periodi_table.setHorizontalHeaderLabels(
-            ["ID", "Nome Periodo", "Anno Inizio", "Anno Fine"])
-        self.periodi_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.periodi_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.periodi_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.periodi_table.setAlternatingRowColors(True)
-        self.periodi_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.periodi_table.setMinimumHeight(120)
-        self.periodi_table.setMaximumHeight(250)
-        self.periodi_table.itemSelectionChanged.connect(
-            self._aggiorna_stato_pulsante_dettaglio_periodo)  # Connetti a nuovo metodo
-        self.periodi_table.itemDoubleClicked.connect(
-            self._apri_dettaglio_modifica_periodo_da_doppio_click)  # Connetti doppio click
-
-        periodi_riepilogo_layout.addWidget(self.periodi_table)
-        main_layout.addWidget(periodi_riepilogo_group)
-
-        # ... (linea e pulsanti Inserisci/Pulisci come prima) ...
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        main_layout.addWidget(line)
+        # Pulsanti
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        self.submit_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogSaveButton), " Inserisci Comune")
-        self.submit_button.clicked.connect(self.inserisci_comune)
-        self.clear_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogDiscardButton), " Pulisci Campi")
-        self.clear_button.clicked.connect(self.pulisci_campi)
-        button_layout.addStretch()
-        button_layout.addWidget(self.submit_button)
-        button_layout.addWidget(self.clear_button)
+        self.submit_button = QPushButton("Inserisci Comune"); self.submit_button.clicked.connect(self.inserisci_comune)
+        self.clear_button = QPushButton("Pulisci Campi"); self.clear_button.clicked.connect(self.pulisci_campi)
+        button_layout.addStretch(); button_layout.addWidget(self.submit_button); button_layout.addWidget(self.clear_button)
         main_layout.addLayout(button_layout)
         main_layout.addStretch(1)
+        self.setLayout(main_layout)
 
-    def _aggiorna_stato_pulsante_dettaglio_periodo(self):
-        """Abilita il pulsante Dettagli/Modifica Periodo se una riga è selezionata."""
-        if hasattr(self, 'btn_dettaglio_modifica_periodo'):  # Controllo di sicurezza
-            self.btn_dettaglio_modifica_periodo.setEnabled(
-                bool(self.periodi_table.selectedItems()))
+    def load_initial_data(self):
+        # ... (questo metodo rimane invariato)
+        if self._data_loaded or not self.db_manager or not self.db_manager.pool: return
+        self._carica_elenco_periodi()
+        self._data_loaded = True
 
-    def _get_selected_periodo_id(self) -> Optional[int]:
-        """Restituisce l'ID del periodo attualmente selezionato nella tabella dei periodi."""
-        selected_items = self.periodi_table.selectedItems()
-        if not selected_items:
-            return None
-
-        current_row = self.periodi_table.currentRow()
-        if current_row < 0:
-            return None
-
-        id_item = self.periodi_table.item(current_row, 0)  # Colonna ID
-        if id_item and id_item.text().isdigit():
-            return int(id_item.text())
-        return None
-
-    def _apri_dettaglio_modifica_periodo_da_doppio_click(self, item: QTableWidgetItem):
-        """Gestisce il doppio click sulla tabella dei periodi."""
-        # Non serve controllare item se la chiamata proviene da un segnale valido di itemDoubleClicked
-        self._apri_dettaglio_modifica_periodo()
-
-    def _apri_dettaglio_modifica_periodo(self):
-        """Apre il dialogo per visualizzare/modificare il periodo selezionato."""
-        selected_periodo_id = self._get_selected_periodo_id()
-        if selected_periodo_id is None:
-            QMessageBox.information(self, "Nessuna Selezione",
-                                    "Selezionare un periodo dalla tabella per vederne/modificarne i dettagli.")
-            return
-
-        dialog = PeriodoStoricoDetailsDialog(
-            self.db_manager, selected_periodo_id, self)
-        if dialog.exec_() == QDialog.Accepted:
-            # Se il dialogo è stato accettato (modifiche salvate), ricarica l'elenco dei periodi
-            logging.getLogger("CatastoGUI").info(
-                f"Dialogo dettagli/modifica periodo ID {selected_periodo_id} chiuso con successo. Aggiorno elenco periodi.")
-            self._carica_elenco_periodi()
-        else:
-            logging.getLogger("CatastoGUI").info(
-                f"Dialogo dettagli/modifica periodo ID {selected_periodo_id} annullato o chiuso.")
-
-    # Mantieni _carica_elenco_periodi, pulisci_campi, inserisci_comune come sono stati definiti correttamente prima.
-    # ...
     def _carica_elenco_periodi(self):
-        self.periodi_table.setRowCount(0)
-        self.periodi_table.setSortingEnabled(False)
+        # ... (questo metodo rimane invariato)
+        self.periodo_combo.clear(); self.periodo_combo.addItem("--- Nessuno ---", None)
         try:
-            logging.getLogger("CatastoGUI").info(
-                "Chiamata a db_manager.get_historical_periods()...")
             periodi = self.db_manager.get_historical_periods()
-            logging.getLogger("CatastoGUI").info(
-                f"Elenco periodi ricevuto da DBManager (tipo: {type(periodi)}): {periodi if periodi is not None else 'None'}")
             if periodi:
-                logging.getLogger("CatastoGUI").info(
-                    f"Numero di periodi ricevuti: {len(periodi)}")
-                self.periodi_table.setRowCount(len(periodi))
-                for row_idx, periodo_data in enumerate(periodi):
-                    col = 0
-                    id_item = QTableWidgetItem(
-                        str(periodo_data.get('id', 'N/D')))
-                    self.periodi_table.setItem(row_idx, col, id_item)
-                    col += 1
-                    nome_item = QTableWidgetItem(
-                        periodo_data.get('nome', 'N/D'))
-                    self.periodi_table.setItem(row_idx, col, nome_item)
-                    col += 1
-                    anno_i_item = QTableWidgetItem(
-                        str(periodo_data.get('anno_inizio', 'N/D')))
-                    self.periodi_table.setItem(row_idx, col, anno_i_item)
-                    col += 1
-                    anno_f_item = QTableWidgetItem(
-                        str(periodo_data.get('anno_fine', 'N/D')))
-                    self.periodi_table.setItem(row_idx, col, anno_f_item)
-                    col += 1
-                self.periodi_table.resizeColumnsToContents()
-            else:
-                logging.getLogger("CatastoGUI").warning(
-                    "Nessun periodo storico restituito da db_manager.get_historical_periods() o la lista è vuota.")
-                self.periodi_table.setRowCount(1)
-                self.periodi_table.setItem(0, 0, QTableWidgetItem(
-                    "Nessun periodo storico trovato nel database."))
-                self.periodi_table.setSpan(
-                    0, 0, 1, self.periodi_table.columnCount())
+                for periodo in periodi:
+                    display_text = f"{periodo.get('nome')} ({periodo.get('anno_inizio')} - {periodo.get('anno_fine', 'oggi')})"
+                    self.periodo_combo.addItem(display_text, periodo.get('id'))
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore imprevisto durante _carica_elenco_periodi: {e}", exc_info=True)
-            QMessageBox.warning(self, "Errore Caricamento Periodi",
-                                f"Impossibile caricare l'elenco dei periodi:\n{type(e).__name__}: {e}")
-            self.periodi_table.setRowCount(1)
-            self.periodi_table.setItem(0, 0, QTableWidgetItem(
-                "Errore nel caricamento dei periodi."))
-            self.periodi_table.setSpan(
-                0, 0, 1, self.periodi_table.columnCount())
-        finally:
-            self.periodi_table.setSortingEnabled(True)
-            self._aggiorna_stato_pulsante_dettaglio_periodo()  # Aggiorna stato pulsante qui
+            QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare l'elenco dei periodi storici:\n{e}")
 
     def pulisci_campi(self):
-        self.nome_comune_edit.clear()
-        self.provincia_edit.setText("SV")
-        self.regione_edit.clear()
-        self.periodo_id_spinbox.setValue(self.periodo_id_spinbox.minimum())
+        self.nome_comune_edit.clear(); self.provincia_edit.setText("SV"); self.regione_edit.clear()
+        self.codice_catastale_edit.clear(); self.note_edit.clear()
+        
+        # --- MODIFICA QUI: Resetta anche le checkbox ---
+        self.data_istituzione_check.setChecked(False)
+        self.data_soppressione_check.setChecked(False)
+        # Il segnale 'toggled' disabiliterà automaticamente i QDateEdit
+        
+        self.periodo_combo.setCurrentIndex(0)
         self.nome_comune_edit.setFocus()
 
     def inserisci_comune(self):
-        """Inserisce un nuovo comune nel database."""
+        # Raccoglie i dati da tutti i campi
         nome_comune = self.nome_comune_edit.text().strip()
         provincia = self.provincia_edit.text().strip()
         regione = self.regione_edit.text().strip()
-        periodo_id_val = self.periodo_id_spinbox.value()
-        if not nome_comune:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Il nome del comune è obbligatorio.")
-            self.nome_comune_edit.setFocus()
+        codice_catastale = self.codice_catastale_edit.text().strip() or None
+        note = self.note_edit.toPlainText().strip() or None
+        periodo_id_val = self.periodo_combo.currentData()
+        
+        # --- MODIFICA QUI: Legge le date solo se le checkbox sono spuntate ---
+        data_ist = self.data_istituzione_edit.date().toPyDate() if self.data_istituzione_check.isChecked() else None
+        data_sopp = self.data_soppressione_edit.date().toPyDate() if self.data_soppressione_check.isChecked() else None
+
+        if not all([nome_comune, provincia, regione]):
+            QMessageBox.warning(self, "Dati Mancanti", "Nome, Provincia e Regione sono campi obbligatori.")
             return
-        if not provincia:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "La provincia è obbligatoria (2 caratteri).")
-            self.provincia_edit.setFocus()
-            return
-        if not regione:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "La regione è obbligatoria.")
-            self.regione_edit.setFocus()
-            return
-        if periodo_id_val < self.periodo_id_spinbox.minimum():
-            QMessageBox.warning(
-                self, "Dati Mancanti", "L'ID del periodo è obbligatorio e deve essere un valore valido.")
-            self.periodo_id_spinbox.setFocus()
-            return
-        username_per_log = "utente_sconosciuto"
-        if self.utente_attuale_info and isinstance(self.utente_attuale_info, dict):
-            username_per_log = self.utente_attuale_info.get(
-                'username', 'utente_sconosciuto')
-        elif isinstance(self.utente_attuale_info, str):
-            username_per_log = self.utente_attuale_info
-        logging.getLogger("CatastoGUI").debug(
-            f"InserimentoComuneWidget: Invio al DBManager -> nome='{nome_comune}', prov='{provincia}', regione='{regione}', periodo_id='{periodo_id_val}', utente='{username_per_log}'")
+
+        username_per_log = self.utente_attuale_info.get('username', 'utente_sconosciuto') if self.utente_attuale_info else 'utente_sconosciuto'
+        
         try:
             comune_id = self.db_manager.aggiungi_comune(
                 nome_comune=nome_comune, provincia=provincia, regione=regione,
-                periodo_id=periodo_id_val, utente=username_per_log
+                periodo_id=periodo_id_val, codice_catastale=codice_catastale,
+                data_istituzione=data_ist, data_soppressione=data_sopp, # Passa i valori corretti (o None)
+                note=note, utente=username_per_log
             )
-            if comune_id is not None:
-                QMessageBox.information(
-                    self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
-                self.pulisci_campi()
-                self._carica_elenco_periodi()
-                # Emetti il segnale con l'ID del nuovo comune!
-                self.comune_appena_inserito.emit(comune_id)
-                logging.getLogger("CatastoGUI").info(f"Segnale comune_appena_inserito emesso per comune ID: {comune_id}")
-                      
-        except DBUniqueConstraintError as uve:
-            logging.getLogger("CatastoGUI").warning(
-                f"Unicità violata inserendo comune '{nome_comune}': {str(uve)}")
-            QMessageBox.critical(self, "Errore di Unicità", str(uve))
-        except DBDataError as dde:
-            logging.getLogger("CatastoGUI").warning(
-                f"Dati non validi per comune '{nome_comune}': {str(dde)}")
-            QMessageBox.warning(self, "Dati Non Validi", str(dde))
-        except DBMError as dbe:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB inserendo comune '{nome_comune}': {str(dbe)}", exc_info=True)
-            QMessageBox.critical(self, "Errore Database", str(dbe))
-        except Exception as e:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto inserendo comune '{nome_comune}': {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico",
-                                 f"Errore imprevisto: {type(e).__name__}: {e}")
-
+            QMessageBox.information(self, "Successo", f"Comune '{nome_comune}' inserito con ID: {comune_id}.")
+            self.pulisci_campi()
+            self.comune_appena_inserito.emit(comune_id)
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore Inserimento", str(e))
 
 class InserimentoPossessoreWidget(QWidget):
     import_csv_requested = pyqtSignal()
@@ -1293,32 +1145,57 @@ class InserimentoPossessoreWidget(QWidget):
 
         main_layout.addStretch()
         
-        # --- INIZIO BLOCCO AGGIUNTO ---
-
-        # Aggiungiamo una linea separatrice per pulizia visiva
-        linea_separatrice = QFrame()
-        linea_separatrice.setFrameShape(QFrame.HLine)
-        linea_separatrice.setFrameShadow(QFrame.Sunken)
-        form_layout.addWidget(linea_separatrice)
-
         # Creiamo un gruppo per le azioni di importazione
         import_group = QGroupBox("Azioni Aggiuntive")
-        import_layout = QVBoxLayout(import_group)
+        # --- MODIFICA QUI: usiamo un QHBoxLayout per mettere i pulsanti in linea ---
+        import_layout = QHBoxLayout(import_group)
 
         self.import_button = QPushButton("📂 Importa Possessori da CSV...")
         self.import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         self.import_button.setToolTip("Apre una finestra per selezionare e importare un file CSV di possessori.")
-        
-        # Colleghiamo il click del pulsante all'emissione del nostro nuovo segnale
         self.import_button.clicked.connect(self.import_csv_requested.emit)
 
+        # Creiamo il nuovo pulsante di aiuto
+        self.info_button_possessori = QPushButton("Info Formato")
+        self.info_button_possessori.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion))
+        self.info_button_possessori.clicked.connect(self._mostra_info_formato_csv)
+        
         import_layout.addWidget(self.import_button)
+        import_layout.addWidget(self.info_button_possessori)
+        import_layout.addStretch()
+        # --- FINE MODIFICA ---
         form_layout.addWidget(import_group)
 
         # --- FINE BLOCCO AGGIUNTO ---
 
         self.setLayout(form_layout)
         self._pulisci_campi_possessore() # Per impostare lo stato iniziale
+    def _mostra_info_formato_csv(self):
+        """Mostra un dialogo con le informazioni sul formato CSV per i possessori."""
+        info_text = """
+        <h3>Formato CSV per Importazione Possessori</h3>
+        <p>Il file CSV deve rispettare le seguenti regole:</p>
+        <ul>
+            <li>Utilizzare il punto e virgola (<b>;</b>) come delimitatore.</li>
+            <li>La prima riga deve contenere le intestazioni delle colonne.</li>
+            <li>Le virgolette doppie (") sono gestite correttamente.</li>
+        </ul>
+        <p><b>Colonne Richieste:</b></p>
+        <ul>
+            <li><b>cognome_nome</b>: Il cognome e nome separati da spazio (es. Rossi Mario).</li>
+            <li><b>nome_completo</b>: Il nome completo come deve apparire, includendo la paternità.</li>
+        </ul>
+        <p><b>Colonne Opzionali:</b></p>
+        <ul>
+            <li><b>paternita</b>: La paternità (es. fu Carlo).</li>
+        </ul>
+        <hr>
+        <p><b>Esempio di contenuto del file:</b></p>
+        <pre style="background-color:#f0f0f0; padding:5px;"><code>cognome_nome;paternita;nome_completo
+        Rossi Mario;fu Giovanni;Rossi Mario fu Giovanni
+        Bianchi Giuseppe;;Bianchi Giuseppe</code></pre>
+        """
+        QMessageBox.information(self, "Guida Formato CSV - Possessori", info_text)
 
     def _genera_e_imposta_nome_completo(self):
         """
@@ -1699,15 +1576,56 @@ class InserimentoPartitaWidget(QWidget):
 
         # Sezione per l'importazione CSV
         import_group = QGroupBox("Importazione Massiva")
-        import_layout = QVBoxLayout(import_group)
+        # --- MODIFICA QUI: usiamo un QHBoxLayout ---
+        import_layout = QHBoxLayout(import_group)
+        
         import_button = QPushButton("📂 Importa Partite da File CSV...")
         import_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         import_button.clicked.connect(self.import_csv_requested.emit)
+
+        # Creiamo il nuovo pulsante di aiuto
+        info_button_partite = QPushButton("Info Formato")
+        info_button_partite.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion))
+        info_button_partite.clicked.connect(self._mostra_info_formato_csv)
+
         import_layout.addWidget(import_button)
+        import_layout.addWidget(info_button_partite)
+        import_layout.addStretch()
+        # --- FINE MODIFICA ---
         main_layout.addWidget(import_group)
 
         main_layout.addStretch()
         self.setLayout(main_layout)
+        
+    def _mostra_info_formato_csv(self):
+        """Mostra un dialogo con le informazioni sul formato CSV per le partite."""
+        info_text = """
+        <h3>Formato CSV per Importazione Partite</h3>
+        <p>Il file CSV deve rispettare le seguenti regole:</p>
+        <ul>
+            <li>Utilizzare il punto e virgola (<b>;</b>) come delimitatore.</li>
+            <li>La prima riga deve contenere le intestazioni delle colonne.</li>
+        </ul>
+        <p><b>Colonne Richieste (*):</b></p>
+        <ul>
+            <li><b>numero_partita</b> (*): Numero intero della partita.</li>
+            <li><b>data_impianto</b> (*): Data in formato YYYY-MM-DD.</li>
+            <li><b>stato</b> (*): Testo, 'attiva' o 'inattiva'.</li>
+            <li><b>tipo</b> (*): Testo, 'principale' o 'secondaria'.</li>
+        </ul>
+        <p><b>Colonne Opzionali:</b></p>
+        <ul>
+            <li><b>suffisso_partita</b>: Suffisso testuale (es. A, bis).</li>
+            <li><b>data_chiusura</b>: Data in formato YYYY-MM-DD.</li>
+            <li><b>numero_provenienza</b>: Testo o numero di riferimento.</li>
+        </ul>
+        <hr>
+        <p><b>Esempio di contenuto del file:</b></p>
+        <pre style="background-color:#f0f0f0; padding:5px;"><code>numero_partita;suffisso_partita;data_impianto;stato;tipo
+        1005;A;1980-05-20;attiva;principale
+        1006;;1975-11-10;inattiva;principale</code></pre>
+        """
+        QMessageBox.information(self, "Guida Formato CSV - Partite", info_text)
 
     def load_initial_data(self):
         """Metodo per caricare i dati necessari, come la lista dei comuni."""
@@ -3609,19 +3527,22 @@ class ReportisticaWidget(QWidget):
         partita_id = self.partita_id_edit.value()
         if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
         report = self.db_manager.genera_report_proprieta(partita_id)
-        self.report_output_browser.setText(report or f"Nessun report generato per la partita ID {partita_id}.")
+        # --- MODIFICA QUI ---
+        # Usiamo setPlainText per garantire che il contenuto sia interpretato come testo semplice
+        self.report_output_browser.setPlainText(report or f"Nessun report generato per la partita ID {partita_id}.")
+        # --- FINE MODIFICA --
 
     def generate_genealogico(self):
         partita_id = self.partita_id_gen_edit.value()
         if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
         report = self.db_manager.genera_report_genealogico(partita_id)
-        self.report_output_browser.setText(report or f"Nessun report genealogico generato per la partita ID {partita_id}.")
+        self.report_output_browser.setPlainText(report or f"Nessun report genealogico generato per la partita ID {partita_id}.")
 
     def generate_possessore(self):
         possessore_id = self.possessore_id_edit.value()
         if possessore_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID possessore valido.")
         report = self.db_manager.genera_report_possessore(possessore_id)
-        self.report_output_browser.setText(report or f"Nessun report generato per il possessore ID {possessore_id}.")
+        self.report_output_browser.setPlainText(report or f"Nessun report generato per il possessore ID {possessore_id}.")
         
     # La generazione del report consultazioni può rimanere in un dialogo separato o essere integrata qui.
     # Per ora la omettiamo dal nuovo layout per semplicità.
@@ -5004,266 +4925,193 @@ class RegistraConsultazioneWidget(QWidget):
 
 # In gui_widgets.py
 
-class LandingPageWidget(QWidget):
-    # Definisci TUTTI i segnali che vengono emessi da questa pagina
-    apri_ricerca_globale_signal = pyqtSignal()
-    apri_elenco_comuni_signal = pyqtSignal()
-    apri_ricerca_partite_signal = pyqtSignal()
-    
-    apri_registra_proprieta_signal = pyqtSignal()
-    apri_ricerca_globale_signal = pyqtSignal()
-    apri_registra_possessore_signal = pyqtSignal()
-    apri_registra_consultazione_signal = pyqtSignal()
-    apri_report_proprieta_signal = pyqtSignal() # Questo era mancante
-    apri_report_genealogico_signal = pyqtSignal()    # Questo era mancante
+# In gui_widgets.py, puoi commentare o eliminare la vecchia classe LandingPageWidget
+# e aggiungere questa nuova classe.
 
-    def __init__(self, parent=None):
+class DashboardWidget(QWidget):
+    # Segnali per navigare ad altri tab (manteniamo la logica)
+    go_to_tab_signal = pyqtSignal(str, str) # Segnale emetterà (nome_tab_principale, nome_sotto_tab)
+
+    def __init__(self, db_manager: 'CatastoDBManager', current_user_info: Optional[Dict], parent=None):
         super().__init__(parent)
+        self.db_manager = db_manager
+        self.current_user_info = current_user_info
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.initUI()
+        self._initUI()
+        self.load_initial_data() # Lazy loading
 
-    def initUI(self):
+    def _initUI(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignTop) # Allinea il contenuto in alto
-        main_layout.setSpacing(20) # Spazio tra le sezioni
-         # --- INIZIO INTEGRAZIONE LOGO DA FILE ESTERNO ---
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(25)
 
-        # 1. Determina il percorso del file SVG.
-        #    Assumiamo che gui_widgets.py sia nella cartella principale del progetto
-        #    e il logo sia in una sottocartella 'resources'.
+        # 1. Intestazione
+        nome_utente = self.current_user_info.get('nome_completo', 'Utente') if self.current_user_info else 'Utente'
+        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.0, {nome_utente}</h2>")
+        header_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(header_label)
 
-        try:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            # Percorso al file dell'immagine (PNG o JPG)
-            logo_path = os.path.join(base_dir, "resources", "logo_meridiana.png") # Assicurati che questo percorso sia corretto e il file esista
+        # 2. Ricerca Globale
+        search_group = QGroupBox("Ricerca Rapida")
+        search_layout = QHBoxLayout(search_group)
+        self.search_edit = QLineEdit(); self.search_edit.setPlaceholderText("Cerca qualsiasi cosa nel catasto...")
+        self.search_edit.setMinimumHeight(35)
+        self.search_button = QPushButton("Cerca"); self.search_button.clicked.connect(self._avvia_ricerca_globale)
+        self.search_edit.returnPressed.connect(self._avvia_ricerca_globale)
+        search_layout.addWidget(self.search_edit); search_layout.addWidget(self.search_button)
+        main_layout.addWidget(search_group)
 
-            self.logo_widget = QLabel() # Inizializza come QLabel
-            
-            if os.path.exists(logo_path):
-                pixmap = QPixmap(logo_path)
-                if not pixmap.isNull():
-                    # Definire le nuove dimensioni desiderate per il logo (es. 250x250 o 300x300)
-                    # Ho aumentato da 150 a 250. Puoi sperimentare con valori maggiori.
-                    new_width = 250
-                    new_height = 140
+        # 3. Statistiche Rapide
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
+        self.stat_comuni_label = self._create_stat_card("Comuni", "0", "background-color: #e6f7ff; border-color: #91d5ff;")
+        self.stat_partite_label = self._create_stat_card("Partite", "0", "background-color: #f6ffed; border-color: #b7eb8f;")
+        self.stat_possessori_label = self._create_stat_card("Possessori", "0", "background-color: #fffbe6; border-color: #ffe58f;")
+        self.stat_immobili_label = self._create_stat_card("Immobili", "0", "background-color: #fff1f0; border-color: #ffccc7;")
+        stats_layout.addWidget(self.stat_comuni_label); stats_layout.addWidget(self.stat_partite_label)
+        stats_layout.addWidget(self.stat_possessori_label); stats_layout.addWidget(self.stat_immobili_label)
+        main_layout.addLayout(stats_layout)
 
-                    # Scala l'immagine per adattarla alle dimensioni desiderate
-                    # Qt.KeepAspectRatio: mantiene le proporzioni per evitare distorsioni.
-                    # Qt.SmoothTransformation: usa un algoritmo di scalatura di alta qualità.
-                    scaled_pixmap = pixmap.scaled(new_width, new_height,
-                                                  Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    self.logo_widget.setPixmap(scaled_pixmap)
-                    self.logo_widget.setAlignment(Qt.AlignCenter) # Centra l'immagine all'interno della QLabel
-                else:
-                    self.logger.error(f"Impossibile caricare QPixmap dal file: {logo_path}. Il file potrebbe essere corrotto o non un'immagine valida.")
-                    self.logo_widget.setText("Errore caricamento immagine")
-                    self.logo_widget.setAlignment(Qt.AlignCenter)
-                    self.logo_widget.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-            else:
-                self.logger.error(f"File logo immagine non trovato in:\n{logo_path}")
-                self.logo_widget.setText("Logo non caricato")
-                self.logo_widget.setAlignment(Qt.AlignCenter)
-                self.logo_widget.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-
-        except Exception as e:
-            self.logger.error(f"Eccezione durante il caricamento del logo (tentativo con QPixmap): {e}", exc_info=True)
-            self.logo_widget = QLabel("Errore caricamento logo")
-            self.logo_widget.setAlignment(Qt.AlignCenter)
-            self.logo_widget.setStyleSheet("QLabel { color: red; }")
-
-        # Imposta le dimensioni fisse del widget contenitore (QLabel)
-        # Queste devono corrispondere o essere leggermente superiori alle dimensioni di scalatura del pixmap
-        self.logo_widget.setFixedSize(new_width, new_height) # Usa le stesse dimensioni di scalatura
-
-
-        # 3. Aggiungi il logo al layout (come prima)
-        logo_container_layout = QHBoxLayout()
-        logo_container_layout.addStretch()
-        logo_container_layout.addWidget(self.logo_widget)
-        logo_container_layout.addStretch()
+        # 4. Attività Recenti e Azioni Rapide
+        bottom_layout = QHBoxLayout()
         
-        main_layout.addLayout(logo_container_layout)
+        recent_activity_group = QGroupBox("Attività Recenti nel Database")
+        recent_activity_layout = QVBoxLayout(recent_activity_group)
+        self.audit_table = QTableWidget(); self.audit_table.setColumnCount(4)
+        self.audit_table.setHorizontalHeaderLabels(["Data/Ora", "Utente", "Azione", "Dettagli"])
+        self.audit_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.audit_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        recent_activity_layout.addWidget(self.audit_table)
+        bottom_layout.addWidget(recent_activity_group, 2) # Diamo più spazio a questa sezione
 
-        # --- FINE INTEGRAZIONE LOGO ---
-        # Titolo di Benvenuto
-        title_label = QLabel("Gestionale Catasto Storico")
-        title_font = QFont()
-        title_font.setPointSize(20)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title_label)
+        actions_group = QGroupBox("Azioni Rapide")
+        actions_layout = QVBoxLayout(actions_group)
+        btn_new_prop = QPushButton("Registra Nuova Proprietà"); btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registrazione Proprietà"))
+        btn_new_partita = QPushButton("Inserisci Nuova Partita"); btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Nuova Partita"))
+        btn_reports = QPushButton("Vai alla Reportistica"); btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Reportistica", ""))
+        actions_layout.addWidget(btn_new_prop); actions_layout.addWidget(btn_new_partita); actions_layout.addWidget(btn_reports)
+        actions_layout.addStretch()
+        bottom_layout.addWidget(actions_group, 1)
 
-        subtitle_label = QLabel("Archivio di Stato di Savona - Funzionalità Principali")
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(12)
-        subtitle_label.setFont(subtitle_font)
-        subtitle_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(subtitle_label)
-        main_layout.addSpacing(10)
-
-        # Layout a griglia per le sezioni di pulsanti
-        grid_layout = QGridLayout()
-        grid_layout.setSpacing(15)
-        main_layout.addLayout(grid_layout)
-
-        # Sezione Consultazione Rapida
-        consultazione_group = QGroupBox("Consultazione Rapida")
-        consultazione_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        consultazione_layout = QVBoxLayout(consultazione_group)
-        consultazione_layout.setSpacing(10)
-
-        btn_elenco_comuni = QPushButton("Principale")
-        btn_elenco_comuni.clicked.connect(self.apri_elenco_comuni_signal.emit)
-        consultazione_layout.addWidget(btn_elenco_comuni)
-
-        btn_ricerca_partite = QPushButton("Ricerca Partite")
-        btn_ricerca_partite.clicked.connect(self.apri_ricerca_partite_signal.emit)
-        consultazione_layout.addWidget(btn_ricerca_partite)
+        main_layout.addLayout(bottom_layout, 1) # Stretch factor per la parte inferiore
         
-        btn_ricerca_possessori = QPushButton("Ricerca Possessori")
-        btn_ricerca_possessori.clicked.connect(self.apri_ricerca_globale_signal.emit)
-        consultazione_layout.addWidget(btn_ricerca_possessori)
-        grid_layout.addWidget(consultazione_group, 0, 0)
-        
-        # Sezione Operazioni Comuni
-        operazioni_group = QGroupBox("Operazioni Comuni")
-        operazioni_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        operazioni_layout = QVBoxLayout(operazioni_group)
-        operazioni_layout.setSpacing(10)
+    def _create_stat_card(self, title, value, style):
+        card = QLabel(f"<h3>{title}</h3><p style='font-size: 24pt; font-weight: bold;'>{value}</p>")
+        card.setAlignment(Qt.AlignCenter)
+        card.setStyleSheet(f"QLabel {{ border: 1px solid; border-radius: 8px; padding: 10px; {style} }}")
+        card.setMinimumHeight(100)
+        return card
 
-        btn_reg_proprieta = QPushButton("Registra Nuova Proprietà")
-        btn_reg_proprieta.clicked.connect(self.apri_registra_proprieta_signal.emit)
-        operazioni_layout.addWidget(btn_reg_proprieta)
+    def load_initial_data(self):
+        """Carica tutti i dati necessari per la dashboard."""
+        self.logger.info("Caricamento dati per la Dashboard...")
+        # Carica statistiche
+        stats = self.db_manager.get_dashboard_stats()
+        self.stat_comuni_label.setText(f"<h3>Comuni</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_comuni', 0)}</p>")
+        self.stat_partite_label.setText(f"<h3>Partite</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_partite', 0)}</p>")
+        self.stat_possessori_label.setText(f"<h3>Possessori</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_possessori', 0)}</p>")
+        self.stat_immobili_label.setText(f"<h3>Immobili</h3><p style='font-size: 24pt; font-weight: bold;'>{stats.get('total_immobili', 0)}</p>")
 
-        btn_reg_possessore = QPushButton("Registra Nuovo Possessore")
-        btn_reg_possessore.clicked.connect(self.apri_registra_possessore_signal.emit)
-        operazioni_layout.addWidget(btn_reg_possessore)
-        
-        btn_reg_consultazione = QPushButton("Registra Consultazione")
-        btn_reg_consultazione.clicked.connect(self.apri_registra_consultazione_signal.emit)
-        operazioni_layout.addWidget(btn_reg_consultazione)
-        grid_layout.addWidget(operazioni_group, 0, 1)
+        # Carica ultimi log di audit
+        logs, _ = self.db_manager.get_audit_logs(page=1, page_size=5) # Prende solo gli ultimi 5
+        self.audit_table.setRowCount(len(logs))
+        for row, log in enumerate(logs):
+            ts = log.get('timestamp'); ts_str = ts.strftime("%d/%m/%y %H:%M") if ts else "N/D"
+            dettagli = f"{log.get('tabella', '')} ID: {log.get('record_id', '')}"
+            self.audit_table.setItem(row, 0, QTableWidgetItem(ts_str))
+            self.audit_table.setItem(row, 1, QTableWidgetItem(log.get('utente', 'N/D')))
+            self.audit_table.setItem(row, 2, QTableWidgetItem(log.get('operazione', '')))
+            self.audit_table.setItem(row, 3, QTableWidgetItem(dettagli))
+        self.audit_table.resizeColumnsToContents()
 
-        # Sezione Report Principali (assicurati che i pulsanti siano collegati ai segnali corretti)
-        report_group = QGroupBox("Report Principali")
-        report_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        report_layout = QVBoxLayout(report_group)
-        report_layout.setSpacing(10)
-
-        btn_cert_proprieta = QPushButton("Genera Report Proprietà")
-        btn_cert_proprieta.clicked.connect(self.apri_report_proprieta_signal.emit) # <--- COLLEGAMENTO
-        report_layout.addWidget(btn_cert_proprieta)
-
-        btn_rep_genealogico = QPushButton("Genera Report Genealogico")
-        btn_rep_genealogico.clicked.connect(self.apri_report_genealogico_signal.emit) # <--- COLLEGAMENTO
-        report_layout.addWidget(btn_rep_genealogico)
-        grid_layout.addWidget(report_group, 1, 0, 1, 2) # Span su due colonne
-
-        main_layout.addStretch()
-        self.setLayout(main_layout)
-
+    def _avvia_ricerca_globale(self):
+        """Emette un segnale per passare al tab di ricerca globale e inserire il testo."""
+        testo_ricerca = self.search_edit.text().strip()
+        if not testo_ricerca:
+            return
+        # Emettiamo un segnale speciale che la main window può intercettare
+        if hasattr(self.parent(), 'parent') and hasattr(self.parent().parent(), 'avvia_ricerca_globale_da_dashboard'):
+            self.parent().parent().avvia_ricerca_globale_da_dashboard(testo_ricerca)
 class WelcomeScreen(QDialog):
     def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
         super().__init__(parent)
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.setWindowTitle("Benvenuto - Catasto Storico")
+        self.setWindowTitle("Benvenuto - Meridiana 1.0")
         self.setModal(True)
         self.setFixedSize(1024, 768)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
-        self.logo_path = logo_path
         self.help_url = help_url
+        self.logo_path = logo_path
 
         self._init_ui()
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(50, 50, 50, 50)
-        main_layout.setSpacing(30)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
-        logo_horizontal_layout = QHBoxLayout()
-        logo_horizontal_layout.addStretch(1)
-        
-        self.logo_label = QLabel()
+        # --- NUOVA STRUTTURA DI LAYOUT PER CENTRATURA VERTICALE ---
+        # 1. Spaziatore superiore per spingere il contenuto verso il basso
+        main_layout.addStretch(1)
+
+        # Logo
+        logo_layout = QHBoxLayout()
+        logo_layout.addStretch(1)
+        logo_label = QLabel()
         if self.logo_path and os.path.exists(self.logo_path):
             pixmap = QPixmap(self.logo_path)
-            if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(700, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.logo_label.setPixmap(scaled_pixmap)
-                self.logo_label.setFixedSize(scaled_pixmap.size())
-        else:
-            self.logo_label.setText("Logo non disponibile")
-        
-        logo_horizontal_layout.addWidget(self.logo_label)
-        logo_horizontal_layout.addStretch(1)
-        main_layout.addLayout(logo_horizontal_layout)
+            # Riduciamo leggermente le dimensioni massime per garantire più spazio
+            scaled_pixmap = pixmap.scaled(750, 450, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+        logo_layout.addWidget(logo_label)
+        logo_layout.addStretch(1)
+        main_layout.addLayout(logo_layout)
 
-        title_label = QLabel("Gestionale Catasto Storico")
-        title_font = QFont("Segoe UI", 24, QFont.Bold)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
+        # Titolo e Sottotitolo
+        title_label = QLabel("Meridiana 1.0"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
-
-        subtitle_label = QLabel("Archivio di Stato di Savona")
-        subtitle_font = QFont("Segoe UI", 16)
-        subtitle_label.setFont(subtitle_font)
-        subtitle_label.setAlignment(Qt.AlignCenter)
+        
+        subtitle_label = QLabel("Gestionale Catasto Storico - Archivio di Stato di Savona"); subtitle_label.setFont(QFont("Segoe UI", 14)); subtitle_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(subtitle_label)
 
-        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
-        credits_label = QLabel(
-            "Sviluppato da: Marco Santoro\n"
-            "Copyright © 2025 - Tutti i diritti riservati\n"
-            "Concesso in comodato d'uso gratuito all'Archivio di Stato di Savona"
-        )
-        credits_font = QFont("Segoe UI", 10)
-        credits_label.setFont(credits_font)
-        credits_label.setAlignment(Qt.AlignCenter)
+        # Crediti
+        credits_label = QLabel("Sviluppato da: Marco Santoro\nCopyright © 2025 - Tutti i diritti riservati\nConcesso in comodato d'uso gratuito all'Archivio di Stato di Savona"); credits_label.setFont(QFont("Segoe UI", 9)); credits_label.setAlignment(Qt.AlignCenter)
+        credits_label.setStyleSheet("color: #6c757d;")
         main_layout.addWidget(credits_label)
+        main_layout.addSpacing(20)
 
+        # Pulsante Guida
         if self.help_url:
-            help_button = QPushButton("Apri Manuale / Guida")
-            help_button.setFont(QFont("Segoe UI", 12))
-            help_button.setFixedSize(200, 40)
-            # --- CORREZIONE LOGICA: Il pulsante chiama SOLO la sua funzione specifica ---
+            help_button = QPushButton("Apri Manuale Utente"); help_button.setFont(QFont("Segoe UI", 11)); help_button.setFixedSize(220, 40)
             help_button.clicked.connect(self._open_help_url)
-            
-            help_button_layout = QHBoxLayout()
-            help_button_layout.addStretch()
-            help_button_layout.addWidget(help_button)
-            help_button_layout.addStretch()
+            help_button_layout = QHBoxLayout(); help_button_layout.addStretch(); help_button_layout.addWidget(help_button); help_button_layout.addStretch()
             main_layout.addLayout(help_button_layout)
 
-        main_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed))
+        # 2. Spaziatore inferiore per spingere il contenuto verso l'alto
+        main_layout.addStretch(1)
+        # --- FINE NUOVA STRUTTURA ---
+
         self.setLayout(main_layout)
 
     def _open_help_url(self):
-        """
-        Questa funzione apre l'URL e NON deve chiudere il dialogo.
-        """
-        if self.help_url:
-            try:
-                QDesktopServices.openUrl(QUrl(self.help_url))
-                self.logger.info(f"Apertura URL di aiuto: {self.help_url}")
-            except Exception as e:
-                self.logger.error(f"Errore nell'apertura dell'URL: {e}", exc_info=True)
-                QMessageBox.critical(self, "Errore", f"Impossibile aprire il link al manuale: {e}")
+        if not self.help_url: return
+        self.logger.info(f"Apertura del manuale richiesta: {self.help_url}")
+        # La logica che gestisce sia URL che file locali
+        if self.help_url.lower().startswith(('http://', 'https://')):
+            QDesktopServices.openUrl(QUrl(self.help_url))
+        elif os.path.exists(self.help_url):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.help_url))
+        else:
+            QMessageBox.warning(self, "File Non Trovato", f"Il file della guida non è stato trovato:\n{self.help_url}")
 
     def mousePressEvent(self, event):
-        """
-        Questa funzione gestisce il CLICK del mouse e DEVE SOLO chiudere il dialogo.
-        """
-        if event.button() == Qt.LeftButton:
-            self.logger.info("Welcome Screen chiusa tramite click del mouse.")
-            self.accept() # Comando per chiudere il dialogo con successo
+        # Chiude la finestra con un click, come richiesto
+        self.logger.info("Welcome Screen chiusa tramite click del mouse.")
+        self.accept()
 
     def keyPressEvent(self, event):
-        """
-        Questa funzione gestisce la PRESSIONE di un tasto e DEVE SOLO chiudere il dialogo.
-        """
+        # Chiude la finestra con un tasto, come richiesto
         self.logger.info(f"Welcome Screen chiusa tramite pressione del tasto: {event.key()}")
-        self.accept() # Comando per chiudere il dialogo con successo
+        self.accept()

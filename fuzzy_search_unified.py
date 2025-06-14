@@ -19,7 +19,7 @@ import logging
 import time
 import json
 import csv
-from datetime import datetime
+from datetime import datetime,date
 from typing import Optional, List, Dict, Any
 
 from PyQt5.QtWidgets import (
@@ -32,16 +32,20 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
-# --- AGGIUNGERE QUESTE IMPORTAZIONI ---
 from dialogs import PartitaDetailsDialog, ModificaPossessoreDialog, ModificaLocalitaDialog
-# Assumiamo che esista un ModificaImmobileDialog, se non c'è lo gestiremo nel fallback
+from app_utils import _get_default_export_path, prompt_to_open_file
+
 try:
     from dialogs import ModificaImmobileDialog
 except ImportError:
     ModificaImmobileDialog = None # Fallback se non esiste
-# --- FINE AGGIUNTE ---
 
 
+try:
+    from app_utils import BulkReportPDF, FPDF_AVAILABLE
+except ImportError:
+    FPDF_AVAILABLE = False
+    class BulkReportPDF: pass
 # ========================================================================
 # THREAD UNIFICATO PER RICERCHE IN BACKGROUND
 # ========================================================================
@@ -169,6 +173,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.clear_btn.setMaximumWidth(30)
         search_row.addWidget(self.clear_btn)
         search_layout.addLayout(search_row)
+        # --- BLOCCO "CONTROLLI AVANZATI" DA SOSTITUIRE ---
         controls_row = QHBoxLayout()
         controls_row.addWidget(QLabel("Soglia:"))
         self.precision_slider = QSlider(Qt.Horizontal)
@@ -176,20 +181,35 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.precision_slider.setValue(30)
         self.precision_slider.setMaximumWidth(100)
         controls_row.addWidget(self.precision_slider)
+
         self.precision_label = QLabel("0.30")
         self.precision_label.setMinimumWidth(30)
         controls_row.addWidget(self.precision_label)
+
         controls_row.addWidget(QLabel("Max Risultati:"))
         self.max_results_combo = QComboBox()
         self.max_results_combo.addItems(["50", "100", "200", "500"])
         self.max_results_combo.setCurrentText("100")
         self.max_results_combo.setMaximumWidth(70)
         controls_row.addWidget(self.max_results_combo)
+
         controls_row.addStretch()
-        self.export_btn = QPushButton("📤 Export")
-        self.export_btn.setEnabled(False)
-        controls_row.addWidget(self.export_btn)
+
+        # Creiamo i nuovi pulsanti specifici
+        self.btn_export_csv = QPushButton("Esporta CSV")
+        self.btn_export_csv.setEnabled(False)
+        controls_row.addWidget(self.btn_export_csv)
+
+        self.btn_export_pdf = QPushButton("Esporta PDF")
+        self.btn_export_pdf.setEnabled(False)
+        if not FPDF_AVAILABLE:
+            self.btn_export_pdf.setToolTip("Libreria FPDF2 non trovata. Funzione non disponibile.")
+        controls_row.addWidget(self.btn_export_pdf)
+        
+        # La riga errata "controls_row.addWidget(self.export_btn)" è stata rimossa.
+        
         search_layout.addLayout(controls_row)
+        # --- FINE BLOCCO DA SOSTITUIRE ---
         
         content_layout.addWidget(search_frame) # AGGIUNTO AL CONTENT_LAYOUT
 
@@ -218,7 +238,12 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.immobili_table = self._create_table_widget(["Natura", "Classificazione", "Partita", "Suffisso", "Comune", "Similitud."], [1, 4], 5); self.results_tabs.addTab(self.immobili_table, "🏢 Immobili")
         self.variazioni_table = self._create_table_widget(["Tipo", "Data", "Descrizione", "Similitud."], [2], 3); self.results_tabs.addTab(self.variazioni_table, "📋 Variazioni")
         self.contratti_table = self._create_table_widget(["Tipo", "Data", "Partita", "Similitud."], [0], 3); self.results_tabs.addTab(self.contratti_table, "📄 Contratti")
-        self.partite_table = self._create_table_widget(["Numero", "Suffisso", "Tipo", "Comune", "Similitud."], [3], 4); self.results_tabs.addTab(self.partite_table, "📊 Partite")
+        self.partite_table = self._create_table_widget(
+            ["Numero", "Suffisso", "Tipo", "Stato", "Data Impianto", "Comune", "Similitud."], # Aggiunte nuove colonne
+            [5],  # Indice della colonna 'Comune' da espandere
+            6     # L'indice della colonna 'Similitud.' ora è 6
+        ) 
+        self.results_tabs.addTab(self.partite_table, "📊 Partite")
 
         content_layout.addWidget(self.results_tabs) # AGGIUNTO AL CONTENT_LAYOUT
 
@@ -273,7 +298,11 @@ class UnifiedFuzzySearchWidget(QWidget):
         self.precision_slider.sliderReleased.connect(self._trigger_search_if_text)
 
         self.max_results_combo.currentTextChanged.connect(self._trigger_search_if_text)
-        self.export_btn.clicked.connect(self._export_results)
+        # --- MODIFICA QUI: Colleghiamo i nuovi pulsanti ---
+        # Rimuoviamo la vecchia riga: self.export_btn.clicked.connect(self._export_results)
+        self.btn_export_csv.clicked.connect(self._handle_export_csv)
+        self.btn_export_pdf.clicked.connect(self._handle_export_pdf)
+        # --- FINE MODIFICA ---
 
         # Checkbox
         for cb in [self.search_possessori_cb, self.search_localita_cb, self.search_immobili_cb,
@@ -376,7 +405,11 @@ class UnifiedFuzzySearchWidget(QWidget):
         
         total = results.get('total_results', 0)
         self.stats_label.setText(f"Trovati {total} risultati per '{results.get('query_text')}'")
-        self.export_btn.setEnabled(total > 0)
+        # --- MODIFICA QUI ---
+        self.btn_export_csv.setEnabled(total > 0)
+        if FPDF_AVAILABLE:
+            self.btn_export_pdf.setEnabled(total > 0)
+        # --- FINE MODIFICA ---
     
     def _populate_table(self, table: QTableWidget, data: List[Dict], row_mapper_func):
         """Funzione helper per popolare una QTableWidget."""
@@ -461,9 +494,19 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._populate_table(self.contratti_table, results_by_type.get('contratto', []), 
             lambda c: [c.get('tipo', ''), c.get('data_contratto', ''), c.get('numero_partita', ''), f"{c.get('similarity_score', 0):.3f}"])
 
+        # --- MODIFICA QUESTA CHIAMATA ---
         self._populate_table(self.partite_table, results_by_type.get('partita', []), 
-            lambda pt: [pt.get('numero_partita', ''), pt.get('suffisso_partita', '') or '', pt.get('tipo_partita', ''), pt.get('comune_nome', ''), f"{pt.get('similarity_score', 0):.3f}"])
-
+            lambda pt: [
+                pt.get('numero_partita', ''),
+                pt.get('suffisso_partita', '') or '',
+                pt.get('tipo_partita', ''),
+                pt.get('stato', ''),  # NUOVO
+                str(pt.get('data_impianto', '')) if pt.get('data_impianto') else '', # NUOVO
+                pt.get('comune_nome', ''),
+                f"{pt.get('similarity_score', 0):.3f}"
+            ]
+        )
+        # --- FINE MODIFICA ---
     def _update_tab_counters(self, results_by_type: Dict[str, List]):
         """Aggiorna i contatori nei titoli dei tab."""
         # --- MODIFICA: La logica di base_index non è più necessaria ---
@@ -481,15 +524,18 @@ class UnifiedFuzzySearchWidget(QWidget):
         tables = [
             self.unified_table, self.possessori_table, self.localita_table, 
             self.immobili_table, self.variazioni_table, self.contratti_table, 
-            self.partite_table # AGGIUNTE NUOVE TABELLE
+            self.partite_table
         ]
         for table in tables:
             table.setRowCount(0)
         
-        # --- MODIFICA: `_update_tab_counters` ora gestisce anche il caso vuoto ---
         self._update_tab_counters({})
         
-        self.export_btn.setEnabled(False)
+        # --- MODIFICA QUI: Disabilita i nuovi pulsanti invece del vecchio ---
+        self.btn_export_csv.setEnabled(False)
+        self.btn_export_pdf.setEnabled(False)
+        # --- FINE MODIFICA ---
+        
         self.current_results = {}
 
     def _handle_search_error(self, error_message):
@@ -537,85 +583,101 @@ class UnifiedFuzzySearchWidget(QWidget):
             self._on_contratti_double_click(index)
         else:
             QMessageBox.warning(self, "Tipo Sconosciuto", f"Nessuna azione di dettaglio definita per il tipo '{entity_type}'.")
-    def _export_results(self):
+    def _handle_export_csv(self):
+        """Esporta i risultati correnti della ricerca unificata in un file CSV."""
         if not self.current_results or not self.current_results.get('total_results', 0) > 0:
             QMessageBox.warning(self, "Nessun Risultato", "Non ci sono risultati da esportare.")
             return
 
-        file_path, selected_filter = QFileDialog.getSaveFileName(
-            self, "Esporta Risultati", f"ricerca_fuzzy_{datetime.now():%Y%m%d_%H%M%S}",
-            "File JSON (*.json);;File CSV (*.csv);;File di Testo (*.txt)"
-        )
+        query_text = self.current_results.get('query_text', 'ricerca')
+        default_filename = f"ricerca_fuzzy_{query_text}_{date.today().isoformat()}.csv"
+        filename, _ = QFileDialog.getSaveFileName(self, "Esporta Risultati in CSV", default_filename, "File CSV (*.csv)")
 
-        if not file_path:
+        if not filename:
             return
 
         try:
-            if selected_filter.startswith("File JSON"):
-                self._export_to_json(file_path)
-            elif selected_filter.startswith("File CSV"):
-                self._export_to_csv(file_path)
-            else: # TXT
-                self._export_to_txt(file_path)
-            QMessageBox.information(self, "Esportazione Completata", f"Dati esportati con successo in:\n{file_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "Errore Esportazione", f"Si è verificato un errore: {e}")
-            self.logger.error(f"Errore esportazione dati fuzzy: {e}", exc_info=True)
-
-    def _export_to_json(self, file_path):
-        export_data = self.current_results
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, ensure_ascii=False, indent=2, default=str)
-
-    def _export_to_txt(self, file_path):
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(f"Risultati Ricerca Fuzzy per: '{self.current_results.get('query_text')}'\n")
-            f.write(f"Data: {self.current_results.get('timestamp')}\n")
-            f.write("="*80 + "\n\n")
-            
-            for entity_type, entities in self.current_results.get('results_by_type', {}).items():
-                if entities:
-                    f.write(f"--- {entity_type.upper()} ({len(entities)}) ---\n")
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                # Usiamo le intestazioni della tabella "Tutti"
+                headers = ['Tipo Entità', 'Nome/Descrizione', 'Dettagli', 'Similarità', 'Campo Trovato']
+                writer = csv.writer(csvfile, delimiter=';')
+                writer.writerow(headers)
+                
+                for entity_type, entities in self.current_results.get('results_by_type', {}).items():
                     for entity in entities:
-                        display = entity.get('display_text', 'N/D')
-                        detail = entity.get('detail_text', '')
-                        score = entity.get('similarity_score', 0)
-                        f.write(f"- {display} | {detail} (Score: {score:.3f})\n")
-                    f.write("\n")
+                        writer.writerow([
+                            entity_type,
+                            entity.get('display_text', ''),
+                            entity.get('detail_text', ''),
+                            f"{entity.get('similarity_score', 0):.3f}",
+                            entity.get('search_field', '')
+                        ])
+            prompt_to_open_file(self, filename)
+        except Exception as e:
+            self.logger.error(f"Errore esportazione CSV fuzzy: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file CSV:\n{e}")
 
-    def _export_to_csv(self, file_path):
-        with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['entity_type', 'display_text', 'detail_text', 'similarity_score', 'search_field', 'entity_id'])
+    def _handle_export_pdf(self):
+        """Esporta i risultati correnti della ricerca unificata in un file PDF."""
+        if not self.current_results or not self.current_results.get('total_results', 0) > 0:
+            QMessageBox.warning(self, "Nessun Risultato", "Non ci sono risultati da esportare.")
+            return
+            
+        query_text = self.current_results.get('query_text', 'ricerca')
+        default_filename = f"ricerca_fuzzy_{query_text}_{date.today().isoformat()}.pdf"
+        filename, _ = QFileDialog.getSaveFileName(self, "Esporta Risultati in PDF", default_filename, "File PDF (*.pdf)")
+
+        if not filename:
+            return
+
+        try:
+            pdf = BulkReportPDF(report_title=f"Risultati Ricerca Fuzzy per '{query_text}'")
+            pdf.add_page()
             
             for entity_type, entities in self.current_results.get('results_by_type', {}).items():
-                for entity in entities:
-                    writer.writerow([
-                        entity_type,
-                        entity.get('display_text', ''),
-                        entity.get('detail_text', ''),
-                        entity.get('similarity_score', 0),
-                        entity.get('search_field', ''),
-                        entity.get('entity_id', '')
-                    ])
-    def _get_entity_id_from_table(self, table: QTableWidget, index: 'QModelIndex') -> Optional[int]:
+                if not entities: continue
+                
+                pdf.set_font('Helvetica', 'B', 12)
+                pdf.cell(0, 10, f"Risultati per: {entity_type.title()} ({len(entities)})", ln=1)
+                
+                headers = ['Nome/Descrizione', 'Dettagli', 'Similarità']
+                # Adattiamo i dati per la tabella
+                data_rows = [
+                    (entity.get('display_text', ''), entity.get('detail_text', ''), f"{entity.get('similarity_score', 0):.3f}")
+                    for entity in entities
+                ]
+                # La classe BulkReportPDF gestirà la creazione della tabella
+                pdf.print_table(headers, data_rows)
+                pdf.ln(5)
+
+            pdf.output(filename)
+            prompt_to_open_file(self, filename)
+        except Exception as e:
+            self.logger.error(f"Errore esportazione PDF fuzzy: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile generare il file PDF:\n{e}")
+    # In fuzzy_search_unified.py, aggiungi questo metodo alla classe UnifiedFuzzySearchWidget
+
+    def _get_entity_id_from_table(self, table: QTableWidget, index) -> Optional[int]:
         """Helper generico per estrarre l'ID dell'entità da una riga della tabella."""
         if not index.isValid():
             return None
-        
-        # I dati completi sono sempre salvati nella prima colonna (indice 0)
+
+        # I dati completi sono sempre salvati nella UserRole della prima colonna (indice 0)
         item_con_dati = table.item(index.row(), 0)
         if not item_con_dati:
             return None
             
-        entity_data = item_con_dati.data(Qt.UserRole)
-        if isinstance(entity_data, dict):
-            # Per il tab "Tutti", i dati sono in un sotto-dizionario
-            if 'data' in entity_data and 'entity_id' in entity_data['data']:
-                return entity_data['data'].get('entity_id')
-            # Per i tab specifici, l'ID è direttamente nel dizionario
-            elif 'entity_id' in entity_data:
-                return entity_data.get('entity_id')
+        entity_data_wrapper = item_con_dati.data(Qt.UserRole)
+        if not isinstance(entity_data_wrapper, dict):
+            return None
+
+        # Gestisce sia il tab "Tutti" (dove i dati sono annidati in 'data') 
+        # sia i tab specifici (dove i dati sono al primo livello).
+        if 'data' in entity_data_wrapper and isinstance(entity_data_wrapper['data'], dict):
+            return entity_data_wrapper['data'].get('entity_id')
+        elif 'entity_id' in entity_data_wrapper:
+            return entity_data_wrapper.get('entity_id')
+
         return None
 
     def _on_possessori_double_click(self, index):
@@ -685,16 +747,11 @@ class UnifiedFuzzySearchWidget(QWidget):
 # FUNZIONI DI INTEGRAZIONE
 # ========================================================================
 
-def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
+# In fuzzy_search_unified.py, SOSTITUISCI l'intera funzione add_fuzzy_search_tab_to_main_window
+
+def add_fuzzy_search_tab_to_main_window(main_window): # RIMOSSO il parametro 'mode'
     """
-    Aggiunge il tab di ricerca fuzzy alla finestra principale.
-    
-    Args:
-        main_window: Istanza di CatastoMainWindow
-        mode: 'compact' o 'expanded'
-        
-    Returns:
-        bool: True se aggiunto con successo, False altrimenti
+    Aggiunge il tab di ricerca fuzzy unificato alla finestra principale.
     """
     try:
         if not hasattr(main_window, 'db_manager') or not main_window.db_manager:
@@ -704,22 +761,24 @@ def add_fuzzy_search_tab_to_main_window(main_window, mode='compact'):
                 print("❌ Database manager non disponibile per ricerca fuzzy")
             return False
             
-        # Crea il widget di ricerca fuzzy
-        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, mode, main_window)
+        # --- MODIFICA QUI: Creiamo il widget senza passare 'mode' ---
+        # Il parent corretto è il QTabWidget della finestra principale, cioè 'main_window.tabs'
+        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, parent=main_window.tabs)
         
         # Aggiunge il tab alla finestra principale
-        tab_index = main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Avanzata")
+        # Il nome del tab ora è fisso, non dipende più dalla modalità
+        tab_index = main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Globale")
         
         if hasattr(main_window, 'logger'):
-            main_window.logger.info(f"Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+            main_window.logger.info(f"Tab Ricerca Globale aggiunto all'indice {tab_index}")
         else:
-            print(f"✅ Tab Ricerca Fuzzy ({mode}) aggiunto all'indice {tab_index}")
+            print(f"✅ Tab Ricerca Globale aggiunto all'indice {tab_index}")
         
         return True
         
     except Exception as e:
         if hasattr(main_window, 'logger'):
-            main_window.logger.error(f"Errore aggiunta tab ricerca fuzzy: {e}")
+            main_window.logger.error(f"Errore aggiunta tab ricerca fuzzy: {e}", exc_info=True)
         else:
             print(f"❌ Errore aggiunta tab ricerca fuzzy: {e}")
         

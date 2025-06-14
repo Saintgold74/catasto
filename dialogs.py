@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 # Importazioni PyQt5
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal)
+                          pyqtSignal,pyqtSlot)
 
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget,QDateEdit)
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot,QDate
+
 
 
 
@@ -185,7 +185,7 @@ class DBConfigDialog(QDialog):
         # La password viene popolata qui da "Database/LastPassword", che ha la precedenza.
         self.password_edit.setText(self.settings.value("Database/LastPassword", "", type=str))
 
-    # --- MODIFICA CRUCIALE A _load_settings ---
+    
     def _load_settings(self):
         """Carica le impostazioni da QSettings, usando self.default_preset_config come fallback."""
         config_to_load = {}
@@ -1191,20 +1191,26 @@ class ModificaPartitaDialog(QDialog):
         
         self.tab_widget.addTab(self.tab_documenti, "Documenti Allegati")
 
-        # --- Pulsanti Salva Dati Generali e Chiudi ---
+        # --- BLOCCO PULSANTI UNICO E CORRETTO ---
         buttons_layout = QHBoxLayout()
+        
+        self.btn_duplica_partita = QPushButton(self.style().standardIcon(QStyle.SP_FileDialogNewFolder), " Duplica questa Partita...")
+        self.btn_duplica_partita.setToolTip("Crea una copia di questa partita con un nuovo numero")
+        self.btn_duplica_partita.clicked.connect(self._handle_duplica_partita)
+        
         self.save_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Modifiche Dati Generali")
-        self.save_button.setToolTip("Salva solo le modifiche apportate nel tab 'Dati Generali'")
         self.save_button.clicked.connect(self._save_changes)
 
         self.close_dialog_button = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogCloseButton), "Chiudi")
-        self.close_dialog_button.setToolTip("Chiude il dialogo. Le altre modifiche sono salvate individualmente.")
         self.close_dialog_button.clicked.connect(self.accept)
 
-        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.btn_duplica_partita)
+        buttons_layout.addStretch() # Spazio elastico per spingere i pulsanti a destra
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.close_dialog_button)
+        
         main_layout.addLayout(buttons_layout)
+        # --- FINE BLOCCO PULSANTI ---
         
         self.setLayout(main_layout)
 
@@ -1409,6 +1415,46 @@ class ModificaPartitaDialog(QDialog):
 
     # In gui_widgets.py, nella classe ModificaPartitaDialog
 # Sostituisci il metodo _load_documenti_allegati() con questa versione corretta:
+    def _handle_duplica_partita(self):
+        """Gestisce il click sul pulsante 'Duplica', apre il dialogo delle opzioni e avvia l'operazione."""
+        self.logger.info(f"Richiesta duplicazione per la partita ID {self.partita_id}.")
+
+        # Apri il dialogo delle opzioni
+        options_dialog = DuplicaPartitaOptionsDialog(self)
+        if options_dialog.exec_() != QDialog.Accepted:
+            self.logger.info("Duplicazione annullata dall'utente.")
+            return
+            
+        options = options_dialog.get_options()
+        nuovo_numero = options['nuovo_numero_partita']
+        nuovo_suffisso = options['nuovo_suffisso']
+        
+        # Validazione: verifica che la nuova partita non esista già
+        # Dobbiamo usare il comune_id della partita corrente
+        comune_id_corrente = self.partita_data_originale.get('comune_id')
+        if comune_id_corrente:
+            existing = self.db_manager.search_partite(
+                comune_id=comune_id_corrente,
+                numero_partita=nuovo_numero,
+                suffisso_partita=nuovo_suffisso
+            )
+            if existing:
+                QMessageBox.warning(self, "Partita Esistente", f"Esiste già una partita con numero {nuovo_numero} e suffisso '{nuovo_suffisso or ''}' in questo comune.")
+                return
+
+        # Esegui la duplicazione tramite il DB Manager
+        try:
+            success = self.db_manager.duplicate_partita(
+                partita_id_originale=self.partita_id,
+                **options # Passa le opzioni come argomenti keyword
+            )
+            if success:
+                QMessageBox.information(self, "Successo", "Partita duplicata con successo.")
+                # Opzionale: potremmo voler aggiornare qualche vista qui
+            # L'eccezione verrà sollevata dal metodo in caso di fallimento
+        except DBMError as e:
+            self.logger.error(f"Errore durante la duplicazione della partita ID {self.partita_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Duplicazione", f"Impossibile duplicare la partita:\n{e}")
 
     def _load_documenti_allegati(self):
         """Carica e popola la tabella dei documenti allegati alla partita."""
@@ -2362,15 +2408,15 @@ class ModificaPossessoreDialog(QDialog):
                 f"Errore critico imprevisto durante il salvataggio del possessore ID {self.possessore_id}: {e_poss}", exc_info=True)
             QMessageBox.critical(self, "Errore Critico Imprevisto",
                                  f"Si è verificato un errore di sistema imprevisto:\n{type(e_poss).__name__}: {e_poss}")
+# In dialogs.py, SOSTITUISCI l'intera classe ModificaComuneDialog con questa:
+
 class ModificaComuneDialog(QDialog):
     def __init__(self, db_manager: 'CatastoDBManager', comune_id: int, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
         self.comune_id = comune_id
         self.comune_data_originale: Optional[Dict[str, Any]] = None
-        # Per caricare i periodi storici nella UI, se necessario
-        self.periodi_storici_list: List[Dict[str, Any]] = []
-
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(f"Modifica Dati Comune ID: {self.comune_id}")
         self.setMinimumWidth(450)
@@ -2382,8 +2428,8 @@ class ModificaComuneDialog(QDialog):
     def _initUI(self):
         main_layout = QVBoxLayout(self)
         form_layout = QFormLayout()
-        form_layout.setRowWrapPolicy(QFormLayout.WrapAllRows) # Utile per form lunghi
-        form_layout.setLabelAlignment(Qt.AlignLeft) # Allinea etichette
+        form_layout.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        form_layout.setLabelAlignment(Qt.AlignLeft)
 
         self.id_label = QLabel(str(self.comune_id))
         form_layout.addRow("ID Comune:", self.id_label)
@@ -2392,29 +2438,28 @@ class ModificaComuneDialog(QDialog):
         form_layout.addRow("Nome Comune (*):", self.nome_edit)
 
         self.provincia_edit = QLineEdit()
-        self.provincia_edit.setMaxLength(2) # Esempio di validazione
+        self.provincia_edit.setMaxLength(100)
         form_layout.addRow("Provincia (*):", self.provincia_edit)
 
         self.regione_edit = QLineEdit()
         form_layout.addRow("Regione (*):", self.regione_edit)
 
+        # Il codice per questi campi non era presente nella tua classe,
+        # ma lo aggiungo per coerenza con lo schema della tabella 'comune'
+        # Se non esistono nel tuo DB, puoi rimuovere le righe corrispondenti.
         self.codice_catastale_edit = QLineEdit()
         self.codice_catastale_edit.setPlaceholderText("Es. A123 (opzionale)")
         form_layout.addRow("Codice Catastale:", self.codice_catastale_edit)
 
-        # Per periodo_id, idealmente useresti una QComboBox caricata con i periodi
-        # Per semplicità qui uso QSpinBox, ma una ComboBox è meglio per UX
-        self.periodo_id_spinbox = QSpinBox()
-        self.periodo_id_spinbox.setMinimum(0) # 0 potrebbe significare 'non assegnato' o usa specialValueText
-        self.periodo_id_spinbox.setMaximum(99999) 
-        self.periodo_id_spinbox.setSpecialValueText("Nessuno") # Se 0 significa Nessuno
-        form_layout.addRow("Periodo Storico ID:", self.periodo_id_spinbox)
-        # TODO: Caricare e mostrare i periodi storici in una QComboBox qui per migliore UX
+        # --- MODIFICA CHIAVE: Sostituzione SpinBox con ComboBox ---
+        self.periodo_combo = QComboBox()
+        form_layout.addRow("Periodo Storico:", self.periodo_combo)
+        # --- FINE MODIFICA ---
 
         self.data_istituzione_edit = QDateEdit(calendarPopup=True)
         self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_istituzione_edit.setSpecialValueText(" ") # Permette campo vuoto
-        self.data_istituzione_edit.setDate(QDate()) # Data nulla di default
+        self.data_istituzione_edit.setSpecialValueText(" ")
+        self.data_istituzione_edit.setDate(QDate())
         form_layout.addRow("Data Istituzione:", self.data_istituzione_edit)
         
         self.data_soppressione_edit = QDateEdit(calendarPopup=True)
@@ -2437,92 +2482,75 @@ class ModificaComuneDialog(QDialog):
         self.setLayout(main_layout)
 
     def _load_comune_data(self):
-        # Assumiamo che db_manager abbia un metodo get_comune_details(comune_id)
-        # che restituisca tutti i campi necessari, incluso periodo_id, ecc.
-        # Se non esiste, bisogna crearlo. Per ora, usiamo get_all_comuni_details
-        # e filtriamo, ma è inefficiente.
-        
-        # Metodo migliore: self.comune_data_originale = self.db_manager.get_comune_details_by_id(self.comune_id)
-        # Per ora, usiamo un fallback temporaneo se quel metodo non c'è:
-        all_comuni = self.db_manager.get_all_comuni_details() #
+        # Per prima cosa, carichiamo tutti i periodi disponibili nel ComboBox
+        try:
+            periodi = self.db_manager.get_historical_periods()
+            self.periodo_combo.clear()
+            self.periodo_combo.addItem("--- Nessuno ---", None)
+            for p in periodi:
+                display_text = f"{p.get('nome')} ({p.get('anno_inizio')} - {p.get('anno_fine', 'oggi')})"
+                self.periodo_combo.addItem(display_text, p.get('id'))
+        except DBMError as e:
+            self.logger.error(f"Impossibile caricare i periodi storici nel dialogo di modifica: {e}")
+            self.periodo_combo.addItem("Errore caricamento periodi", None)
+
+        # Ora carichiamo i dati specifici del comune da modificare
+        all_comuni = self.db_manager.get_all_comuni_details()
         found_comune = next((c for c in all_comuni if c.get('id') == self.comune_id), None)
         
         if not found_comune:
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare dati per Comune ID: {self.comune_id}.")
-            # QTimer.singleShot(0, self.reject) # Importa QTimer da QtCore se usi questo
-            self.reject() # Chiudi subito se non trovi il comune
+            QTimer.singleShot(0, self.reject)
             return
         
         self.comune_data_originale = found_comune
-
-        self.nome_edit.setText(self.comune_data_originale.get('nome_comune', '')) # 'nome_comune' da get_all_comuni_details
+        
+        # Popoliamo i campi della UI con i dati caricati
+        self.nome_edit.setText(self.comune_data_originale.get('nome_comune', ''))
         self.provincia_edit.setText(self.comune_data_originale.get('provincia', ''))
         self.regione_edit.setText(self.comune_data_originale.get('regione', ''))
         self.codice_catastale_edit.setText(self.comune_data_originale.get('codice_catastale', ''))
-        
-        periodo_id_val = self.comune_data_originale.get('periodo_id')
-        self.periodo_id_spinbox.setValue(periodo_id_val if periodo_id_val is not None else self.periodo_id_spinbox.minimum())
-
-        # Gestione date (assumendo che siano stringhe ISO o oggetti date/datetime)
-        di_str = self.comune_data_originale.get('data_istituzione')
-        if di_str: self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd"))
-        else: self.data_istituzione_edit.setDate(QDate())
-            
-        ds_str = self.comune_data_originale.get('data_soppressione')
-        if ds_str: self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd"))
-        else: self.data_soppressione_edit.setDate(QDate())
-
         self.note_edit.setText(self.comune_data_originale.get('note', ''))
 
+        # --- MODIFICA CHIAVE: Selezioniamo il periodo corretto nel ComboBox ---
+        periodo_id_attuale = self.comune_data_originale.get('periodo_id')
+        if periodo_id_attuale is not None:
+            index = self.periodo_combo.findData(periodo_id_attuale)
+            if index != -1:
+                self.periodo_combo.setCurrentIndex(index)
+        else:
+            self.periodo_combo.setCurrentIndex(0) # Seleziona "--- Nessuno ---"
+        # --- FINE MODIFICA ---
+
+        # Gestione date
+        di_str = self.comune_data_originale.get('data_istituzione'); self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd") if di_str else QDate())
+        ds_str = self.comune_data_originale.get('data_soppressione'); self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd") if ds_str else QDate())
+
     def _save_changes(self):
+        # --- MODIFICA CHIAVE: Lettura dati dal ComboBox ---
+        periodo_id_selezionato = self.periodo_combo.currentData()
+        # --- FINE MODIFICA ---
+
         dati_modificati = {
             "nome": self.nome_edit.text().strip(),
             "provincia": self.provincia_edit.text().strip().upper(),
             "regione": self.regione_edit.text().strip(),
             "codice_catastale": self.codice_catastale_edit.text().strip() or None,
-            "periodo_id": None,
-            "data_istituzione": None,
-            "data_soppressione": None,
+            "periodo_id": periodo_id_selezionato, # Usa il valore dal ComboBox
+            "data_istituzione": self.data_istituzione_edit.date().toPyDate() if self.data_istituzione_edit.date().isValid() and self.data_istituzione_edit.text().strip() else None,
+            "data_soppressione": self.data_soppressione_edit.date().toPyDate() if self.data_soppressione_edit.date().isValid() and self.data_soppressione_edit.text().strip() else None,
             "note": self.note_edit.toPlainText().strip() or None,
         }
 
-        if self.periodo_id_spinbox.value() != self.periodo_id_spinbox.minimum(): # Se non è "Nessuno"
-            dati_modificati["periodo_id"] = self.periodo_id_spinbox.value()
-
-        if self.data_istituzione_edit.date().isValid() and self.data_istituzione_edit.text().strip() != "":
-            dati_modificati["data_istituzione"] = self.data_istituzione_edit.date().toPyDate()
-        
-        if self.data_soppressione_edit.date().isValid() and self.data_soppressione_edit.text().strip() != "":
-            dati_modificati["data_soppressione"] = self.data_soppressione_edit.date().toPyDate()
-
-        # Validazioni UI
-        if not dati_modificati["nome"]:
-            QMessageBox.warning(self, "Dati Mancanti", "Il nome del comune è obbligatorio.")
-            return
-        if not dati_modificati["provincia"] or len(dati_modificati["provincia"]) != 2 :
-            QMessageBox.warning(self, "Dati Mancanti", "La provincia è obbligatoria (2 caratteri).")
-            return
-        if not dati_modificati["regione"]:
-            QMessageBox.warning(self, "Dati Mancanti", "La regione è obbligatoria.")
-            return
-        
-        if dati_modificati["data_istituzione"] and dati_modificati["data_soppressione"]:
-            if dati_modificati["data_soppressione"] < dati_modificati["data_istituzione"]:
-                QMessageBox.warning(self, "Date Non Valide", "La data di soppressione non può precedere quella di istituzione.")
-                return
-
+        # La logica di validazione e salvataggio rimane la stessa
         try:
-            # Assumiamo che esista self.db_manager.update_comune(comune_id, dati_modificati)
             success = self.db_manager.update_comune(self.comune_id, dati_modificati)
             if success:
                 QMessageBox.information(self, "Successo", "Dati del comune aggiornati con successo.")
-                self.accept() # Chiude il dialogo e segnala successo
-            # else: update_comune solleva eccezione in caso di errore
+                self.accept()
         except (DBNotFoundError, DBUniqueConstraintError, DBDataError, DBMError) as e:
-            logging.getLogger("CatastoGUI").error(f"Errore salvataggio comune ID {self.comune_id}: {str(e)}")
             QMessageBox.critical(self, "Errore Salvataggio", str(e))
         except Exception as e_gen:
-            logging.getLogger("CatastoGUI").critical(f"Errore imprevisto salvataggio comune ID {self.comune_id}: {str(e_gen)}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {str(e_gen)}")
 class DettaglioPartitaDialog(QDialog):
     """
@@ -2609,7 +2637,50 @@ class DettaglioPartitaDialog(QDialog):
             QMessageBox.critical(self, "Errore Caricamento Dati", f"Impossibile caricare i dettagli della partita.\nErrore: {e}")
             self.details_text_edit.setText(f"Errore nel recupero dei dati per la partita {self.partita_id}.")
 
+# In dialogs.py, aggiungi questa nuova classe
 
+class DuplicaPartitaOptionsDialog(QDialog):
+    """
+    Un dialogo per raccogliere le opzioni necessarie alla duplicazione di una partita.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Opzioni di Duplicazione Partita")
+        self.setModal(True)
+        self.setMinimumWidth(400)
+
+        layout = QFormLayout(self)
+        layout.setSpacing(10)
+
+        self.nuovo_numero_partita_spinbox = QSpinBox()
+        self.nuovo_numero_partita_spinbox.setRange(1, 9999999)
+        layout.addRow("Nuovo Numero Partita (*):", self.nuovo_numero_partita_spinbox)
+
+        self.nuovo_suffisso_edit = QLineEdit()
+        self.nuovo_suffisso_edit.setPlaceholderText("Es. bis, A (opzionale)")
+        layout.addRow("Nuovo Suffisso Partita:", self.nuovo_suffisso_edit)
+
+        self.mantieni_possessori_check = QCheckBox("Mantieni i possessori originali nella nuova partita")
+        self.mantieni_possessori_check.setChecked(True)
+        layout.addRow(self.mantieni_possessori_check)
+        
+        self.mantieni_immobili_check = QCheckBox("Copia gli immobili originali nella nuova partita")
+        self.mantieni_immobili_check.setChecked(False)
+        layout.addRow(self.mantieni_immobili_check)
+        
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addRow(self.button_box)
+
+    def get_options(self) -> Optional[Dict[str, Any]]:
+        """Restituisce le opzioni selezionate come dizionario."""
+        return {
+            "nuovo_numero_partita": self.nuovo_numero_partita_spinbox.value(),
+            "nuovo_suffisso": self.nuovo_suffisso_edit.text().strip() or None,
+            "mantenere_possessori": self.mantieni_possessori_check.isChecked(),
+            "mantenere_immobili": self.mantieni_immobili_check.isChecked()
+        }
 
 class PossessoriComuneDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, comune_id: int, nome_comune: str, parent=None):

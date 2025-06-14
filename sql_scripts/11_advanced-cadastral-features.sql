@@ -1,6 +1,6 @@
 -- Imposta lo schema
 SET search_path TO catasto;
-
+/* 
 -- 1. Estensione per la gestione di periodi storici
 CREATE TABLE periodo_storico (
     id SERIAL PRIMARY KEY,
@@ -16,7 +16,7 @@ VALUES
 ('Regno di Sardegna', 1720, 1861, 'Periodo del Regno di Sardegna prima dell''unità d''Italia'),
 ('Regno d''Italia', 1861, 1946, 'Periodo del Regno d''Italia'),
 ('Repubblica Italiana', 1946, NULL, 'Periodo della Repubblica Italiana')
-ON CONFLICT (nome) DO NOTHING; -- O DO UPDATE SET ... se preferisci aggiornare
+ON CONFLICT (nome) DO NOTHING; -- O DO UPDATE SET ... se preferisci aggiornare */
 
 -- 2. Estensione delle tabelle per contemplare il periodo storico
 ALTER TABLE comune ADD COLUMN periodo_id INTEGER REFERENCES periodo_storico(id);

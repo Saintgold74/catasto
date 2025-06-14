@@ -395,32 +395,43 @@ class CatastoDBManager:
 # from typing import Optional, Dict, Any, List 
 # from datetime import date # Già importato se datetime è importato
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo aggiungi_comune con questo:
+
     def aggiungi_comune(self,
-                    nome_comune: str,
-                    provincia: str,
-                    regione: Optional[str] = None, 
-                    periodo_id: Optional[int] = None,
-                    utente: Optional[str] = None
-                   ) -> int:
-    # La validazione iniziale dei parametri resta invariata
-        if not nome_comune or not nome_comune.strip():
-            raise DBDataError("Il nome del comune è obbligatorio.")
-        provincia_norm = provincia.strip().upper() if isinstance(provincia, str) else ""
-        if not provincia_norm or len(provincia_norm) != 2:
-            raise DBDataError("La provincia è obbligatoria e deve essere di 2 caratteri (es. SV).")
+                        nome_comune: str,
+                        provincia: str,
+                        regione: str,
+                        periodo_id: Optional[int] = None,
+                        codice_catastale: Optional[str] = None,
+                        data_istituzione: Optional[date] = None,
+                        data_soppressione: Optional[date] = None,
+                        note: Optional[str] = None,
+                        utente: Optional[str] = None
+                       ) -> int:
         
-        actual_regione = regione.strip() if isinstance(regione, str) and regione.strip() else None
+        # Validazione base dei campi obbligatori
+        if not nome_comune or not provincia or not regione:
+            raise DBDataError("Nome, Provincia e Regione sono campi obbligatori.")
         
+        # --- Query aggiornata per includere i nuovi campi opzionali ---
         query = f"""
             INSERT INTO {self.schema}.comune 
-                (nome, provincia, regione, periodo_id)
-            VALUES (%s, %s, %s, %s)
+                (nome, provincia, regione, periodo_id, codice_catastale, data_istituzione, data_soppressione, note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
         """
-        params = (nome_comune.strip(), provincia_norm, actual_regione, periodo_id)
+        params = (
+            nome_comune.strip(),
+            provincia.strip(),
+            regione.strip(),
+            periodo_id,
+            codice_catastale.strip() if codice_catastale else None,
+            data_istituzione,
+            data_soppressione,
+            note.strip() if note else None
+        )
         
         try:
-            # Utilizzo del pattern with per gestire connessione e transazione
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
                     self.logger.info(f"Esecuzione aggiungi_comune per: {nome_comune.strip()}")
@@ -428,22 +439,17 @@ class CatastoDBManager:
                     result = cur.fetchone()
                     if result and result[0] is not None:
                         new_comune_id = result[0]
-                        # Il commit è automatico all'uscita dal blocco 'with' senza errori
                         self.logger.info(f"Comune '{nome_comune.strip()}' aggiunto con successo. ID: {new_comune_id}.")
                         return new_comune_id
                     else:
-                        # Se non viene restituito un ID, qualcosa è andato storto
                         raise DBMError("Creazione del comune fallita, nessun ID restituito.")
         
         except psycopg2.errors.UniqueViolation as e:
-            # Il rollback è automatico in caso di eccezione
-            constraint_name = getattr(e.diag, 'constraint_name', 'N/D')
-            msg = f"Impossibile aggiungere il comune: esiste già un comune con lo stesso nome (vincolo: {constraint_name})."
-            raise DBUniqueConstraintError(msg, constraint_name=constraint_name, details=str(e)) from e
+            # Assumiamo che il vincolo di unicità sia sul nome
+            raise DBUniqueConstraintError(f"Impossibile aggiungere il comune: il nome '{nome_comune}' esiste già.", details=str(e)) from e
         
         except Exception as e:
             self.logger.error(f"Errore generico in aggiungi_comune: {e}", exc_info=True)
-            # Rilancia come DBMError per coerenza
             raise DBMError(f"Errore database durante l'aggiunta del comune: {e}") from e
     def registra_comune_nel_db(self, nome: str, provincia: str, regione: str) -> Optional[int]:
             comune_id: Optional[int] = None
@@ -567,12 +573,24 @@ class CatastoDBManager:
             return None # Restituisce None in caso di qualsiasi errore
     def get_all_comuni_details(self):
         self.logger.info(">>> ESECUZIONE di get_all_comuni_details...")
-        # Query aggiornata per selezionare solo le colonne esistenti e utili
+        
+        # --- QUERY AGGIORNATA PER SELEZIONARE TUTTE LE COLONNE NECESSARIE ---
         query = """
-            SELECT id, nome AS nome_comune, provincia, regione,
-                   data_creazione, data_modifica
+            SELECT 
+                id, 
+                nome AS nome_comune, 
+                codice_catastale,
+                provincia, 
+                regione,
+                data_istituzione,
+                data_soppressione,
+                note,
+                data_creazione, 
+                data_modifica
             FROM catasto.comune ORDER BY nome;
         """
+        # --- FINE QUERY AGGIORNATA ---
+
         self.logger.info(f"Query in esecuzione:\n\t\t\t{query}")
         try:
             with self._get_connection() as conn:
@@ -584,6 +602,7 @@ class CatastoDBManager:
         except (Exception, psycopg2.Error) as error:
             self.logger.error(f"Errore DB in get_all_comuni_details: {error}", exc_info=True)
             return [] # Restituisci una lista vuota in caso di errore
+
     def get_elenco_comuni_semplice(self) -> List[Tuple]:
         """
         Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
@@ -3586,22 +3605,25 @@ class CatastoDBManager:
             return []
 
     def _search_partite_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per le partite (su numero, tipo, stato)."""
+        """Ricerca fuzzy interna per le partite (su numero, tipo, stato), ora più completa."""
+        # --- MODIFICA: Migliorato display_text, detail_text e aggiunti campi stato, data_impianto ---
         sql = f"""
             SELECT
                 p.id AS entity_id,
                 'Partita N. ' || p.numero_partita || COALESCE(' (' || p.suffisso_partita || ')', '') AS display_text,
-                'Comune: ' || c.nome || ' | Stato: ' || p.stato AS detail_text,
+                'Comune: ' || c.nome || ' | Tipo: ' || p.tipo || ' | Stato: ' || p.stato AS detail_text,
                 greatest(
                     similarity(CAST(p.numero_partita AS TEXT), %s),
                     similarity(p.tipo, %s),
                     similarity(p.suffisso_partita, %s)
                 ) AS similarity_score,
-                'partita' AS search_field, -- Semplificato
+                'partita' AS search_field,
                 p.numero_partita,
                 p.suffisso_partita,
                 p.tipo as tipo_partita,
-                c.nome as comune_nome
+                c.nome as comune_nome,
+                p.stato,
+                p.data_impianto
             FROM {self.schema}.partita p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             WHERE greatest(
@@ -3656,7 +3678,34 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore nel recuperare il timestamp di refresh: {e}", exc_info=True)
             return None
+    # In catasto_db_manager.py, aggiungi questo nuovo metodo alla classe CatastoDBManager
 
+    def get_dashboard_stats(self) -> Dict[str, int]:
+        """Recupera le statistiche di base per la dashboard in un'unica query."""
+        stats = {
+            "total_comuni": 0,
+            "total_partite": 0,
+            "total_possessori": 0,
+            "total_immobili": 0,
+        }
+        query = f"""
+            SELECT 
+                (SELECT COUNT(*) FROM {self.schema}.comune) AS total_comuni,
+                (SELECT COUNT(*) FROM {self.schema}.partita) AS total_partite,
+                (SELECT COUNT(*) FROM {self.schema}.possessore) AS total_possessori,
+                (SELECT COUNT(*) FROM {self.schema}.immobile) AS total_immobili;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=DictCursor) as cur:
+                    cur.execute(query)
+                    result = cur.fetchone()
+                    if result:
+                        stats.update(dict(result))
+            return stats
+        except Exception as e:
+            self.logger.error(f"Errore durante il recupero delle statistiche per la dashboard: {e}", exc_info=True)
+            return stats # Restituisce il dizionario con gli zeri in caso di errore
     def update_last_mv_refresh_timestamp(self):
         """Aggiorna il timestamp dell'ultimo refresh delle viste al tempo attuale (UTC)."""
         # Usiamo un "UPSERT" per inserire la chiave se non esiste, o aggiornarla se esiste.

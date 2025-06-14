@@ -688,6 +688,35 @@ def _get_default_export_path(default_filename: str) -> str:
     
     # Unisce il percorso della cartella con il nome del file suggerito
     return os.path.join(full_dir_path, default_filename)
+# In app_utils.py, aggiungi questa nuova funzione
+
+def prompt_to_open_file(parent_widget, filename: str):
+    """
+    Mostra un dialogo che chiede all'utente se vuole aprire il file appena creato.
+    Se l'utente accetta, apre il file con l'applicazione di sistema predefinita.
+    """
+    if not filename:
+        return
+        
+    reply = QMessageBox.question(
+        parent_widget,
+        "Esportazione Completata",
+        f"File salvato con successo.\n\nVuoi aprirlo ora?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes  # Il pulsante 'Sì' è preselezionato
+    )
+
+    if reply == QMessageBox.Yes:
+        try:
+            from PyQt5.QtCore import QUrl
+            from PyQt5.QtGui import QDesktopServices
+            
+            QDesktopServices.openUrl(QUrl.fromLocalFile(filename))
+        except Exception as e:
+            logging.getLogger("CatastoGUI").error(f"Impossibile aprire il file {filename}: {e}", exc_info=True)
+            QMessageBox.critical(parent_widget, "Errore Apertura File", f"Impossibile aprire il file:\n{e}")
+
+
 if FPDF_AVAILABLE:
     class BulkReportPDF(FPDF):
         """

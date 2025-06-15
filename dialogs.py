@@ -1012,16 +1012,17 @@ class ModificaPartitaDialog(QDialog):
         self.stato_combo = QComboBox(); self.stato_combo.addItems(["attiva", "inattiva"]); form_layout_generali.addRow("Stato (*):", self.stato_combo)
         self.tab_widget.addTab(self.tab_dati_generali, "Dati Generali")
 
-        # --- Tab 2: Possessori Associati ---
+        # Tab 2: Possessori Associati ---
         self.tab_possessori = QWidget()
-        layout_possessori = QVBoxLayout(self.tab_possessori)
+        # DEVI INIZIALIZZARE possessori_layout QUI
+        possessori_layout = QVBoxLayout(self.tab_possessori) 
         self.possessori_table = QTableWidget()
         self.possessori_table.setColumnCount(5)
         self.possessori_table.setHorizontalHeaderLabels(["ID Rel.", "ID Poss.", "Nome Completo Possessore", "Titolo", "Quota"])
         self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
         self.possessori_table.setAlternatingRowColors(True)
-        self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
         
         # Logica per l'espansione delle colonne
         header_possessori = self.possessori_table.horizontalHeader()
@@ -1031,8 +1032,30 @@ class ModificaPartitaDialog(QDialog):
         header_possessori.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header_possessori.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         
-        layout_possessori.addWidget(self.possessori_table)
-        # (pulsanti del tab possessori)
+        possessori_layout.addWidget(self.possessori_table)
+
+        # Pulsanti per la gestione dei possessori
+        possessori_buttons_layout = QHBoxLayout()
+        self.btn_aggiungi_possessore = QPushButton("Aggiungi Possessore...")
+        self.btn_aggiungi_possessore.clicked.connect(self._aggiungi_possessore_a_partita)
+        possessori_buttons_layout.addWidget(self.btn_aggiungi_possessore)
+
+        self.btn_modifica_legame_possessore = QPushButton("Modifica Legame")
+        self.btn_modifica_legame_possessore.clicked.connect(self._modifica_legame_possessore)
+        self.btn_modifica_legame_possessore.setEnabled(False) 
+        possessori_buttons_layout.addWidget(self.btn_modifica_legame_possessore)
+
+        self.btn_rimuovi_possessore = QPushButton("Rimuovi Possessore")
+        self.btn_rimuovi_possessore.clicked.connect(self._rimuovi_possessore_da_partita)
+        self.btn_rimuovi_possessore.setEnabled(False) 
+        possessori_buttons_layout.addWidget(self.btn_rimuovi_possessore)
+        
+        possessori_buttons_layout.addStretch() 
+        possessori_layout.addLayout(possessori_buttons_layout) # Questa è la riga che causava l'errore
+
+        # Collega il segnale itemSelectionChanged della tabella alla funzione che abilita/disabilita i pulsanti
+        self.possessori_table.itemSelectionChanged.connect(self._aggiorna_stato_pulsanti_possessori)
+
         self.tab_widget.addTab(self.tab_possessori, "Possessori Associati")
 
         # --- Tab 3: Immobili Associati ---
@@ -1749,6 +1772,13 @@ class ModificaPartitaDialog(QDialog):
             return
 
         row = self.variazioni_table.currentRow()
+        # --- INIZIO MODIFICA ---
+        # Controlla se la riga selezionata è una riga di placeholder
+        if self.variazioni_table.rowCount() == 1 and self.variazioni_table.item(0, 0) and "Nessuna variazione" in self.variazioni_table.item(0, 0).text():
+            QMessageBox.warning(self, "Nessuna Variazione", "Non ci sono variazioni valide selezionate per la modifica.")
+            return
+        # --- FINE MODIFICA ---
+
         variazione_id = int(self.variazioni_table.item(row, 0).text())
 
         # Apri un dialogo per modificare la variazione, simile a InserimentoVariazione (se lo hai)

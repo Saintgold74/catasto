@@ -1,160 +1,53 @@
-import logging
-import bcrypt
-import csv
-import json
-import os
+import logging,socket ,bcrypt,json, csv, os
+
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
 # Importazioni PyQt5
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                             QHBoxLayout, QPushButton, QLabel, QLineEdit,
-                             QComboBox,  QTabWidget, QMessageBox,
-                             QGroupBox, QGridLayout, QTableWidget,
-                             QTableWidgetItem, QDialog, QListWidget,
-                             QListWidgetItem, QFileDialog, QStyle, QSpinBox,
-                             QHeaderView, QFormLayout,)
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTextEdit
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QFrame, QHBoxLayout, QPushButton, QApplication, QStyle, QMessageBox
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
-from catasto_db_manager import CatastoDBManager, DBUniqueConstraintError, DBMError # Assumendo che sia nello stesso pacchetto o usa il path corretto
-from dialogs import LocalitaSelectionDialog,CSVApreviewDialog,PDFApreviewDialog
-# In app_utils.py, dopo le importazioni PyQt e standard:
-# Nessuna dipendenza ciclica dagli altri due moduli GUI (gui_main, gui_widgets) dovrebbe essere necessaria qui.
-# Questo modulo fornisce utility AGLI ALTRI.
-# Se necessario, importa CatastoDBManager per type hinting o usi diretti limitati:
-from config import (
-    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA
-)
+from PyQt5.QtWidgets import (QMessageBox, QFileDialog)
+from PyQt5.QtCore import QDate
 
+from catasto_db_manager import CatastoDBManager
+from dialogs import CSVApreviewDialog, PDFApreviewDialog
 
-
-# Importa FPDF se disponibile
+# Importa FPDF e le sue utility, che ora funzioneranno grazie a fpdf2
 try:
     from fpdf import FPDF
-    from fpdf.enums import XPos, YPos
+    from fpdf.enums import XPos, YPos # Ora possiamo re-importare e usare questi
     FPDF_AVAILABLE = True
 except ImportError:
     FPDF_AVAILABLE = False
-    # class FPDF: pass # Fallback se si volessero istanziare le classi PDF anche senza fpdf
-    # ma è meglio gestire con FPDF_AVAILABLE
-    # Potrebbe essere utile definire classi PDF vuote qui se FPDF non è disponibile,
-    # per evitare NameError se il codice tenta di usarle condizionalmente.
+    # Definizioni fallback
+    class FPDF: pass
+    class PDFPartita: pass
+    class PDFPossessore: pass
+    class GenericTextReportPDF: pass
+    class BulkReportPDF: pass
 
-    class PDFPartita:
-        pass
+# --- Funzioni Helper ---
+def _get_default_export_path(default_filename: str) -> str:
+    export_dir_name = "esportazioni"
+    full_dir_path = os.path.abspath(export_dir_name)
+    os.makedirs(full_dir_path, exist_ok=True)
+    return os.path.join(full_dir_path, default_filename)
 
-    class PDFPossessore:
-        pass
+# --- Classi PDF (versione moderna con new_x e new_y) ---
 
-    class GenericTextReportPDF:
-        pass
-
-# Gestione Eccezioni DB (potrebbero essere importate da catasto_db_manager se si preferisce)
-# Se rimangono qui, assicurarsi che non ci siano conflitti se catasto_db_manager le definisce pure.
-# Idealmente, dovrebbero essere definite UNA SOLA VOLTA in catasto_db_manager e importate qui.
-# Per ora, manteniamo il fallback come nel suo codice originale.
-try:
-    from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
-except ImportError:
-    class DBMError(Exception):
-        pass
-
-    class DBUniqueConstraintError(DBMError):
-        pass
-
-    class DBNotFoundError(DBMError):
-        pass
-
-    class DBDataError(DBMError):
-        pass
-    # QMessageBox.warning(None, "Avviso Importazione", "Eccezioni DB personalizzate non trovate in app_utils.")
-
-# Eventuale importazione di CatastoDBManager se alcune utility qui ne avessero bisogno direttamente,
-# ma è più probabile che i dialoghi ricevano l'istanza db_manager come parametro.
-# from catasto_db_manager import CatastoDBManager
-# Costanti per le colonne delle tabelle, se usate in più punti
-
-# Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
-COLONNE_POSSESSORI_DETTAGLI_NUM = 6
-COLONNE_POSSESSORI_DETTAGLI_LABELS = [
-    "ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
-# Costanti per la configurazione delle tabelle dei possessori, se usate in più punti
-# Scegli nomi specifici se diverse tabelle hanno diverse configurazioni
-# Esempio: ID, Nome Compl, Paternità, Comune, Num. Partite
-COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM = 5
-COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Rif.", "Num. Partite"]
-
-# Per InserimentoPossessoreWidget, se la sua tabella è diversa:
-# Esempio: ID, Nome Completo, Paternità, Comune
-COLONNE_INSERIMENTO_POSSESSORI_NUM = 4
-COLONNE_INSERIMENTO_POSSESSORI_LABELS = [
-    "ID", "Nome Completo", "Paternità", "Comune Riferimento"]
-
-NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nascita", "cognome_nome",
-                              "paternita", "indirizzo_residenza", "comune_residenza_nome", "attivo", "note", "num_partite"]
-# Nomi per le chiavi di QSettings (globali o definite prima di run_gui_app)
-# --- Nomi per le chiavi di QSettings (definisci globalmente o prima di run_gui_app) ---
-SETTINGS_DB_TYPE = "Database/Type"
-SETTINGS_DB_HOST = "Database/Host"
-SETTINGS_DB_PORT = "Database/Port"
-SETTINGS_DB_NAME = "Database/DBName"
-SETTINGS_DB_USER = "Database/User"
-SETTINGS_DB_SCHEMA = "Database/Schema"
-# Non salviamo la password in QSettings
-# Non usato, ma definito per completezza
-SETTINGS_DB_PASSWORD = "Database/Password"
-
-# --- Funzioni Helper per Password ---
-
-
-
-
-
-
-
-        
-        
-def format_full_name(first_name, last_name):
-    """Formatta nome e cognome in 'Cognome Nome', gestendo input non validi."""
-    if not isinstance(first_name, str) or not isinstance(last_name, str):
-        raise TypeError("First name and last name must be strings.")
-    
-    if not first_name and not last_name:
-        return ""
-    
-    # Rimuove spazi e mette in maiuscolo la prima lettera di ogni parola
-    last_name_formatted = last_name.strip().title()
-    first_name_formatted = first_name.strip().title()
-
-    # Unisce i nomi, gestendo il caso in cui uno dei due sia vuoto
-    full_name = f"{last_name_formatted} {first_name_formatted}".strip()
-    
-    return full_name
-
-
-# --- Classi PDF (da python_example.py) ---
 if FPDF_AVAILABLE:
     class PDFPartita(FPDF):
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, 'Dettaglio Partita Catastale', 0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.cell(0, 10, 'Dettaglio Partita Catastale', 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             self.ln(5)
 
         def footer(self):
             self.set_y(-15)
-            self.set_font('Helvetica', 'B', 8)  # Cambiato in Bold per coerenza
-            self.cell(0, 10, f'Pagina {self.page_no()}', border=0,
-                      align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.set_font('Helvetica', 'B', 8)
+            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, align='C')
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 6, title, 0, new_x=XPos.LMARGIN,
-                      new_y=YPos.NEXT, align='L')
+            self.cell(0, 6, title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='L')
             self.ln(2)
 
         def chapter_body(self, data_dict):
@@ -162,18 +55,8 @@ if FPDF_AVAILABLE:
             page_width = self.w - self.l_margin - self.r_margin
             for key, value in data_dict.items():
                 text_to_write = f"{key.replace('_', ' ').title()}: {value if value is not None else 'N/D'}"
-                try:
-                    self.multi_cell(page_width, 5, text_to_write,
-                                    border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                except Exception as e:  # FPDFException non è definita se FPDF non è importato
-                    if "Not enough horizontal space" in str(e):
-                        logging.getLogger("CatastoGUI").warning(
-                            f"FPDFException: {e} per il testo: {text_to_write[:100]}...")
-                        self.multi_cell(
-                            page_width, 5, f"{key.replace('_', ' ').title()}: [ERRORE DATI TROPPO LUNGHI]", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    else:
-                        raise e
-            self.ln(2)  # Aggiungo un po' di spazio
+                self.multi_cell(page_width, 5, text_to_write, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.ln(2)
 
         def simple_table(self, headers, data_rows, col_widths_percent=None):
             self.set_font('Helvetica', 'B', 9)  # Header in grassetto
@@ -213,8 +96,7 @@ if FPDF_AVAILABLE:
     class PDFPossessore(FPDF):
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.cell(0, 10, 'Dettaglio Possessore Catastale', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             self.ln(5)
 
         def footer(self):
@@ -300,17 +182,13 @@ if FPDF_AVAILABLE:
 
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, self.report_title, 0,
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-            self.ln(5)  # Spazio dopo l'header
+            self.cell(0, 10, self.report_title, 0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.ln(5)
 
         def footer(self):
-            self.set_y(-15)  # Posizione a 1.5 cm dal fondo
+            self.set_y(-15)
             self.set_font('Helvetica', 'I', 8)
-            # {{nb}} è un alias per il numero totale di pagine
-            page_num_text = f'Pagina {self.page_no()} / {{nb}}'
-            self.cell(0, 10, page_num_text, border=0, align='C',
-                      new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
 
         def add_report_text(self, text_content: str):
             """Aggiunge il contenuto testuale del report al PDF."""
@@ -325,8 +203,34 @@ if FPDF_AVAILABLE:
             self.multi_cell(0, 5, text_content)
             self.ln()
 
-# --- Funzioni di esportazione adattate per GUI ---
+def get_local_ip_address() -> str:
+    """
+    Trova l'indirizzo IP locale della macchina sulla rete.
 
+    Utilizza un trucco standard: crea un socket UDP e si connette a un IP
+    esterno (senza inviare dati) per determinare quale indirizzo IP locale
+    il sistema operativo userebbe.
+    Restituisce '127.0.0.1' come fallback in caso di errore (es. macchina offline).
+    """
+    s = None
+    try:
+        # Crea un socket UDP (veloce e non richiede una vera e propria connessione)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Connettiti a un server DNS pubblico (non invia alcun dato)
+        # L'indirizzo non deve essere necessariamente raggiungibile
+        s.connect(('8.8.8.8', 80))
+        # Ottieni l'indirizzo IP del "nostro" lato del socket
+        ip_address = s.getsockname()[0]
+    except Exception:
+        # Se si verifica un errore (es. nessuna connessione di rete),
+        # restituisci l'indirizzo di loopback come fallback.
+        ip_address = '127.0.0.1'
+    finally:
+        # Chiudi sempre il socket
+        if s:
+            s.close()
+    return ip_address
+# --- Funzioni di esportazione adattate per GUI ---
 
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo
@@ -359,9 +263,17 @@ def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partit
             return
         # --- FINE MODIFICA ---
 
-        default_filename = f"partita_{partita_id}_{date.today().isoformat()}.json"
+        # --- MODIFICA QUI ---
+        # 1. Crea solo il nome base del file
+        default_filename_base = f"partita_{partita_id}_{date.today().isoformat()}.json"
+        
+        # 2. Usa la nuova funzione per ottenere il percorso completo di default
+        full_default_path = _get_default_export_path(default_filename_base)
+
+        # 3. Passa il percorso completo a QFileDialog
         filename, _ = QFileDialog.getSaveFileName(
-            parent_widget, "Salva JSON Partita", default_filename, "JSON Files (*.json)")
+            parent_widget, "Salva JSON Partita", full_default_path, "JSON Files (*.json)")
+        # --- FINE MODIFICA ---
 
         if filename:
             try:
@@ -414,9 +326,12 @@ def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per partita ID {partita_id} annullata dall'utente dopo anteprima.")
         return
     # --- FINE LOGICA ANTEPRIMA CSV ---
+    
     default_filename = f"partita_{partita_id}_{date.today()}.csv"
+    # 2. Usa la nuova funzione per ottenere il percorso completo di default
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva CSV Partita", default_filename, "CSV Files (*.csv)")
+        parent_widget, "Salva CSV Partita", full_default_path, "CSV Files (*.csv)")
     if not filename:
         return
 
@@ -510,8 +425,9 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
         return
     # --- FINE LOGICA ANTEPRIMA TESTUALE PDF ---
     default_filename = f"partita_{partita_id}_{date.today()}.pdf"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva PDF Partita", default_filename, "PDF Files (*.pdf)")
+        parent_widget, "Salva PDF Partita", full_default_path, "PDF Files (*.pdf)")
     if not filename:
         return
 
@@ -632,8 +548,9 @@ def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, poss
     # --- FINE Logica di Anteprima ---
 
     default_filename = f"possessore_{possessore_id}_{date.today()}.csv"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva CSV Possessore", default_filename, "CSV Files (*.csv)")
+        parent_widget, "Salva CSV Possessore", full_default_path, "CSV Files (*.csv)")
     if not filename:
         return
 
@@ -712,8 +629,9 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
     # --- FINE Logica di Anteprima ---
 
     default_filename = f"possessore_{possessore_id}_{date.today()}.pdf"
+    full_default_path = _get_default_export_path(default_filename)
     filename, _ = QFileDialog.getSaveFileName(
-        parent_widget, "Salva PDF Possessore", default_filename, "PDF Files (*.pdf)")
+        parent_widget, "Salva PDF Possessore", full_default_path, "PDF Files (*.pdf)")
     if not filename:
         return
 
@@ -773,6 +691,108 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
             "Errore esportazione PDF possessore (GUI)")
         QMessageBox.critical(parent_widget, "Errore Esportazione",
                              f"Errore durante l'esportazione PDF:\n{e}")
+# In app_utils.py, dopo le importazioni
+
+import os # Assicurati che 'os' sia importato
+
+def _get_default_export_path(default_filename: str) -> str:
+    """
+    Crea la sottocartella 'esportazioni' se non esiste e restituisce
+    il percorso completo per il file di default.
+    """
+    # Definisce il nome della sottocartella
+    export_dir_name = "esportazioni"
+    
+    # Crea il percorso completo della cartella (relativo alla posizione di esecuzione)
+    full_dir_path = os.path.abspath(export_dir_name)
+    
+    # Crea la directory se non esiste, senza generare errori se esiste già
+    os.makedirs(full_dir_path, exist_ok=True)
+    
+    # Unisce il percorso della cartella con il nome del file suggerito
+    return os.path.join(full_dir_path, default_filename)
+# In app_utils.py, aggiungi questa nuova funzione
+
+def prompt_to_open_file(parent_widget, filename: str):
+    """
+    Mostra un dialogo che chiede all'utente se vuole aprire il file appena creato.
+    Se l'utente accetta, apre il file con l'applicazione di sistema predefinita.
+    """
+    if not filename:
+        return
+        
+    reply = QMessageBox.question(
+        parent_widget,
+        "Esportazione Completata",
+        f"File salvato con successo.\n\nVuoi aprirlo ora?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes  # Il pulsante 'Sì' è preselezionato
+    )
+
+    if reply == QMessageBox.Yes:
+        try:
+            from PyQt5.QtCore import QUrl
+            from PyQt5.QtGui import QDesktopServices
+            
+            QDesktopServices.openUrl(QUrl.fromLocalFile(filename))
+        except Exception as e:
+            logging.getLogger("CatastoGUI").error(f"Impossibile aprire il file {filename}: {e}", exc_info=True)
+            QMessageBox.critical(parent_widget, "Errore Apertura File", f"Impossibile aprire il file:\n{e}")
+
+
+if FPDF_AVAILABLE:
+    class BulkReportPDF(FPDF):
+        """
+        Classe PDF specializzata per creare report tabellari lunghi
+        con intestazioni ripetute su ogni pagina.
+        """
+        def __init__(self, orientation='L', unit='mm', format='A4', report_title="Report Dati"):
+            super().__init__(orientation, unit, format) # 'L' per Landscape, più adatto a tabelle
+            self.report_title = report_title
+            self.headers = []
+            self.col_widths = []
+
+        def header(self):
+            self.set_font('Helvetica', 'B', 12)
+            self.cell(0, 10, self.report_title, 0, 1, 'C')
+            self.ln(5)
+            # Stampa l'intestazione della tabella su ogni pagina
+            if self.headers:
+                self.set_font('Helvetica', 'B', 8)
+                self.set_fill_color(230, 230, 230)
+                for i, header in enumerate(self.headers):
+                    self.cell(self.col_widths[i], 7, header, 1, 0, 'C', 1)
+                self.ln()
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'I', 8)
+            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
+
+        def print_table(self, headers, data):
+            if not data: return
+            
+            self.headers = headers
+            # Calcola larghezza colonne (semplice divisione)
+            effective_width = self.w - self.l_margin - self.r_margin
+            self.col_widths = [effective_width / len(headers)] * len(headers)
+            
+            self.set_font('Helvetica', '', 8)
+            self.add_page()
+            
+            for row in data:
+                # Controlla se c'è spazio per la riga, altrimenti vai a pagina nuova
+                if self.get_y() + 6 > self.page_break_trigger:
+                    self.add_page()
+
+                for i, header in enumerate(headers):
+                    # Usiamo .get(header) se i dati sono dict, o l'indice se sono liste/tuple
+                    if isinstance(row, dict):
+                        cell_value = str(row.get(header, ''))
+                    else:
+                        cell_value = str(row[i]) if i < len(row) else ''
+                    self.cell(self.col_widths[i], 6, cell_value, 1, 0, 'L')
+                self.ln()
 
 
 

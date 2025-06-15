@@ -1,4 +1,0 @@
-Note testing GUI al 03-06-2025
-- i tasti della schermata centrale a dx non porta sul tab interessato ma sull'ultimo visitato della categoria
-- inserire una combobox per selezionare tipo di contratto in registra prpoprietà
-- campi di elenco comuni 3 vs 6

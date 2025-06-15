@@ -12,18 +12,65 @@ SET search_path TO catasto, public; -- Aggiunto public per le estensioni
 -- Estensioni necessarie
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public; -- O catasto se preferito
 CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA public;   -- O catasto se preferito
+CREATE EXTENSION IF NOT EXISTS "system_stats" WITH SCHEMA public; -- O catasto se preferito
+
+
+-- 1. Estensione per la gestione di periodi storici
+CREATE TABLE periodo_storico (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL UNIQUE,
+    anno_inizio INTEGER NOT NULL,
+    anno_fine INTEGER,
+    descrizione TEXT,
+    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO periodo_storico (nome, anno_inizio, anno_fine, descrizione)
+VALUES 
+('Regno di Sardegna', 1720, 1861, 'Periodo del Regno di Sardegna prima dell''unità d''Italia'),
+('Regno d''Italia', 1861, 1946, 'Periodo del Regno d''Italia'),
+('Repubblica Italiana', 1946, NULL, 'Periodo della Repubblica Italiana')
+ON CONFLICT (nome) DO NOTHING; -- O DO UPDATE SET ... se preferisci aggiornare
 
 -- Tabella COMUNE (Modificata con ID PK)
+-- =====================================================================
+-- TABELLA DEI COMUNI
+-- Versione aggiornata per includere tutti i campi necessari all'interfaccia.
+-- =====================================================================
+
+--DROP TABLE IF EXISTS catasto.comune CASCADE; -- Opzionale: per pulizia se lo script viene eseguito più volte
+
 CREATE TABLE comune (
-    id SERIAL PRIMARY KEY, -- Chiave primaria numerica
-    nome VARCHAR(100) NOT NULL UNIQUE, -- Nome rimane, ma ora è solo UNIQUE
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL UNIQUE,
     provincia VARCHAR(100) NOT NULL,
     regione VARCHAR(100) NOT NULL,
-    data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
-    -- La colonna periodo_id da script 11 verrà aggiunta lì o qui se preferito
+    
+    -- Campi aggiunti per coerenza con l'interfaccia
+    codice_catastale VARCHAR(50) NULL,
+    data_istituzione DATE NULL,
+    data_soppressione DATE NULL,
+    note TEXT NULL,
+    
+    -- Campi esistenti
+    periodo_id INTEGER NULL REFERENCES catasto.periodo_storico(id),
+    
+    -- Timestamps automatici
+    data_creazione TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    data_modifica TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE comune IS 'Tabella dei comuni catalogati nel catasto storico (con ID PK).';
+
+-- Commenti per chiarezza (opzionali ma consigliati)
+COMMENT ON TABLE catasto.comune IS 'Anagrafica dei comuni storici e attuali.';
+COMMENT ON COLUMN catasto.comune.nome IS 'Nome completo del comune (es. "Comune di Savona").';
+COMMENT ON COLUMN catasto.comune.codice_catastale IS 'Codice catastale del comune (es. I480).';
+COMMENT ON COLUMN catasto.comune.data_istituzione IS 'Data di istituzione ufficiale del comune.';
+COMMENT ON COLUMN catasto.comune.data_soppressione IS 'Data di soppressione del comune, se applicabile.';
+COMMENT ON COLUMN catasto.comune.periodo_id IS 'FK alla tabella dei periodi storici di riferimento.';
+
+-- Trigger (se usi la stessa logica delle altre tabelle)
+-- CREATE TRIGGER audit_trigger_comune AFTER INSERT OR DELETE OR UPDATE ON catasto.comune FOR EACH ROW EXECUTE FUNCTION log_audit_trigger_function();
+-- CREATE TRIGGER update_comune_modifica BEFORE UPDATE ON catasto.comune FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 -- Tabella REGISTRO_PARTITE (Modificata per usare comune_id)
 CREATE TABLE registro_partite (
@@ -340,3 +387,26 @@ ON localita USING gin(to_tsvector('italian', nome));
 COMMENT ON INDEX idx_gin_immobili_natura IS 'Indice GIN per ricerca fuzzy nella natura degli immobili';
 COMMENT ON INDEX idx_gin_variazioni_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di variazione';
 COMMENT ON INDEX idx_gin_contratti_tipo IS 'Indice GIN per ricerca fuzzy nei tipi di contratto';
+
+-- =====================================================================
+-- TABELLA PER I METADATI DELL'APPLICAZIONE
+-- Contiene chiavi/valori per impostazioni o stati, come l'ultimo
+-- aggiornamento delle viste materializzate.
+-- =====================================================================
+
+CREATE TABLE catasto.app_metadata (
+    key TEXT PRIMARY KEY,
+    value_timestamp TIMESTAMP WITH TIME ZONE,
+    value_text TEXT
+);
+
+COMMENT ON TABLE catasto.app_metadata IS 'Tabella chiave-valore per memorizzare metadati e stati dell''applicazione, come il timestamp dell''ultimo aggiornamento delle viste.';
+COMMENT ON COLUMN catasto.app_metadata.key IS 'La chiave univoca per il metadato (es. ''last_mv_refresh'').';
+COMMENT ON COLUMN catasto.app_metadata.value_timestamp IS 'Un valore di tipo timestamp associato alla chiave.';
+COMMENT ON COLUMN catasto.app_metadata.value_text IS 'Un valore di tipo testuale associato alla chiave.';
+
+
+-- Inserisce il valore di default per la chiave dell'aggiornamento delle viste.
+-- Questo previene errori al primo avvio dell'applicazione su un database pulito.
+INSERT INTO catasto.app_metadata (key, value_timestamp) 
+VALUES ('last_mv_refresh', '2000-01-01 00:00:00+00');

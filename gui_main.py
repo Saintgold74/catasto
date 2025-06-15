@@ -9,18 +9,7 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys,bcrypt
-<<<<<<< HEAD
-from fuzzy_search_unified import UnifiedFuzzySearchWidget,integrate_expanded_fuzzy_search_widget,add_fuzzy_search_tab_to_main_window
-from fuzzy_search_unified import FuzzySearchWidget
-from fuzzy_search_unified import (
-    FUZZY_SEARCH_AVAILABLE, 
-    add_fuzzy_search_tab_to_main_window
-)
-
-
-=======
 from fuzzy_search_unified import UnifiedFuzzySearchWidget, add_fuzzy_search_tab_to_main_window
->>>>>>> new_entry
 import os
 import logging
 import uuid  # Se usato per session_id in modalità offline
@@ -715,32 +704,12 @@ class CatastoMainWindow(QMainWindow):
             self.db_manager, self.logged_in_user_info, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(
             self.registra_consultazione_widget_ref, "Registra Consultazione")
-<<<<<<< HEAD
-        # === AGGIUNTA TAB RICERCA FUZZY ===
-        if FUZZY_SEARCH_AVAILABLE and self.db_manager:
-            try:
-                success = add_fuzzy_search_tab_to_main_window(self)
-                if success:
-                    print("✅ Tab ricerca fuzzy semplificato aggiunto")
-                else:
-                    print("⚠️ Errore aggiunta tab ricerca fuzzy")
-            except Exception as e:
-                print(f"⚠️ Errore ricerca fuzzy: {e}")
-        
-        # Aggiungi i sotto-tab al layout del contenitore
-        layout_contenitore_inserimento.addWidget(self.inserimento_sub_tabs)
-        # Aggiungi il contenitore come tab principale
-        self.tabs.addTab(inserimento_gestione_contenitore,
-                         "Inserimento e Gestione")
-        
-=======
         self.logger.info("Tentativo di aggiungere il tab di Registra Consultazione.")
        
         layout_inserimento.addWidget(self.inserimento_sub_tabs)
         self.tabs.addTab(inserimento_contenitore, "Inserimento e Gestione")
         self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager, self.tabs)
         self.tabs.addTab(self.esportazioni_widget_ref, "🗄️ Esportazioni Massive")
->>>>>>> new_entry
 
         self.reportistica_widget_ref = ReportisticaWidget(self.db_manager, self)
         self.tabs.addTab(self.reportistica_widget_ref, "Reportistica")
@@ -1544,6 +1513,7 @@ def run_gui_app():
         QMessageBox.critical(None, "Errore Critico", f"Errore fatale: {e}\nControlla crash_report.log.")
         sys.exit(1)
 
+
 if __name__ == "__main__":
     print("[FASE 4] Inizio blocco di esecuzione __main__.")
     
@@ -1552,7 +1522,7 @@ if __name__ == "__main__":
     import traceback
     
     try:
-        run_gui_app()  # ← QUESTA DEVE ESSERE INDENTATA DENTRO IL BLOCCO if __name__
+        run_gui_app()
     except Exception as e:
         # Log dell'errore critico
         gui_logger.critical(f"Errore critico all'avvio dell'applicazione: {e}", exc_info=True)

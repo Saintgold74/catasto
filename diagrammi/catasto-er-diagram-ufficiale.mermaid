@@ -1,0 +1,108 @@
+erDiagram
+    %% Struttura catasto storico anni '50 (VERSIONE UFFICIALE 1.0)
+    COMUNE ||--o{ REGISTRO_PARTITE : contiene
+    COMUNE ||--o{ REGISTRO_MATRICOLE : contiene
+    REGISTRO_PARTITE ||--o{ PARTITA : contiene
+    REGISTRO_MATRICOLE ||--o{ POSSESSORE : elenca
+    PARTITA }|--|{ POSSESSORE : "intestata a"
+    PARTITA ||--o{ IMMOBILE : include
+    IMMOBILE }|--|| LOCALITA : "situato in"
+    PARTITA ||--o{ VARIAZIONE : "subisce"
+    PARTITA }o--o{ PARTITA : "collegata a"
+    
+    COMUNE {
+        string nome PK "Carcare"
+        string provincia "Savona"
+        string regione "Liguria"
+    }
+    
+    REGISTRO_PARTITE {
+        string comune_nome FK
+        int anno_impianto
+        int numero_volumi
+        string stato_conservazione
+    }
+    
+    REGISTRO_MATRICOLE {
+        string comune_nome FK
+        int anno_impianto
+        int numero_volumi
+        string stato_conservazione
+    }
+    
+    PARTITA {
+        string comune_nome FK
+        int numero_partita PK "221, 219, 245, etc."
+        string tipo "principale|secondaria"
+        date data_impianto
+        date data_chiusura
+        int numero_provenienza "Nr. provent."
+        string stato "attiva|inattiva"
+    }
+    
+    POSSESSORE {
+        int id PK
+        string comune_nome FK
+        string cognome_nome "Nome completo"
+        string paternita "fu [nome]"
+        string nome_completo "es. Fossati Angelo fu Roberto"
+        boolean attivo "sì|no"
+    }
+    
+    PARTITA_POSSESSORE {
+        int numero_partita FK
+        int possessore_id FK
+        string tipo_partita "principale|secondaria"
+        string titolo "proprietà esclusiva|comproprietà"
+        string quota "quota possesso"
+    }
+    
+    LOCALITA {
+        int id PK
+        string comune_nome FK
+        string nome "Regione Vista, Via Giuseppe Verdi, etc."
+        string tipo "regione|via|borgata"
+        int civico
+    }
+    
+    IMMOBILE {
+        int id PK
+        int numero_partita FK
+        int localita_id FK
+        string natura "Molino da cereali|Casa|Magazzino, etc."
+        int numero_piani
+        int numero_vani
+        string consistenza
+        string classificazione
+    }
+    
+    VARIAZIONE {
+        int id PK
+        int partita_origine FK
+        int partita_destinazione FK
+        string tipo "Acquisto|Successione|Variazione|Frazionamento, etc."
+        date data_variazione
+        string numero_riferimento "Nr. sec."
+        string nominativo_riferimento "Nome sec."
+    }
+    
+    CONTRATTO {
+        int id PK
+        int variazione_id FK
+        string tipo "Vendita|Divisione"
+        date data_contratto
+        string notaio
+        string repertorio
+        string note
+    }
+    
+    %% Consultazione
+    CONSULTAZIONE {
+        int id PK
+        date data
+        string richiedente
+        string documento_identita
+        string motivazione
+        string materiale_consultato
+        string funzionario_autorizzante
+    }

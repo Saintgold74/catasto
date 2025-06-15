@@ -25,11 +25,6 @@ import json
 import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
-<<<<<<< HEAD
-# --- CORREZIONE ---
-# Ho corretto il nome della classe in 'CatastoDBAdapter' con la 'B' maiuscola.
-from catasto_db_adapter import CatastoDBAdapter
-=======
 from contextlib import contextmanager
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
@@ -46,9 +41,7 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
                           pyqtSignal)
 
->>>>>>> new_entry
 
-# ------------------
 
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
@@ -88,30 +81,6 @@ class DBDataError(DBMError):
 # -------------------------------------------------
 
 class CatastoDBManager:
-<<<<<<< HEAD
-    """
-    Gestisce le operazioni di amministrazione e manutenzione del database Catasto.
-    Versione semplificata.
-    """
-    # --- VERSIONE CORRETTA E ROBUSTA DEL COSTRUTTORE ---
-    def __init__(self, dbname, user, password, host, port, log_level=logging.INFO, schema='catasto', application_name='CatastoApp', **kwargs):
-        """
-        Costruttore passivo. Non si connette al DB, ma si limita a configurare
-        i parametri necessari per le connessioni future gestite dal pool.
-        """
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)
-
-        # Dizionario contenente i parametri di connessione principali.
-        # Sarà la fonte unica di verità per tutte le connessioni.
-        self._main_db_conn_params = {
-            'dbname': dbname,
-            'user': user,
-            'password': password,
-            'host': host,
-            'port': port
-        }
-=======
     def __init__(self, dbname, user, password, host, port,
                  schema="catasto",
                  application_name="CatastoApp_Pool",
@@ -119,30 +88,11 @@ class CatastoDBManager:
                  log_level=logging.DEBUG, # O il suo default
                  min_conn=2,
                  max_conn=20):
->>>>>>> new_entry
         
-        # Attributi di configurazione
+        self._main_db_conn_params = {"dbname": dbname, "user": user, "password": password, "host": host, "port": port}
+        self._maintenance_db_name = "postgres" 
         self.schema = schema
         self.application_name = application_name
-<<<<<<< HEAD
-        self.pool = None  # Il pool viene inizializzato esplicitamente, non qui.
-        
-        # Parametri per la configurazione del pool
-        self._min_conn_pool = kwargs.get('min_conn_pool', 1)
-        self._max_conn_pool = kwargs.get('max_conn_pool', 10)
-        
-        # L'istanza di CatastoDBAdapter, se ancora necessaria per alcune funzioni specifiche,
-        # può essere creata qui ma senza chiamare connect().
-        # Tuttavia, consiglio di razionalizzare l'uso e affidarsi solo al pool.
-        # Per ora, la rimuoviamo da __init__ per risolvere l'errore.
-        # self.db_adapter = CatastoDBAdapter(f"dbname='{dbname}' user='{user}'...")
-
-        self.logger.info(f"CatastoDBManager inizializzato per il database '{dbname}'. "
-                         "Il pool di connessioni deve essere attivato esplicitamente.")
-
-
-
-=======
         self._min_conn_pool = min_conn
         self._max_conn_pool = max_conn
         # --- AGGIUNGERE QUESTA RIGA ---
@@ -154,7 +104,6 @@ class CatastoDBManager:
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
         self.pool = None # Il pool viene inizializzato esplicitamente dopo
     # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
->>>>>>> new_entry
 
     def initialize_main_pool(self) -> bool:
         if self.pool:
@@ -2275,197 +2224,6 @@ class CatastoDBManager:
             if show_success_message:
                 QMessageBox.information(None, "Successo", "Tutte le viste materializzate sono state aggiornate con successo.")
             
-<<<<<<< HEAD
-            # Salva e pulisci gli handler di notice esistenti per questa connessione
-            # conn.notices è una lista in psycopg2
-            original_notices_handlers = conn.notices[:] 
-            conn.notices.clear()
-            conn.notices.append(notice_handler_gui)
-
-            with conn.cursor() as cur:
-                self.logger.debug(f"Chiamata a procedura {self.schema}.verifica_integrita_database()")
-                cur.execute(f"CALL {self.schema}.verifica_integrita_database();") # SENZA (NULL)
-                conn.commit()
-            
-            self.logger.info("Procedura di verifica integrità database eseguita.")
-
-        except psycopg2.errors.UndefinedFunction:
-            self.logger.error(f"La procedura SQL '{self.schema}.verifica_integrita_database' non è stata trovata.", exc_info=True)
-            captured_notices.append(f"ERRORE: La procedura SQL '{self.schema}.verifica_integrita_database' non esiste nel database.")
-            problemi_rilevati_flag = True
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback() # Rollback in caso di errore DB
-            self.logger.error(f"Errore DB durante la verifica integrità: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
-            captured_notices.append(f"ERRORE DATABASE: {getattr(db_err, 'pgerror', str(db_err))}")
-            problemi_rilevati_flag = True
-        except Exception as e:
-            if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore Python imprevisto durante la verifica integrità: {e}", exc_info=True)
-            captured_notices.append(f"ERRORE DI SISTEMA: {e}")
-            problemi_rilevati_flag = True
-        finally:
-            if conn:
-                # Ripristina gli handler di notice originali
-                if 'original_notices_handlers' in locals():
-                    conn.notices[:] = original_notices_handlers
-                self._release_connection(conn)
-            
-        output_string = "\n".join(captured_notices).strip()
-        if not output_string and not problemi_rilevati_flag:
-            output_string = "Verifica completata. Nessun messaggio specifico o problema riportato dalla procedura."
-            
-        return problemi_rilevati_flag, output_string
-    
-    def open_user_management_dialog(self):
-        """
-        Apre la finestra di dialogo per la gestione degli utenti e dei ruoli.
-        Questa versione passa l'istanza del manager stesso al dialogo.
-        """
-        # L'importazione rimane qui per evitare importazioni circolari
-        from dialogs import UserManagementDialog
-        
-        try:
-            # Passiamo 'self', ovvero l'intera istanza di CatastoDBManager
-            dialog = UserManagementDialog(self) 
-            dialog.exec_()
-        except Exception as e:
-            self.logger.error(f"Impossibile aprire la gestione utenti: {e}", exc_info=True)
-            # Qui un QMessageBox è accettabile solo se questo metodo è chiamato da un contesto GUI.
-            # Per coerenza, sarebbe meglio che anche questo metodo sollevasse un'eccezione
-            # e fosse la GUI a mostrare il messaggio di errore.
-            # from PyQt5.QtWidgets import QMessageBox
-            # QMessageBox.critical(None, "Errore", f"Impossibile aprire la finestra di gestione utenti: {e}")
-    def run_sql_script(self, script_path):
-        """
-        Esegue un singolo script SQL.
-        """
-        logging.info(f"Esecuzione dello script SQL: {script_path}")
-        try:
-            with open(script_path, 'r', encoding='utf-8') as f:
-                sql_script = f.read()
-            # Ora utilizza self.db_adapter che è stato correttamente salvato.
-            if self.db_adapter.execute_script(sql_script):
-                logging.info(f"Script {script_path} eseguito con successo.")
-                QMessageBox.information(None, "Successo", f"Lo script {script_path} è stato eseguito correttamente.")
-                return True
-            else:
-                return False
-        except Exception as e:
-            logging.error(f"Errore durante l'esecuzione dello script {script_path}: {e}")
-            QMessageBox.critical(None, "Errore Script", f"Impossibile eseguire lo script {script_path}: {e}")
-            return False
-    def refresh_materialized_views(self) -> Tuple[bool, str]:
-        """
-        Aggiorna tutte le viste materializzate nello schema 'catasto'.
-        Utilizza il pool di connessioni e restituisce un esito e un messaggio.
-        Questo metodo è ora disaccoppiato dalla GUI.
-        """
-        self.logger.info("Inizio aggiornamento delle viste materializzate.")
-        
-        # La query rimane la stessa
-        query = """
-        DO $$
-        DECLARE
-            r RECORD;
-        BEGIN
-            FOR r IN (SELECT matviewname FROM pg_matviews WHERE schemaname = 'catasto') LOOP
-                RAISE NOTICE 'Aggiornamento vista: %', r.matviewname;
-                EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY catasto.' || quote_ident(r.matviewname);
-            END LOOP;
-            RAISE NOTICE 'Aggiornamento completato.';
-        END $$;
-        """
-        
-        conn = None
-        try:
-            conn = self._get_connection()
-            with conn.cursor() as cur:
-                cur.execute(query)
-                # REFRESH MATERIALIZED VIEW (anche in un DO block) non richiede commit esplicito
-                # se eseguito in una sessione con autocommit off, ma è buona norma farlo se si
-                # vuole essere sicuri che la transazione si chiuda.
-                conn.commit() 
-            
-            # Recupera eventuali messaggi (NOTICE) generati dalla procedura per darli alla GUI
-            notices = "\n".join(conn.notices) if hasattr(conn, 'notices') and conn.notices else ""
-            msg_success = f"Viste materializzate aggiornate con successo.\n{notices}"
-            self.logger.info(msg_success)
-            return True, msg_success
-
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback()
-            # Messaggio specifico se si tenta REFRESH CONCURRENTLY senza indice UNIQUE
-            if "cannot refresh materialized view concurrently" in str(db_err).lower():
-                msg = "Una o più viste non hanno un indice UNIQUE, necessario per l'aggiornamento CONCURRENTLY. Usare un aggiornamento standard o creare gli indici."
-                self.logger.error(f"Errore aggiornamento viste: {msg}. Dettaglio DB: {getattr(db_err, 'pgerror', str(db_err))}")
-                return False, msg
-
-            msg_failure = f"Errore database durante l'aggiornamento delle viste: {getattr(db_err, 'pgerror', str(db_err))}"
-            self.logger.error(msg_failure, exc_info=True)
-            return False, msg_failure
-
-        except Exception as e:
-            if conn and not conn.closed: conn.rollback()
-            msg_failure = f"Errore di sistema imprevisto durante l'aggiornamento delle viste: {e}"
-            self.logger.error(msg_failure, exc_info=True)
-            return False, msg_failure
-            
-        finally:
-            if conn:
-                self._release_connection(conn)
-
-    def run_database_maintenance(self) -> bool:
-        """Esegue manutenzione generale del database (es. ANALYZE e aggiorna viste), usando il pool."""
-        self.logger.info("Avvio manutenzione database (es. ANALYZE, REFRESH MV)...")
-        conn = None
-        try:
-            conn = self._get_connection()
-            with conn.cursor() as cur:
-                # Assumendo che la procedura esista e sia nello schema corretto.
-                # Potrebbe anche essere una serie di comandi SQL invece di una singola procedura.
-                # Esempio se chiama una procedura specifica:
-                self.logger.debug(f"Chiamata procedura {self.schema}.manutenzione_database()")
-                cur.execute(f"CALL {self.schema}.manutenzione_database();")
-                # Se manutenzione_database() non fa commit internamente, è necessario qui.
-                conn.commit() 
-            self.logger.info("Manutenzione database completata con successo.")
-            return True
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback() # Esegui rollback sulla connessione specifica
-            self.logger.error(f"Errore DB durante la manutenzione del database: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
-            return False
-        except Exception as e: # Per altri errori Python
-            if conn and not conn.closed: conn.rollback() # Esegui rollback sulla connessione specifica
-            self.logger.error(f"Errore Python imprevisto durante la manutenzione del database: {e}", exc_info=True)
-            return False
-        finally:
-            if conn:
-                self._release_connection(conn)
-
-    def analyze_slow_queries(self, min_duration_ms: int = 1000) -> List[Dict]:
-        """Chiama la funzione SQL analizza_query_lente (se esiste)."""
-        logger.warning("La funzione SQL 'analizza_query_lente' potrebbe non essere definita.")
-        try:
-            query = "SELECT * FROM analizza_query_lente(%s)"
-            if self.execute_query(query, (min_duration_ms,)): return self.fetchall()
-        except psycopg2.errors.UndefinedFunction: logger.warning("Funzione 'analizza_query_lente' non trovata."); return []
-        except psycopg2.errors.UndefinedTable: logger.warning("Estensione 'pg_stat_statements' non abilitata."); return []
-        except psycopg2.Error as db_err: logger.error(f"Errore DB in analyze_slow_queries: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python in analyze_slow_queries: {e}"); return []
-        return []
-
-    def check_index_fragmentation(self):
-        """Chiama la procedura SQL controlla_frammentazione_indici (se esiste)."""
-        logger.warning("La procedura SQL 'controlla_frammentazione_indici' potrebbe non essere definita.")
-        logger.info("Avvio controllo frammentazione indici (risultati nei log DB)...")
-        try:
-            if self.execute_query("CALL controlla_frammentazione_indici()"): self.commit(); logger.info("Controllo frammentazione avviato."); return True
-            return False
-        except psycopg2.errors.UndefinedFunction: logger.warning("Procedura 'controlla_frammentazione_indici' non trovata."); return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB check_index_fragmentation: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python check_index_fragmentation: {e}"); self.rollback(); return False
-
-=======
             self.logger.info("Viste materializzate aggiornate con successo.")
             return True
             
@@ -2481,7 +2239,6 @@ class CatastoDBManager:
             self.logger.error(error_message, exc_info=True)
             QMessageBox.critical(None, "Errore Aggiornamento Viste", error_message)
             return False
->>>>>>> new_entry
     def get_optimization_suggestions(self) -> Optional[str]:
         """Chiama la funzione SQL suggerimenti_ottimizzazione (se esiste)."""
         logger.warning("La funzione SQL 'suggerimenti_ottimizzazione' potrebbe non essere definita o corretta.")
@@ -3502,82 +3259,10 @@ class CatastoDBManager:
         if not os.path.exists(file_path):
             return False, f"File SQL non trovato: {file_path}"
         
-<<<<<<< HEAD
-        conn = None
-=======
->>>>>>> new_entry
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
-<<<<<<< HEAD
-            conn = self._get_connection()
-            with conn.cursor() as cur:
-                self.logger.info(f"Esecuzione script SQL da file: {file_path}")
-                cur.execute(sql_content)
-                conn.commit() 
-                
-            self.logger.info(f"Script SQL {file_path} eseguito con successo.")
-            return True, f"Script {os.path.basename(file_path)} eseguito con successo."
-
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback()
-            msg = f"Errore DB eseguendo script {file_path}: {getattr(db_err, 'pgerror', str(db_err))}"
-            self.logger.error(msg, exc_info=True)
-            return False, msg
-        except Exception as e:
-            if conn and not conn.closed: conn.rollback()
-            msg = f"Errore Python eseguendo script {file_path}: {e}"
-            self.logger.error(msg, exc_info=True)
-            return False, msg
-        finally:
-            if conn:
-                self._release_connection(conn)
-    def clear_audit_session_variables(self) -> bool:
-        """
-        Resetta le variabili di sessione PostgreSQL 'catasto.app_user_id' e 
-        'catasto.session_id' a NULL per la connessione corrente.
-        Usa il pool di connessioni.
-        """
-        self.logger.info("Reset variabili di sessione per audit (catasto.app_user_id, catasto.session_id).")
-        conn = None
-        try:
-            conn = self._get_connection() # Se il pool è None, solleverà DBMError qui
-            with conn.cursor() as cur:
-                # Usare RESET è più pulito se le variabili sono state impostate con SET LOCAL o SET SESSION
-                # Se sono state impostate con set_config(..., ..., false), il loro scope è la sessione.
-                # Resettarle esplicitamente a NULL con set_config è un'alternativa.
-                # SELECT set_config('catasto.app_user_id', NULL, false);
-                # SELECT set_config('catasto.session_id', NULL, false);
-                # Oppure, se sono definite con un DEFAULT nel db, RESET le riporterà al default.
-                # Per GUC custom senza un DEFAULT esplicito, impostarle a NULL è più sicuro.
-                
-                # Tentativo 1: RESET (preferibile se hanno un default o per pulizia generale)
-                # cur.execute(f"RESET {self.schema}.app_user_id;")
-                # cur.execute(f"RESET {self.schema}.session_id;")
-                
-                # Tentativo 2: SET a NULL (più esplicito se non si è sicuri del default)
-                cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
-                cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
-                
-                conn.commit() # Necessario per set_config con is_local = false
-                self.logger.info("Variabili di sessione per audit resettate con successo.")
-                return True
-        except DBMError as e: # Cattura DBMError da _get_connection se il pool non è inizializzato
-            self.logger.warning(f"Impossibile resettare variabili audit: {e}")
-            return False # Non sollevare eccezione, semplicemente non ha potuto farlo
-        except psycopg2.Error as db_err:
-            if conn: conn.rollback()
-            self.logger.error(f"Errore DB resettando variabili audit: {getattr(db_err, 'pgerror', str(db_err))}", exc_info=True)
-            return False
-        except Exception as e:
-            if conn and not conn.closed: conn.rollback()
-            self.logger.error(f"Errore Python resettando variabili audit: {e}", exc_info=True)
-            return False
-        finally:
-            if conn:
-                self._release_connection(conn)
-=======
             with self._get_connection() as conn:
                 # Imposta il livello di isolamento per la singola operazione
                 # Questo è il modo corretto di gestire l'autocommit con un pool
@@ -3588,7 +3273,6 @@ class CatastoDBManager:
             
             self.logger.info(f"Script SQL {file_path} eseguito con successo.")
             return True, f"Script {os.path.basename(file_path)} eseguito con successo."
->>>>>>> new_entry
 
         except Exception as e:
             msg = f"Errore eseguendo script {file_path}: {e}"

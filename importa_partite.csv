@@ -1,0 +1,5 @@
+numero_partita;suffisso_partita;data_impianto;stato;tipo;numero_provenienza
+1052;A;22/07/1985;attiva;principale;
+1053;;15/01/1970;inattiva;principale;Vol. 10, N. 3
+666;bis;12/05/1995;attiva;principale;10/bis
+999;alpha;10/04/1920;inattiva;secondaria;99/bis

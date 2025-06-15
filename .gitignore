@@ -115,6 +115,7 @@ config.dev.json
 secrets.json
 
 # Binary and large files
+<<<<<<< HEAD
 *.zip
 *.tar.gz
 *.rar
@@ -126,4 +127,6 @@ secrets.json
 *.xlsx
 *.ppt
 *.pptx
+=======
+>>>>>>> dc7cada0fe695f706965436c56717ee31a9de676
 >>>>>>> 0a923e6492c945930ac2ff2dbc5aa05398eb22c0

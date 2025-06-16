@@ -44,6 +44,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplicat
 from catasto_db_manager import CatastoDBManager
 from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address
 import pandas as pd # Importa pandas
+from app_paths import get_style_file, get_logo_path, resource_path
+
 
 # Dai nuovi moduli che creeremo:
 from gui_widgets import (
@@ -108,66 +110,40 @@ except ImportError:
                              "Assicurati che catasto_db_manager.py sia accessibile.")
         sys.exit(1)
         
-# =============================================================================
-# CONFIGURAZIONE LOGGER GLOBALE (DA INSERIRE QUI)
-# =============================================================================
-# Definiamo e configuriamo il logger una sola volta a livello di modulo.
-gui_logger = logging.getLogger("CatastoGUI")
-gui_logger.setLevel(logging.INFO) # O logging.DEBUG per più dettagli
-
-# Controlliamo se ci sono già handler per evitare duplicati
-if not gui_logger.hasHandlers():
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-    
-    # Handler per il file di log
-    file_handler = logging.FileHandler("catasto_gui.log", mode='a', encoding='utf-8')
-    file_handler.setFormatter(logging.Formatter(log_format))
-    gui_logger.addHandler(file_handler)
-    
-    # Handler per la console (utile durante lo sviluppo)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    gui_logger.addHandler(console_handler)
-# =============================================================================
 
 
 # --- Stylesheet Moderno (senza icone custom sui pulsanti principali) ---
-def get_available_styles() -> List[str]:
-    """
-    Scansiona la sottocartella 'styles' e restituisce una lista dei file .qss trovati.
-    """
-    try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        styles_dir = os.path.join(base_dir, "styles")
-        if os.path.exists(styles_dir):
-            # Restituisce solo i file che finiscono con .qss
-            return [f for f in os.listdir(styles_dir) if f.endswith('.qss')]
-        else:
-            return []
-    except Exception as e:
-        gui_logger.error(f"Errore nella scansione della cartella stili: {e}")
-        return []
 def load_stylesheet(filename: str) -> str:
     """
-    Carica un file di stylesheet dalla sottocartella 'styles'.
+    Carica un file di stylesheet usando il percorso corretto gestito da app_paths.
     Restituisce il contenuto come stringa o una stringa vuota se non trovato.
     """
+    # --- INIZIO CORREZIONE ---
+    # Otteniamo un'istanza del logger qui. Poiché il logging è già stato 
+    # configurato da setup_global_logging(), questo logger scriverà 
+    # correttamente su file e console.
+    logger = logging.getLogger(__name__)
+    # --- FINE CORREZIONE ---
+
     try:
-        # Costruisce un percorso relativo alla posizione dello script
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(base_dir, "styles", filename)
-        
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                gui_logger.info(f"Caricato stylesheet: {path}")
-                return f.read()
+        style_path = get_style_file(filename)
+
+        # Usiamo la nuova variabile 'logger'
+        logger.info(f"Tentativo di caricamento stylesheet da: {style_path}")
+
+        if os.path.exists(style_path):
+            with open(style_path, "r", encoding="utf-8") as f:
+                style_content = f.read()
+            logger.info(f"Stylesheet '{filename}' caricato con successo.")
+            return style_content
         else:
-            gui_logger.warning(f"File stylesheet non trovato: {path}")
+            logger.warning(f"File stylesheet non trovato al percorso: {style_path}")
             return ""
     except Exception as e:
-        gui_logger.error(f"Errore durante il caricamento dello stylesheet '{filename}': {e}")
+        # Usiamo la nuova variabile 'logger' anche qui
+        logger.error(f"Errore critico durante il caricamento dello stylesheet '{filename}': {e}", exc_info=True)
         return ""
-# In gui_main.py, aggiungi questo nuovo metodo alla classe CatastoMainWindow
+
 
 
 def _hash_password(password: str) -> str:
@@ -1392,7 +1368,7 @@ class CatastoMainWindow(QMainWindow):
         try:
             # Ricostruiamo il percorso del manuale
             base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-            manual_path = os.path.join(base_dir, "resources", "manuale_utente.pdf")
+            manual_path = resource_path(os.path.join("resources", "manuale_utente.pdf"))
 
             if os.path.exists(manual_path):
                 self.logger.info(f"Tentativo di aprire il manuale utente da: {manual_path}")
@@ -1433,21 +1409,59 @@ def setup_logging():
                         ])
 
     logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
+    
+# Inserisci questa funzione in gui_main.py
+
+def setup_global_logging():
+    """
+    Configura il logging in modo centralizzato e sicuro, scrivendo i file
+    nella cartella AppData dell'utente, che e' sempre scrivibile.
+    """
+    # Imposta i metadati necessari a PyQt per trovare il percorso corretto
+    QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
+    QCoreApplication.setApplicationName("Meridiana")
+    
+    # Ottieni il percorso standard e scrivibile per i dati dell'applicazione
+    app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+    
+    # Assicurati che la cartella esista
+    os.makedirs(app_data_path, exist_ok=True)
+    
+    # Percorso completo del file di log
+    log_file_path = os.path.join(app_data_path, "meridiana_session.log")
+    
+    # Configura il logger usando basicConfig, che pulisce ogni handler precedente.
+    # 'force=True' (per Python 3.8+) assicura che questa configurazione sovrascriva tutto.
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ],
+        force=True 
+    )
+    
+    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
 
 
 def run_gui_app():
     try:
         app = QApplication(sys.argv)
 
-        # --- CHIAMATA ALLA NUOVA FUNZIONE DI LOGGING ---
-        # Eseguita subito dopo la creazione dell'app, prima di qualsiasi altra cosa.
-        setup_logging()
-        # -----------------------------------------------
+        # --- CHIAMATA ALLA NUOVA FUNZIONE QUI ---
+        # Questo imposta il logging per l'intera applicazione prima che qualsiasi
+        # altra cosa venga importata o eseguita.
+        setup_global_logging()
+        # --- FINE CHIAMATA ---
 
-        # Il resto della funzione rimane quasi identico...
+        # Ora puoi ottenere il logger già configurato
+        gui_logger = logging.getLogger("CatastoGUI")
+
+        # Il resto della funzione rimane identico...
         client_ip_address_gui = get_local_ip_address()
-        gui_logger = logging.getLogger("CatastoGUI") # Ora questo prende il logger già configurato
         gui_logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
+
 
         settings = QSettings()
         current_style_file = settings.value("UI/CurrentStyle", "meridiana_style.qss", type=str)
@@ -1522,9 +1536,9 @@ def run_gui_app():
 
         # 4. LOGIN UTENTE OK, MOSTRA WELCOME SCREEN E AVVIA L'APP
         base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
-        logo_path = os.path.join(base_dir_app, "resources", "logo_meridiana.png")
-        manuale_path = os.path.join(base_dir_app, "resources", "manuale_utente.pdf")
-        
+        logo_path = get_logo_path()
+        manuale_path = resource_path(os.path.join("resources", "manuale_utente.pdf"))
+
         welcome_screen = WelcomeScreen(parent=None, logo_path=logo_path, help_url=manuale_path)
         if welcome_screen.exec_() != QDialog.Accepted:
             gui_logger.info("Welcome screen chiusa. Uscita.")

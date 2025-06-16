@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
-from dialogs import PartitaDetailsDialog, ModificaPossessoreDialog, ModificaLocalitaDialog, ModificaPartitaDialog, ModificaImmobileDialog
+from dialogs import PartitaDetailsDialog, ModificaPossessoreDialog, ModificaLocalitaDialog
 from app_utils import _get_default_export_path, prompt_to_open_file
 
 try:
@@ -719,25 +719,14 @@ class UnifiedFuzzySearchWidget(QWidget):
                  QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per l'immobile ID {entity_id}.")
 
     def _on_partite_double_click(self, index):
-        # La logica per ottenere l'ID rimane la stessa
         entity_id = self._get_entity_id_from_table(self.partite_table, index)
         if entity_id:
-            # --- INIZIO MODIFICA ---
-            # Non carichiamo più i dettagli qui, passiamo solo l'ID.
-            # Il dialogo di modifica caricherà i dati di cui ha bisogno da solo.
-
-            # Crea e apre la finestra di MODIFICA, non quella di solo dettaglio
-            dialog = ModificaPartitaDialog(self.db_manager, entity_id, self)
-
-            # Se il dialogo viene chiuso (es. dopo aver salvato),
-            # si può aggiornare la ricerca per riflettere eventuali modifiche.
-            if dialog.exec_() == QDialog.Accepted:
-                self._perform_search() # Rilancia la ricerca per aggiornare i risultati
-            # --- FINE MODIFICA ---
-        else:
-            # Questo caso si verifica se l'ID non è stato trovato nella riga della tabella
-            QMessageBox.warning(self, "Errore", "Impossibile recuperare l'ID della partita dalla riga selezionata.")
-
+            full_details = self.db_manager.get_partita_details(entity_id)
+            if full_details:
+                dialog = PartitaDetailsDialog(full_details, self)
+                dialog.exec_()
+            else:
+                QMessageBox.warning(self, "Errore Dati", f"Impossibile caricare i dettagli per la partita ID {entity_id}.")
 
     def _show_generic_details_popup(self, table: QTableWidget, index: 'QModelIndex', entity_type_name: str):
         """Mostra un popup leggibile per entità senza un dialogo di dettaglio dedicato."""

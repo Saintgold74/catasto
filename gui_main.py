@@ -346,7 +346,7 @@ except ImportError as e:
     FUZZY_SEARCH_AVAILABLE = False
 print("[FASE 2] Inizio definizione classe CatastoMainWindow.")
 class CatastoMainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, client_ip_address_gui: str):
         super(CatastoMainWindow, self).__init__()
         self.logger = logging.getLogger("CatastoGUI")
         self.db_manager: Optional[CatastoDBManager] = None
@@ -355,6 +355,7 @@ class CatastoMainWindow(QMainWindow):
         self.current_session_id: Optional[str] = None
         # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
         self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
+        self.client_ip_address_gui = client_ip_address_gui 
 
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
@@ -1118,7 +1119,7 @@ class CatastoMainWindow(QMainWindow):
     def handle_logout(self):
         if self.logged_in_user_id is not None and self.current_session_id and self.db_manager:
             # Chiama il logout_user del db_manager passando l'ID utente e l'ID sessione correnti
-            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
+            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, self.client_ip_address_gui):
                 QMessageBox.information(
                     self, "Logout", "Logout effettuato con successo.")
                 logging.getLogger("CatastoGUI").info(
@@ -1424,7 +1425,7 @@ def run_gui_app():
         
         gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
         db_manager_gui: Optional[CatastoDBManager] = None
-        main_window_instance = CatastoMainWindow()
+        main_window_instance = CatastoMainWindow(client_ip_address_gui)
 
         # --- NUOVO FLUSSO DI AVVIO ---
 

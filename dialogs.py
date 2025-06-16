@@ -38,15 +38,11 @@ from catasto_db_manager import CatastoDBManager
 from custom_widgets import QPasswordLineEdit
 from custom_widgets import ImmobiliTableWidget
 
+# In dialogs.py
+from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
+                       gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
+                       GenericTextReportPDF,FPDF_AVAILABLE, GenericTextReportPDF,PDFApreviewDialog,CSVApreviewDialog)
 
-try:
-    # Si tenta di importare la classe principale dalla libreria fpdf2
-    from fpdf import FPDF
-    FPDF_AVAILABLE = True
-except ImportError:
-    # Se l'import fallisce, la libreria non è installata.
-    FPDF_AVAILABLE = False
-# Importazione del gestore DB (il percorso potrebbe necessitare aggiustamenti)
 try:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
@@ -3791,27 +3787,7 @@ class ModificaImmobileDialog(QDialog):
         """Eseguito quando si preme 'Salva'."""
         if self._save_changes():
             super().accept() # Chiude il dialogo con stato 'Accepted' solo se il salvataggio ha successo
-class PDFApreviewDialog(QDialog):
-    def __init__(self, text_content: str, parent=None, title="Anteprima Esportazione PDF"):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumSize(700, 500) # Dimensioni indicative
 
-        layout = QVBoxLayout(self)
-
-        self.text_preview = QTextEdit()
-        self.text_preview.setReadOnly(True)
-        self.text_preview.setFontFamily("Courier New") # Per testo preformattato
-        self.text_preview.setPlainText(text_content) # Imposta il testo
-        layout.addWidget(self.text_preview)
-
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione PDF")
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-        self.setLayout(layout)
 class PossessoreSelectionDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):
         super(PossessoreSelectionDialog, self).__init__(parent)
@@ -5206,37 +5182,6 @@ class UserSelectionDialog(QDialog):
             QMessageBox.warning(self, "Selezione",
                                 "Per favore, seleziona un utente dalla lista.")
 
-
-class CSVApreviewDialog(QDialog):
-    def __init__(self, headers: List[str], data_rows: List[List[Any]], parent=None, title="Anteprima Esportazione CSV"):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumSize(600, 400) # Dimensioni indicative
-
-        layout = QVBoxLayout(self)
-
-        self.table_preview = QTableWidget()
-        self.table_preview.setColumnCount(len(headers))
-        self.table_preview.setHorizontalHeaderLabels(headers)
-        self.table_preview.setAlternatingRowColors(True)
-        self.table_preview.setEditTriggers(QAbstractItemView.NoEditTriggers) # Sola lettura
-        self.table_preview.setSelectionBehavior(QAbstractItemView.SelectRows)
-
-        self.table_preview.setRowCount(len(data_rows))
-        for row_idx, row_data in enumerate(data_rows):
-            for col_idx, cell_data in enumerate(row_data):
-                self.table_preview.setItem(row_idx, col_idx, QTableWidgetItem(str(cell_data)))
-
-        self.table_preview.resizeColumnsToContents()
-        layout.addWidget(self.table_preview)
-
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione")
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-        self.setLayout(layout)
  
 class AggiungiDocumentoDialog(QDialog):
     def __init__(self, db_manager: 'CatastoDBManager', partita_id: int, parent=None):

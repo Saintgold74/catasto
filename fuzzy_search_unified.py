@@ -637,6 +637,9 @@ class UnifiedFuzzySearchWidget(QWidget):
 
         try:
             pdf = BulkReportPDF(report_title=f"Risultati Ricerca Fuzzy per '{query_text}'")
+            pdf.alias_nb_pages()
+            pdf.set_font('Times', '', 12)
+            pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
             
             for entity_type, entities in self.current_results.get('results_by_type', {}).items():

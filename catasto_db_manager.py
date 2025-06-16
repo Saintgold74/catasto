@@ -46,19 +46,8 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
 
-# --- Configurazione Logging ---
-# Configura il logger se non già fatto altrove
-if not logging.getLogger("CatastoDB").hasHandlers():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("catasto_db.log"),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-logger = logging.getLogger("CatastoDB")
-# logger.setLevel(logging.DEBUG) # Decommenta per vedere query mogrify
+import logging
+logger = logging.getLogger(__name__)
 # ------------ ECCEZIONI PERSONALIZZATE ------------
 class DBMError(Exception):
     """Classe base per errori specifici del DBManager."""
@@ -3782,6 +3771,28 @@ class CatastoDBManager:
             self.logger.info("Timestamp di aggiornamento viste materializzate aggiornato con successo.")
         except Exception as e:
             self.logger.error(f"Errore nell'aggiornare il timestamp di refresh: {e}", exc_info=True)
+    def cleanup_audit_logs(self, days_to_keep: int) -> int:
+        """
+        Elimina i record di audit_log più vecchi di un certo numero di giorni.
+        Restituisce il numero di record eliminati.
+        """
+        if not isinstance(days_to_keep, int) or days_to_keep < 0:
+            raise DBDataError("Il numero di giorni da conservare deve essere un intero non negativo.")
+
+        query = f"""
+            DELETE FROM {self.schema}.audit_log
+            WHERE timestamp < NOW() - INTERVAL '{days_to_keep} days';
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    deleted_rows = cur.rowcount
+            self.logger.info(f"Eliminati {deleted_rows} record di audit log più vecchi di {days_to_keep} giorni.")
+            return deleted_rows
+        except Exception as e:
+            self.logger.error(f"Errore durante la pulizia dei log di audit: {e}", exc_info=True)
+            raise DBMError(f"Impossibile pulire i log di audit: {e}") from e
 
 
     

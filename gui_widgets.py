@@ -28,10 +28,6 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QVBoxLayout, QWidget,QProgressDialog,QTextBrowser)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal 
 
-# Importazione commentata (da abilitare se necessario)
-# from PyQt5.QtSvgWidgets import QSvgWidget
-
-
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
@@ -39,6 +35,10 @@ from config import (
     COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
     COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
     NUOVE_ETICHETTE_POSSESSORI)
+
+from dialogs import (DBConfigDialog, DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
+                     PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog, PeriodoStoricoDetailsDialog,
+                     PartitaDetailsDialog, CreateUserDialog)
 
 
 
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 from custom_widgets import QPasswordLineEdit
 from dialogs import (DBConfigDialog,DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
                     PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog,PeriodoStoricoDetailsDialog,
-                    PartitaDetailsDialog,PDFApreviewDialog,CreateUserDialog)
+                    PartitaDetailsDialog,CreateUserDialog)
 from dialogs import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog,LocalitaSelectionDialog, 
                     DettagliLegamePossessoreDialog, UserSelectionDialog,qdate_to_datetime, datetime_to_qdate,_hash_password,_verify_password)
 
@@ -3357,6 +3357,9 @@ class EsportazioniWidget(QWidget):
         try:
             pdf_title = f"{export_type} - Comune di {comune_name}"
             pdf = BulkReportPDF(report_title=pdf_title)
+            pdf.alias_nb_pages()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            
             
             # Trasforma i dati per la tabella PDF, usando le chiavi ordinate
             data_rows = [[str(row.get(key, '')) for key in ordered_keys] for row in data]
@@ -4139,6 +4142,27 @@ class AuditLogViewerWidget(QWidget):
         self.export_xls_button = QPushButton("Esporta Excel"); self.export_xls_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         self.export_xls_button.clicked.connect(self._handle_export_xls)
         
+            # --- NUOVA SEZIONE: Pulizia Log ---
+        cleanup_group = QGroupBox("Pulizia Log di Audit")
+        cleanup_layout = QHBoxLayout(cleanup_group)
+        cleanup_label = QLabel("Elimina log più vecchi di:")
+        self.days_to_keep_spinbox = QSpinBox()
+        self.days_to_keep_spinbox.setRange(1, 365 * 10) # Da 1 giorno a 10 anni
+        self.days_to_keep_spinbox.setValue(90) # Default: 90 giorni
+        self.days_to_keep_spinbox.setMinimumWidth(60)
+        self.days_unit_combo = QComboBox()
+        self.days_unit_combo.addItems(["Giorni", "Mesi", "Anni"])
+        self.days_unit_combo.setMinimumWidth(80)
+        self.btn_cleanup_logs = QPushButton(self.style().standardIcon(QStyle.SP_DialogResetButton), "Pulisci Ora")
+        self.btn_cleanup_logs.clicked.connect(self._confirm_and_cleanup_logs)
+        cleanup_layout.addWidget(cleanup_label)
+        cleanup_layout.addWidget(self.days_to_keep_spinbox)
+        cleanup_layout.addWidget(self.days_unit_combo)
+        cleanup_layout.addStretch()
+        cleanup_layout.addWidget(self.btn_cleanup_logs)
+        main_layout.addWidget(cleanup_group)
+        # --- FINE NUOVA SEZIONE ---
+        
         action_layout.addWidget(self.search_button)
         action_layout.addWidget(self.reset_button)
         action_layout.addStretch()
@@ -4188,8 +4212,58 @@ class AuditLogViewerWidget(QWidget):
         self.logger.info("AuditLogViewerWidget: Esecuzione lazy loading dei log di audit...")
         self._apply_filters_and_search()
         self._data_loaded = True
+    def _get_days_from_ui_input(self) -> int:
+        """Converte l'input dell'utente (giorni, mesi, anni) in giorni."""
+        value = self.days_to_keep_spinbox.value()
+        unit_index = self.days_unit_combo.currentIndex()
+        if unit_index == 1: # Mesi
+            return value * 30
+        elif unit_index == 2: # Anni
+            return value * 365
+        return value # Giorni
+
+    def _confirm_and_cleanup_logs(self):
+        """Chiede conferma all'utente e poi avvia la pulizia dei log."""
+        days_to_keep = self._get_days_from_ui_input()
+
+        reply = QMessageBox.question(
+            self,
+            "Conferma Eliminazione Log di Audit",
+            f"Sei sicuro di voler eliminare DEFINITIVAMENTE tutti i log di audit "
+            f"più vecchi di {days_to_keep} giorni?\n\n"
+            "Questa operazione non può essere annullata.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                self.logger.info(f"Avvio pulizia log di audit più vecchi di {days_to_keep} giorni.")
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+                deleted_count = self.db_manager.cleanup_audit_logs(days_to_keep)
+                QApplication.restoreOverrideCursor()
+
+                QMessageBox.information(
+                    self,
+                    "Pulizia Completata",
+                    f"Pulizia dei log di audit completata con successo.\n"
+                    f"Eliminati {deleted_count} record."
+                )
+                self._apply_filters_and_search() # Ricarica la tabella
+            except DBMError as e:
+                QApplication.restoreOverrideCursor()
+                QMessageBox.critical(self, "Errore Pulizia Log", f"Si è verificato un errore:\n{str(e)}")
+            except Exception as e:
+                QApplication.restoreOverrideCursor()
+                self.logger.error(f"Errore inatteso durante la pulizia dei log: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore Imprevisto", f"Errore di sistema:\n{str(e)}")
+
 
     def _apply_filters_and_search(self):
+        """
+        Raccoglie i filtri correnti dalla UI, reimposta la paginazione
+        e avvia la ricerca dei log.
+        """
         self.current_filters = {
             "table_name": self.filter_table_name_edit.text().strip() or None,
             "operation_char": None,
@@ -4198,10 +4272,14 @@ class AuditLogViewerWidget(QWidget):
             "end_datetime": self.filter_end_datetime_edit.dateTime().toPyDateTime(),
         }
         op_text = self.filter_operation_combo.currentText()
-        if "INSERT" in op_text: self.current_filters["operation_char"] = "I"
-        elif "UPDATE" in op_text: self.current_filters["operation_char"] = "U"
-        elif "DELETE" in op_text: self.current_filters["operation_char"] = "D"
-        
+        if "INSERT" in op_text:
+            self.current_filters["operation_char"] = "I"
+        elif "UPDATE" in op_text:
+            self.current_filters["operation_char"] = "U"
+        elif "DELETE" in op_text:
+            self.current_filters["operation_char"] = "D"
+
+        # Quando si applica un nuovo filtro, si torna sempre alla prima pagina
         self.current_page = 1
         self._fetch_and_display_logs()
 
@@ -4980,8 +5058,12 @@ class DashboardWidget(QWidget):
         actions_layout = QVBoxLayout(actions_group)
         btn_new_prop = QPushButton("Registra Nuova Proprietà"); btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registrazione Proprietà"))
         btn_new_partita = QPushButton("Inserisci Nuova Partita"); btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Nuova Partita"))
+        # --- INIZIO MODIFICA ---
+        btn_new_consult = QPushButton("Registra Consultazione")
+        btn_new_consult.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registra Consultazione"))
+# --- FINE MODIFICA ---
         btn_reports = QPushButton("Vai alla Reportistica"); btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Reportistica", ""))
-        actions_layout.addWidget(btn_new_prop); actions_layout.addWidget(btn_new_partita); actions_layout.addWidget(btn_reports)
+        actions_layout.addWidget(btn_new_prop); actions_layout.addWidget(btn_new_partita); actions_layout.addWidget(btn_new_consult) ; actions_layout.addWidget(btn_reports)
         actions_layout.addStretch()
         bottom_layout.addWidget(actions_group, 1)
 

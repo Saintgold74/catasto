@@ -4,11 +4,13 @@ from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 
 # Importazioni PyQt5
-from PyQt5.QtWidgets import (QMessageBox, QFileDialog)
 from PyQt5.QtCore import QDate
-
+from PyQt5.QtGui import QFont # QFont serve per i report
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox,
+                             QTableWidget, QTableWidgetItem, QAbstractItemView,
+                             QMessageBox, QFileDialog)
 from catasto_db_manager import CatastoDBManager
-from dialogs import CSVApreviewDialog, PDFApreviewDialog
+
 
 # Importa FPDF e le sue utility, che ora funzioneranno grazie a fpdf2
 try:
@@ -41,9 +43,15 @@ if FPDF_AVAILABLE:
             self.ln(5)
 
         def footer(self):
-            self.set_y(-15)
-            self.set_font('Helvetica', 'B', 8)
-            self.cell(0, 10, f'Pagina {self.page_no()}', border=0, align='C')
+            self.set_y(-15)  # Posizione a 1.5 cm dal fondo
+            self.set_font('Helvetica', 'I', 8)  # Font in corsivo e più piccolo
+
+            # Aggiungi la dicitura
+            disclaimer = "Il presente report ha valore puramente storico e documentale."
+            self.cell(0, 5, disclaimer, align='C', new_x='LMARGIN', new_y='NEXT')
+
+            # Aggiungi il numero di pagina sotto la dicitura
+            self.cell(0, 5, f'Pagina {self.page_no()}/{{nb}}', align='C')
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
@@ -101,9 +109,12 @@ if FPDF_AVAILABLE:
 
         def footer(self):
             self.set_y(-15)
-            self.set_font('Helvetica', 'I', 8)  # Originale era 'I'
-            self.cell(0, 10, f'Pagina {self.page_no()}', border=0,
-                      align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.set_font('Helvetica', 'I', 8)
+            
+            disclaimer = "Il presente report ha valore puramente storico e documentale."
+            self.cell(0, 5, disclaimer, align='C', new_x='LMARGIN', new_y='NEXT')
+
+            self.cell(0, 5, f'Pagina {self.page_no()}/{{nb}}', align='C')
 
         def chapter_title(self, title):
             self.set_font('Helvetica', 'B', 12)
@@ -188,7 +199,11 @@ if FPDF_AVAILABLE:
         def footer(self):
             self.set_y(-15)
             self.set_font('Helvetica', 'I', 8)
-            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
+            
+            disclaimer = "Il presente report ha valore puramente storico e documentale."
+            self.cell(0, 5, disclaimer, align='C', new_x='LMARGIN', new_y='NEXT')
+
+            self.cell(0, 5, f'Pagina {self.page_no()}/{{nb}}', align='C')
 
         def add_report_text(self, text_content: str):
             """Aggiunge il contenuto testuale del report al PDF."""
@@ -322,6 +337,7 @@ def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita
 
     preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
                                        title=f"Anteprima CSV - Partita ID {partita_id}")
+    pdf.alias_nb_pages()
     if preview_dialog.exec_() != QDialog.Accepted:
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per partita ID {partita_id} annullata dall'utente dopo anteprima.")
         return
@@ -433,6 +449,7 @@ def gui_esporta_partita_pdf(parent_widget, db_manager: CatastoDBManager, partita
 
     try:
         pdf = PDFPartita()
+        pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.set_left_margin(10)
         pdf.set_right_margin(10)
@@ -542,6 +559,7 @@ def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, poss
 
     preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
                                        title=f"Anteprima CSV - Possessore ID {possessore_id}")
+    pdf.alias_nb_pages()
     if preview_dialog.exec_() != QDialog.Accepted:
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per possessore ID {possessore_id} annullata dall'utente.")
         return
@@ -637,6 +655,7 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
 
     try:
         pdf = PDFPossessore()
+        pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.set_left_margin(10)
         pdf.set_right_margin(10)
@@ -767,7 +786,11 @@ if FPDF_AVAILABLE:
         def footer(self):
             self.set_y(-15)
             self.set_font('Helvetica', 'I', 8)
-            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', 0, 0, 'C')
+            
+            disclaimer = "Il presente report ha valore puramente storico e documentale."
+            self.cell(0, 5, disclaimer, align='C', new_x='LMARGIN', new_y='NEXT')
+
+            self.cell(0, 5, f'Pagina {self.page_no()}/{{nb}}', align='C')
 
         def print_table(self, headers, data):
             if not data: return
@@ -793,6 +816,58 @@ if FPDF_AVAILABLE:
                         cell_value = str(row[i]) if i < len(row) else ''
                     self.cell(self.col_widths[i], 6, cell_value, 1, 0, 'L')
                 self.ln()
+# In fondo al file app_utils.py
+
+# --- DIALOGHI DI ANTEPRIMA SPOSTATI QUI PER RISOLVERE IMPORTAZIONE CIRCOLARE ---
+
+class PDFApreviewDialog(QDialog):
+    def __init__(self, text_content: str, parent=None, title="Anteprima Esportazione PDF"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(700, 500)
+
+        layout = QVBoxLayout(self)
+        self.text_preview = QTextEdit()
+        self.text_preview.setReadOnly(True)
+        self.text_preview.setFontFamily("Courier New")
+        self.text_preview.setPlainText(text_content)
+        layout.addWidget(self.text_preview)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione PDF")
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+        self.setLayout(layout)
+
+class CSVApreviewDialog(QDialog):
+    def __init__(self, headers: List[str], data_rows: List[List[Any]], parent=None, title="Anteprima Esportazione CSV"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(600, 400)
+
+        layout = QVBoxLayout(self)
+        self.table_preview = QTableWidget()
+        self.table_preview.setColumnCount(len(headers))
+        self.table_preview.setHorizontalHeaderLabels(headers)
+        self.table_preview.setAlternatingRowColors(True)
+        self.table_preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_preview.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+        self.table_preview.setRowCount(len(data_rows))
+        for row_idx, row_data in enumerate(data_rows):
+            for col_idx, cell_data in enumerate(row_data):
+                self.table_preview.setItem(row_idx, col_idx, QTableWidgetItem(str(cell_data)))
+
+        self.table_preview.resizeColumnsToContents()
+        layout.addWidget(self.table_preview)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setText("Procedi con Esportazione")
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+        self.setLayout(layout)
 
 
 

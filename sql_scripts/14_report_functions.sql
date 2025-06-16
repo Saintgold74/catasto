@@ -108,6 +108,7 @@ BEGIN
     -- Piè di pagina (invariato)
     v_report := v_report || '============================================================' || E'\n';
     v_report := v_report || 'Report generato il: ' || CURRENT_DATE || E'\n';
+    v_report := v_report || 'Il presente report ha valore puramente storico e documentale.' || E'\n';
     v_report := v_report || '============================================================' || E'\n';
     RETURN v_report;
 END;
@@ -265,6 +266,7 @@ BEGIN
     -- Piè di pagina (invariato)
     v_report := v_report || '============================================================' || E'\n';
     v_report := v_report || 'Report generato il: ' || CURRENT_DATE || E'\n';
+    v_report := v_report || 'Il presente report ha valore puramente storico e documentale.' || E'\n';
     v_report := v_report || '============================================================' || E'\n';
     RETURN v_report;
 END;
@@ -315,6 +317,7 @@ BEGIN
     -- Piè di pagina (invariato)
     v_report := v_report || '============================================================' || E'\n';
     v_report := v_report || 'Report generato il: ' || CURRENT_DATE || E'\n';
+    v_report := v_report || 'Il presente report ha valore puramente storico e documentale.' || E'\n';
     v_report := v_report || '============================================================' || E'\n';
     RETURN v_report;
 END;

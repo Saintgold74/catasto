@@ -18,7 +18,7 @@ from typing import Optional, List, Dict, Any, Tuple
 # Importazioni PyQt5
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
                           QSize, QStandardPaths, Qt, QTimer, QUrl,
-                          pyqtSignal,pyqtSlot)
+                          pyqtSignal,pyqtSlot,QCoreApplication)
 
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont,
                          QIcon, QPalette, QPixmap)
@@ -346,7 +346,7 @@ except ImportError as e:
     FUZZY_SEARCH_AVAILABLE = False
 print("[FASE 2] Inizio definizione classe CatastoMainWindow.")
 class CatastoMainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, client_ip_address_gui: str):
         super(CatastoMainWindow, self).__init__()
         self.logger = logging.getLogger("CatastoGUI")
         self.db_manager: Optional[CatastoDBManager] = None
@@ -355,6 +355,7 @@ class CatastoMainWindow(QMainWindow):
         self.current_session_id: Optional[str] = None
         # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
         self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
+        self.client_ip_address_gui = client_ip_address_gui 
 
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
@@ -1118,7 +1119,7 @@ class CatastoMainWindow(QMainWindow):
     def handle_logout(self):
         if self.logged_in_user_id is not None and self.current_session_id and self.db_manager:
             # Chiama il logout_user del db_manager passando l'ID utente e l'ID sessione correnti
-            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, client_ip_address_gui):
+            if self.db_manager.logout_user(self.logged_in_user_id, self.current_session_id, self.client_ip_address_gui):
                 QMessageBox.information(
                     self, "Logout", "Logout effettuato con successo.")
                 logging.getLogger("CatastoGUI").info(
@@ -1167,7 +1168,7 @@ class CatastoMainWindow(QMainWindow):
                     logging.getLogger("CatastoGUI").info(
                         f"Chiusura applicazione: logout di sicurezza per utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}...")
                     self.db_manager.logout_user(
-                        self.logged_in_user_id, self.current_session_id, client_ip_address_gui)
+                        self.logged_in_user_id, self.current_session_id, self.client_ip_address_gui)
                 else:
                     # Se non c'è un utente loggato, ma il pool è attivo, logga un messaggio informativo
                     logging.getLogger("CatastoGUI").info(
@@ -1407,12 +1408,45 @@ class CatastoMainWindow(QMainWindow):
 
 
 
+def setup_logging():
+    """Configura il logging per scrivere nella cartella AppData dell'utente."""
+    # Imposta i metadati dell'applicazione per creare un percorso univoco
+    QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
+    QCoreApplication.setApplicationName("Meridiana")
+
+    # Trova la cartella standard e scrivibile per i dati dell'applicazione
+    app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+
+    # Assicurati che la cartella esista
+    os.makedirs(app_data_path, exist_ok=True)
+
+    # Percorso completo del file di log
+    log_file_path = os.path.join(app_data_path, "meridiana_session.log")
+
+    # Configura il logger principale (root logger)
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    logging.basicConfig(level=logging.INFO,
+                        format=log_format,
+                        handlers=[
+                            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
+                            logging.StreamHandler(sys.stdout)
+                        ])
+
+    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
+
+
 def run_gui_app():
     try:
         app = QApplication(sys.argv)
-        QApplication.setOrganizationName("ArchivioDiStatoSavona")
-        QApplication.setApplicationName("Meridiana") # o CatastoStoricoApp
+
+        # --- CHIAMATA ALLA NUOVA FUNZIONE DI LOGGING ---
+        # Eseguita subito dopo la creazione dell'app, prima di qualsiasi altra cosa.
+        setup_logging()
+        # -----------------------------------------------
+
+        # Il resto della funzione rimane quasi identico...
         client_ip_address_gui = get_local_ip_address()
+        gui_logger = logging.getLogger("CatastoGUI") # Ora questo prende il logger già configurato
         gui_logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
 
         settings = QSettings()
@@ -1424,7 +1458,7 @@ def run_gui_app():
         
         gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
         db_manager_gui: Optional[CatastoDBManager] = None
-        main_window_instance = CatastoMainWindow()
+        main_window_instance = CatastoMainWindow(client_ip_address_gui)
 
         # --- NUOVO FLUSSO DI AVVIO ---
 

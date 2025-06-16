@@ -121,7 +121,7 @@ secrets.json
 *.7z
 
 
-
+*.exe
 *.xls
 *.xlsx
 *.ppt

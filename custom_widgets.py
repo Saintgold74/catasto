@@ -82,4 +82,41 @@ class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
+# In custom_widgets.py
+
+import logging
+from PyQt5.QtWidgets import QWidget
+
+class LazyLoadedWidget(QWidget):
+    """
+    Una classe base per tutti i widget che necessitano di caricare dati
+    solo la prima volta che vengono visualizzati (lazy loading).
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._data_loaded = False
+        # Ogni sottoclasse dovrebbe avere il proprio logger
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+
+    def load_initial_data(self):
+        """
+        Metodo universale chiamato dalla finestra principale.
+        Controlla se i dati sono già stati caricati e, in caso negativo,
+        chiama il metodo di caricamento specifico della sottoclasse.
+        """
+        if self._data_loaded:
+            return  # Non fare nulla se già caricato
+
+        self.logger.info(f"Esecuzione lazy loading per {self.__class__.__name__}...")
+        self._load_data_on_first_show() # Chiama il metodo che le sottoclassi implementeranno
+        self._data_loaded = True
+
+    def _load_data_on_first_show(self):
+        """
+        Metodo astratto. Le sottoclassi DEVONO sovrascrivere questo metodo
+        per implementare la loro logica di caricamento dati.
+        """
+        # self.logger.warning(f"Metodo _load_data_on_first_show non implementato per {self.__class__.__name__}")
+        # Usiamo pass per non mostrare avvisi per widget che potrebbero non averne bisogno
+        pass
         

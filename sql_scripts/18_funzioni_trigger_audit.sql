@@ -213,7 +213,35 @@ AFTER INSERT OR UPDATE OR DELETE ON catasto.consultazione
 COMMENT ON TRIGGER audit_trigger_consultazione ON catasto.consultazione IS 'Trigger per audit sulla tabella consultazione.';
 
 -- NON creare un trigger sulla tabella audit_log stessa!
+-- File: 18a_vista_audit_dettagliato.sql (v1.2)
+-- Scopo: Crea o sostituisce la vista per i log di audit, formattando il timestamp.
 
+SET search_path TO catasto, public;
+
+CREATE OR REPLACE VIEW catasto.v_audit_dettagliato AS
+SELECT
+    al.id,
+    -- CORREZIONE: Formatta il timestamp per rimuovere i millisecondi
+    CAST(al.timestamp AS TIMESTAMP(0)) AS timestamp,
+    al.app_user_id,
+    u.username,
+    u.nome_completo,
+    al.session_id,
+    al.tabella,
+    al.operazione,
+    al.record_id,
+    al.ip_address,
+    al.utente AS db_user,
+    al.dati_prima,
+    al.dati_dopo
+FROM
+    catasto.audit_log al
+LEFT JOIN
+    catasto.utente u ON al.app_user_id = u.id;
+
+COMMENT ON VIEW catasto.v_audit_dettagliato IS 'Vista che unisce i log di audit con i nomi degli utenti applicativi (timestamp formattato).';
+
+\echo 'Vista v_audit_dettagliato creata/aggiornata con successo (timestamp formattato).'
 -- ========================================================================
 -- Fine Script
 -- ========================================================================

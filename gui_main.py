@@ -44,7 +44,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplicat
 from catasto_db_manager import CatastoDBManager
 from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address
 import pandas as pd # Importa pandas
-from app_paths import get_style_file, get_logo_path, resource_path
+from app_paths import get_available_styles, load_stylesheet, get_logo_path, resource_path
 
 
 # Dai nuovi moduli che creeremo:
@@ -54,13 +54,12 @@ from gui_widgets import (
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget, RicercaPartiteWidget
-)
-from gui_widgets import DBConfigDialog
+    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget, RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
+    DBConfigDialog)
 from dialogs import CSVImportResultDialog
 
 from custom_widgets import QPasswordLineEdit
-from app_utils import FPDF_AVAILABLE
+
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
@@ -109,43 +108,6 @@ except ImportError:
                              "Non è possibile importare CatastoDBManager. "
                              "Assicurati che catasto_db_manager.py sia accessibile.")
         sys.exit(1)
-        
-
-
-# --- Stylesheet Moderno (senza icone custom sui pulsanti principali) ---
-def load_stylesheet(filename: str) -> str:
-    """
-    Carica un file di stylesheet usando il percorso corretto gestito da app_paths.
-    Restituisce il contenuto come stringa o una stringa vuota se non trovato.
-    """
-    # --- INIZIO CORREZIONE ---
-    # Otteniamo un'istanza del logger qui. Poiché il logging è già stato 
-    # configurato da setup_global_logging(), questo logger scriverà 
-    # correttamente su file e console.
-    logger = logging.getLogger(__name__)
-    # --- FINE CORREZIONE ---
-
-    try:
-        style_path = get_style_file(filename)
-
-        # Usiamo la nuova variabile 'logger'
-        logger.info(f"Tentativo di caricamento stylesheet da: {style_path}")
-
-        if os.path.exists(style_path):
-            with open(style_path, "r", encoding="utf-8") as f:
-                style_content = f.read()
-            logger.info(f"Stylesheet '{filename}' caricato con successo.")
-            return style_content
-        else:
-            logger.warning(f"File stylesheet non trovato al percorso: {style_path}")
-            return ""
-    except Exception as e:
-        # Usiamo la nuova variabile 'logger' anche qui
-        logger.error(f"Errore critico durante il caricamento dello stylesheet '{filename}': {e}", exc_info=True)
-        return ""
-
-
-
 def _hash_password(password: str) -> str:
         """Genera un hash sicuro per la password usando bcrypt."""
         password_bytes = password.encode('utf-8')
@@ -332,6 +294,7 @@ class CatastoMainWindow(QMainWindow):
         # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
         self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
         self.client_ip_address_gui = client_ip_address_gui 
+        self.pool_initialized_successful: bool = False
 
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
@@ -704,6 +667,15 @@ class CatastoMainWindow(QMainWindow):
             self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log di Audit")
             self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager, self.sistema_sub_tabs)
             self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino DB")
+            # --- INIZIO MODIFICA ---
+            # Aggiungi il nuovo widget per la gestione delle tipologie
+            self.gestione_tipi_localita_widget = GestioneTipiLocalitaWidget(self.db_manager, self.sistema_sub_tabs)
+            self.sistema_sub_tabs.addTab(self.gestione_tipi_localita_widget, "Tipi Località")
+            # --- FINE MODIFICA ---
+            # --- INIZIO AGGIUNTA ---
+            self.gestione_periodi_widget = GestionePeriodiStoriciWidget(self.db_manager)
+            self.sistema_sub_tabs.addTab(self.gestione_periodi_widget, "Periodi Storici")
+            # --- FINE AGGIUNTA ---
             layout_sistema.addWidget(self.sistema_sub_tabs)
             self.tabs.addTab(sistema_contenitore, "Sistema")
 
@@ -1573,7 +1545,7 @@ if __name__ == "__main__":
         run_gui_app()
     except Exception as e:
         # Log dell'errore critico
-        gui_logger.critical(f"Errore critico all'avvio dell'applicazione: {e}", exc_info=True)
+        logging.getLogger("CatastoGUI").critical(f"Errore critico all'avvio dell'applicazione: {e}", exc_info=True)
         traceback.print_exc()
         
         # Mostra messaggio di errore all'utente

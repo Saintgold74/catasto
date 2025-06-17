@@ -38,10 +38,9 @@ from catasto_db_manager import CatastoDBManager
 from custom_widgets import QPasswordLineEdit
 from custom_widgets import ImmobiliTableWidget
 
-# In dialogs.py
 from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
                        gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
-                       GenericTextReportPDF,FPDF_AVAILABLE, GenericTextReportPDF,PDFApreviewDialog,CSVApreviewDialog)
+                       GenericTextReportPDF, FPDF_AVAILABLE, prompt_to_open_file,PDFApreviewDialog) # <-- AGGIUNGI QUI
 
 try:
     from fpdf import FPDF
@@ -723,8 +722,8 @@ class PartitaDetailsDialog(QDialog):
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(text_content)
 
-                QMessageBox.information(
-                    self, "Esportazione Completata", f"Il dettaglio della partita è stato salvato in:\n{file_path}")
+                prompt_to_open_file(self, file_path)
+                self.logger.info(f"Dettaglio partita TXT salvato con successo in: {file_path}")
             except Exception as e:
                 self.logger.error(f"Errore durante l'esportazione TXT del dettaglio partita: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Esportazione", f"Errore durante il salvataggio del file TXT:\n{e}")
@@ -761,8 +760,8 @@ class PartitaDetailsDialog(QDialog):
                 pdf.add_page()
                 pdf.add_report_text(text_content)
                 pdf.output(filename_pdf)
-                QMessageBox.information(self, "Esportazione PDF Completata",
-                                        f"Dettaglio partita PDF salvato con successo in:\n{filename_pdf}")
+                prompt_to_open_file(self, filename_pdf)
+                self.logger.info(f"Dettaglio partita PDF salvato con successo in: {filename_pdf}")
             except Exception as e:
                 self.logger.error(f"Errore durante la generazione del PDF per il dettaglio partita: {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
@@ -2570,6 +2569,7 @@ class PossessoriComuneDialog(QDialog):
         self.db_manager = db_manager
         self.comune_id = comune_id
         self.nome_comune = nome_comune
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
             f"Possessori del Comune di {self.nome_comune} (ID: {self.comune_id})")
@@ -2922,164 +2922,98 @@ class PartiteComuneDialog(QDialog):
 
 
 class ModificaLocalitaDialog(QDialog):
-    def __init__(self, db_manager: CatastoDBManager, localita_id: int, comune_id_parent: int, parent=None):  # Aggiunto comune_id_parent
+    def __init__(self, db_manager: CatastoDBManager, localita_id: int, comune_id_parent: int, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
         self.localita_id = localita_id
-        # ID del comune a cui questa località appartiene (non modificabile)
         self.comune_id_parent = comune_id_parent
         self.localita_data_originale = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(f"Modifica Dati Località ID: {self.localita_id}")
         self.setMinimumWidth(450)
 
         self._init_ui()
-        self._load_localita_data()
+        self._load_tipi_localita() # Carica subito i tipi disponibili
+        self._load_localita_data() # Poi carica i dati della località e seleziona il tipo corretto
 
     def _init_ui(self):
+        # ... (la UI è identica a prima, con la QComboBox per il tipo)
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
-
         self.id_label = QLabel(str(self.localita_id))
         form_layout.addRow("ID Località:", self.id_label)
-        self.comune_display_label = QLabel(
-            "Caricamento nome comune...")  # Verrà popolato
-        form_layout.addRow("Comune di Appartenenza:",
-                           self.comune_display_label)
-
+        self.comune_display_label = QLabel("Caricamento...")
+        form_layout.addRow("Comune di Appartenenza:", self.comune_display_label)
         self.nome_edit = QLineEdit()
         form_layout.addRow("Nome Località (*):", self.nome_edit)
-
         self.tipo_combo = QComboBox()
-        # Coerente con la tabella
-        self.tipo_combo.addItems(["Regione", "Via", "Borgata","Altro"])
         form_layout.addRow("Tipo (*):", self.tipo_combo)
-
         self.civico_spinbox = QSpinBox()
-        # 0 potrebbe significare "non applicabile"
-        self.civico_spinbox.setMinimum(0)
-        self.civico_spinbox.setMaximum(99999)
-        self.civico_spinbox.setSpecialValueText("Nessuno")  # Se 0 è "Nessuno"
-        form_layout.addRow("Numero Civico (0 se assente):",
-                           self.civico_spinbox)
-
+        self.civico_spinbox.setMinimum(0); self.civico_spinbox.setMaximum(99999)
+        self.civico_spinbox.setSpecialValueText("Nessuno")
+        form_layout.addRow("Numero Civico (0 se assente):", self.civico_spinbox)
         layout.addLayout(form_layout)
-
-        buttons_layout = QHBoxLayout()
-        self.save_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogSaveButton), "Salva Modifiche")
-        self.save_button.clicked.connect(self._save_changes)
-        self.cancel_button = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogCancelButton), "Annulla")
-        self.cancel_button.clicked.connect(self.reject)
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(self.save_button)
-        buttons_layout.addWidget(self.cancel_button)
-        layout.addLayout(buttons_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
+        buttons.accepted.connect(self._save_changes)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
         self.setLayout(layout)
 
-    def _load_localita_data(self):
-        # Metodo da creare in CatastoDBManager: get_localita_details(localita_id)
-        # Dovrebbe restituire: id, nome, tipo, civico, comune_id, e il nome del comune (comune_nome)
-        self.localita_data_originale = self.db_manager.get_localita_details(
-            self.localita_id)  # Metodo da creare
+    def _load_tipi_localita(self):
+        """Carica dinamicamente le tipologie di località nel ComboBox."""
+        self.tipo_combo.clear()
+        try:
+            tipi = self.db_manager.get_tipi_localita()
+            for tipo in tipi:
+                self.tipo_combo.addItem(tipo['nome'], tipo['id'])
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare le tipologie di località:\n{e}")
 
+    def _load_localita_data(self):
+        # get_localita_details deve ora restituire anche tipo_id e comune_nome
+        self.localita_data_originale = self.db_manager.get_localita_details(self.localita_id)
         if not self.localita_data_originale:
-            QMessageBox.critical(
-                self, "Errore Caricamento", f"Impossibile caricare dati per località ID: {self.localita_id}.")
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(0, self.reject)
+            QMessageBox.critical(self, "Errore", "Impossibile caricare i dati della località.")
+            self.reject()
             return
 
         self.nome_edit.setText(self.localita_data_originale.get('nome', ''))
+        self.comune_display_label.setText(f"{self.localita_data_originale.get('comune_nome', 'N/D')} (ID: {self.comune_id_parent})")
 
-        tipo_idx = self.tipo_combo.findText(
-            self.localita_data_originale.get('tipo', ''), Qt.MatchFixedString)
-        if tipo_idx >= 0:
-            self.tipo_combo.setCurrentIndex(tipo_idx)
+        # --- MODIFICA CHIAVE QUI: Seleziona l'item nel ComboBox basandosi sull'ID ---
+        tipo_id_attuale = self.localita_data_originale.get('tipo_id')
+        if tipo_id_attuale is not None:
+            index = self.tipo_combo.findData(tipo_id_attuale)
+            if index >= 0:
+                self.tipo_combo.setCurrentIndex(index)
+        # --- FINE MODIFICA ---
 
         civico_val = self.localita_data_originale.get('civico')
-        if civico_val is not None:
-            self.civico_spinbox.setValue(civico_val)
-        else:  # Se civico è NULL nel DB
-            # Imposta a 0 (che potrebbe essere "Nessuno")
-            self.civico_spinbox.setValue(self.civico_spinbox.minimum())
-            # o se 0 è un civico valido, dovresti avere un modo per distinguere
-            # Forse il QSpinBox non è ideale se NULL è molto diverso da 0.
-            # Un QLineEdit che accetta numeri o è vuoto potrebbe essere più flessibile per il civico.
-            # Per ora, lasciamo QSpinBox e 0 (con specialValueText) per NULL.
-
-        # Visualizza il nome del comune (non modificabile qui)
-        self.comune_display_label.setText(
-            f"{self.localita_data_originale.get('comune_nome', 'N/D')} (ID: {self.localita_data_originale.get('comune_id', 'N/D')})"
-        )
-        # Verifica che il comune_id della località corrisponda a quello del dialogo genitore
-        if self.localita_data_originale.get('comune_id') != self.comune_id_parent:
-            logging.getLogger("CatastoGUI").warning(
-                f"Incoerenza Comune ID: Località {self.localita_id} appartiene a comune {self.localita_data_originale.get('comune_id')} ma aperta da contesto comune {self.comune_id_parent}")
-            # Potresti mostrare un avviso, ma per ora procediamo.
+        self.civico_spinbox.setValue(civico_val if civico_val is not None else 0)
 
     def _save_changes(self):
+        # Recupera l'ID dal ComboBox invece del testo
+        tipo_id_selezionato = self.tipo_combo.currentData()
+
+        if tipo_id_selezionato is None:
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare una tipologia valida.")
+            return
+
         dati_modificati = {
             "nome": self.nome_edit.text().strip(),
-            "tipo": self.tipo_combo.currentText(),
+            "tipo_id": tipo_id_selezionato, # <-- MODIFICA QUI
+            "civico": self.civico_spinbox.value() if self.civico_spinbox.value() > 0 else None
         }
-
-        civico_val = self.civico_spinbox.value()
-        if self.civico_spinbox.text() == self.civico_spinbox.specialValueText() or civico_val == 0:
-            dati_modificati["civico"] = None
-        else:
-            dati_modificati["civico"] = civico_val
-
+        # ... (la logica di validazione e chiamata a update_localita rimane la stessa)
         if not dati_modificati["nome"]:
-            QMessageBox.warning(self, "Dati Mancanti",
-                                "Il nome della località è obbligatorio.")
-            self.nome_edit.setFocus()
-            return
-        # Aggiungi altre validazioni UI se necessario
+             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+             return
         try:
-            logging.getLogger("CatastoGUI").info(
-                f"Tentativo di aggiornare località ID {self.localita_id} con: {dati_modificati}")
-            self.db_manager.update_localita(
-                self.localita_id, dati_modificati)  # Chiamata al metodo
-
-            logging.getLogger("CatastoGUI").info(
-                f"Località ID {self.localita_id} aggiornata con successo.")
-            self.accept()  # Chiudi se ha successo
-
-        except DBUniqueConstraintError as uve:
-            logging.getLogger("CatastoGUI").warning(
-                f"Violazione unicità per località ID {self.localita_id}: {uve.message}")
-            QMessageBox.warning(self, "Errore di Unicità",
-                                f"Impossibile salvare le modifiche:\n{uve.message}\n"
-                                "Una località con lo stesso nome e civico potrebbe già esistere in questo comune.")
-            self.nome_edit.setFocus()  # O il campo civico se più appropriato
-        except DBNotFoundError as nfe:
-            logging.getLogger("CatastoGUI").error(
-                f"Località ID {self.localita_id} non trovata per l'aggiornamento: {nfe.message}")
-            QMessageBox.critical(
-                self, "Errore Aggiornamento", str(nfe.message))
-            self.reject()  # Chiudi perché il record non esiste più
-        except DBDataError as dde:
-            logging.getLogger("CatastoGUI").warning(
-                f"Errore dati per località ID {self.localita_id}: {dde.message}")
-            QMessageBox.warning(self, "Errore Dati Non Validi",
-                                f"Impossibile salvare le modifiche:\n{dde.message}")
-        except DBMError as dbe:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore DB aggiornando località ID {self.localita_id}: {dbe.message}")
-            QMessageBox.critical(self, "Errore Database",
-                                 f"Errore salvataggio località:\n{dbe.message}")
-        except AttributeError as ae:  # Per debug se il metodo non è ancora in db_manager
-            logging.getLogger("CatastoGUI").critical(
-                f"Metodo 'update_localita' non trovato o altro AttributeError: {ae}", exc_info=True)
-            QMessageBox.critical(self, "Errore Implementazione",
-                                 "Funzionalità non completamente implementata.")
-        except Exception as e:
-            logging.getLogger("CatastoGUI").critical(
-                f"Errore imprevisto salvataggio località ID {self.localita_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Critico",
-                                 f"Errore imprevisto: {e}")
+            self.db_manager.update_localita(self.localita_id, dati_modificati)
+            self.accept()
+        except (DBMError, DBDataError, DBUniqueConstraintError) as e:
+            QMessageBox.critical(self, "Errore Salvataggio", str(e))
 
 
 class PeriodoStoricoDetailsDialog(QDialog):
@@ -5116,7 +5050,49 @@ class DettagliLegamePossessoreDialog(QDialog):
                 "quota": dialog.quota,
             }
         return None
+# In dialogs.py, aggiungi questa nuova classe
 
+class PeriodoStoricoEditDialog(QDialog):
+    def __init__(self, db_manager, periodo_data: Optional[Dict] = None, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.periodo_id = periodo_data.get('id') if periodo_data else None
+        self.setWindowTitle("Dati Periodo Storico")
+        self.setMinimumWidth(400)
+
+        layout = QFormLayout(self)
+        self.nome_edit = QLineEdit(periodo_data.get('nome', '') if periodo_data else '')
+        self.anno_inizio_spin = QSpinBox()
+        self.anno_inizio_spin.setRange(1000, 3000)
+        self.anno_inizio_spin.setValue(periodo_data.get('anno_inizio', 1900) if periodo_data else 1900)
+        self.anno_fine_spin = QSpinBox()
+        self.anno_fine_spin.setRange(0, 3000)
+        self.anno_fine_spin.setSpecialValueText("Aperto")
+        self.anno_fine_spin.setValue(periodo_data.get('anno_fine') or 0)
+        self.descrizione_edit = QTextEdit(periodo_data.get('descrizione', '') if periodo_data else '')
+        self.descrizione_edit.setFixedHeight(80)
+
+        layout.addRow("Nome (*):", self.nome_edit)
+        layout.addRow("Anno Inizio (*):", self.anno_inizio_spin)
+        layout.addRow("Anno Fine (0 se Aperto):", self.anno_fine_spin)
+        layout.addRow("Descrizione:", self.descrizione_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
+        buttons.accepted.connect(self.save_and_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+    def save_and_accept(self):
+        nome = self.nome_edit.text()
+        anno_inizio = self.anno_inizio_spin.value()
+        anno_fine = self.anno_fine_spin.value() if self.anno_fine_spin.value() > 0 else None
+        descrizione = self.descrizione_edit.toPlainText()
+
+        try:
+            self.db_manager.gestisci_tipo_localita(nome, descrizione, self.periodo_id)
+            self.accept()
+        except (DBMError, DBDataError, DBUniqueConstraintError) as e:
+            QMessageBox.critical(self, "Errore", str(e))
 
 class UserSelectionDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None, title="Seleziona Utente", exclude_user_id: Optional[int] = None):

@@ -592,6 +592,66 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB in get_all_comuni_details: {error}", exc_info=True)
             return [] # Restituisci una lista vuota in caso di errore
 
+    
+    # In catasto_db_manager.py, aggiungi questi metodi
+
+    def get_tipi_localita(self) -> List[Dict[str, Any]]:
+        """Recupera tutte le tipologie di località disponibili."""
+        query = "SELECT id, nome, descrizione FROM catasto.tipo_localita ORDER BY nome;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore nel recuperare i tipi di località: {e}", exc_info=True)
+            raise DBMError("Impossibile recuperare le tipologie di località.") from e
+
+    def gestisci_tipo_localita(self, tipo_id: Optional[int], nome: str, descrizione: Optional[str] = None) -> int:
+        """Crea o aggiorna una tipologia di località."""
+        if not nome or not nome.strip():
+            raise DBDataError("Il nome della tipologia non può essere vuoto.")
+        
+        nome = nome.strip()
+        descrizione = descrizione.strip() if descrizione else None
+
+        if tipo_id: # Modalità aggiornamento
+            query = "UPDATE catasto.tipo_localita SET nome = %s, descrizione = %s WHERE id = %s RETURNING id;"
+            params = (nome, descrizione, tipo_id)
+        else: # Modalità inserimento
+            query = "INSERT INTO catasto.tipo_localita (nome, descrizione) VALUES (%s, %s) ON CONFLICT (nome) DO NOTHING RETURNING id;"
+            params = (nome, descrizione)
+        
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    result = cur.fetchone()
+                    if result:
+                        return result[0]
+                    # Se ON CONFLICT non ha fatto nulla, l'ID non viene restituito. Potremmo voler gestire questo caso.
+                    raise DBUniqueConstraintError(f"Una tipologia con nome '{nome}' esiste già.")
+        except psycopg2.errors.UniqueViolation:
+            raise DBUniqueConstraintError(f"Una tipologia con nome '{nome}' esiste già.") from None
+        except Exception as e:
+            self.logger.error(f"Errore in gestisci_tipo_localita: {e}", exc_info=True)
+            raise DBMError("Operazione sulla tipologia di località fallita.") from e
+
+    # Potresti voler aggiungere anche un metodo per l'eliminazione
+    def elimina_tipo_localita(self, tipo_id: int) -> bool:
+        """Elimina una tipologia di località, solo se non è utilizzata."""
+        query = "DELETE FROM catasto.tipo_localita WHERE id = %s;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (tipo_id,))
+                    return cur.rowcount > 0
+        except psycopg2.errors.ForeignKeyViolation:
+            raise DBMError("Impossibile eliminare: questa tipologia è utilizzata da una o più località.") from None
+        except Exception as e:
+            self.logger.error(f"Errore in elimina_tipo_localita: {e}", exc_info=True)
+            raise DBMError("Eliminazione della tipologia fallita.") from e
+    
     def get_elenco_comuni_semplice(self) -> List[Tuple]:
         """
         Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
@@ -985,44 +1045,42 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB durante il recupero dei possessori per la partita ID {partita_id}: {e}", exc_info=True)
             # In caso di errore, restituisce una lista vuota per stabilità
             return []
-    def insert_localita(self, comune_id: int, nome: str, tipo: str, civico: Optional[int] = None) -> int:
+    def insert_localita(self, comune_id: int, nome: str, tipo_id: int, civico: Optional[int] = None) -> int:
         """
-        Inserisce una nuova località (o recupera l'ID di una esistente) in modo transazionale e sicuro.
+        Inserisce una nuova località usando tipo_id (FK) e gestisce i conflitti.
         """
-        if not (isinstance(comune_id, int) and comune_id > 0): raise DBDataError("ID comune non valido.")
-        if not (isinstance(nome, str) and nome.strip()): raise DBDataError("Nome località obbligatorio.")
-        if not (isinstance(tipo, str) and tipo.strip()): raise DBDataError("Tipo località obbligatorio.")
+        if not all([isinstance(comune_id, int), comune_id > 0, isinstance(nome, str), nome.strip(), isinstance(tipo_id, int), tipo_id > 0]):
+            raise DBDataError("Parametri per l'inserimento della località non validi.")
 
         actual_civico = civico if civico is not None and civico > 0 else None
 
-        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo, civico) VALUES (%s, %s, %s, %s) ON CONFLICT (comune_id, nome, civico) DO NOTHING RETURNING id;"
-        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s AND ((civico IS NULL AND %s IS NULL) OR (civico = %s));"
-        
+        # La colonna ora è 'tipo_id'
+        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo_id, civico) VALUES (%s, %s, %s, %s) ON CONFLICT (comune_id, nome, civico) DO NOTHING RETURNING id;"
+        # Anche la query di select deve usare tipo_id, ma per ora non è strettamente necessaria se il recupero avviene dopo
+        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s AND tipo_id = %s AND ((civico IS NULL AND %s IS NULL) OR (civico = %s));"
+
         try:
             with self._get_connection() as conn:
-                with conn.cursor(cursor_factory=DictCursor) as cur:
-                    cur.execute(query_insert, (comune_id, nome.strip(), tipo.strip(), actual_civico))
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query_insert, (comune_id, nome.strip(), tipo_id, actual_civico))
                     insert_result = cur.fetchone()
-                    
+
                     if insert_result and insert_result['id']:
                         localita_id = insert_result['id']
                         self.logger.info(f"Località '{nome}' inserita con successo. ID: {localita_id}.")
-                    else:
-                        cur.execute(query_select, (comune_id, nome.strip(), actual_civico, actual_civico))
+                    else: # Conflitto, recupera l'ID esistente
+                        cur.execute(query_select, (comune_id, nome.strip(), tipo_id, actual_civico, actual_civico))
                         select_result = cur.fetchone()
                         if select_result and select_result['id']:
                             localita_id = select_result['id']
                             self.logger.info(f"Località '{nome}' già esistente trovata. ID: {localita_id}.")
                         else:
-                            raise DBMError("Logica inconsistente: impossibile inserire o trovare la località.")
-            
-            # Il commit è automatico se nessuna eccezione è stata sollevata
+                            raise DBMError(f"Logica inconsistente: impossibile inserire o trovare la località '{nome}'.")
             return localita_id
-
         except Exception as e:
-            # Il rollback è automatico in caso di qualsiasi eccezione
             self.logger.error(f"Errore in insert_localita per '{nome}': {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'operazione sulla località: {e}") from e
+
     def get_localita_details(self, localita_id: int) -> Optional[Dict[str, Any]]:
         """Recupera i dettagli di una singola località, incluso il nome del comune."""
         if not isinstance(localita_id, int) or localita_id <= 0: return None
@@ -1043,21 +1101,23 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB in get_localita_details per ID {localita_id}: {e}", exc_info=True)
             return None
     def update_localita(self, localita_id: int, dati_modificati: Dict[str, Any]):
-        """Aggiorna i dati di una località esistente nel database in modo transazionale."""
-        if not isinstance(localita_id, int) or localita_id <= 0: raise DBDataError("ID località non valido.")
-        if not isinstance(dati_modificati, dict): raise DBDataError("Formato dati per aggiornamento non valido.")
+        """Aggiorna i dati di una località esistente, usando tipo_id."""
+        if not (isinstance(localita_id, int) and localita_id > 0): raise DBDataError("ID località non valido.")
+        if not isinstance(dati_modificati, dict) or not dati_modificati: raise DBDataError("Dati per aggiornamento non validi.")
 
         set_clauses = []
         params = []
 
-        # La logica di costruzione della query rimane invariata
-        if "nome" in dati_modificati and dati_modificati["nome"].strip():
+        if "nome" in dati_modificati and dati_modificati["nome"] and dati_modificati["nome"].strip():
             set_clauses.append("nome = %s")
             params.append(dati_modificati["nome"].strip())
-        # ... altri campi ...
-        if "tipo" in dati_modificati and dati_modificati["tipo"]:
-            set_clauses.append("tipo = %s")
-            params.append(dati_modificati["tipo"])
+
+        # --- MODIFICA CHIAVE QUI ---
+        if "tipo_id" in dati_modificati and dati_modificati["tipo_id"] is not None:
+            set_clauses.append("tipo_id = %s")
+            params.append(dati_modificati["tipo_id"])
+        # --- FINE MODIFICA ---
+
         if "civico" in dati_modificati:
             set_clauses.append("civico = %s")
             params.append(dati_modificati["civico"] if dati_modificati["civico"] else None)
@@ -1069,18 +1129,18 @@ class CatastoDBManager:
         set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
         query = f"UPDATE {self.schema}.localita SET {', '.join(set_clauses)} WHERE id = %s;"
         params.append(localita_id)
-        
+
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query, tuple(params))
                     if cur.rowcount == 0:
-                        # La transazione verrà annullata dall'eccezione
                         raise DBNotFoundError(f"Nessuna località trovata con ID {localita_id} da aggiornare.")
             self.logger.info(f"Località ID {localita_id} aggiornata con successo.")
         except Exception as e:
             self.logger.error(f"Errore DB aggiornando località ID {localita_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare la località: {e}") from e
+
 
     
     def get_partite_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1120,12 +1180,12 @@ class CatastoDBManager:
         """Recupera dettagli completi di una partita, usando una singola connessione e transazione."""
         if not isinstance(partita_id, int) or partita_id <= 0:
             return None
-        
+
         partita_details: Dict[str, Any] = {}
         try:
             with self._get_connection() as conn:
-                with conn.cursor(cursor_factory=DictCursor) as cur:
-                    # 1. Info base partita
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    # 1. Info base partita (invariato)
                     query_partita = f"SELECT p.*, c.nome as comune_nome, c.id as comune_id FROM {self.schema}.partita p JOIN {self.schema}.comune c ON p.comune_id = c.id WHERE p.id = %s;"
                     cur.execute(query_partita, (partita_id,))
                     partita_base = cur.fetchone()
@@ -1134,17 +1194,27 @@ class CatastoDBManager:
                         return None
                     partita_details.update(dict(partita_base))
 
-                    # 2. Possessori
+                    # 2. Possessori (invariato)
                     query_poss = f"SELECT pos.id, pos.nome_completo, pp.titolo, pp.quota FROM {self.schema}.possessore pos JOIN {self.schema}.partita_possessore pp ON pos.id = pp.possessore_id WHERE pp.partita_id = %s ORDER BY pos.nome_completo;"
                     cur.execute(query_poss, (partita_id,))
                     partita_details['possessori'] = [dict(row) for row in cur.fetchall()]
 
-                    # 3. Immobili
-                    query_imm = f"SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, i.classificazione, l.nome as localita_nome, l.tipo as localita_tipo, l.civico FROM {self.schema}.immobile i JOIN {self.schema}.localita l ON i.localita_id = l.id WHERE i.partita_id = %s ORDER BY l.nome, i.natura;"
+                    # --- INIZIO CORREZIONE QUI ---
+                    # 3. Immobili (query aggiornata con JOIN a tipo_localita)
+                    query_imm = f"""
+                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, 
+                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo, l.civico 
+                        FROM {self.schema}.immobile i 
+                        JOIN {self.schema}.localita l ON i.localita_id = l.id
+                        LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+                        WHERE i.partita_id = %s 
+                        ORDER BY l.nome, i.natura;
+                    """
+                    # --- FINE CORREZIONE QUI ---
                     cur.execute(query_imm, (partita_id,))
                     partita_details['immobili'] = [dict(row) for row in cur.fetchall()]
 
-                    # 4. Variazioni
+                    # 4. Variazioni (invariato)
                     query_var = f"""
                         SELECT v.*, con.tipo as tipo_contratto, con.data_contratto, con.notaio, con.repertorio, con.note as contratto_note,
                             po.numero_partita AS origine_numero_partita, co.nome AS origine_comune_nome,
@@ -1160,7 +1230,7 @@ class CatastoDBManager:
                     """
                     cur.execute(query_var, (partita_id, partita_id))
                     partita_details['variazioni'] = [dict(row) for row in cur.fetchall()]
-            
+
             self.logger.info(f"Dettagli completi recuperati per partita ID {partita_id}.")
             return partita_details
 
@@ -2662,36 +2732,17 @@ class CatastoDBManager:
             self.logger.error(f"Errore durante l'eliminazione dell'utente ID {utente_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile eliminare l'utente: {e}") from e
     # --- Metodi Sistema Backup (Invariati rispetto a comune_id) ---
+    # In catasto_db_manager.py, SOSTITUISCI la vecchia funzione get_audit_logs
+
     def get_audit_logs(self,
-                       filters: Optional[Dict[str, Any]] = None,
-                       page: int = 1,
-                       page_size: int = 50, # Numero di record per pagina
-                       sort_by: str = 'timestamp', # Colonna di default per l'ordinamento
-                       sort_order: str = 'DESC' # Ordine di default
-                      ) -> Tuple[List[Dict[str, Any]], int]:
+                    filters: Optional[Dict[str, Any]] = None,
+                    page: int = 1,
+                    page_size: int = 50,
+                    sort_by: str = 'timestamp',
+                    sort_order: str = 'DESC'
+                    ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        Recupera i record dalla tabella audit_log con filtri, paginazione e ordinamento.
-
-        Args:
-            filters: Un dizionario contenente i filtri. Chiavi possibili:
-                'table_name': str (ricerca parziale con ILIKE)
-                'operation_char': str ('I', 'U', o 'D')
-                'app_user_id': int
-                'record_id': int
-                'start_datetime': datetime
-                'end_datetime': datetime
-                'search_text_json': str (ricerca parziale ILIKE su dati_prima e dati_dopo)
-                'ip_address': str (ricerca parziale ILIKE)
-            page: Numero della pagina da recuperare (1-based).
-            page_size: Numero di record per pagina.
-            sort_by: Nome della colonna per l'ordinamento (default: 'timestamp').
-                     Colonne valide: 'id', 'timestamp', 'tabella', 'operazione', 'record_id', 'app_user_id', 'ip_address'.
-            sort_order: 'ASC' o 'DESC' (default: 'DESC').
-
-        Returns:
-            Una tupla contenente:
-                - Una lista di dizionari, dove ogni dizionario rappresenta un record di log.
-                - Il numero totale di record che soddisfano i filtri (per la paginazione).
+        Recupera i record dalla vista v_audit_dettagliato con filtri, paginazione e ordinamento.
         """
         if filters is None:
             filters = {}
@@ -2703,97 +2754,66 @@ class CatastoDBManager:
         if filters.get("table_name"):
             query_conditions.append("tabella ILIKE %s")
             query_params.append(f"%{filters['table_name']}%")
-        
+
+        # --- NUOVO: Filtro per username ---
+        if filters.get("username"):
+            query_conditions.append("username ILIKE %s")
+            query_params.append(f"%{filters['username']}%")
+        # --- FINE NUOVO ---
+
+        # ... (gli altri filtri come operation_char, record_id, date rimangono uguali) ...
         if filters.get("operation_char"):
             query_conditions.append("operazione = %s")
             query_params.append(filters["operation_char"])
-            
-        if filters.get("app_user_id") is not None: # Controlla esplicitamente per None perché 0 è un ID valido
-            query_conditions.append("app_user_id = %s")
-            query_params.append(filters["app_user_id"])
-
         if filters.get("record_id") is not None:
             query_conditions.append("record_id = %s")
             query_params.append(filters["record_id"])
-
         if filters.get("start_datetime"):
             query_conditions.append("timestamp >= %s")
             query_params.append(filters["start_datetime"])
-
         if filters.get("end_datetime"):
             query_conditions.append("timestamp <= %s")
             query_params.append(filters["end_datetime"])
-            
-        if filters.get("ip_address"):
-            query_conditions.append("ip_address ILIKE %s")
-            query_params.append(f"%{filters['ip_address']}%")
-
-        if filters.get("search_text_json"):
-            # Attenzione: questa ricerca può essere lenta su grandi volumi di dati JSON
-            # se non ci sono indici GIN appropriati sui campi JSONB.
-            json_search_text = f"%{filters['search_text_json']}%"
-            query_conditions.append("(dati_prima::text ILIKE %s OR dati_dopo::text ILIKE %s)")
-            query_params.extend([json_search_text, json_search_text])
 
         where_clause = ""
         if query_conditions:
             where_clause = "WHERE " + " AND ".join(query_conditions)
 
-        # Query per contare il totale dei record (per la paginazione)
-        count_query = f"SELECT COUNT(*) FROM {self.schema}.audit_log {where_clause};"
+        # La query ora interroga la VISTA, non la tabella diretta
+        base_query = f"FROM {self.schema}.v_audit_dettagliato {where_clause}"
+        count_query = f"SELECT COUNT(*) {base_query};"
 
-        # Validazione e costruzione della clausola ORDER BY
-        allowed_sort_columns = ['id', 'timestamp', 'tabella', 'operazione', 'record_id', 'app_user_id', 'ip_address']
-        if sort_by not in allowed_sort_columns:
-            sort_by = 'timestamp' # Default sicuro
-        if sort_order.upper() not in ['ASC', 'DESC']:
-            sort_order = 'DESC' # Default sicuro
-        
+        # Validazione e costruzione ORDER BY (invariato)
+        allowed_sort_columns = ['id', 'timestamp', 'username', 'tabella', 'operazione', 'record_id']
+        if sort_by not in allowed_sort_columns: sort_by = 'timestamp'
+        if sort_order.upper() not in ['ASC', 'DESC']: sort_order = 'DESC'
         order_by_clause = f"ORDER BY {sort_by} {sort_order.upper()}"
-        if sort_by != 'id': # Aggiungi 'id' come secondo criterio per un ordinamento stabile
-            order_by_clause += f", id {sort_order.upper()}"
 
-
-        # Calcolo dell'offset per la paginazione
         offset = (page - 1) * page_size
 
-        # Query per recuperare i dati paginati
+        # La query dei dati ora seleziona direttamente dalla vista
         data_query = f"""
-            SELECT id, timestamp, app_user_id, session_id, tabella, operazione, record_id, ip_address, utente, dati_prima, dati_dopo
-            FROM {self.schema}.audit_log
-            {where_clause}
+            SELECT * {base_query}
             {order_by_clause}
             LIMIT %s OFFSET %s;
         """
         query_params_data = query_params + [page_size, offset]
-        
-        logs = []
-        total_records = 0
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    # Esegui la query di conteggio
-                    self.logger.debug(f"Audit Log Count Query: {cur.mogrify(count_query, query_params).decode('utf-8', 'ignore')}")
                     cur.execute(count_query, query_params)
-                    total_records_result = cur.fetchone()
-                    if total_records_result:
-                        total_records = total_records_result[0]
-                    
+                    total_records = cur.fetchone()[0]
+
                     if total_records > 0:
-                        # Esegui la query per i dati
-                        self.logger.debug(f"Audit Log Data Query: {cur.mogrify(data_query, query_params_data).decode('utf-8', 'ignore')}")
                         cur.execute(data_query, query_params_data)
                         logs = [dict(row) for row in cur.fetchall()]
-                        self.logger.info(f"Recuperati {len(logs)} record di audit log (pagina {page} di {((total_records - 1) // page_size) + 1}). Totale filtrati: {total_records}")
                     else:
-                        self.logger.info("Nessun record di audit log trovato con i filtri specificati.")
-                        
-        except psycopg2.Error as e:
-            self.logger.error(f"Errore DB durante il recupero dei log di audit: {e}", exc_info=True)
-            # Potresti voler sollevare un'eccezione qui o ritornare un indicatore di errore
+                        logs = []
+
         except Exception as e:
-            self.logger.error(f"Errore generico durante il recupero dei log di audit: {e}", exc_info=True)
+            self.logger.error(f"Errore durante il recupero dei log di audit: {e}", exc_info=True)
+            return [], 0
 
         return logs, total_records
     def register_backup_log(self, nome_file: str, utente: str, tipo: str, esito: bool,
@@ -3139,6 +3159,50 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore imprevisto DB aggiornando periodo storico {periodo_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare il periodo storico: {e}") from e
+
+    def aggiungi_periodo_storico(self, nome: str, anno_inizio: int, anno_fine: Optional[int], descrizione: Optional[str]) -> int:
+        """Crea un nuovo periodo storico nel database."""
+        if not nome or not nome.strip():
+            raise DBDataError("Il nome del periodo non può essere vuoto.")
+        if anno_fine is not None and anno_fine < anno_inizio:
+            raise DBDataError("L'anno di fine non può essere precedente a quello di inizio.")
+
+        query = """
+            INSERT INTO catasto.periodo_storico (nome, anno_inizio, anno_fine, descrizione)
+            VALUES (%s, %s, %s, %s) RETURNING id;
+        """
+        params = (nome.strip(), anno_inizio, anno_fine, descrizione)
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    result = cur.fetchone()
+                    if result:
+                        return result[0]
+                    raise DBMError("Creazione del periodo storico fallita.")
+        except psycopg2.errors.UniqueViolation:
+            raise DBUniqueConstraintError(f"Un periodo storico con nome '{nome}' esiste già.") from None
+        except Exception as e:
+            self.logger.error(f"Errore DB in aggiungi_periodo_storico: {e}", exc_info=True)
+            raise DBMError("Impossibile creare il periodo storico.") from e
+
+    def elimina_periodo_storico(self, periodo_id: int) -> bool:
+        """Elimina un periodo storico, solo se non è utilizzato."""
+        query = "DELETE FROM catasto.periodo_storico WHERE id = %s;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (periodo_id,))
+                    if cur.rowcount == 0:
+                        raise DBNotFoundError(f"Nessun periodo storico trovato con ID {periodo_id}.")
+                    return True
+        except psycopg2.errors.ForeignKeyViolation:
+            raise DBMError("Impossibile eliminare: questo periodo è utilizzato da uno o più comuni.") from None
+        except Exception as e:
+            self.logger.error(f"Errore DB in elimina_periodo_storico: {e}", exc_info=True)
+            raise DBMError("Eliminazione del periodo storico fallita.") from e
+
     def get_property_genealogy(self, partita_id: int) -> List[Dict]:
         """Chiama la funzione SQL albero_genealogico_proprieta (SQL aggiornata per join)."""
         try:
@@ -3482,23 +3546,27 @@ class CatastoDBManager:
             self.logger.error(f"Errore ricerca fuzzy variazioni: {e}", exc_info=True)
             return []
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo _search_localita_fuzzy_internal
+
     def _search_localita_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
-        """Ricerca fuzzy interna per le località, restituendo tutti i campi necessari, inclusi tipo e civico."""
-        # --- CORREZIONE: Cast esplicito di l.civico a TEXT per evitare errore di tipo in COALESCE ---
+        """Ricerca fuzzy interna per le località, usando la nuova tabella tipo_localita."""
+        # --- INIZIO CORREZIONE ---
+        # La query ora fa un JOIN con tipo_localita per ottenere il nome del tipo
         sql = f"""
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Tipo: ' || COALESCE(l.tipo, 'N/D') || ', Civico: ' || COALESCE(CAST(l.civico AS TEXT), 'N/D') || ' | Comune: ' || c.nome AS detail_text,
+                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ', Civico: ' || COALESCE(CAST(l.civico AS TEXT), 'N/A') || ' | Comune: ' || c.nome AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
                 'nome' AS search_field,
                 l.nome,
-                l.tipo,
+                tl.nome AS tipo, -- Selezioniamo il nome dalla tabella joinata
                 l.civico,
                 c.nome as comune_nome,
                 COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id -- <-- JOIN con la nuova tabella
             LEFT JOIN (
                 SELECT localita_id, COUNT(*) as num_immobili
                 FROM {self.schema}.immobile
@@ -3508,6 +3576,7 @@ class CatastoDBManager:
             ORDER BY similarity_score DESC
             LIMIT %s;
         """
+        # --- FINE CORREZIONE ---
         try:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(sql, (query, query, threshold, limit))
@@ -3515,7 +3584,6 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore ricerca fuzzy località: {e}", exc_info=True)
             return []
-    # Inserisci questo metodo all'interno della classe CatastoDBManager in catasto_db_manager.py
 
     def _search_possessori_fuzzy_internal(self, conn, query: str, threshold: float, limit: int) -> List[Dict]:
         """Ricerca fuzzy interna per i possessori, restituendo tutti i campi necessari."""
@@ -3793,6 +3861,7 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore durante la pulizia dei log di audit: {e}", exc_info=True)
             raise DBMError(f"Impossibile pulire i log di audit: {e}") from e
+    
 
 
     

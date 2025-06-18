@@ -43,8 +43,8 @@ from config import (
 )
 from catasto_db_manager import CatastoDBManager
 
-from custom_widgets import QPasswordLineEdit
-from custom_widgets import ImmobiliTableWidget
+from custom_widgets import QPasswordLineEdit,ImmobiliTableWidget
+
 
 from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
                        gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,

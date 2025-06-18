@@ -105,6 +105,24 @@ BEGIN
       AND t.tablename IN ('possessore', 'localita', 'immobile', 'variazione', 'contratto', 'partita');
 END;
 $$;
+-- 7. Procedura per registrare una consultazione (Invariata)
+CREATE OR REPLACE PROCEDURE registra_consultazione(
+    p_data DATE,
+    p_richiedente VARCHAR(255),
+    p_documento_identita VARCHAR(100),
+    p_motivazione TEXT,
+    p_materiale_consultato TEXT,
+    p_funzionario_autorizzante VARCHAR(255)
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO consultazione(data, richiedente, documento_identita, motivazione,
+                             materiale_consultato, funzionario_autorizzante)
+    VALUES (p_data, p_richiedente, p_documento_identita, p_motivazione,
+           p_materiale_consultato, p_funzionario_autorizzante);
+END;
+$$;
 
 -- Nota: le funzioni di ricerca fuzzy specifiche per ogni entità e la funzione unificata
 -- sono state rimosse da qui perché ora sono gestite direttamente nel codice Python

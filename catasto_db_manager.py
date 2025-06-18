@@ -945,19 +945,35 @@ class CatastoDBManager:
             except Exception as e:
                 self.logger.error(f"Errore in get_partite_per_possessore: {e}", exc_info=True)
                 raise DBMError("Impossibile recuperare le partite per il possessore.") from e
+    # In catasto_db_manager.py
+
     def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Recupera località per comune_id, con filtro opzionale per nome."""
+        """
+        Recupera le località per un dato comune, includendo il nome della tipologia tramite JOIN.
+        """
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
 
-        query_base = f"SELECT id, nome, tipo, civico FROM {self.schema}.localita WHERE comune_id = %s"
+        # --- INIZIO QUERY CORRETTA ---
+        query_base = f"""
+            SELECT 
+                l.id, 
+                l.nome, 
+                tl.nome AS tipo,  -- Selezioniamo il NOME dalla tabella tipo_localita e lo aliasiamo come 'tipo'
+                l.civico 
+            FROM {self.schema}.localita l
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id -- JOIN per ottenere il nome del tipo
+            WHERE l.comune_id = %s
+        """
+        # --- FINE QUERY CORRETTA ---
+
         params: List[Union[int, str]] = [comune_id]
 
         if filter_text:
-            query_base += " AND nome ILIKE %s"
+            query_base += " AND l.nome ILIKE %s"
             params.append(f"%{filter_text}%")
         
-        query = query_base + " ORDER BY tipo, nome, civico;"
+        query = query_base + " ORDER BY l.nome, l.civico;"
 
         try:
             with self._get_connection() as conn:
@@ -970,8 +986,8 @@ class CatastoDBManager:
                     return localita_list
         except Exception as e:
             self.logger.error(f"Errore DB in get_localita_by_comune: {e}", exc_info=True)
-            # In caso di errore, restituisce una lista vuota per stabilità della UI
-            return []
+            # Rilanciamo l'eccezione per farla gestire dal chiamante, che mostrerà un QMessageBox
+            raise DBMError(f"Impossibile recuperare le località: {e}") from e
     def search_possessori_by_term_globally(self, search_term: Optional[str], limit: int = 200) -> List[Dict[str, Any]]:
         """
         Ricerca possessori globalmente, usando il nuovo pattern di connessione.
@@ -2504,35 +2520,37 @@ class CatastoDBManager:
             self.logger.error(f"Errore Python in register_access per utente {user_id}: {e}", exc_info=True)
             raise DBMError(f"Errore di sistema imprevisto durante la registrazione dell'evento: {e}") from e
 
-    # Metodo ESISTENTE da MODIFICARE
+   
+
     def logout_user(self, user_id: int, session_id: str, ip_address: Optional[str]) -> bool:
         """
-        Esegue il logout di un utente chiamando la procedura di logout e pulendo
-        le variabili di sessione in modo transazionale e sicuro.
+        Esegue il logout e gestisce la potenziale perdita di connessione con il server.
         """
         try:
             with self._get_connection() as conn:
-                # Esegui tutte le operazioni all'interno della stessa transazione
                 with conn.cursor() as cur:
-                    # 1. Chiama la procedura per registrare il logout nel database
                     call_proc_str = f"CALL {self.schema}.logout_utente_sessione(%s, %s, %s, %s);"
                     params = (user_id, session_id, ip_address, self.application_name)
                     self.logger.debug(f"Chiamata a logout_utente_sessione per utente {user_id}, sessione {session_id[:8]}...")
                     cur.execute(call_proc_str, params)
 
-                    # 2. Pulisce le variabili di audit sulla stessa connessione
                     self.logger.debug("Pulizia delle variabili di sessione per l'audit.")
                     cur.execute(f"SELECT set_config('{self.schema}.app_user_id', NULL, false);")
                     cur.execute(f"SELECT set_config('{self.schema}.session_id', NULL, false);")
             
-            # Il commit è automatico qui se tutte le operazioni hanno successo
             self.logger.info(f"Logout per utente ID {user_id}, sessione {session_id[:8]}... completato.")
             return True
 
+        # --- CORREZIONE: Gestione esplicita della perdita di connessione ---
+        except psycopg2.OperationalError as op_err:
+            self.logger.critical(f"Logout fallito: persa la connessione con il server DB. Errore: {op_err}", exc_info=True)
+            # Azione critica: il pool non è più valido. Chiudiamolo forzatamente.
+            self.close_pool()
+            return False # Segnala il fallimento
+        # --- FINE CORREZIONE ---
+
         except Exception as e:
-            # Il rollback è automatico in caso di qualsiasi errore
             self.logger.error(f"Errore durante il processo di logout per l'utente {user_id}: {e}", exc_info=True)
-            # Non rilanciamo l'eccezione, ma restituiamo False per indicare un fallimento non bloccante.
             return False
     def check_permission(self, utente_id: int, permesso_nome: str) -> bool:
         """Chiama la funzione SQL ha_permesso."""
@@ -3877,7 +3895,59 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore durante la pulizia dei log di audit: {e}", exc_info=True)
             raise DBMError(f"Impossibile pulire i log di audit: {e}") from e
-    
+    # In catasto_db_manager.py, dentro la classe CatastoDBManager
+
+    def close_user_session(self, session_id: str) -> bool:
+        """
+        Aggiorna la sessione di un utente nel database, impostando l'ora di fine (logout).
+
+        Args:
+            session_id: L'UUID della sessione da chiudere.
+
+        Returns:
+            True se la sessione è stata chiusa con successo, False altrimenti.
+        """
+        if not self.pool:
+            logger.error("Impossibile chiudere la sessione utente: pool di connessioni non disponibile.")
+            return False
+
+        if not session_id:
+            logger.warning("Nessun ID di sessione fornito, impossibile chiudere la sessione nel DB.")
+            return False
+
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                logger.info(f"Chiusura della sessione utente con ID: {session_id}")
+                
+                # Query per aggiornare la data_fine della sessione specificata
+                # che non è ancora stata chiusa.
+                query = """
+                    UPDATE catasto.sessioni
+                    SET data_fine = CURRENT_TIMESTAMP
+                    WHERE id = %s AND data_fine IS NULL;
+                """
+                cur.execute(query, (session_id,))
+                conn.commit()
+                
+                # psycopg2 fornisce rowcount per sapere se una riga è stata effettivamente aggiornata
+                if cur.rowcount > 0:
+                    logger.info(f"Sessione {session_id} chiusa con successo nel database.")
+                else:
+                    logger.warning(f"Tentativo di chiudere la sessione {session_id}, ma non è stata trovata o era già chiusa.")
+                
+                return True
+        
+        except (Exception, psycopg2.Error) as e:
+            logger.error(f"Errore database durante la chiusura della sessione {session_id}: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        
+        finally:
+            if conn:
+                self.release_connection(conn)
 
 
     

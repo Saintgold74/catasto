@@ -32,7 +32,6 @@ catasto-storico/
 ├── config.py
 ├── custom_widgets.py
 ├── dialogs.py
-├── fuzzy_search_unified.py
 ├── gui_main.py
 ├── gui_widgets.py
 ├── requirements.txt

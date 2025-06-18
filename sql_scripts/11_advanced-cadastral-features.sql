@@ -19,7 +19,7 @@ VALUES
 ON CONFLICT (nome) DO NOTHING; -- O DO UPDATE SET ... se preferisci aggiornare */
 
 -- 2. Estensione delle tabelle per contemplare il periodo storico
-ALTER TABLE comune ADD COLUMN periodo_id INTEGER REFERENCES periodo_storico(id);
+--ALTER TABLE comune ADD COLUMN periodo_id INTEGER REFERENCES periodo_storico(id);
 ALTER TABLE localita ADD COLUMN periodo_id INTEGER REFERENCES periodo_storico(id);
 
 -- Aggiorna i dati esistenti

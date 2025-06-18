@@ -169,10 +169,10 @@ COMMENT ON TABLE partita_possessore IS 'Relazione tra partite e possessori.';
 -- Tabella LOCALITA (Modificata per usare comune_id)
 CREATE TABLE localita (
     id SERIAL PRIMARY KEY,
-    comune_id INTEGER NOT NULL REFERENCES comune(id) ON UPDATE CASCADE ON DELETE RESTRICT, -- FK su ID
+    comune_id INTEGER NOT NULL REFERENCES comune(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     nome VARCHAR(255) NOT NULL,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('Regione', 'Via', 'Borgata', 'Altro')),
-    civico INTEGER,
+    tipologia_stradale VARCHAR(50), -- NOME CORRETTO E RESO NULLable PER FLESSIBILITÀ
+    civico VARCHAR(50), -- Modificato in VARCHAR per supportare civici come '10A'
     data_creazione TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     data_modifica TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comune_id, nome, civico) -- UNIQUE su ID + nome + civico

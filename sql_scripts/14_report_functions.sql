@@ -159,7 +159,7 @@ BEGIN
 
     -- Immobili (invariato)
     v_report := v_report || '-------------------- IMMOBILI --------------------' || E'\n';
-    FOR v_immobile IN SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, i.classificazione, l.tipo AS tipo_localita, l.nome AS nome_localita, l.civico FROM immobile i JOIN localita l ON i.localita_id = l.id WHERE i.partita_id = p_partita_id ORDER BY l.nome, i.natura LOOP
+    FOR v_immobile IN SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, i.classificazione, l.tipologia_stradale AS tipo_localita, l.nome AS nome_localita, l.civico FROM immobile i JOIN localita l ON i.localita_id = l.id WHERE i.partita_id = p_partita_id ORDER BY l.nome, i.natura LOOP
         v_report := v_report || 'Immobile ID: ' || v_immobile.id || E'\n';
         v_report := v_report || '  Natura: ' || COALESCE(v_immobile.natura, 'N/D') || E'\n';
         v_report := v_report || '  Localita: ' || COALESCE(v_immobile.nome_localita, 'N/D');
@@ -241,7 +241,7 @@ BEGIN
         v_report := v_report || E'\n';
         v_report := v_report || '  Immobili associati: ' || v_record.num_immobili || E'\n';
         v_report := v_report || '    Immobili:' || E'\n';
-        FOR v_immobile IN SELECT i.natura, l.nome AS localita_nome, l.tipo AS tipo_localita, i.classificazione FROM immobile i JOIN localita l ON i.localita_id = l.id WHERE i.partita_id = v_record.partita_id ORDER BY l.nome, i.natura LOOP
+        FOR v_immobile IN SELECT i.natura, l.nome AS localita_nome, l.tipologia_stradale AS tipo_localita, i.classificazione FROM immobile i JOIN localita l ON i.localita_id = l.id WHERE i.partita_id = v_record.partita_id ORDER BY l.nome, i.natura LOOP
             v_report := v_report || '      - ' || COALESCE(v_immobile.natura, 'N/D') || ' in ' || COALESCE(v_immobile.localita_nome, 'N/D');
             IF v_immobile.classificazione IS NOT NULL THEN v_report := v_report || ' (' || v_immobile.classificazione || ')'; END IF;
             v_report := v_report || E'\n';

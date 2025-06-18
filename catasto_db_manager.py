@@ -2299,18 +2299,33 @@ class CatastoDBManager:
             QMessageBox.critical(None, "Errore Aggiornamento Viste", error_message)
             return False
     def get_optimization_suggestions(self) -> Optional[str]:
-        """Chiama la funzione SQL suggerimenti_ottimizzazione (se esiste)."""
-        logger.warning("La funzione SQL 'suggerimenti_ottimizzazione' potrebbe non essere definita o corretta.")
+        """Chiama la funzione SQL suggerimenti_ottimizzazione in modo sicuro."""
+        query = f"SELECT {self.schema}.suggerimenti_ottimizzazione();"
         try:
-            query = "SELECT suggerimenti_ottimizzazione() AS suggestions"
-            if self.execute_query(query): result = self.fetchone(); return result.get('suggestions') if result else "Nessun suggerimento."
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    result = cur.fetchone()
+                    return result[0] if result and result[0] else "Nessun suggerimento disponibile."
+        except psycopg2.errors.UndefinedFunction:
+            self.logger.warning(f"Funzione SQL '{self.schema}.suggerimenti_ottimizzazione' non trovata.")
+            return "Funzionalità di suggerimenti non implementata nel database."
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_optimization_suggestions: {e}", exc_info=True)
+            return f"Errore durante il recupero dei suggerimenti: {e}"
+    def get_historical_name(self, entity_type: str, entity_id: int, year: Optional[int] = None) -> Optional[Dict]:
+        """Chiama la funzione SQL get_nome_storico in modo sicuro."""
+        if year is None: year = datetime.now().year
+        query = f"SELECT * FROM {self.schema}.get_nome_storico(%s, %s, %s)"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (entity_type, entity_id, year))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_historical_name ({entity_type} ID {entity_id}): {e}", exc_info=True)
             return None
-        except psycopg2.errors.UndefinedFunction: logger.warning("Funzione 'suggerimenti_ottimizzazione' non trovata."); return "Funzione suggerimenti non trovata."
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_optimization_suggestions: {db_err}"); return None
-        except Exception as e: logger.error(f"Errore Python get_optimization_suggestions: {e}"); return None
-
-    # --- Metodi Sistema Utenti e Audit (Invariati rispetto a comune_id) ---
-
     def set_session_app_user(self, user_id: Optional[int], client_ip: Optional[str] = None) -> bool:
         """
         Imposta variabili di sessione PostgreSQL per tracciamento usando il context manager.
@@ -2965,12 +2980,15 @@ class CatastoDBManager:
 
     def get_backup_logs(self, limit: int = 20) -> List[Dict]:
         """Recupera gli ultimi N log di backup dal registro."""
+        query = f"SELECT * FROM {self.schema}.backup_registro ORDER BY timestamp DESC LIMIT %s"
         try:
-            query = "SELECT * FROM backup_registro ORDER BY timestamp DESC LIMIT %s"
-            if self.execute_query(query, (limit,)): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_backup_logs: {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python get_backup_logs: {e}"); return []
-        return []
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (limit,))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore DB get_backup_logs: {e}", exc_info=True)
+            return []
 
     
     # --- Metodi Ricerca Avanzata (MODIFICATI) ---
@@ -3058,28 +3076,24 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore DB in get_historical_periods: {e}", exc_info=True)
             return []
-    def get_historical_name(self, entity_type: str, entity_id: int, year: Optional[int] = None) -> Optional[Dict]:
-        """Chiama la funzione SQL get_nome_storico (SQL aggiornata per join)."""
-        try:
-            # Funzione SQL aggiornata per join corretti
-            if year is None: year = datetime.now().year
-            query = "SELECT * FROM get_nome_storico(%s, %s, %s)"
-            if self.execute_query(query, (entity_type, entity_id, year)): return self.fetchone()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_historical_name ({entity_type} ID {entity_id}): {db_err}"); return None
-        except Exception as e: logger.error(f"Errore Python get_historical_name ({entity_type} ID {entity_id}): {e}"); return None
-        return None
+    
 
     def register_historical_name(self, entity_type: str, entity_id: int, name: str,
-                                 period_id: int, year_start: int, year_end: Optional[int] = None,
-                                 notes: Optional[str] = None) -> bool:
-        """Chiama la procedura SQL registra_nome_storico."""
+                             period_id: int, year_start: int, year_end: Optional[int] = None,
+                             notes: Optional[str] = None) -> bool:
+        """Chiama la procedura SQL registra_nome_storico in modo sicuro."""
+        call_proc = f"CALL {self.schema}.registra_nome_storico(%s, %s, %s, %s, %s, %s, %s)"
+        params = (entity_type, entity_id, name, period_id, year_start, year_end, notes)
         try:
-            call_proc = "CALL registra_nome_storico(%s, %s, %s, %s, %s, %s, %s)"
-            params = (entity_type, entity_id, name, period_id, year_start, year_end, notes)
-            if self.execute_query(call_proc, params): self.commit(); logger.info(f"Registrato nome storico '{name}' per {entity_type} ID {entity_id}."); return True
-            return False
-        except psycopg2.Error as db_err: logger.error(f"Errore DB registrazione nome storico: {db_err}"); return False
-        except Exception as e: logger.error(f"Errore Python registrazione nome storico: {e}"); self.rollback(); return False
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(call_proc, params)
+            self.logger.info(f"Registrato nome storico '{name}' per {entity_type} ID {entity_id}.")
+            return True
+        except Exception as e:
+            self.logger.error(f"Errore DB in register_historical_name: {e}", exc_info=True)
+            raise DBMError(f"Impossibile registrare il nome storico: {e}") from e
+
 
     def search_historical_documents(self, title: Optional[str] = None, doc_type: Optional[str] = None,
                                     period_id: Optional[int] = None, year_start: Optional[int] = None,
@@ -3204,14 +3218,16 @@ class CatastoDBManager:
             raise DBMError("Eliminazione del periodo storico fallita.") from e
 
     def get_property_genealogy(self, partita_id: int) -> List[Dict]:
-        """Chiama la funzione SQL albero_genealogico_proprieta (SQL aggiornata per join)."""
+        """Chiama la funzione SQL albero_genealogico_proprieta in modo sicuro."""
+        query = f"SELECT * FROM {self.schema}.albero_genealogico_proprieta(%s)"
         try:
-            # Funzione SQL aggiornata per join corretti
-            query = "SELECT * FROM albero_genealogico_proprieta(%s)"
-            if self.execute_query(query, (partita_id,)): return self.fetchall()
-        except psycopg2.Error as db_err: logger.error(f"Errore DB get_property_genealogy (ID: {partita_id}): {db_err}"); return []
-        except Exception as e: logger.error(f"Errore Python get_property_genealogy (ID: {partita_id}): {e}"); return []
-        return []
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (partita_id,))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_property_genealogy (ID: {partita_id}): {e}", exc_info=True)
+            return []
 
     def get_cadastral_stats_by_period(self, comune_id: Optional[int] = None, year_start: int = 1900, # Usa comune_id
                                        year_end: Optional[int] = None) -> List[Dict]:

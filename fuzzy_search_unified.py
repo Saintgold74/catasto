@@ -21,6 +21,7 @@ import json
 import csv
 from datetime import datetime,date
 from typing import Optional, List, Dict, Any
+from config import logger
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
@@ -30,7 +31,7 @@ from PyQt5.QtWidgets import (
     QSplitter, QScrollArea, QFormLayout, QDialogButtonBox, QSpacerItem,
     QSizePolicy,QMessageBox, QApplication, QFileDialog, QDialog 
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QModelIndex
 from PyQt5.QtGui import QColor, QFont
 from dialogs import PartitaDetailsDialog, ModificaPossessoreDialog, ModificaLocalitaDialog
 from app_utils import _get_default_export_path, prompt_to_open_file
@@ -762,31 +763,24 @@ def add_fuzzy_search_tab_to_main_window(main_window): # RIMOSSO il parametro 'mo
     Aggiunge il tab di ricerca fuzzy unificato alla finestra principale.
     """
     try:
-        if not hasattr(main_window, 'db_manager') or not main_window.db_manager:
-            if hasattr(main_window, 'logger'):
-                main_window.logger.warning("Database manager non disponibile per ricerca fuzzy")
-            else:
-                print("❌ Database manager non disponibile per ricerca fuzzy")
-            return False
-            
-        # --- MODIFICA QUI: Creiamo il widget senza passare 'mode' ---
-        # Il parent corretto è il QTabWidget della finestra principale, cioè 'main_window.tabs'
-        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, parent=main_window.tabs)
+        logger.info("Aggiunta della scheda di ricerca unificata.")
         
-        # Aggiunge il tab alla finestra principale
-        # Il nome del tab ora è fisso, non dipende più dalla modalità
-        tab_index = main_window.tabs.addTab(fuzzy_widget, "🔍 Ricerca Globale")
+        # --- INIZIO MODIFICA ---
+        # Usiamo il nome corretto dell'attributo: 'tab_widget' invece di 'tabs'
+        fuzzy_widget = UnifiedFuzzySearchWidget(main_window.db_manager, parent=main_window.tab_widget)
         
-        if hasattr(main_window, 'logger'):
-            main_window.logger.info(f"Tab Ricerca Globale aggiunto all'indice {tab_index}")
-        else:
-            print(f"✅ Tab Ricerca Globale aggiunto all'indice {tab_index}")
+        # Aggiungiamo la nuova scheda al 'tab_widget'
+        index = main_window.tab_widget.addTab(fuzzy_widget, "Ricerca Unificata")
         
-        return True
+        # Impostiamo la nuova scheda come quella attiva
+        main_window.tab_widget.setCurrentIndex(index)
+        # --- FINE MODIFICA ---
+        
+        logger.info("Scheda di ricerca unificata aggiunta con successo.")
         
     except Exception as e:
         if hasattr(main_window, 'logger'):
-            main_window.logger.error(f"Errore aggiunta tab ricerca fuzzy: {e}", exc_info=True)
+            logger.error(f"Errore durante l'aggiunta della scheda di ricerca: {e}", exc_info=True)
         else:
             print(f"❌ Errore aggiunta tab ricerca fuzzy: {e}")
         

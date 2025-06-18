@@ -10,7 +10,12 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
 
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    WEB_ENGINE_AVAILABLE = True
+except ImportError:
+    QWebEngineView = None
+    WEB_ENGINE_AVAILABLE = False
 
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
@@ -22,7 +27,10 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget,QDateEdit)
+                             QVBoxLayout, QWidget, QDateEdit,
+                             QGraphicsScene, QGraphicsView)
+
+from PyQt5.QtGui import QPainter
 
 
 

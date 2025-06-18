@@ -1,7 +1,45 @@
-import os
-import sys
-import logging # <-- AGGIUNGI QUESTA RIGA
+# app_paths.py
 
+import logging
+import sys
+import os
+from pathlib import Path
+
+def resource_path(relative_path):
+    """
+    Ottiene il percorso assoluto della risorsa, funziona sia in sviluppo che con PyInstaller.
+    """
+    try:
+        # PyInstaller crea una cartella temporanea e ci mette il percorso in _MEIPASS
+        base_path = Path(sys._MEIPASS)
+    except Exception:
+        # In sviluppo, usiamo il percorso del file corrente
+        base_path = Path(__file__).parent
+    return base_path / relative_path
+
+# --- DEFINIZIONE DEI PERCORSI PRINCIPALI ---
+
+# Directory principale del progetto
+BASE_DIR = Path(__file__).resolve().parent
+
+# Directory per i log
+LOGS_DIR = BASE_DIR / "logs"
+
+# Directory per gli allegati
+ALLEGATI_DIR = BASE_DIR / "allegati_catasto"
+
+# Directory per le esportazioni
+ESPORTAZIONI_DIR = BASE_DIR / "esportazioni"
+
+# Directory delle risorse (icone, stili, etc.)
+RESOURCES_DIR = BASE_DIR / "resources"
+
+# Percorso del file di stile QSS di default
+DEFAULT_STYLE_PATH = RESOURCES_DIR / "meridiana_style.qss"
+
+# Assicurati che le directory principali esistano all'avvio del modulo
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+ESPORTAZIONI_DIR.mkdir(parents=True, exist_ok=True)
 def get_base_path():
     """Ottiene il percorso base dell'applicazione."""
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -64,7 +102,3 @@ def get_style_file(style_name):
     """
     return resource_path(os.path.join('styles', style_name))
 
-# Potresti aggiungere altre funzioni simili se necessario
-# Esempio:
-# def get_manual_path():
-#     return resource_path(os.path.join('resources', 'manuale_utente.pdf'))

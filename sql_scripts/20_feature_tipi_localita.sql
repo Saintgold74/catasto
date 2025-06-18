@@ -50,7 +50,7 @@ END IF;
 
 END $$;
 
-\echo 'Script per la gestione dinamica dei tipi di località eseguito con successo.';
+-- 'Script per la gestione dinamica dei tipi di località eseguito con successo.';
 
 -- ========================================================================
 -- Fine Script

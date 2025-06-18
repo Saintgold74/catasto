@@ -2,10 +2,10 @@
 -- Script interattivo per creare un nuovo admin.
 -- ATTENZIONE: Eseguire esclusivamente tramite il client psql.
 
-\echo '*** CREAZIONE NUOVO UTENTE AMMINISTRATORE PER MERIDIANA ***'
-\echo '-------------------------------------------------------'
-\echo 'Passo 2 -> Inserisci i dettagli del nuovo utente qui sotto.'
-\echo ''
+-- '*** CREAZIONE NUOVO UTENTE AMMINISTRATORE PER MERIDIANA ***'
+-- '-------------------------------------------------------'
+-- 'Passo 2 -> Inserisci i dettagli del nuovo utente qui sotto.'
+-- ''
 
 -- Richieste interattive per l'utente
 \prompt 'Inserisci il nuovo username: ' v_username
@@ -36,12 +36,12 @@ WHERE NOT EXISTS (
 -- Controlla se l'inserimento è avvenuto
 GET DIAGNOSTICS row_count = ROW_COUNT;
 \if :row_count > 0
-    \echo '\nSUCCESS: Utente amministratore "' :'v_username' '" creato con successo nel database.'
+    -- '\nSUCCESS: Utente amministratore "' :'v_username' '" creato con successo nel database.'
 \else
-    \echo '\nATTENZIONE: L''utente "' :'v_username' '" o l''email "' :'v_email' '" esistono già. Nessuna modifica effettuata.'
+    -- '\nATTENZIONE: L''utente "' :'v_username' '" o l''email "' :'v_email' '" esistono già. Nessuna modifica effettuata.'
 \endif
 
 -- Fine della transazione
 COMMIT;
 
-\echo '-------------------------------------------------------'
+-- '-------------------------------------------------------'

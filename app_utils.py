@@ -1,4 +1,14 @@
 import logging,socket ,bcrypt,json, csv, os
+import sys
+from PyQt5.QtWidgets import QMessageBox
+# L'import ora è corretto e centralizzato
+# Importa solo il logger già pronto, non le sue dipendenze
+
+# Importa le utility necessarie
+# Importa la configurazione centralizzata
+from config import DEVELOPMENT_MODE, logger
+
+
 
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
@@ -27,11 +37,7 @@ except ImportError:
     class BulkReportPDF: pass
 
 # --- Funzioni Helper ---
-def _get_default_export_path(default_filename: str) -> str:
-    export_dir_name = "esportazioni"
-    full_dir_path = os.path.abspath(export_dir_name)
-    os.makedirs(full_dir_path, exist_ok=True)
-    return os.path.join(full_dir_path, default_filename)
+
 
 # --- Classi PDF (versione moderna con new_x e new_y) ---
 
@@ -218,34 +224,63 @@ if FPDF_AVAILABLE:
             self.multi_cell(0, 5, text_content)
             self.ln()
 
-def get_local_ip_address() -> str:
+def get_local_ip_address():
     """
-    Trova l'indirizzo IP locale della macchina sulla rete.
-
-    Utilizza un trucco standard: crea un socket UDP e si connette a un IP
-    esterno (senza inviare dati) per determinare quale indirizzo IP locale
-    il sistema operativo userebbe.
-    Restituisce '127.0.0.1' come fallback in caso di errore (es. macchina offline).
+    Ottiene l'indirizzo IP locale della macchina con cui si esce sulla rete.
     """
-    s = None
     try:
-        # Crea un socket UDP (veloce e non richiede una vera e propria connessione)
+        # Crea un socket UDP (non invia dati reali) per determinare l'IP di uscita
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Connettiti a un server DNS pubblico (non invia alcun dato)
-        # L'indirizzo non deve essere necessariamente raggiungibile
-        s.connect(('8.8.8.8', 80))
-        # Ottieni l'indirizzo IP del "nostro" lato del socket
-        ip_address = s.getsockname()[0]
+        s.settimeout(0.1)
+        # 8.8.8.8 è il DNS di Google, un endpoint affidabile per questo scopo
+        s.connect(('8.8.8.8', 1))
+        ip = s.getsockname()[0]
     except Exception:
-        # Se si verifica un errore (es. nessuna connessione di rete),
-        # restituisci l'indirizzo di loopback come fallback.
-        ip_address = '127.0.0.1'
+        # Se non c'è connessione di rete o si verifica un errore, usa il fallback
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except socket.gaierror:
+            ip = '127.0.0.1'
     finally:
-        # Chiudi sempre il socket
-        if s:
+        if 's' in locals():
             s.close()
-    return ip_address
-# --- Funzioni di esportazione adattate per GUI ---
+    return ip
+
+# La funzione check_network_environment rimane esattamente come nell'esempio precedente,
+# ma ora l'import "from config import logger" funzionerà correttamente.
+# ...
+# La funzione get_local_ip_address() rimane invariata
+
+def check_network_environment(allowed_subnet="192.168.1."):
+    """Verifica la rete, a meno che non sia attiva la modalità di sviluppo."""
+    if DEVELOPMENT_MODE:
+        logger.warning("MODALITÀ SVILUPPO ATTIVA - Il controllo di rete è disabilitato.")
+        return True
+
+    ip_address = get_local_ip_address()
+
+    # Controlla se l'IP rientra nella subnet autorizzata o è l'host locale
+    if ip_address.startswith(allowed_subnet) or ip_address == "127.0.0.1":
+        # from config import logger # Evitiamo import circolari, il logging va gestito nel chiamante
+        # logger.info(f"Controllo di rete superato. IP rilevato: {ip_address}")
+        return True
+    else:
+        # Mostra un messaggio di errore chiaro all'utente
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Accesso non autorizzato.")
+        msg.setInformativeText(
+            f"Questo applicativo non è autorizzato a funzionare da questo indirizzo IP ({ip_address}).\n"
+            "L'uso è consentito esclusivamente all'interno della rete dell'Archivio di Stato di Savona."
+        )
+        msg.setWindowTitle("Errore di Sicurezza")
+        msg.exec_()
+        return False
+def _get_default_export_path(default_filename: str) -> str:
+    export_dir_name = "esportazioni"
+    full_dir_path = os.path.abspath(export_dir_name)
+    os.makedirs(full_dir_path, exist_ok=True)
+    return os.path.join(full_dir_path, default_filename)
 
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo

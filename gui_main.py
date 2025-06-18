@@ -8,10 +8,10 @@ Autore: Marco Santoro
 Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
-import sys,bcrypt
+import sys,bcrypt,logging
 from fuzzy_search_unified import UnifiedFuzzySearchWidget, add_fuzzy_search_tab_to_main_window
 import os
-import logging
+from config import logger 
 import uuid  # Se usato per session_id in modalità offline
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple
@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplicat
                              QLabel, QLineEdit, QListWidget, QListWidgetItem,
                              QMainWindow, QMenu, QMessageBox, QProgressBar,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
-                             QSpinBox, QStyle, QStyleFactory, QTabWidget,
+                             QSpinBox, QStatusBar, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget)
 # --- FINE MODIFICA ---
@@ -42,7 +42,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplicat
 
 
 from catasto_db_manager import CatastoDBManager
-from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address
+from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address,check_network_environment
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, resource_path
 
@@ -59,6 +59,7 @@ from gui_widgets import (
 from dialogs import CSVImportResultDialog
 
 from custom_widgets import QPasswordLineEdit
+from fuzzy_search_unified import add_fuzzy_search_tab_to_main_window
 
 
 from config import (
@@ -284,82 +285,240 @@ except ImportError as e:
     FUZZY_SEARCH_AVAILABLE = False
 print("[FASE 2] Inizio definizione classe CatastoMainWindow.")
 class CatastoMainWindow(QMainWindow):
-    def __init__(self, client_ip_address_gui: str):
-        super(CatastoMainWindow, self).__init__()
-        self.logger = logging.getLogger("CatastoGUI")
-        self.db_manager: Optional[CatastoDBManager] = None
-        self.logged_in_user_id: Optional[int] = None
-        self.logged_in_user_info: Optional[Dict] = None
-        self.current_session_id: Optional[str] = None
-        # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
-        self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
-        self.client_ip_address_gui = client_ip_address_gui 
-        self.pool_initialized_successful: bool = False
+    """
+    Finestra principale dell'applicazione Meridiana.
+    
+    Questa classe è progettata per essere inizializzata in due fasi:
+    1. __init__(): Costruisce l'interfaccia utente statica (menu, barre, layout)
+       senza dipendere dal database. Tutti i componenti che richiedono una
+       connessione al DB sono inizialmente disabilitati.
+    2. perform_initial_setup(): Riceve il gestore del database e le info
+       utente DOPO il login, e "attiva" l'interfaccia, abilitando le azioni
+       e caricando i dati necessari.
+    """
+    def __init__(self, client_ip_address, parent=None):
+        super().__init__(parent)
+        logger.info("Inizializzazione di CatastoMainWindow...")
 
-        # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
-        self.consultazione_sub_tabs = QTabWidget()
-        self.inserimento_sub_tabs = QTabWidget()
-        self.sistema_sub_tabs = QTabWidget()  # Deve essere inizializzato qui
+        # --- FASE 1: Inizializzazione degli attributi a valori di default ---
+        # Il db_manager non esiste ancora, quindi lo impostiamo a None.
+        self.db_manager = None
+        self.client_ip_address = client_ip_address
+        self.logged_in_user_id = None
+        self.logged_in_user_info = {}
+        self.current_session_id = None
 
-        # Riferimenti ai widget specifici, inizializzati a None
-        
-        self.elenco_comuni_widget_ref: Optional[ElencoComuniWidget] = None
-        self.ricerca_partite_widget_ref: Optional[RicercaPartiteWidget] = None
-        
-        self.ricerca_avanzata_immobili_widget_ref: Optional[RicercaAvanzataImmobiliWidget] = None
-        self.inserimento_comune_widget_ref: Optional[InserimentoComuneWidget] = None
-        self.inserimento_possessore_widget_ref: Optional[InserimentoPossessoreWidget] = None
-        self.inserimento_localita_widget_ref: Optional[InserimentoLocalitaWidget] = None
-        self.registrazione_proprieta_widget_ref: Optional[RegistrazioneProprietaWidget] = None
-        self.operazioni_partita_widget_ref: Optional[OperazioniPartitaWidget] = None
-        self.registra_consultazione_widget_ref: Optional[RegistraConsultazioneWidget] = None
-        self.esportazioni_widget_ref: Optional[EsportazioniWidget] = None
-        self.reportistica_widget_ref: Optional[ReportisticaWidget] = None
-        self.statistiche_widget_ref: Optional[StatisticheWidget] = None
-        self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
-        self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None
-        self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None
-        
+        # --- FASE 2: Costruzione dell'interfaccia utente "spenta" ---
+        self._setup_ui()
+        logger.info("Interfaccia utente di base creata. In attesa di setup post-login.")
 
-        self.initUI()
+    def _setup_ui(self):
+        """
+        Metodo privato per costruire tutti i componenti statici della UI.
+        """
+        self.setWindowTitle("Meridiana - Archivio Catastale Storico")
+        self.setGeometry(100, 100, 1280, 720) # Imposta dimensioni iniziali
 
-    def initUI(self):
-        self.setWindowTitle("Meridiana 1.0 - Gestionale Catasto Storico")
-        self.setMinimumSize(1280, 720)
-        self.central_widget = QWidget()
-        self.main_layout = QVBoxLayout(self.central_widget)
-        
-        self.stale_data_bar = QFrame()
-        self.stale_data_bar.setObjectName("staleDataBar") # Per lo stile CSS
-        self.stale_data_bar.setStyleSheet("#staleDataBar { background-color: #FFF3CD; border: 1px solid #FFEEBA; border-radius: 4px; }")
-        stale_data_layout = QHBoxLayout(self.stale_data_bar)
-        stale_data_layout.setContentsMargins(10, 5, 10, 5)
-        
-        self.stale_data_label = QLabel("I dati delle statistiche potrebbero non essere aggiornati.")
-        self.stale_data_label.setStyleSheet("color: #664D03;")
-        
-        self.stale_data_refresh_btn = QPushButton("Aggiorna Ora")
-        self.stale_data_refresh_btn.setFixedWidth(100)
-        self.stale_data_refresh_btn.clicked.connect(self._handle_stale_data_refresh_click)
-        
-        stale_data_layout.addWidget(self.stale_data_label)
-        stale_data_layout.addStretch()
-        stale_data_layout.addWidget(self.stale_data_refresh_btn)
-        
-        self.main_layout.addWidget(self.stale_data_bar)
-        self.stale_data_bar.hide() # Nascondi la barra di default
-       
+        # Imposta l'icona della finestra (assicurati che il percorso sia corretto)
+        # icon_path = resource_path("resources/meridiana_icon.png")
+        # self.setWindowIcon(QIcon(icon_path))
 
-        self.create_status_bar_content()
-        self.create_menu_bar()
+        # Creazione della struttura base
+        self._create_actions()
+        self._create_menus()
+        self._create_toolbars()
+        self._create_statusbar()
+        self._create_central_widget()
+        
+        # Le azioni verranno abilitate solo in un secondo momento
+        self.update_actions_for_user_role() 
+    def _create_actions(self):
+        """Crea tutte le QAction per menu e toolbar."""
+        # Qui definiamo le azioni, ma la maggior parte sarà disabilitata di default
+        # Saranno abilitate da _update_ui_for_user_role() dopo il login.
+        
+        # Azioni File
+        self.nuova_partita_action = QAction(QIcon(), "&Nuova Partita", self)
+        self.importa_action = QAction(QIcon(), "&Importa Dati", self)
+        self.esporta_action = QAction(QIcon(), "&Esporta Report", self)
+        self.impostazioni_action = QAction(QIcon(), "&Impostazioni", self)
+        self.exit_action = QAction(QIcon(), "&Esci", self)
 
-        self.tabs = QTabWidget()
-        self.tabs.currentChanged.connect(self.handle_main_tab_changed) # <-- ASSICURATI CHE QUESTA RIGA ESISTA
-        self.main_layout.addWidget(self.tabs)
-        self.setCentralWidget(self.central_widget)
+        # Azioni Modifica
+        self.cerca_action = QAction(QIcon(), "&Cerca", self)
 
-        self.statusBar().showMessage("Pronto.")
+        # Azioni Aiuto
+        self.help_action = QAction(QIcon(), "&Manuale Utente", self)
+        self.about_action = QAction(QIcon(), "&Informazioni su Meridiana", self)
 
+        # Connessioni ai segnali (slot)
+        self.exit_action.triggered.connect(self.close)
+        # Le altre connessioni che usano il db_manager verranno fatte dopo
+        
+    def _create_menus(self):
+        """Crea la barra dei menu."""
+        self.menuBar().clear() # Pulisce il menu per sicurezza
+        
+        file_menu = self.menuBar().addMenu("&File")
+        file_menu.addAction(self.nuova_partita_action)
+        file_menu.addAction(self.importa_action)
+        file_menu.addAction(self.esporta_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.impostazioni_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.exit_action)
+
+        edit_menu = self.menuBar().addMenu("&Modifica")
+        edit_menu.addAction(self.cerca_action)
+
+        help_menu = self.menuBar().addMenu("&Aiuto")
+        help_menu.addAction(self.help_action)
+        help_menu.addAction(self.about_action)
+
+    def _create_toolbars(self):
+        """Crea le barre degli strumenti."""
+        self.main_toolbar = self.addToolBar("Principale")
+        self.main_toolbar.addAction(self.nuova_partita_action)
+        self.main_toolbar.addAction(self.cerca_action)
+
+    def _create_statusbar(self):
+        """Crea la barra di stato."""
+        self.statusBar = QStatusBar(self)
+        self.setStatusBar(self.statusBar)
+        self.statusBar.showMessage("Benvenuto in Meridiana. In attesa di connessione e login.")
+        
+    def _create_central_widget(self):
+        """Crea il widget centrale, che è un contenitore a schede (QTabWidget)."""
+        logger.info("Creazione del widget centrale a schede (QTabWidget).")
+        
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)  # Permette di chiudere le schede con una 'x'
+        self.tab_widget.setMovable(True)       # Permette di riordinare le schede
+        
+        # Collega il segnale di chiusura di una scheda a una funzione che la gestisce
+        self.tab_widget.tabCloseRequested.connect(self.close_tab)
+
+        # Impostiamo il tab_widget come widget centrale della finestra
+        self.setCentralWidget(self.tab_widget)
+    def close_tab(self, index):
+        """Slot per gestire la richiesta di chiusura di una scheda."""
+        widget_to_close = self.tab_widget.widget(index)
+        if widget_to_close is not None:
+            logger.info(f"Chiusura della scheda '{self.tab_widget.tabText(index)}'.")
+            widget_to_close.deleteLater()  # Rilascia la memoria in modo sicuro
+        self.tab_widget.removeTab(index)
+
+        # --- MOTORE DI ACCENSIONE ---
+    def perform_initial_setup(self, db_manager, user_id, user_info, session_id):
+        """
+        Metodo "intelligente" che riceve i dati dopo il login e attiva la UI.
+        Questo è il PRIMO posto in cui self.db_manager viene usato.
+        """
+        logger.info(f"Setup post-login in corso per l'utente: {user_info.get('username')}")
+        
+        # 1. Assegna il gestore del DB e le informazioni dell'utente all'istanza
+        self.db_manager = db_manager
+        self.logged_in_user_id = user_id
+        self.logged_in_user_info = user_info
+        self.current_session_id = session_id
+        
+        # 2. Connetti i segnali delle azioni ai loro metodi (slot)
+        #    Ora è sicuro farlo perché sappiamo che self.db_manager esiste.
+        self._connect_actions_slots()
+
+        # 3. Aggiorna la UI in base al ruolo dell'utente
+        self.update_actions_for_user_role()
+
+        # 4. Aggiorna la status bar con le informazioni corrette
+        username = self.logged_in_user_info.get('username', 'N/D')
+        role = self.logged_in_user_info.get('role', 'N/D')
+        self.statusBar.showMessage(f"Utente: {username} | Ruolo: {role} | Connesso")
+    def perform_initial_setup(self, db_manager, user_id, user_info, session_id):
+        """
+        Metodo "intelligente" che riceve i dati dopo il login e attiva la UI.
+        Questo è il PRIMO posto in cui self.db_manager viene usato.
+        """
+        logger.info(f"Setup post-login in corso per l'utente: {user_info.get('username')}")
+        
+        # 1. Assegna il gestore del DB e le informazioni dell'utente all'istanza
+        self.db_manager = db_manager
+        self.logged_in_user_id = user_id
+        self.logged_in_user_info = user_info
+        self.current_session_id = session_id
+        
+        # 2. Connetti i segnali delle azioni ai loro metodi (slot)
+        #    Ora è sicuro farlo perché sappiamo che self.db_manager esiste.
+        self._connect_actions_slots()
+
+        # 3. Aggiorna la UI in base al ruolo dell'utente
+        self.update_actions_for_user_role()
+
+        # 4. Aggiorna la status bar con le informazioni corrette
+        username = self.logged_in_user_info.get('username', 'N/D')
+        role = self.logged_in_user_info.get('role', 'N/D')
+        self.statusBar.showMessage(f"Utente: {username} | Ruolo: {role} | Connesso")
+        # --- NUOVA PARTE ---
+        # 5. Popola il widget centrale con le schede iniziali.
+        #    Questo viene fatto per ultimo, quando tutto il resto è pronto.
+        self._populate_initial_tabs()
+        # --- FINE NUOVA PARTE ---
+        
+    def _populate_initial_tabs(self):
+        """Aggiunge le schede principali all'interfaccia dopo il login."""
+        logger.info("Popolamento delle schede di lavoro iniziali.")
+        
+        # Aggiungiamo la sua scheda di ricerca unificata.
+        # La funzione 'add_fuzzy_search_tab_to_main_window' si aspetta l'intera
+        # istanza di 'main_window' per poter accedere sia a .tab_widget che a .db_manager.
+        # Passandole 'self', le diamo tutto ciò di cui ha bisogno.
+        try:
+            add_fuzzy_search_tab_to_main_window(self)
+        except Exception as e:
+            logger.error(f"Impossibile creare la scheda di ricerca unificata: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Creazione Scheda", 
+                                 f"Non è stato possibile caricare il modulo di ricerca:\n{e}")
+
+    def _connect_actions_slots(self):
+        """Connette le azioni che richiedono il DB ai loro gestori."""
+        # Esempio:
+        # self.nuova_partita_action.triggered.connect(self.on_nuova_partita)
+        # self.cerca_action.triggered.connect(self.on_cerca)
+        # self.importa_action.triggered.connect(self.on_importa)
+        pass
+
+    def update_actions_for_user_role(self):
+        """Abilita o disabilita le azioni in base al ruolo dell'utente."""
+        role = self.logged_in_user_info.get('role')
+        
+        # Se il login non è ancora avvenuto, tutto è disabilitato
+        is_logged_in = bool(role)
+        self.cerca_action.setEnabled(is_logged_in)
+        self.esporta_action.setEnabled(is_logged_in)
+        
+        # Solo admin e editor possono modificare i dati
+        can_edit = role in ['admin', 'editor']
+        self.nuova_partita_action.setEnabled(can_edit)
+        self.importa_action.setEnabled(can_edit)
+        
+        logger.info(f"Azioni aggiornate per il ruolo: {role}")
+        
+    def closeEvent(self, event):
+        """Gestisce l'evento di chiusura della finestra."""
+        reply = QMessageBox.question(self, 'Uscita', 
+                                     "Sei sicuro di voler uscire da Meridiana?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            logger.info("Chiusura applicazione richiesta dall'utente.")
+            if self.db_manager:
+                # Se abbiamo una sessione aperta, proviamo a chiuderla
+                if self.current_session_id:
+                    self.db_manager.close_user_session(self.current_session_id)
+                self.db_manager.close_main_pool()
+            event.accept()
+        else:
+            event.ignore()
+ 
     def avvia_ricerca_globale_da_dashboard(self, testo: str):
         # 1. Trova l'indice del tab "Ricerca Globale"
         idx_ricerca = -1
@@ -375,79 +534,7 @@ class CatastoMainWindow(QMainWindow):
             self.fuzzy_search_widget._perform_search() # Avvia la ricerca
         else:
             self.logger.warning("Tentativo di avviare ricerca da dashboard ma il tab/widget non è stato trovato.")
-    def perform_initial_setup(self, db_manager: CatastoDBManager,
-                              # ID utente dell'applicazione
-                              user_id: Optional[int],
-                              user_info: Optional[Dict],   # Dettagli utente
-                              session_id: Optional[str]):  # UUID della sessione
-        logging.getLogger("CatastoGUI").info(
-            ">>> CatastoMainWindow: Inizio perform_initial_setup")
-        self.db_manager = db_manager
-        self.logged_in_user_id = user_id
-        self.logged_in_user_info = user_info
-        self.current_session_id = session_id  # Memorizza l'UUID della sessione
-
-        # --- Aggiornamento etichetta stato DB ---
-        db_name_configured = "N/Config"  # Default
-        db_name_configured = "N/Config"
-        if self.db_manager:
-            db_name_configured = self.db_manager.get_current_dbname() or "N/Config(None)"
-
-        connection_status_text = ""
-        if hasattr(self, 'pool_initialized_successfully'):
-            if self.pool_initialized_successfully:
-                connection_status_text = f"Database: Connesso ({db_name_configured})"
-            else:
-                connection_status_text = f"Database: Non Pronto/Inesistente ({db_name_configured})"
-        else:
-            connection_status_text = f"Database: Stato Sconosciuto ({db_name_configured})"
-        self.db_status_label.setText(connection_status_text)
-
-        if self.logged_in_user_info:  # Se l'utente è loggato
-            user_display = self.logged_in_user_info.get(
-                'nome_completo') or self.logged_in_user_info.get('username', 'N/D')
-            ruolo_display = self.logged_in_user_info.get('ruolo', 'N/D')
-            # L'ID utente è già in self.logged_in_user_id
-            self.user_status_label.setText(
-                f"Utente: {user_display} (ID: {self.logged_in_user_id}, Ruolo: {ruolo_display}, Sessione: {str(self.current_session_id)[:8]}...)")
-            self.logout_button.setEnabled(True)
-            self.statusBar().showMessage(
-                f"Login come {user_display} effettuato con successo.")
-        else:  # Modalità setup DB (admin_offline) o nessun login
-            ruolo_fittizio = self.logged_in_user_info.get(
-                'ruolo') if self.logged_in_user_info else None
-            if ruolo_fittizio == 'admin_offline':
-                self.user_status_label.setText(
-                    f"Utente: Admin Setup (Sessione: {str(self.current_session_id)[:8]}...)")
-                # L'admin_offline può fare "logout" per chiudere l'app
-                self.logout_button.setEnabled(True)
-                self.statusBar().showMessage("Modalità configurazione database.")
-            # Nessun login valido, ma il pool potrebbe essere attivo (improbabile con flusso attuale)
-            else:
-                self.user_status_label.setText("Utente: Non Autenticato")
-                self.logout_button.setEnabled(False)
-                self.statusBar().showMessage("Pronto.")
-
-        logging.getLogger("CatastoGUI").info(
-            ">>> CatastoMainWindow: Chiamata a setup_tabs")
-        self.setup_tabs()
-        
-        logging.getLogger("CatastoGUI").info(
-            ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
-        self.update_ui_based_on_role()
-
-        logging.getLogger("CatastoGUI").info(
-            ">>> CatastoMainWindow: Chiamata a self.show()")
-        self.show()
-        logging.getLogger("CatastoGUI").info(
-            ">>> CatastoMainWindow: self.show() completato. Fine perform_initial_setup")
-         # --- AGGIUNGERE QUESTA CHIAMATA ALLA FINE ---
-        self.check_mv_refresh_status()
-        # --- FINE AGGIUNTA ---
-
-    # All'interno della classe CatastoMainWindow in prova.py
-
-    # In gui_main.py, SOSTITUISCI il metodo create_menu_bar con questo
+    
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -1103,39 +1190,7 @@ class CatastoMainWindow(QMainWindow):
             logging.getLogger("CatastoGUI").warning(
                 "Tentativo di logout senza una sessione utente valida o db_manager.")
 
-    def closeEvent(self, event: QCloseEvent):
-        logging.getLogger("CatastoGUI").info(
-            "Evento closeEvent intercettato in CatastoMainWindow.")
-
-        if hasattr(self, 'db_manager') and self.db_manager:
-            pool_era_attivo = self.db_manager.pool is not None
-
-            if pool_era_attivo:
-                # Se un utente è loggato con una sessione attiva, esegui il logout
-                if self.logged_in_user_id is not None and self.current_session_id:
-                    logging.getLogger("CatastoGUI").info(
-                        f"Chiusura applicazione: logout di sicurezza per utente ID {self.logged_in_user_id}, sessione {self.current_session_id[:8]}...")
-                    self.db_manager.logout_user(
-                        self.logged_in_user_id, self.current_session_id, self.client_ip_address_gui)
-                else:
-                    # Se non c'è un utente loggato, ma il pool è attivo, logga un messaggio informativo
-                    logging.getLogger("CatastoGUI").info(
-                        "Chiusura applicazione: nessun utente loggato, ma il pool di connessioni era attivo.")
-                    self.logger.info(
-                        "Nessun utente/sessione attiva da loggare out esplicitamente, ma il pool era attivo.")
-                   
-
-            # Chiudi sempre il pool se esiste
-            self.db_manager.close_pool()
-            logging.getLogger("CatastoGUI").info(
-                "Tentativo di chiusura del pool di connessioni al database completato durante closeEvent.")
-        else:
-            logging.getLogger("CatastoGUI").warning(
-                "DB Manager non disponibile durante closeEvent o pool già None.")
-
-        logging.getLogger("CatastoGUI").info(
-            "Applicazione GUI Catasto Storico terminata via closeEvent.")
-        event.accept()
+    
    
     def _import_possessori_csv(self):
         """
@@ -1356,100 +1411,102 @@ class CatastoMainWindow(QMainWindow):
 
 
 
-def setup_logging():
-    """Configura il logging per scrivere nella cartella AppData dell'utente."""
-    # Imposta i metadati dell'applicazione per creare un percorso univoco
-    QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
-    QCoreApplication.setApplicationName("Meridiana")
+    def setup_logging():
+        """Configura il logging per scrivere nella cartella AppData dell'utente."""
+        # Imposta i metadati dell'applicazione per creare un percorso univoco
+        QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
+        QCoreApplication.setApplicationName("Meridiana")
 
-    # Trova la cartella standard e scrivibile per i dati dell'applicazione
-    app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        # Trova la cartella standard e scrivibile per i dati dell'applicazione
+        app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
 
-    # Assicurati che la cartella esista
-    os.makedirs(app_data_path, exist_ok=True)
+        # Assicurati che la cartella esista
+        os.makedirs(app_data_path, exist_ok=True)
 
-    # Percorso completo del file di log
-    log_file_path = os.path.join(app_data_path, "meridiana_session.log")
+        # Percorso completo del file di log
+        log_file_path = os.path.join(app_data_path, "meridiana_session.log")
 
-    # Configura il logger principale (root logger)
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-    logging.basicConfig(level=logging.INFO,
-                        format=log_format,
-                        handlers=[
-                            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-                            logging.StreamHandler(sys.stdout)
-                        ])
+        # Configura il logger principale (root logger)
+        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+        logging.basicConfig(level=logging.INFO,
+                            format=log_format,
+                            handlers=[
+                                logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
+                                logging.StreamHandler(sys.stdout)
+                            ])
 
-    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
-    
-# Inserisci questa funzione in gui_main.py
-
-def setup_global_logging():
-    """
-    Configura il logging in modo centralizzato e sicuro, scrivendo i file
-    nella cartella AppData dell'utente, che e' sempre scrivibile.
-    """
-    # Imposta i metadati necessari a PyQt per trovare il percorso corretto
-    QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
-    QCoreApplication.setApplicationName("Meridiana")
-    
-    # Ottieni il percorso standard e scrivibile per i dati dell'applicazione
-    app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
-    
-    # Assicurati che la cartella esista
-    os.makedirs(app_data_path, exist_ok=True)
-    
-    # Percorso completo del file di log
-    log_file_path = os.path.join(app_data_path, "meridiana_session.log")
-    
-    # Configura il logger usando basicConfig, che pulisce ogni handler precedente.
-    # 'force=True' (per Python 3.8+) assicura che questa configurazione sovrascriva tutto.
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ],
-        force=True 
-    )
-    
-    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
-
-
-def run_gui_app():
-    try:
-        app = QApplication(sys.argv)
-
-        # --- CHIAMATA ALLA NUOVA FUNZIONE QUI ---
-        # Questo imposta il logging per l'intera applicazione prima che qualsiasi
-        # altra cosa venga importata o eseguita.
-        setup_global_logging()
-        # --- FINE CHIAMATA ---
-
-        # Ora puoi ottenere il logger già configurato
-        gui_logger = logging.getLogger("CatastoGUI")
-
-        # Il resto della funzione rimane identico...
-        client_ip_address_gui = get_local_ip_address()
-        gui_logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
-
-
-        settings = QSettings()
-        current_style_file = settings.value("UI/CurrentStyle", "meridiana_style.qss", type=str)
-        stylesheet = load_stylesheet(current_style_file)
-        if stylesheet:
-            app.setStyleSheet(stylesheet)
-        # --- FINE MODIFICA ---
+        logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
         
-        gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
-        db_manager_gui: Optional[CatastoDBManager] = None
+    # Inserisci questa funzione in gui_main.py
+
+    def setup_global_logging():
+        """
+        Configura il logging in modo centralizzato e sicuro, scrivendo i file
+        nella cartella AppData dell'utente, che e' sempre scrivibile.
+        """
+        # Imposta i metadati necessari a PyQt per trovare il percorso corretto
+        QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
+        QCoreApplication.setApplicationName("Meridiana")
+        
+        # Ottieni il percorso standard e scrivibile per i dati dell'applicazione
+        app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        
+        # Assicurati che la cartella esista
+        os.makedirs(app_data_path, exist_ok=True)
+        
+        # Percorso completo del file di log
+        log_file_path = os.path.join(app_data_path, "meridiana_session.log")
+        
+        # Configura il logger usando basicConfig, che pulisce ogni handler precedente.
+        # 'force=True' (per Python 3.8+) assicura che questa configurazione sovrascriva tutto.
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ],
+            force=True 
+        )
+        
+        logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
+
+# ==============================================================================
+# ---- Definizione della classe CatastoMainWindow (invariata) ----
+# ==============================================================================
+
+def run_gui_app(app):
+    """
+    Contiene la logica di avvio principale: controlli, configurazione db, login e avvio GUI.
+    Riceve l'istanza di QApplication come parametro.
+    """
+    try:
+        logger.info("Esecuzione di run_gui_app...")
+
+        # 1. CONTROLLI PRELIMINARI
+        client_ip_address_gui = get_local_ip_address()
+        logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
+        
+        if not check_network_environment():
+            # La funzione `check_network_environment` mostra già un pop-up di errore.
+            # Usciamo pulitamente da run_gui_app.
+            return 
+        
+        # 2. IMPOSTAZIONI GRAFICHE
+        logger.info("Caricamento impostazioni UI e stylesheet...")
+        settings = QSettings()
+        # Qui può inserire la sua logica per caricare lo stylesheet (load_stylesheet)
+        # current_style_file = settings.value(...)
+        # stylesheet = load_stylesheet(current_style_file)
+        # if stylesheet:
+        #     app.setStyleSheet(stylesheet)
+        
+        # Creazione dell'istanza della finestra (non ancora mostrata)
         main_window_instance = CatastoMainWindow(client_ip_address_gui)
 
-        # --- NUOVO FLUSSO DI AVVIO ---
-
-        # 1. TENTATIVO DI CONNESSIONE AUTOMATICA
-        gui_logger.info("Tentativo di connessione automatica con le impostazioni salvate...")
+        # 3. GESTIONE CONNESSIONE AL DATABASE
+        db_manager_gui = None  
+        logger.info("Tentativo di connessione automatica con le impostazioni salvate...")
         saved_config = {
             "host": settings.value(SETTINGS_DB_HOST, "localhost", type=str),
             "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
@@ -1465,19 +1522,19 @@ def run_gui_app():
             if db_manager_gui.initialize_main_pool():
                 main_window_instance.db_manager = db_manager_gui
                 main_window_instance.pool_initialized_successful = True
-                gui_logger.info("Connessione automatica riuscita.")
+                logger.info("Connessione automatica riuscita.")
             else:
                 db_manager_gui = None # Resetta se fallisce
         
         # 2. FALLBACK A CONFIGURAZIONE MANUALE se la connessione automatica è fallita
         if not db_manager_gui or not db_manager_gui.pool:
-            gui_logger.warning("Connessione automatica fallita. Apertura dialogo di configurazione manuale.")
+            logger.warning("Connessione automatica fallita. Apertura dialogo di configurazione manuale.")
             QMessageBox.information(None, "Configurazione Database", "Impossibile connettersi con le impostazioni salvate. Apriamo la configurazione.")
 
             while True: # Loop per riprovare la configurazione manuale
                 config_dialog = DBConfigDialog(parent=None)
                 if config_dialog.exec_() != QDialog.Accepted:
-                    gui_logger.info("Configurazione manuale annullata. Uscita.")
+                    logger.info("Configurazione manuale annullata. Uscita.")
                     sys.exit(0)
 
                 current_config = config_dialog.get_config_values(include_password=True)
@@ -1486,7 +1543,7 @@ def run_gui_app():
                 if db_manager_gui.initialize_main_pool():
                     main_window_instance.db_manager = db_manager_gui
                     main_window_instance.pool_initialized_successful = True
-                    gui_logger.info("Connessione manuale riuscita.")
+                    logger.info("Connessione manuale riuscita.")
                     break # Esce dal loop di configurazione
                 else:
                     # Mostra l'errore specifico e il loop continuerà, riaprendo il dialogo
@@ -1497,14 +1554,17 @@ def run_gui_app():
                     if pgcode == '28P01': QMessageBox.critical(None, "Errore Autenticazione", "Password o utente errati."); #... etc
                     else: QMessageBox.critical(None, "Errore Connessione", f"Impossibile connettersi.\n{pgerror_msg}")
 
-        # 3. SE LA CONNESSIONE (auto o manuale) è OK, PROCEDI CON IL LOGIN UTENTE
-        # --- INIZIO MODIFICA ---
-        # Passiamo la variabile 'client_ip_address_gui' al costruttore del LoginDialog
+        # Se anche dopo il fallback non c'è connessione, l'app non può continuare.
+        if not db_manager_gui or not db_manager_gui.pool:
+             logger.critical("Impossibile stabilire una connessione al database. Uscita.")
+             QMessageBox.critical(None, "Errore Fatale", "Impossibile connettersi al database. L'applicazione verrà chiusa.")
+             return
+        # 4. GESTIONE LOGIN UTENTE
+        logger.info("Connessione al DB riuscita. Apertura dialogo di login.")
         login_dialog = LoginDialog(db_manager_gui, client_ip_address_gui, parent=main_window_instance)
-        # --- FINE MODIFICA ---
         if login_dialog.exec_() != QDialog.Accepted:
-            gui_logger.info("Login utente annullato. Uscita.")
-            sys.exit(0)
+            logger.info("Login utente annullato. Uscita.")
+            return
 
         # 4. LOGIN UTENTE OK, MOSTRA WELCOME SCREEN E AVVIA L'APP
         base_dir_app = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -1513,7 +1573,7 @@ def run_gui_app():
 
         welcome_screen = WelcomeScreen(parent=None, logo_path=logo_path, help_url=manuale_path)
         if welcome_screen.exec_() != QDialog.Accepted:
-            gui_logger.info("Welcome screen chiusa. Uscita.")
+            logger.info("Welcome screen chiusa. Uscita.")
             sys.exit(0)
             
         main_window_instance.perform_initial_setup(
@@ -1523,41 +1583,24 @@ def run_gui_app():
             login_dialog.current_session_id_from_dialog
         )
         
-        gui_logger.info("Setup completato. Avvio loop eventi.")
+        logger.info("Setup completato. Avvio loop eventi.")
         sys.exit(app.exec_())
 
     except Exception as e:
-        # Blocco di gestione crash (invariato)
-        logging.basicConfig(filename='crash_report.log', level=logging.DEBUG)
-        logging.exception("CRASH IMPREVISTO ALL'AVVIO:")
-        QMessageBox.critical(None, "Errore Critico", f"Errore fatale: {e}\nControlla crash_report.log.")
+        logger.critical(f"CRASH IMPREVISTO durante l'esecuzione di run_gui_app: {e}", exc_info=True)
+        QMessageBox.critical(None, "Errore Critico", f"Errore fatale: {e}\nControlla il file di log.")
         sys.exit(1)
-
-
-if __name__ == "__main__":
-    print("[FASE 4] Inizio blocco di esecuzione __main__.")
-    
-    
-    # Importa qui per evitare importazioni circolari (se necessario)
-    import traceback
-    
+        
+if __name__ == '__main__':
+    # Il blocco main ora è semplicissimo e fa solo 2 cose:
     try:
-        run_gui_app()
+        # 1. Crea le fondamenta dell'applicazione
+        app = QApplication(sys.argv)
+        # 2. Lancia la sua funzione di avvio, passandole le fondamenta
+        run_gui_app(app)
     except Exception as e:
-        # Log dell'errore critico
-        logging.getLogger("CatastoGUI").critical(f"Errore critico all'avvio dell'applicazione: {e}", exc_info=True)
-        traceback.print_exc()
-        
-        # Mostra messaggio di errore all'utente
-        try:
-            from PyQt5.QtWidgets import QApplication, QMessageBox
-            if not QApplication.instance():
-                app = QApplication(sys.argv)
-            QMessageBox.critical(None, "Errore Critico", 
-                               f"Si è verificato un errore critico:\n\n{str(e)}\n\n"
-                               "Controlla il file catasto_gui.log per maggiori dettagli.")
-        except:
-            print(f"ERRORE CRITICO: {e}")
-            print("Controlla il file catasto_gui.log per maggiori dettagli.")
-        
+        # Questo blocco cattura solo errori catastrofici nella creazione di QApplication
+        # La gestione principale è dentro run_gui_app
+        logging.basicConfig(filename='crash_report_main.log', level=logging.DEBUG)
+        logging.exception(f"CRASH FATALE IN __main__: {e}")
         sys.exit(1)

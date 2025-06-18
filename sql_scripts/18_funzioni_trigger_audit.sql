@@ -241,7 +241,7 @@ LEFT JOIN
 
 COMMENT ON VIEW catasto.v_audit_dettagliato IS 'Vista che unisce i log di audit con i nomi degli utenti applicativi (timestamp formattato).';
 
-\echo 'Vista v_audit_dettagliato creata/aggiornata con successo (timestamp formattato).'
+-- 'Vista v_audit_dettagliato creata/aggiornata con successo (timestamp formattato).'
 -- ========================================================================
 -- Fine Script
 -- ========================================================================

@@ -1,15 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# ===================================================================
+#  File di Specifiche PyInstaller per Meridiana 1.0
+# ===================================================================
+
+# 'a' è l'analisi dello script principale e delle sue dipendenze.
 a = Analysis(
-    ['gui_main.py'],
+    ['gui_main.py'],  # Lo script Python principale da cui partire
     pathex=[],
     binaries=[],
     datas=[
+        # Sezione FONDAMENTALE per includere le tue cartelle.
+        # La sintassi è ('sorgente', 'destinazione nel pacchetto')
         ('resources', 'resources'),
         ('styles', 'styles'),
         ('sql_scripts', 'sql_scripts')
     ],
     hiddenimports=[
+        # Moduli che PyInstaller potrebbe non trovare automaticamente.
         'psycopg2._psycopg',
         'PyQt5.sip',
         'PyQt5.QtSvg',
@@ -25,7 +33,11 @@ a = Analysis(
     win_private_assemblies=False,
     noarchive=False,
 )
+
+# 'pyz' è il bundle di tutti i file Python.
 pyz = PYZ(a.pure)
+
+# 'exe' definisce le proprietà del file .exe finale.
 exe = EXE(
     pyz,
     a.scripts,
@@ -36,9 +48,11 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False, # Molto importante per le app GUI
-    icon='resources/logo_meridiana.ico'
+    console=False, # IMPORTANTISSIMO: Nasconde la finestra di console nera
+    icon='resources/logo_meridiana.ico' # Percorso del file icona (.ico)
 )
+
+# 'coll' raggruppa tutto nella cartella di output finale.
 coll = COLLECT(
     exe,
     a.binaries,

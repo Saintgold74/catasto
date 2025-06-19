@@ -38,7 +38,10 @@ from config import (
 
 from dialogs import (DBConfigDialog, DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
                      PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog, PeriodoStoricoDetailsDialog,
-                     PartitaDetailsDialog, CreateUserDialog,ModificaLocalitaDialog)
+                     PartitaDetailsDialog, CreateUserDialog,ModificaLocalitaDialog,PeriodoStoricoEditDialog)
+from custom_widgets import LazyLoadedWidget
+
+
 
 
 
@@ -969,50 +972,41 @@ class RicercaAvanzataImmobiliWidget(QWidget):
 
 # In gui_widgets.py, SOSTITUISCI l'intera classe InserimentoComuneWidget con questa:
 
-class InserimentoComuneWidget(LazyLoadedWidget):
+class InserimentoComuneWidget(LazyLoadedWidget): # Eredita da LazyLoadedWidget
     comune_appena_inserito = pyqtSignal(int)
 
-    def __init__(self, parent: Optional[QWidget] = None,
-                 db_manager: Optional['CatastoDBManager'] = None,
-                 utente_attuale_info: Optional[Dict[str, Any]] = None):
-        super().__init__(parent)
+    def __init__(self, db_manager: 'CatastoDBManager', utente_attuale_info: Optional[Dict[str, Any]], parent=None):
+        super().__init__(parent) # Chiama il costruttore della classe base
         self.db_manager = db_manager
         self.utente_attuale_info = utente_attuale_info
-        
+        # self.logger e self._data_loaded sono gestiti dalla classe base
+
         self._initUI()
 
     def _initUI(self):
+        # ... (tutta la definizione della UI rimane la stessa)
         main_layout = QVBoxLayout(self)
         form_group = QGroupBox("Dati del Nuovo Comune")
         form_layout = QFormLayout(form_group)
         form_layout.setSpacing(10)
-
-        # --- Campi del form aggiornati ---
         self.nome_comune_edit = QLineEdit()
         form_layout.addRow("Nome Comune (*):", self.nome_comune_edit)
-        
         self.provincia_edit = QLineEdit("SV")
         self.provincia_edit.setMaxLength(100)
         form_layout.addRow("Provincia (*):", self.provincia_edit)
-
         self.regione_edit = QLineEdit()
         self.regione_edit.setMaxLength(100)
         form_layout.addRow("Regione (*):", self.regione_edit)
-
         self.codice_catastale_edit = QLineEdit()
         self.codice_catastale_edit.setPlaceholderText("Es. A123 (opzionale)")
         form_layout.addRow("Codice Catastale:", self.codice_catastale_edit)
-        
-        # --- NUOVA GESTIONE PER DATA ISTITUZIONE (FACOLTATIVA) ---
         self.data_istituzione_check = QCheckBox("Imposta data istituzione")
         self.data_istituzione_edit = QDateEdit(calendarPopup=True)
         self.data_istituzione_edit.setDisplayFormat("yyyy-MM-dd")
         self.data_istituzione_edit.setEnabled(False)
-        self.data_istituzione_check.toggled.connect(self.data_istituzione_edit.setEnabled) # Collega il check al campo data
+        self.data_istituzione_check.toggled.connect(self.data_istituzione_edit.setEnabled)
         data_istituzione_layout = QHBoxLayout(); data_istituzione_layout.addWidget(self.data_istituzione_check); data_istituzione_layout.addWidget(self.data_istituzione_edit)
         form_layout.addRow("Data Istituzione:", data_istituzione_layout)
-        
-        # --- NUOVA GESTIONE PER DATA SOPPRESSIONE (FACOLTATIVA) ---
         self.data_soppressione_check = QCheckBox("Imposta data soppressione")
         self.data_soppressione_edit = QDateEdit(calendarPopup=True)
         self.data_soppressione_edit.setDisplayFormat("yyyy-MM-dd")
@@ -1020,42 +1014,36 @@ class InserimentoComuneWidget(LazyLoadedWidget):
         self.data_soppressione_check.toggled.connect(self.data_soppressione_edit.setEnabled)
         data_soppressione_layout = QHBoxLayout(); data_soppressione_layout.addWidget(self.data_soppressione_check); data_soppressione_layout.addWidget(self.data_soppressione_edit)
         form_layout.addRow("Data Soppressione:", data_soppressione_layout)
-
         self.note_edit = QTextEdit()
         self.note_edit.setFixedHeight(60)
         form_layout.addRow("Note:", self.note_edit)
-        
         self.periodo_combo = QComboBox()
         form_layout.addRow("Periodo Storico:", self.periodo_combo)
-        
         main_layout.addWidget(form_group)
-
-        # Pulsanti
         button_layout = QHBoxLayout()
         self.submit_button = QPushButton("Inserisci Comune"); self.submit_button.clicked.connect(self.inserisci_comune)
         self.clear_button = QPushButton("Pulisci Campi"); self.clear_button.clicked.connect(self.pulisci_campi)
         button_layout.addStretch(); button_layout.addWidget(self.submit_button); button_layout.addWidget(self.clear_button)
         main_layout.addLayout(button_layout)
         main_layout.addStretch(1)
-        self.setLayout(main_layout)
 
     def _load_data_on_first_show(self):
-        # ... (questo metodo rimane invariato)
-        if self._data_loaded or not self.db_manager or not self.db_manager.pool: return
+        """Metodo per il lazy loading, chiamato la prima volta."""
+        self.logger.info("InserimentoComuneWidget: Esecuzione lazy loading dei periodi storici...")
         self._carica_elenco_periodi()
-        self._data_loaded = True
 
     def _carica_elenco_periodi(self):
-        # ... (questo metodo rimane invariato)
-        self.periodo_combo.clear(); self.periodo_combo.addItem("--- Nessuno ---", None)
+        self.periodo_combo.clear()
+        self.periodo_combo.addItem("--- Nessuno ---", None)
         try:
             periodi = self.db_manager.get_historical_periods()
             if periodi:
                 for periodo in periodi:
                     display_text = f"{periodo.get('nome')} ({periodo.get('anno_inizio')} - {periodo.get('anno_fine', 'oggi')})"
                     self.periodo_combo.addItem(display_text, periodo.get('id'))
-        except Exception as e:
+        except DBMError as e:
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare l'elenco dei periodi storici:\n{e}")
+
 
     def pulisci_campi(self):
         self.nome_comune_edit.clear(); self.provincia_edit.setText("SV"); self.regione_edit.clear()
@@ -1107,16 +1095,13 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        
         self._initUI()
-        
 
     def _initUI(self):
         layout = QVBoxLayout(self)
         group = QGroupBox("Gestione Tipologie Località (Via, Piazza, Borgata, etc.)")
         group_layout = QHBoxLayout(group)
 
-        # Tabella
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["ID", "Nome Tipologia", "Descrizione"])
@@ -1126,7 +1111,6 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         group_layout.addWidget(self.table, 2)
 
-        # Pulsanti
         button_layout = QVBoxLayout()
         btn_add = QPushButton("Aggiungi...")
         btn_add.clicked.connect(self._add_or_edit_item)
@@ -1134,16 +1118,29 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
         btn_edit.clicked.connect(lambda: self._add_or_edit_item(edit_mode=True))
         btn_del = QPushButton("Elimina")
         btn_del.clicked.connect(self._delete_item)
+        
+        # Aggiungiamo un pulsante di refresh manuale per coerenza
+        btn_refresh = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna")
+        btn_refresh.clicked.connect(self.load_data)
+
         button_layout.addWidget(btn_add)
         button_layout.addWidget(btn_edit)
         button_layout.addWidget(btn_del)
+        button_layout.addSpacing(20)
+        button_layout.addWidget(btn_refresh)
         button_layout.addStretch()
         group_layout.addLayout(button_layout, 1)
 
         layout.addWidget(group)
         self.setLayout(layout)
 
-    def _load_data_on_first_show(self):
+    # --- INIZIO CORREZIONE ---
+
+    def load_data(self):
+        """
+        Metodo pubblico per caricare o ricaricare i dati delle tipologie di località.
+        """
+        self.logger.info("Esecuzione di load_data in GestioneTipiLocalitaWidget.")
         self.table.setRowCount(0)
         try:
             tipi = self.db_manager.get_tipi_localita()
@@ -1153,8 +1150,18 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
                 self.table.setItem(row, 0, QTableWidgetItem(str(tipo['id'])))
                 self.table.setItem(row, 1, QTableWidgetItem(tipo['nome']))
                 self.table.setItem(row, 2, QTableWidgetItem(tipo.get('descrizione', '')))
+            self.table.resizeColumnToContents(0) # Adatta solo la colonna ID
         except DBMError as e:
-            QMessageBox.critical(self, "Errore", str(e))
+            QMessageBox.critical(self, "Errore Caricamento", str(e))
+
+    def _load_data_on_first_show(self):
+        """
+        Metodo per il lazy loading, chiamato dalla classe base.
+        Delega il lavoro al metodo pubblico `load_data`.
+        """
+        self.load_data()
+
+    # --- FINE CORREZIONE ---
 
     def _add_or_edit_item(self, edit_mode=False):
         tipo_id, old_nome, old_desc = None, "", ""
@@ -1199,8 +1206,6 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
 # In gui_widgets.py, SOSTITUISCI l'intera classe GestionePeriodiStoriciWidget
 
 # Assicurati che queste importazioni siano presenti all'inizio del file
-from custom_widgets import LazyLoadedWidget
-from dialogs import PeriodoStoricoEditDialog
 
 class GestionePeriodiStoriciWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
@@ -1945,20 +1950,20 @@ class RegistrazioneProprietaWidget(QWidget):
 
     def add_possessore(self):
         """
-        Apre un dialogo per selezionare/creare un possessore e, in caso di successo,
-        un secondo dialogo per definire i dettagli del legame (titolo e quota).
+        Apre un dialogo per selezionare/creare un possessore da qualsiasi comune.
         """
         if not self.comune_id:
             QMessageBox.warning(self, "Comune Mancante", "Selezionare un comune per la partita prima di aggiungere un possessore.")
             return
 
-        # 1. Dialogo per selezionare la PERSONA
-        dialog_sel_poss = PossessoreSelectionDialog(self.db_manager, self.comune_id, self)
-        if dialog_sel_poss.exec_() != QDialog.Accepted or not dialog_sel_poss.selected_possessore:
-            self.logger.info("Aggiunta possessore annullata o nessun possessore selezionato.")
-            return
-            
-        selected_possessore_info = dialog_sel_poss.selected_possessore
+        # --- MODIFICA CHIAVE QUI ---
+        # Passiamo 'None' come comune_id per indicare al dialogo di non filtrare
+        # e permettere la selezione/creazione da qualsiasi comune.
+        dialog_sel_poss = PossessoreSelectionDialog(self.db_manager, comune_id=None, parent=self)
+        # --- FINE MODIFICA ---
+
+        if dialog_sel_poss.exec() == QDialog.Accepted and dialog_sel_poss.selected_possessore:
+            selected_possessore_info = dialog_sel_poss.selected_possessore
         
         # 2. Dialogo per chiedere i dettagli del LEGAME (Titolo, Quota)
         # Usiamo il metodo statico che abbiamo già preparato

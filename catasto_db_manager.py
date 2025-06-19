@@ -947,47 +947,44 @@ class CatastoDBManager:
                 raise DBMError("Impossibile recuperare le partite per il possessore.") from e
     # In catasto_db_manager.py
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo get_localita_by_comune
+
     def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        Recupera le località per un dato comune, includendo il nome della tipologia tramite JOIN.
-        """
+        """Recupera località per comune_id, unendo il nome del tipo dalla nuova tabella."""
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
 
-        # --- INIZIO QUERY CORRETTA ---
+        # --- INIZIO CORREZIONE: Query aggiornata con JOIN ---
         query_base = f"""
             SELECT 
-                l.id, 
-                l.nome, 
-                tl.nome AS tipo,  -- Selezioniamo il NOME dalla tabella tipo_localita e lo aliasiamo come 'tipo'
-                l.civico 
-            FROM {self.schema}.localita l
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id -- JOIN per ottenere il nome del tipo
-            WHERE l.comune_id = %s
+                loc.id, 
+                loc.nome, 
+                tl.nome AS tipo,  -- Selezioniamo il nome dalla tabella tipo_localita
+                loc.civico 
+            FROM {self.schema}.localita loc
+            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
+            WHERE loc.comune_id = %s
         """
-        # --- FINE QUERY CORRETTA ---
+        # --- FINE CORREZIONE ---
 
         params: List[Union[int, str]] = [comune_id]
 
         if filter_text:
-            query_base += " AND l.nome ILIKE %s"
+            query_base += " AND loc.nome ILIKE %s"
             params.append(f"%{filter_text}%")
-        
-        query = query_base + " ORDER BY l.nome, l.civico;"
+
+        query = query_base + " ORDER BY tl.nome, loc.nome, loc.civico;"
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
-                    self.logger.debug(f"Esecuzione get_localita_by_comune per comune_id {comune_id}")
                     cur.execute(query, tuple(params))
-                    results = cur.fetchall()
-                    localita_list = [dict(row) for row in results]
-                    self.logger.info(f"Recuperate {len(localita_list)} località per comune ID {comune_id} (filtro: '{filter_text}').")
-                    return localita_list
+                    results = [dict(row) for row in cur.fetchall()]
+                    self.logger.info(f"Recuperate {len(results)} località per comune ID {comune_id} (filtro: '{filter_text}').")
+                    return results
         except Exception as e:
             self.logger.error(f"Errore DB in get_localita_by_comune: {e}", exc_info=True)
-            # Rilanciamo l'eccezione per farla gestire dal chiamante, che mostrerà un QMessageBox
-            raise DBMError(f"Impossibile recuperare le località: {e}") from e
+            return [] # Restituisce lista vuota in caso di errore
     def search_possessori_by_term_globally(self, search_term: Optional[str], limit: int = 200) -> List[Dict[str, Any]]:
         """
         Ricerca possessori globalmente, usando il nuovo pattern di connessione.

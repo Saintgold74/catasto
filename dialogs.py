@@ -3730,349 +3730,154 @@ class ModificaImmobileDialog(QDialog):
         if self._save_changes():
             super().accept() # Chiude il dialogo con stato 'Accepted' solo se il salvataggio ha successo
 
+# In dialogs.py, SOSTITUISCI l'intera classe PossessoreSelectionDialog
+
 class PossessoreSelectionDialog(QDialog):
-    def __init__(self, db_manager, comune_id, parent=None):
-        super(PossessoreSelectionDialog, self).__init__(parent)
+    def __init__(self, db_manager: CatastoDBManager, comune_id: Optional[int], parent=None):
+        super().__init__(parent)
         self.db_manager = db_manager
-        self.comune_id = comune_id
+        # comune_id ora è un filtro iniziale opzionale, non un requisito fisso
+        self.comune_id_filter = comune_id
         self.selected_possessore = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
-        self.setWindowTitle("Seleziona Possessore")
-        self.setMinimumSize(600, 400)
+        self.setWindowTitle("Seleziona o Crea Possessore")
+        self.setMinimumSize(700, 500)
 
-        layout = QVBoxLayout()
+        self._initUI()
+        self.load_data()
 
-        # Tab per selezione o creazione
+    def _initUI(self):
+        layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
 
-        # Tab Seleziona
+        # --- Tab 1: Seleziona Esistente ---
         select_tab = QWidget()
-        select_layout = QVBoxLayout()
-
-        # Filtro
+        select_layout = QVBoxLayout(select_tab)
         filter_layout = QHBoxLayout()
-        filter_label = QLabel("Filtra per nome:")
+        filter_layout.addWidget(QLabel("Filtra per nome:"))
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Digita per filtrare...")
+        self.filter_edit.setPlaceholderText("Digita per filtrare su tutti i comuni...")
         self.filter_edit.textChanged.connect(self.filter_possessori)
-
-        filter_layout.addWidget(filter_label)
         filter_layout.addWidget(self.filter_edit)
-
         select_layout.addLayout(filter_layout)
 
-        # Tabella possessori
         self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels(
-            ["ID", "Nome Completo", "Paternità", "Stato"])
-        self.possessori_table.setAlternatingRowColors(True)
+        # Aggiungiamo il comune di riferimento alla tabella
+        self.possessori_table.setColumnCount(5)
+        self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Paternità", "Comune Riferimento", "Stato"])
         self.possessori_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.possessori_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.possessori_table.itemDoubleClicked.connect(self.select_from_table)
-
+        self.possessori_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.possessori_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.possessori_table.itemDoubleClicked.connect(self.handle_selection)
         select_layout.addWidget(self.possessori_table)
-
-        select_tab.setLayout(select_layout)
         self.tabs.addTab(select_tab, "Seleziona Esistente")
 
-        # Tab Crea
+        # --- Tab 2: Crea Nuovo ---
         create_tab = QWidget()
-        create_layout = QGridLayout()
-
-        # Cognome e nome
-        cognome_label = QLabel("Cognome e nome:")
+        create_layout = QFormLayout(create_tab)
         self.cognome_edit = QLineEdit()
-
-        create_layout.addWidget(cognome_label, 0, 0)
-        create_layout.addWidget(self.cognome_edit, 0, 1)
-
-        # Paternità
-        paternita_label = QLabel("Paternità:")
+        create_layout.addRow("Cognome e Nome (*):", self.cognome_edit)
         self.paternita_edit = QLineEdit()
-
-        create_layout.addWidget(paternita_label, 1, 0)
-        create_layout.addWidget(self.paternita_edit, 1, 1)
-
-        # Nome completo
-        nome_completo_label = QLabel("Nome completo:")
+        create_layout.addRow("Paternità:", self.paternita_edit)
         self.nome_completo_edit = QLineEdit()
-        self.nome_completo_update_button = QPushButton(
-            "Genera da cognome+paternità")
-        self.nome_completo_update_button.clicked.connect(
-            self.update_nome_completo)
+        create_layout.addRow("Nome Completo (*):", self.nome_completo_edit)
 
-        create_layout.addWidget(nome_completo_label, 2, 0)
-        create_layout.addWidget(self.nome_completo_edit, 2, 1)
-        create_layout.addWidget(self.nome_completo_update_button, 2, 2)
+        # --- MODIFICA CHIAVE: Combo per selezionare il comune del NUOVO possessore ---
+        self.new_poss_comune_combo = QComboBox()
+        create_layout.addRow("Comune di Riferimento (*):", self.new_poss_comune_combo)
+        # --- FINE MODIFICA ---
 
-        # Quota
-        quota_label = QLabel("Quota (vuoto per esclusiva):")
-        self.quota_edit = QLineEdit()
-        self.quota_edit.setPlaceholderText("Es. 1/2, 1/3, ecc.")
-
-        create_layout.addWidget(quota_label, 3, 0)
-        create_layout.addWidget(self.quota_edit, 3, 1)
-
-        create_tab.setLayout(create_layout)
+        self.attivo_checkbox = QCheckBox("Attivo")
+        self.attivo_checkbox.setChecked(True)
+        create_layout.addRow(self.attivo_checkbox)
         self.tabs.addTab(create_tab, "Crea Nuovo")
 
         layout.addWidget(self.tabs)
 
-        # Pulsanti
         buttons_layout = QHBoxLayout()
-
         self.ok_button = QPushButton("Seleziona")
         self.ok_button.clicked.connect(self.handle_selection)
-
+        buttons_layout.addWidget(self.ok_button)
         self.cancel_button = QPushButton("Annulla")
         self.cancel_button.clicked.connect(self.reject)
-
-        buttons_layout.addWidget(self.ok_button)
         buttons_layout.addWidget(self.cancel_button)
-
         layout.addLayout(buttons_layout)
 
-        self.setLayout(layout)
+    def load_data(self):
+        """Carica i dati per entrambi i tab (lista possessori e lista comuni)."""
+        self._load_possessori_for_table()
+        self._load_comuni_for_combo()
 
-        # Carica i possessori iniziali
-        self.current_tab = 0
-        self.tabs.currentChanged.connect(self.tab_changed)
-        self.load_possessori()
-
-    def tab_changed(self, index):
-        """Gestisce il cambio di tab."""
-        self.current_tab = index
-        if index == 0:
-            self.ok_button.setText("Seleziona")
-        else:
-            self.ok_button.setText("Crea e Seleziona")
-
-    def load_possessori(self, filter_text: Optional[str] = None):
+    def _load_possessori_for_table(self, filter_text=None):
         self.possessori_table.setRowCount(0)
-        self.possessori_table.setSortingEnabled(False)
-
-        possessori_list: List[Dict[str, Any]] = []
         try:
-            actual_filter_text = filter_text if filter_text and filter_text.strip() else None
-
-            if self.comune_id is not None:
-                # Scenario 1: Comune specificato
-                logging.getLogger("CatastoGUI").debug(
-                    f"PossessoreSelectionDialog: Caricamento per comune_id={self.comune_id}, filtro='{actual_filter_text}'")
-                # Questo dovrebbe già restituire tutti i campi necessari
-                temp_list = self.db_manager.get_possessori_by_comune(
-                    self.comune_id)
-                if actual_filter_text:
-                    ft_lower = actual_filter_text.lower()
-                    possessori_list = [
-                        p for p in temp_list
-                        if ft_lower in p.get('nome_completo', '').lower() or
-                        (p.get('cognome_nome') and ft_lower in p.get(
-                            'cognome_nome', '').lower())
-                    ]
-                else:
-                    possessori_list = temp_list
-            else:  # Nessun comune_id specificato -> ricerca globale
-                # Scenario 2: Ricerca globale (con o senza testo di filtro)
-                # Se actual_filter_text è None, search_possessori_by_term_globally restituirà i primi N.
-                logging.getLogger("CatastoGUI").debug(
-                    f"PossessoreSelectionDialog: Caricamento globale, filtro='{actual_filter_text}'")
-                possessori_list = self.db_manager.search_possessori_by_term_globally(
-                    actual_filter_text)  # Passa None se nessun filtro
-                logging.getLogger("CatastoGUI").info(
-                    f"PossessoreSelectionDialog.load_possessori: Risultato da search_possessori_by_term_globally: {len(possessori_list)} elementi.")
-
-            # Popolamento della tabella
-            if possessori_list:
-                logging.getLogger("CatastoGUI").info(
-                    f">>> Popolando possessori_table con {len(possessori_list)} righe.")
-                self.possessori_table.setRowCount(len(possessori_list))
-                for i, pos_data in enumerate(possessori_list):
-                    col = 0
-                    item_id_str = str(pos_data.get('id', 'N/D'))
-                    item_nome_str = pos_data.get('nome_completo', 'N/D')
-                    # Assicurati che 'paternita' e 'attivo' siano presenti nei risultati di entrambe le query
-                    # (get_possessori_by_comune e search_possessori_by_term_globally)
-                    item_pater_str = pos_data.get('paternita', 'N/D')
-                    item_stato_str = "Attivo" if pos_data.get(
-                        'attivo', False) else "Non Attivo"
-
-                    logging.getLogger("CatastoGUI").debug(
-                        f"    Popolando riga {i}: ID='{item_id_str}', Nome='{item_nome_str}', Pater='{item_pater_str}', Stato='{item_stato_str}'")
-
-                    self.possessori_table.setItem(
-                        i, col, QTableWidgetItem(item_id_str))
-                    col += 1
-                    self.possessori_table.setItem(
-                        i, col, QTableWidgetItem(item_nome_str))
-                    col += 1
-                    self.possessori_table.setItem(
-                        i, col, QTableWidgetItem(item_pater_str))
-                    col += 1
-                    self.possessori_table.setItem(
-                        i, col, QTableWidgetItem(item_stato_str))
-                    col += 1
-                self.possessori_table.resizeColumnsToContents()
-                logging.getLogger("CatastoGUI").info(
-                    ">>> Popolamento possessori_table completato.")
-            # Mostra "Nessun risultato" solo se è stata tentata una ricerca attiva (con filtro o con comune)
-            # O se la ricerca globale senza filtro non ha prodotto risultati (improbabile se ci sono dati).
-            elif actual_filter_text or self.comune_id:
-                self.possessori_table.setRowCount(1)
-                self.possessori_table.setItem(0, 0, QTableWidgetItem(
-                    "Nessun possessore trovato con i criteri specificati."))
-                self.possessori_table.setSpan(
-                    0, 0, 1, self.possessori_table.columnCount())
-            # Nessun filtro, nessun comune_id, e search_possessori_by_term_globally(None) ha restituito lista vuota
+            # Se è stato passato un comune_id, filtra per quello. Altrimenti, ricerca globale.
+            if self.comune_id_filter:
+                possessori_list = self.db_manager.get_possessori_by_comune(self.comune_id_filter, filter_text)
             else:
-                self.possessori_table.setRowCount(1)
-                self.possessori_table.setItem(0, 0, QTableWidgetItem(
-                    "Nessun possessore presente nel database."))
-                self.possessori_table.setSpan(
-                    0, 0, 1, self.possessori_table.columnCount())
+                possessori_list = self.db_manager.search_possessori_by_term_globally(filter_text)
 
-        except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante il caricamento dei possessori in PossessoreSelectionDialog: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento",
-                                 f"Impossibile caricare i possessori: {e}")
-            # Mostra errore anche nella tabella
-            self.possessori_table.setRowCount(1)
-            self.possessori_table.setItem(
-                0, 0, QTableWidgetItem(f"Errore caricamento: {e}"))
-            self.possessori_table.setSpan(
-                0, 0, 1, self.possessori_table.columnCount())
-        finally:
-            self.possessori_table.setSortingEnabled(True)
+            self.possessori_table.setRowCount(len(possessori_list))
+            for row, pos_data in enumerate(possessori_list):
+                self.possessori_table.setItem(row, 0, QTableWidgetItem(str(pos_data.get('id', ''))))
+                self.possessori_table.setItem(row, 1, QTableWidgetItem(pos_data.get('nome_completo', '')))
+                self.possessori_table.setItem(row, 2, QTableWidgetItem(pos_data.get('paternita', '')))
+                self.possessori_table.setItem(row, 3, QTableWidgetItem(pos_data.get('comune_riferimento_nome', '')))
+                self.possessori_table.setItem(row, 4, QTableWidgetItem("Attivo" if pos_data.get('attivo', False) else "Non Attivo"))
+            self.possessori_table.resizeColumnsToContents()
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare i possessori: {e}")
 
-    # Il metodo filter_possessori dovrebbe rimanere com'è, chiamando load_possessori con il testo.
-    # Questo metodo è collegato a self.filter_edit.textChanged
+    def _load_comuni_for_combo(self):
+        self.new_poss_comune_combo.clear()
+        try:
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            self.new_poss_comune_combo.addItem("--- Seleziona Comune ---", None)
+            for id, nome in comuni:
+                self.new_poss_comune_combo.addItem(nome, id)
+        except DBMError as e:
+            self.new_poss_comune_combo.addItem("Errore caricamento", None)
+
     def filter_possessori(self):
-        filter_text = self.filter_edit.text().strip()
-        logging.getLogger("CatastoGUI").info(
-            f">>> PossessoreSelectionDialog.filter_possessori: Testo filtro='{filter_text}'")
-
-        # Chiama load_possessori; il testo del filtro verrà usato se comune_id è None
-        self.load_possessori(filter_text if filter_text else None)
-
-    def update_nome_completo(self):
-        """Aggiorna il nome completo in base a cognome e paternità."""
-        cognome = self.cognome_edit.text().strip()
-        paternita = self.paternita_edit.text().strip()
-
-        if cognome:
-            nome_completo = cognome
-            if paternita:
-                nome_completo += f" {paternita}"
-
-            self.nome_completo_edit.setText(nome_completo)
-
-    def select_from_table(self, item):
-        """Gestisce la selezione dalla tabella dei possessori."""
-        row = item.row()
-        self.handle_selection()
+        self._load_possessori_for_table(self.filter_edit.text().strip())
 
     def handle_selection(self):
-        """Gestisce la selezione o creazione del possessore."""
-        current_tab_index = self.tabs.currentIndex(
-        )  # Assumendo che self.tabs sia il suo QTabWidget
-
-        if current_tab_index == 0:  # Tab "Seleziona Esistente"
-            selected_rows = self.possessori_table.selectionModel().selectedRows()
-            if not selected_rows:
-                QMessageBox.warning(self, "Nessuna Selezione",
-                                    "Seleziona un possessore dalla tabella.")
+        if self.tabs.currentIndex() == 0: # Tab "Seleziona Esistente"
+            selected = self.possessori_table.selectedItems()
+            if not selected:
+                QMessageBox.warning(self, "Nessuna Selezione", "Seleziona un possessore dalla tabella.")
                 return
+            row = selected[0].row()
+            id_poss = int(self.possessori_table.item(row, 0).text())
+            # Recuperiamo tutti i dettagli per assicurarci di averli
+            self.selected_possessore = self.db_manager.get_possessore_full_details(id_poss)
+            self.accept()
 
-            current_row = selected_rows[0].row()
-
-            id_item = self.possessori_table.item(current_row, 0)
-            nome_item = self.possessori_table.item(current_row, 1)
-            # Aggiungi controlli per tutti gli item da cui leggi .text()
-            paternita_item = self.possessori_table.item(
-                current_row, 2) if self.possessori_table.columnCount() > 2 else None
-            # Nota: la tabella di selezione ha "Paternità" come colonna 2 (indice), non "Cognome Nome"
-
-            if id_item and id_item.text().isdigit() and nome_item:
-                self.selected_possessore = {
-                    'id': int(id_item.text()),
-                    'nome_completo': nome_item.text(),
-                    'paternita': paternita_item.text() if paternita_item else None,
-                    # 'cognome_nome' non è direttamente nella tabella di selezione, ma può essere nel dict del possessore
-                    # Se il chiamante necessita di 'cognome_nome', andrebbe recuperato in altro modo o aggiunto ai dati
-                }
-                self.accept()
-            else:
-                QMessageBox.warning(
-                    self, "Errore Selezione", "Dati del possessore selezionato non validi o incompleti nella tabella.")
-
-        elif current_tab_index == 1:  # Tab "Crea Nuovo"
-            # --- USA I NOMI CORRETTI DEI WIDGET DEFINITI NELL'__INIT__ ---
+        elif self.tabs.currentIndex() == 1: # Tab "Crea Nuovo"
             nome_completo = self.nome_completo_edit.text().strip()
-            paternita = self.paternita_edit.text().strip()
-            # Questo è self.cognome_edit per il cognome/nome nel tab "Crea"
             cognome_nome = self.cognome_edit.text().strip()
-            # quota = self.quota_edit.text().strip() # La quota non è usata per creare il possessore, ma per il legame
+            paternita = self.paternita_edit.text().strip() or None
+            comune_id = self.new_poss_comune_combo.currentData()
 
-            # --- Log di Debug per Verificare i Valori ---
-            logging.getLogger("CatastoGUI").debug(
-                f"DEBUG - Tab Crea Nuovo - Valori letti: nome_completo='{nome_completo}', cognome_nome='{cognome_nome}', paternita='{paternita}'")
-
-            if not nome_completo:
-                QMessageBox.warning(self, "Dati Mancanti",
-                                    "Il 'Nome Completo' è obbligatorio.")
-                self.nome_completo_edit.setFocus()
-                return
-
-            if not cognome_nome:  # Questo è il controllo che le dà problemi
-                QMessageBox.warning(self, "Dati Mancanti",
-                                    "Il campo 'Cognome e nome' è obbligatorio.")
-                self.cognome_edit.setFocus()  # Focus sul widget corretto
-                return
-
-            if self.comune_id is None:
-                QMessageBox.warning(self, "Contesto Mancante",
-                                    "Comune di riferimento non specificato per creare un nuovo possessore.\n"
-                                    "Questo dialogo dovrebbe essere aperto con un comune_id valido per la creazione.")
+            if not nome_completo or not cognome_nome or comune_id is None:
+                QMessageBox.warning(self, "Dati Mancanti", "Nome completo, Cognome/Nome e Comune sono obbligatori.")
                 return
 
             try:
-                # Chiamata corretta a create_possessore
-                new_possessore_id = self.db_manager.create_possessore(
+                new_id = self.db_manager.create_possessore(
                     nome_completo=nome_completo,
-                    paternita=paternita if paternita else None,
-                    comune_riferimento_id=self.comune_id,
-                    attivo=True,  # Default per un nuovo possessore
-                    cognome_nome=cognome_nome  # Passa il cognome_nome
+                    cognome_nome=cognome_nome,
+                    paternita=paternita,
+                    comune_riferimento_id=comune_id,
+                    attivo=self.attivo_checkbox.isChecked()
                 )
-
-                if new_possessore_id is not None:
-                    self.selected_possessore = {
-                        'id': new_possessore_id,
-                        'nome_completo': nome_completo,
-                        'cognome_nome': cognome_nome,  # Aggiunto per coerenza
-                        'paternita': paternita,       # Aggiunto per coerenza
-                        'comune_riferimento_id': self.comune_id,  # Importante
-                        'attivo': True
-                        # quota non fa parte dei dati del possessore, ma del legame partita-possessore
-                    }
-                    QMessageBox.information(
-                        self, "Successo", f"Nuovo possessore '{nome_completo}' creato con ID: {new_possessore_id}.")
-                    self.accept()
-            except (DBUniqueConstraintError, DBDataError, DBMError) as e:
-                QMessageBox.critical(
-                    self, "Errore Creazione Possessore", str(e))
-            except Exception as e_gen:
-                logging.getLogger("CatastoGUI").critical(
-                    f"Errore imprevisto creazione possessore: {e_gen}", exc_info=True)
-                QMessageBox.critical(
-                    self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
-        else:
-            QMessageBox.warning(self, "Azione Non Valida",
-                                "Azione non riconosciuta per il tab corrente.")
-
-
+                self.selected_possessore = self.db_manager.get_possessore_full_details(new_id)
+                QMessageBox.information(self, "Successo", f"Nuovo possessore '{nome_completo}' creato con successo.")
+                self.accept()
+            except (DBMError, DBUniqueConstraintError) as e:
+                QMessageBox.critical(self, "Errore Creazione", str(e))
 class ImmobileDialog(QDialog):
     def __init__(self, db_manager, comune_id, parent=None):
         super(ImmobileDialog, self).__init__(parent)
@@ -5064,20 +4869,36 @@ class PeriodoStoricoEditDialog(QDialog):
     def __init__(self, db_manager, periodo_data: Optional[Dict] = None, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.periodo_id = periodo_data.get('id') if periodo_data else None
-        self.setWindowTitle("Dati Periodo Storico")
-        self.setMinimumWidth(400)
+        self.periodo_data = periodo_data
+        self.periodo_id = self.periodo_data.get('id') if self.periodo_data else None
 
+        if self.periodo_id:
+            self.setWindowTitle(f"Modifica Periodo Storico ID: {self.periodo_id}")
+        else:
+            self.setWindowTitle("Crea Nuovo Periodo Storico")
+
+        self.setMinimumWidth(400)
+        self._initUI()
+
+    def _initUI(self):
         layout = QFormLayout(self)
-        self.nome_edit = QLineEdit(periodo_data.get('nome', '') if periodo_data else '')
+
+        # --- INIZIO CORREZIONE: Gestione del caso in cui periodo_data è None ---
+        nome_default = self.periodo_data.get('nome', '') if self.periodo_data else ''
+        anno_inizio_default = self.periodo_data.get('anno_inizio', 1900) if self.periodo_data else 1900
+        anno_fine_default = self.periodo_data.get('anno_fine') if self.periodo_data and self.periodo_data.get('anno_fine') is not None else 0
+        descrizione_default = self.periodo_data.get('descrizione', '') if self.periodo_data else ''
+        # --- FINE CORREZIONE ---
+
+        self.nome_edit = QLineEdit(nome_default)
         self.anno_inizio_spin = QSpinBox()
         self.anno_inizio_spin.setRange(1000, 3000)
-        self.anno_inizio_spin.setValue(periodo_data.get('anno_inizio', 1900) if periodo_data else 1900)
+        self.anno_inizio_spin.setValue(anno_inizio_default)
         self.anno_fine_spin = QSpinBox()
         self.anno_fine_spin.setRange(0, 3000)
         self.anno_fine_spin.setSpecialValueText("Aperto")
-        self.anno_fine_spin.setValue(periodo_data.get('anno_fine') or 0)
-        self.descrizione_edit = QTextEdit(periodo_data.get('descrizione', '') if periodo_data else '')
+        self.anno_fine_spin.setValue(anno_fine_default)
+        self.descrizione_edit = QTextEdit(descrizione_default)
         self.descrizione_edit.setFixedHeight(80)
 
         layout.addRow("Nome (*):", self.nome_edit)
@@ -5085,22 +4906,37 @@ class PeriodoStoricoEditDialog(QDialog):
         layout.addRow("Anno Fine (0 se Aperto):", self.anno_fine_spin)
         layout.addRow("Descrizione:", self.descrizione_edit)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.save_and_accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
 
     def save_and_accept(self):
-        nome = self.nome_edit.text()
+        nome = self.nome_edit.text().strip()
         anno_inizio = self.anno_inizio_spin.value()
         anno_fine = self.anno_fine_spin.value() if self.anno_fine_spin.value() > 0 else None
-        descrizione = self.descrizione_edit.toPlainText()
+        descrizione = self.descrizione_edit.toPlainText().strip()
+
+        if not nome:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del periodo è obbligatorio.")
+            return
 
         try:
-            self.db_manager.gestisci_tipo_localita(nome, descrizione, self.periodo_id)
-            self.accept()
+            # --- CORREZIONE LOGICA: Chiama il metodo giusto per modifica o creazione ---
+            if self.periodo_id:
+                # Modalità Modifica
+                dati_modificati = {
+                    "nome": nome, "anno_inizio": anno_inizio, 
+                    "anno_fine": anno_fine, "descrizione": descrizione
+                }
+                self.db_manager.update_periodo_storico(self.periodo_id, dati_modificati)
+            else:
+                # Modalità Creazione
+                self.db_manager.aggiungi_periodo_storico(nome, anno_inizio, anno_fine, descrizione)
+
+            self.accept() # Chiude il dialogo solo se il salvataggio ha successo
         except (DBMError, DBDataError, DBUniqueConstraintError) as e:
-            QMessageBox.critical(self, "Errore", str(e))
+            QMessageBox.critical(self, "Errore di Salvataggio", str(e))
 
 class UserSelectionDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, parent=None, title="Seleziona Utente", exclude_user_id: Optional[int] = None):

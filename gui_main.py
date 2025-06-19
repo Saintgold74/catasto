@@ -9,40 +9,30 @@ Data: 18/05/2025
 Versione: 1.2 (con integrazione menu esportazioni)
 """
 import sys,bcrypt
-from gui_widgets import UnifiedFuzzySearchWidget, UnifiedFuzzySearchThread
+from gui_widgets import UnifiedFuzzySearchWidget
 import os
 import logging
-import uuid  # Se usato per session_id in modalità offline
-from datetime import date, datetime
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime
+from typing import Optional, Dict
 # Importazioni PyQt5
-from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
-                          QSize, QStandardPaths, Qt, QTimer, QUrl,
-                          pyqtSignal,pyqtSlot,QCoreApplication)
+from PyQt5.QtCore import (QSettings,
+                          QStandardPaths, Qt, QUrl,
+                          pyqtSlot,QCoreApplication)
 
-from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont,
-                         QIcon, QPalette, QPixmap)
+from PyQt5.QtGui import (QCloseEvent, QDesktopServices)
 
-from PyQt5.QtWebEngineWidgets import QWebEngineView
 
-import pandas as pd  # Importa pandas per la gestione dei DataFrame
-from PyQt5.QtWidgets import (QAbstractItemView, QAction, QActionGroup, QApplication, # <-- AGGIUNTO QActionGroup
-                             QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
-                             QDialog, QDialogButtonBox, QDoubleSpinBox,
-                             QFileDialog, QFormLayout, QFrame, QGridLayout,
-                             QGroupBox, QHBoxLayout, QHeaderView, QInputDialog,
-                             QLabel, QLineEdit, QListWidget, QListWidgetItem,
-                             QMainWindow, QMenu, QMessageBox, QProgressBar,
-                             QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
-                             QSpinBox, QStyle, QStyleFactory, QTabWidget,
-                             QTableWidget, QTableWidgetItem, QTextEdit,
+from PyQt5.QtWidgets import (QAction, QActionGroup, QApplication, # <-- AGGIUNTO QActionGroup
+                             QDialog, QFileDialog, QFrame, QGridLayout,
+                             QHBoxLayout, QInputDialog,
+                             QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QStyle, QTabWidget,
                              QVBoxLayout, QWidget)
 # --- FINE MODIFICA ---
 
 
 
 from catasto_db_manager import CatastoDBManager
-from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, get_local_ip_address
+from app_utils import get_local_ip_address
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, resource_path
 
@@ -54,7 +44,7 @@ from gui_widgets import (
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  , InserimentoPartitaWidget, RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
+    RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
     DBConfigDialog)
 from dialogs import CSVImportResultDialog
 
@@ -63,10 +53,7 @@ from custom_widgets import QPasswordLineEdit
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,SETTINGS_DB_PASSWORD,
-    COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
-    COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
-    NUOVE_ETICHETTE_POSSESSORI)
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,SETTINGS_DB_PASSWORD)
 
 try:
     from fpdf import FPDF

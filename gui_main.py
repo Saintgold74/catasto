@@ -269,7 +269,7 @@ try:
 except ImportError as e:
     print(f"[INIT] Ricerca fuzzy non disponibile")
     FUZZY_SEARCH_AVAILABLE = False
-print("[FASE 2] Inizio definizione classe CatastoMainWindow.")
+
 class CatastoMainWindow(QMainWindow):
     def __init__(self, client_ip_address_gui: str):
         super(CatastoMainWindow, self).__init__()
@@ -341,7 +341,9 @@ class CatastoMainWindow(QMainWindow):
         self.create_menu_bar()
 
         self.tabs = QTabWidget()
-        self.tabs.currentChanged.connect(self.handle_main_tab_changed) # <-- ASSICURATI CHE QUESTA RIGA ESISTA
+        self.tabs.currentChanged.connect(self.handle_tab_changed) # <-- Modifica qui
+        
+        
         self.main_layout.addWidget(self.tabs)
         self.setCentralWidget(self.central_widget)
 
@@ -551,6 +553,13 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
         self.sistema_sub_tabs = QTabWidget()
+        
+            # --- INIZIO MODIFICA ---
+        # Collega anche i sotto-tab al gestore di eventi universale
+        self.consultazione_sub_tabs.currentChanged.connect(self.handle_tab_changed)
+        self.inserimento_sub_tabs.currentChanged.connect(self.handle_tab_changed)
+        self.sistema_sub_tabs.currentChanged.connect(self.handle_tab_changed)
+    # --- FINE MODIFICA ---
 
         # 1. Tab Dashboard
         self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
@@ -788,38 +797,34 @@ class CatastoMainWindow(QMainWindow):
                 self.logger.error(f"Errore durante il lazy loading del sotto-widget '{widget_to_load.__class__.__name__}': {e}", exc_info=True)
                 QMessageBox.critical(self, "Errore Caricamento Widget", f"Impossibile caricare i dati per la sezione selezionata:\n{e}")
 
-    def handle_main_tab_changed(self, index: int):
+    # In gui_main.py, SOSTITUISCI il vecchio handle_main_tab_changed con questo:
+
+    def handle_tab_changed(self, index: int):
         """
-        Gestisce il cambio di tab e carica i dati per il widget appena visualizzato.
-        Questo implementa il "lazy loading" per evitare caricamenti non necessari all'avvio.
+        Gestore universale per il cambio di tab (principali o sotto-tab).
+        Implementa il lazy loading per il widget appena visualizzato.
         """
-        # Ignora l'azione se il database non è ancora pronto (es. in modalità setup)
         if not self.db_manager or not self.db_manager.pool:
-            self.logger.warning(f"Cambio tab all'indice {index} ignorato: il pool del DB non è attivo.")
             return
 
-        current_main_widget = self.tabs.widget(index)
-        if current_main_widget is None:
+        # self.sender() ci dice quale QTabWidget ha emesso il segnale
+        tab_widget = self.sender()
+        if not isinstance(tab_widget, QTabWidget):
+            self.logger.warning("handle_tab_changed chiamato da un oggetto non QTabWidget.")
             return
 
-        # Il nostro widget da caricare potrebbe essere il widget principale o un sotto-widget in un sotto-tab
-        widget_to_load = None
+        widget_to_load = tab_widget.widget(index)
 
-        # Controlla se il widget del tab principale contiene a sua volta dei QTabWidget (i nostri sotto-tab)
-        sub_tab_widgets = current_main_widget.findChildren(QTabWidget)
-        if sub_tab_widgets:
-            # Se sì, prendi il widget attualmente visibile nel sotto-tab
-            sub_tab_container = sub_tab_widgets[0]
-            widget_to_load = sub_tab_container.currentWidget()
-        else:
-            # Altrimenti, il widget da caricare è il widget del tab principale stesso
-            widget_to_load = current_main_widget
+        # Se il widget appena attivato è un contenitore per altri sotto-tab,
+        # dobbiamo caricare il primo dei suoi figli.
+        if widget_to_load:
+            sub_tabs = widget_to_load.findChildren(QTabWidget)
+            if sub_tabs:
+                widget_to_load = sub_tabs[0].currentWidget()
 
-        # Infine, se abbiamo trovato un widget valido, controlliamo se ha il nostro metodo
-        # per il caricamento dei dati e, in caso affermativo, lo chiamiamo.
-        if widget_to_load and hasattr(widget_to_load, 'load_initial_data'):
+        # Infine, se abbiamo un widget valido, chiamiamo il suo metodo di lazy loading.
+        if hasattr(widget_to_load, 'load_initial_data'):
             try:
-                # Chiamiamo il metodo per caricare i suoi dati
                 widget_to_load.load_initial_data()
             except Exception as e:
                 self.logger.error(f"Errore durante il lazy loading del widget '{widget_to_load.__class__.__name__}': {e}", exc_info=True)
@@ -1519,7 +1524,7 @@ def run_gui_app():
 
 
 if __name__ == "__main__":
-    print("[FASE 4] Inizio blocco di esecuzione __main__.")
+    
     
     
     # Importa qui per evitare importazioni circolari (se necessario)

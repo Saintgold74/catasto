@@ -651,6 +651,40 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore in elimina_tipo_localita: {e}", exc_info=True)
             raise DBMError("Eliminazione della tipologia fallita.") from e
+    # In catasto_db_manager.py, aggiungi questo nuovo metodo
+
+    # In catasto_db_manager.py, SOSTITUISCI il metodo get_immobili_by_comune
+
+    def get_immobili_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+        """Recupera un elenco di tutti gli immobili presenti in un dato comune."""
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            return []
+
+        # --- INIZIO CORREZIONE: Aggiunto l.id AS localita_id alla query ---
+        query = f"""
+            SELECT 
+                i.id, 
+                i.natura, 
+                l.nome AS localita_nome, 
+                l.civico, 
+                tl.nome as tipo_localita,
+                l.id as localita_id -- Aggiungi questa colonna fondamentale
+            FROM {self.schema}.immobile i
+            JOIN {self.schema}.partita p ON i.partita_id = p.id
+            JOIN {self.schema}.localita l ON i.localita_id = l.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+            WHERE p.comune_id = %s
+            ORDER BY l.nome, i.natura;
+        """
+        # --- FINE CORREZIONE ---
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (comune_id,))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_immobili_by_comune per comune ID {comune_id}: {e}", exc_info=True)
+            return []
     
     def get_elenco_comuni_semplice(self) -> List[Tuple]:
         """
@@ -2311,21 +2345,7 @@ class CatastoDBManager:
             self.logger.error(error_message, exc_info=True)
             QMessageBox.critical(None, "Errore Aggiornamento Viste", error_message)
             return False
-    def get_optimization_suggestions(self) -> Optional[str]:
-        """Chiama la funzione SQL suggerimenti_ottimizzazione in modo sicuro."""
-        query = f"SELECT {self.schema}.suggerimenti_ottimizzazione();"
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query)
-                    result = cur.fetchone()
-                    return result[0] if result and result[0] else "Nessun suggerimento disponibile."
-        except psycopg2.errors.UndefinedFunction:
-            self.logger.warning(f"Funzione SQL '{self.schema}.suggerimenti_ottimizzazione' non trovata.")
-            return "Funzionalità di suggerimenti non implementata nel database."
-        except Exception as e:
-            self.logger.error(f"Errore DB in get_optimization_suggestions: {e}", exc_info=True)
-            return f"Errore durante il recupero dei suggerimenti: {e}"
+    
     def get_historical_name(self, entity_type: str, entity_id: int, year: Optional[int] = None) -> Optional[Dict]:
         """Chiama la funzione SQL get_nome_storico in modo sicuro."""
         if year is None: year = datetime.now().year

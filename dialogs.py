@@ -4362,6 +4362,81 @@ class CreateUserDialog(QDialog):
             logging.getLogger("CatastoGUI").error(f"Errore imprevisto durante la creazione dell'utente {username}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Inaspettato", f"Si è verificato un errore imprevisto: {e}")
 
+# In dialogs.py, aggiungi questa nuova classe
+
+class CreatePossessoreDialog(QDialog):
+    """Dialogo semplificato per la creazione di un nuovo possessore."""
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.nuovo_possessore_id = None
+        self.nuovo_possessore_dati = None
+        self.setWindowTitle("Crea Nuovo Possessore")
+        self.setMinimumWidth(450)
+        self.setModal(True)
+
+        # UI
+        layout = QFormLayout(self)
+        self.cognome_nome_edit = QLineEdit()
+        self.paternita_edit = QLineEdit()
+        self.nome_completo_edit = QLineEdit()
+        self.btn_genera_nome = QPushButton("Genera da campi precedenti")
+        self.comune_combo = QComboBox()
+        self.attivo_check = QCheckBox("Attivo"); self.attivo_check.setChecked(True)
+
+        layout.addRow("Cognome e Nome (*):", self.cognome_nome_edit)
+        layout.addRow("Paternità:", self.paternita_edit)
+        layout.addRow(self.btn_genera_nome)
+        layout.addRow("Nome Completo (*):", self.nome_completo_edit)
+        layout.addRow("Comune di Riferimento (*):", self.comune_combo)
+        layout.addRow(self.attivo_check)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addRow(self.button_box)
+
+        # Connessioni e caricamento dati
+        self.btn_genera_nome.clicked.connect(self._genera_nome)
+        self.button_box.accepted.connect(self._salva_e_accetta)
+        self.button_box.rejected.connect(self.reject)
+
+        self._carica_comuni()
+
+    def _carica_comuni(self):
+        self.comune_combo.addItem("--- Seleziona ---", None)
+        try:
+            comuni = self.db_manager.get_elenco_comuni_semplice()
+            for cid, nome in comuni:
+                self.comune_combo.addItem(nome, cid)
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare i comuni: {e}")
+
+    def _genera_nome(self):
+        nome = self.cognome_nome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        self.nome_completo_edit.setText(f"{nome} {paternita}".strip())
+
+    def _salva_e_accetta(self):
+        nome_completo = self.nome_completo_edit.text().strip()
+        cognome_nome = self.cognome_nome_edit.text().strip()
+        comune_id = self.comune_combo.currentData()
+
+        if not nome_completo or not cognome_nome or comune_id is None:
+            QMessageBox.warning(self, "Dati Mancanti", "Cognome/Nome, Nome Completo e Comune sono obbligatori.")
+            return
+
+        try:
+            self.nuovo_possessore_id = self.db_manager.create_possessore(
+                nome_completo=nome_completo,
+                cognome_nome=cognome_nome,
+                paternita=self.paternita_edit.text().strip() or None,
+                comune_riferimento_id=comune_id,
+                attivo=self.attivo_check.isChecked()
+            )
+            self.nuovo_possessore_dati = self.db_manager.get_possessore_full_details(self.nuovo_possessore_id)
+            self.accept()
+        except (DBMError, DBUniqueConstraintError) as e:
+            QMessageBox.critical(self, "Errore Creazione", str(e))
+
 class LocalitaSelectionDialog(QDialog):
     def __init__(self, db_manager: CatastoDBManager, comune_id: int, parent=None,
                  selection_mode: bool = False):

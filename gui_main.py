@@ -271,6 +271,7 @@ except ImportError as e:
     FUZZY_SEARCH_AVAILABLE = False
 
 class CatastoMainWindow(QMainWindow):
+    
     def __init__(self, client_ip_address_gui: str):
         super(CatastoMainWindow, self).__init__()
         self.logger = logging.getLogger("CatastoGUI")
@@ -278,11 +279,15 @@ class CatastoMainWindow(QMainWindow):
         self.logged_in_user_id: Optional[int] = None
         self.logged_in_user_info: Optional[Dict] = None
         self.current_session_id: Optional[str] = None
-        # AGGIUNGI QUESTA RIGA PER INIZIALIZZARE L'ATTRIBUTO
-        self.pool_initialized_successful: bool = False  # <--- AGGIUNTA
-        self.client_ip_address_gui = client_ip_address_gui 
-        self.pool_initialized_successful: bool = False
+        self.client_ip_address_gui = client_ip_address_gui
 
+        # --- INIZIO CORREZIONE DEFINITIVA: Aggiungi questa riga ---
+        self.pool_initialized_successful: bool = False
+        # --- FINE CORREZIONE DEFINITIVA ---
+
+        self.initUI()
+        
+    def initUI(self):
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
@@ -306,11 +311,9 @@ class CatastoMainWindow(QMainWindow):
         self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
         self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None
         self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None
+        self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
+        self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
-
-        self.initUI()
-
-    def initUI(self):
         self.setWindowTitle("Meridiana 1.0 - Gestionale Catasto Storico")
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
@@ -383,8 +386,8 @@ class CatastoMainWindow(QMainWindow):
             db_name_configured = self.db_manager.get_current_dbname() or "N/Config(None)"
 
         connection_status_text = ""
-        if hasattr(self, 'pool_initialized_successfully'):
-            if self.pool_initialized_successfully:
+        if hasattr(self, 'pool_initialized_successful'):  # Corretto il nome dell'attributo
+            if self.pool_initialized_successful:
                 connection_status_text = f"Database: Connesso ({db_name_configured})"
             else:
                 connection_status_text = f"Database: Non Pronto/Inesistente ({db_name_configured})"

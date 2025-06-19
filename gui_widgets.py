@@ -4384,26 +4384,48 @@ class AuditLogViewerWidget(LazyLoadedWidget):
         filters_group = QGroupBox("Filtri e Azioni")
         top_layout = QVBoxLayout(filters_group)
         
-        filters_form_layout = QFormLayout()
-        
-        self.filter_table_name_edit = QLineEdit()
-        filters_form_layout.addRow("Nome Tabella:", self.filter_table_name_edit)
-        
+        # --- INIZIO MODIFICA: Usiamo QGridLayout invece di QFormLayout ---
+        filters_grid_layout = QGridLayout()
+        filters_grid_layout.setSpacing(10)
 
+        # Riga 0: Nome Tabella e Username
+        self.filter_table_name_edit = QLineEdit()
+        self.filter_app_user_id_edit = QLineEdit()
+        self.filter_app_user_id_edit.setPlaceholderText("ID o nome utente (opzionale)")
+        
+        filters_grid_layout.addWidget(QLabel("Nome Tabella:"), 0, 0)
+        filters_grid_layout.addWidget(self.filter_table_name_edit, 0, 1)
+        filters_grid_layout.addWidget(QLabel("Username:"), 0, 2)
+        filters_grid_layout.addWidget(self.filter_app_user_id_edit, 0, 3)
+
+        # Riga 1: Data Inizio e Data Fine
+        self.filter_start_datetime_edit = QDateTimeEdit(self)
+        self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7))
+        self.filter_start_datetime_edit.setCalendarPopup(True)
+        self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        
+        self.filter_end_datetime_edit = QDateTimeEdit(self)
+        self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime())
+        self.filter_end_datetime_edit.setCalendarPopup(True)
+        self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+
+        filters_grid_layout.addWidget(QLabel("Da Data/Ora:"), 1, 0)
+        filters_grid_layout.addWidget(self.filter_start_datetime_edit, 1, 1)
+        filters_grid_layout.addWidget(QLabel("A Data/Ora:"), 1, 2)
+        filters_grid_layout.addWidget(self.filter_end_datetime_edit, 1, 3)
+
+        # Riga 2: Operazione (occupa meno spazio, può stare da sola)
         self.filter_operation_combo = QComboBox()
         self.filter_operation_combo.addItems(["Tutte", "INSERT (I)", "UPDATE (U)", "DELETE (D)"])
-        filters_form_layout.addRow("Operazione:", self.filter_operation_combo)
+        filters_grid_layout.addWidget(QLabel("Operazione:"), 2, 0)
+        filters_grid_layout.addWidget(self.filter_operation_combo, 2, 1)
 
-        self.filter_app_user_id_edit = QLineEdit(); self.filter_app_user_id_edit.setPlaceholderText("ID utente (opzionale)")
-        filters_form_layout.addRow("Username:", self.filter_app_user_id_edit)
-
-        self.filter_start_datetime_edit = QDateTimeEdit(self); self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7)); self.filter_start_datetime_edit.setCalendarPopup(True); self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        filters_form_layout.addRow("Da Data/Ora:", self.filter_start_datetime_edit)
-
-        self.filter_end_datetime_edit = QDateTimeEdit(self); self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime()); self.filter_end_datetime_edit.setCalendarPopup(True); self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        filters_form_layout.addRow("A Data/Ora:", self.filter_end_datetime_edit)
+        # Imposta le colonne dei campi di input per espandersi, mentre le etichette rimangono fisse
+        filters_grid_layout.setColumnStretch(1, 1)
+        filters_grid_layout.setColumnStretch(3, 1)
         
-        top_layout.addLayout(filters_form_layout)
+        top_layout.addLayout(filters_grid_layout)
+        # --- FINE MODIFICA ---
         
         # Pulsanti di azione
         action_layout = QHBoxLayout()

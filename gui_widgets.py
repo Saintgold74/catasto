@@ -1836,55 +1836,63 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        # (variabili di stato)
         self.comune_id: Optional[int] = None
         self.possessori_data: List[Dict[str, Any]] = []
         self.immobili_data: List[Dict[str, Any]] = []
         self.localita_cache: List[Dict[str, Any]] = []
         self.possessori_cache: List[Dict[str, Any]] = []
-
+        self.immobili_cache: List[Dict[str, Any]] = []
         self._initUI()
 
     def _initUI(self):
-        # L'interfaccia UI che abbiamo definito precedentemente va qui.
-        # Per assicurare che sia corretta, ti riporto la versione completa e pulita.
         main_layout = QVBoxLayout(self)
         scroll_area = QScrollArea(); scroll_area.setWidgetResizable(True)
         main_layout.addWidget(scroll_area)
         container_widget = QWidget(); layout = QVBoxLayout(container_widget)
         scroll_area.setWidget(container_widget)
-
-        # 1. Dati Partita
-        form_group = QGroupBox("1. Dati della Nuova Partita"); form_layout = QGridLayout(form_group)
-        self.comune_button = QPushButton("Seleziona Comune..."); self.comune_button.clicked.connect(self._select_comune)
+        
+        # --- 1. DATI PARTITA (LAYOUT COMPATTO) ---
+        form_group = QGroupBox("1. Dati della Nuova Partita")
+        form_layout = QGridLayout(form_group)
         self.comune_display = QLabel("Nessun comune selezionato."); self.comune_display.setStyleSheet("font-weight: bold;")
-        form_layout.addWidget(QLabel("Comune (*):"), 0, 0); form_layout.addWidget(self.comune_display, 0, 1, 1, 2); form_layout.addWidget(self.comune_button, 0, 3)
+        self.comune_button = QPushButton("Seleziona Comune..."); self.comune_button.clicked.connect(self._select_comune)
+        form_layout.addWidget(QLabel("Comune (*):"), 0, 0); form_layout.addWidget(self.comune_display, 0, 1, 1, 2)
+        form_layout.addWidget(self.comune_button, 0, 3)
+        
+        # --- INIZIO MODIFICA LAYOUT ---
         self.num_partita_edit = QSpinBox(); self.num_partita_edit.setRange(1, 9999999)
-        self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. A, bis")
+        self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. A"); self.suffisso_partita_edit.setMaximumWidth(80)
         self.data_edit = QDateEdit(calendarPopup=True); self.data_edit.setDate(QDate.currentDate()); self.data_edit.setDisplayFormat("yyyy-MM-dd")
-        form_layout.addWidget(QLabel("Numero Partita (*):"), 1, 0); form_layout.addWidget(self.num_partita_edit, 1, 1)
-        form_layout.addWidget(QLabel("Suffisso:"), 1, 2); form_layout.addWidget(self.suffisso_partita_edit, 1, 3)
+        
+        partita_line_layout = QHBoxLayout()
+        partita_line_layout.addWidget(QLabel("Numero Partita (*):")); partita_line_layout.addWidget(self.num_partita_edit)
+        partita_line_layout.addWidget(QLabel("Suffisso:")); partita_line_layout.addWidget(self.suffisso_partita_edit)
+        partita_line_layout.addStretch()
+        form_layout.addLayout(partita_line_layout, 1, 0, 1, 4)
+        
         form_layout.addWidget(QLabel("Data Impianto (*):"), 2, 0); form_layout.addWidget(self.data_edit, 2, 1)
+        # --- FINE MODIFICA LAYOUT ---
+        
         layout.addWidget(form_group)
 
-        # 2. Possessori
-        possessori_group = QGroupBox("2. Possessori Associati"); possessori_layout = QVBoxLayout(possessori_group)
+        # --- 2. POSSESSORI (FLUSSO MIGLIORATO) ---
+        possessori_group = QGroupBox("2. Possessori Associati")
+        possessori_layout = QVBoxLayout(possessori_group)
         self.possessori_table = QTableWidget(); self.possessori_table.setColumnCount(4); self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
         self.possessori_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch); self.possessori_table.setMinimumHeight(120)
-        self.btn_rem_poss = QPushButton("Rimuovi Selezionato dalla Lista"); self.btn_rem_poss.clicked.connect(self.remove_possessore)
+        self.btn_rem_poss = QPushButton("Rimuovi Selezionato"); self.btn_rem_poss.clicked.connect(self.remove_possessore)
         possessori_layout.addWidget(self.possessori_table); possessori_layout.addWidget(self.btn_rem_poss, 0, Qt.AlignRight)
+        
         add_poss_group = QGroupBox("Aggiungi Possessore"); add_poss_layout = QGridLayout(add_poss_group)
-        self.possessore_search_combo = QComboBox(); self.possessore_search_combo.setEditable(True)
-        self.possessore_search_combo.setInsertPolicy(QComboBox.NoInsert); self.possessore_search_combo.setPlaceholderText("Cerca o seleziona un possessore...")
+        self.possessore_search_combo = QComboBox(); self.possessore_search_combo.setEditable(True); self.possessore_search_combo.setPlaceholderText("Cerca possessore esistente...")
         self.possessore_search_combo.completer().setCompletionMode(QCompleter.PopupCompletion); self.possessore_search_combo.completer().setFilterMode(Qt.MatchContains)
         self.btn_add_selected_poss = QPushButton("Aggiungi Selezionato"); self.btn_add_selected_poss.clicked.connect(self._add_selected_possessore)
-        self.btn_create_new_poss = QPushButton("Crea Nuovo Possessore..."); self.btn_create_new_poss.clicked.connect(self._create_and_add_new_possessore)
+        self.btn_create_new_poss = QPushButton("Crea Nuovo..."); self.btn_create_new_poss.clicked.connect(self._create_and_add_new_possessore)
         add_poss_layout.addWidget(QLabel("Cerca:"), 0, 0); add_poss_layout.addWidget(self.possessore_search_combo, 0, 1)
         add_poss_layout.addWidget(self.btn_add_selected_poss, 0, 2); add_poss_layout.addWidget(self.btn_create_new_poss, 0, 3)
         possessori_layout.addWidget(add_poss_group); layout.addWidget(possessori_group)
 
-
-        # 3. Immobili
+        # --- 3. IMMOBILI (FLUSSO MIGLIORATO) ---
         immobili_group = QGroupBox("3. Immobili Associati"); immobili_layout = QVBoxLayout(immobili_group)
         self.immobili_table = QTableWidget(); self.immobili_table.setColumnCount(5); self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
         self.immobili_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch); self.immobili_table.setMinimumHeight(120)
@@ -1893,18 +1901,42 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
         add_imm_tabs = QTabWidget(); add_imm_tabs.addTab(self._create_add_immobile_esistente_tab(), "Aggiungi Esistente"); add_imm_tabs.addTab(self._create_add_immobile_nuovo_tab(), "Crea Nuovo")
         immobili_layout.addWidget(add_imm_tabs); layout.addWidget(immobili_group)
 
-        # 4. Registrazione Finale
+        # --- 4. REGISTRAZIONE FINALE ---
         self.btn_registra_proprieta = QPushButton("Registra Nuova Proprietà e Tutti i Componenti"); self.btn_registra_proprieta.clicked.connect(self._salva_proprieta)
         self.btn_registra_proprieta.setStyleSheet("font-weight: bold; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb;"); 
-        self.btn_registra_proprieta.setEnabled(False)
-        layout.addWidget(self.btn_registra_proprieta)
-        layout.addStretch(1)
+        self.btn_registra_proprieta.setEnabled(False) # Inizia disabilitato
+        layout.addWidget(self.btn_registra_proprieta); layout.addStretch(1)
+        
+        self._update_registra_button_state()
+
+    # --- NUOVO METODO PER AGGIORNARE LO STATO DEL PULSANTE ---
+    def _update_registra_button_state(self):
+        """
+        Abilita il pulsante di registrazione finale solo se tutte le 
+        condizioni necessarie sono soddisfatte.
+        """
+        is_ready = bool(
+            self.comune_id and      # Deve essere selezionato un comune
+            self.possessori_data and  # La lista possessori non deve essere vuota
+            self.immobili_data       # La lista immobili non deve essere vuota
+        )
+        self.btn_registra_proprieta.setEnabled(is_ready)
+
+        if is_ready:
+            self.btn_registra_proprieta.setToolTip("Pronto per registrare la proprietà nel database.")
+        else:
+            reasons = []
+            if not self.comune_id: reasons.append("selezionare un comune")
+            if not self.possessori_data: reasons.append("aggiungere almeno un possessore")
+            if not self.immobili_data: reasons.append("aggiungere almeno un immobile")
+            tooltip_text = f"Per abilitare, è necessario: {', '.join(reasons)}."
+            self.btn_registra_proprieta.setToolTip(tooltip_text)
 
     
     def _create_add_immobile_esistente_tab(self):
         widget = QWidget(); layout = QGridLayout(widget)
         self.imm_search_combo = QComboBox(); self.imm_search_combo.setEditable(True); self.imm_search_combo.setPlaceholderText("Seleziona prima un comune...")
-        self.imm_search_combo.setEnabled(False)
+        self.imm_search_combo.setEnabled(False); self.imm_search_combo.completer().setCompletionMode(QCompleter.PopupCompletion); self.imm_search_combo.completer().setFilterMode(Qt.MatchContains)
         self.btn_add_existing_imm = QPushButton("Aggiungi Selezionato"); self.btn_add_existing_imm.clicked.connect(self._add_existing_immobile)
         layout.addWidget(QLabel("Cerca Immobile:"), 0, 0); layout.addWidget(self.imm_search_combo, 0, 1); layout.addWidget(self.btn_add_existing_imm, 0, 2)
         return widget
@@ -2108,14 +2140,7 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             self.update_immobili_table()
         self._update_registra_button_state()
         
-    def _update_registra_button_state(self):
-        """Abilita il pulsante di registrazione finale solo se tutti i dati necessari sono presenti."""
-        is_valid = bool(
-            self.comune_id and
-            self.possessori_data and
-            self.immobili_data
-        )
-        self.btn_registra_proprieta.setEnabled(is_valid)
+    
         
     def _salva_proprieta(self):
         self.logger.info("Avvio registrazione nuova proprietà...")
@@ -3646,10 +3671,12 @@ class EsportazioniWidget(LazyLoadedWidget):
 
 # In gui_widgets.py, SOSTITUISCI l'intera classe ReportisticaWidget con questa:
 
-class ReportisticaWidget(QWidget):
+class ReportisticaWidget(LazyLoadedWidget):
     def __init__(self, db_manager, parent=None):
-        super(ReportisticaWidget, self).__init__(parent)
+        super().__init__(parent)
         self.db_manager = db_manager
+        # Il logger è ereditato da LazyLoadedWidget
+
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         self.current_report_content = ""  # Memorizza il report corrente come testo semplice
         self._initUI()

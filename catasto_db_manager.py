@@ -3458,22 +3458,27 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB collegando doc {documento_id} a partita {partita_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile collegare il documento: {e}") from e
 
+    # In catasto_db_manager.py, SOSTITUISCI il metodo get_documenti_per_partita
+
     def get_documenti_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
         """Recupera l'elenco dei documenti associati a una partita in modo sicuro."""
-        # Nota: Ho rimosso dp.id e altri campi duplicati per una query più pulita
+        # --- INIZIO CORREZIONE: Aggiunti dp.documento_id e dp.partita_id alla SELECT ---
         query = f"""
             SELECT
                 ds.id as documento_id, ds.titolo, ds.tipo_documento, ds.percorso_file, ds.anno,
-                dp.rilevanza, dp.note as note_legame, ps.nome as nome_periodo
+                dp.rilevanza, dp.note as note_legame, ps.nome as nome_periodo,
+                dp.documento_id AS rel_documento_id, 
+                dp.partita_id AS rel_partita_id
             FROM {self.schema}.documento_storico ds
             JOIN {self.schema}.documento_partita dp ON ds.id = dp.documento_id
             LEFT JOIN {self.schema}.periodo_storico ps ON ds.periodo_id = ps.id
             WHERE dp.partita_id = %s
             ORDER BY ds.anno DESC, ds.titolo;
         """
+        # --- FINE CORREZIONE ---
         try:
             with self._get_connection() as conn:
-                with conn.cursor(cursor_factory=DictCursor) as cur:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, (partita_id,))
                     documenti = [dict(row) for row in cur.fetchall()]
                     self.logger.info(f"Recuperati {len(documenti)} documenti per partita ID {partita_id}.")

@@ -28,9 +28,11 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget, QDateEdit,
-                             QGraphicsScene, QGraphicsView)
+                             QGraphicsScene, QGraphicsView,QDialog, QVBoxLayout, 
+                             QTextBrowser, QDialogButtonBox)
 
 from PyQt5.QtGui import QPainter
+from app_paths import resource_path
 
 
 
@@ -1447,11 +1449,22 @@ class ModificaPartitaDialog(QDialog):
                 for row, doc in enumerate(documenti):
                     documento_id_storico = doc.get("documento_id")
                     
-                    item_doc_id = QTableWidgetItem(str(documento_id_storico))
+                    # --- INIZIO CORREZIONE: Salvataggio dati robusto ---
+            # Salviamo un dizionario con gli ID di relazione nell'UserRole
+                    rel_data = {
+                        'doc_id': doc.get('rel_documento_id'),
+                        'partita_id': doc.get('rel_partita_id')
+                    }
+
+                    # L'item nella prima colonna conterrà tutti i dati per la riga
+                    item_doc_id = QTableWidgetItem(str(doc.get('documento_id', '')))
+                    item_doc_id.setData(Qt.UserRole, rel_data)
+                    self.documents_table.setItem(row, 0, item_doc_id)
+            # --- FINE CORREZIONE ---
                     # Salviamo l'ID del documento storico e l'ID della partita per la rimozione del legame
                     item_doc_id.setData(Qt.UserRole + 1, doc.get("dp_documento_id")) # ID del documento storico nella relazione
                     item_doc_id.setData(Qt.UserRole + 2, doc.get("dp_partita_id")) # ID della partita nella relazione (che è self.partita_id)
-                    self.documents_table.setItem(row, 0, item_doc_id)
+                    
                     
                     self.documents_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo") or ''))
                     self.documents_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento") or ''))
@@ -2020,10 +2033,17 @@ class ModificaPartitaDialog(QDialog):
         if not id_doc_item:
             QMessageBox.critical(self, "Errore Interno", "Impossibile recuperare i dati del documento selezionato.")
             return
-            
-        # Gli ID necessari per la cancellazione (chiave primaria composta)
-        documento_id_da_scollegare = id_doc_item.data(Qt.UserRole + 1)
-        partita_id_da_cui_scollegare = id_doc_item.data(Qt.UserRole + 2)
+        # --- INIZIO CORREZIONE: Recupero dati robusto ---
+        rel_data = id_doc_item.data(Qt.UserRole)
+        if not isinstance(rel_data, dict) or not rel_data.get('doc_id') or not rel_data.get('partita_id'):
+            self.logger.error(f"Dati di relazione mancanti o corrotti per la riga {row}: {rel_data}")
+            QMessageBox.critical(self, "Errore Dati", "Informazioni sulla relazione documento-partita non trovate.")
+            return
+
+        documento_id_da_scollegare = rel_data['doc_id']
+        partita_id_da_cui_scollegare = rel_data['partita_id']
+        # --- FINE CORREZIONE --
+        
 
         if not documento_id_da_scollegare or not partita_id_da_cui_scollegare:
             self.logger.error(f"Dati di relazione mancanti per la riga {row} (DocID: {documento_id_da_scollegare}, PartitaID: {partita_id_da_cui_scollegare})")
@@ -4354,8 +4374,9 @@ class CreateUserDialog(QDialog):
                 QMessageBox.information(self, "Successo", f"Utente '{username}' creato con successo.")
                 self.accept()
             # else: create_user solleva eccezioni in caso di fallimento noto
-        except DBUniqueConstraintError as uve: # Errore specifico per utente/email duplicati
-             QMessageBox.critical(self, "Errore Creazione Utente", f"Impossibile creare l'utente '{username}':\n{uve.message}")
+        except DBUniqueConstraintError as uve:
+            # Usiamo str(uve) per ottenere il messaggio di errore in modo standard
+            QMessageBox.critical(self, "Errore Creazione Utente", f"Impossibile creare l'utente '{username}':\n{str(uve)}")
         except DBMError as dbe: # Altri errori gestiti dal DBManager
              QMessageBox.critical(self, "Errore Database", f"Errore database durante la creazione dell'utente '{username}':\n{dbe.message}")
         except Exception as e:
@@ -5280,6 +5301,50 @@ class CSVImportResultDialog(QDialog):
         table.resizeColumnsToContents()
         table.horizontalHeader().setStretchLastSection(True)
         return table
+    
+class EulaDialog(QDialog):
+    """Dialogo per la visualizzazione e l'accettazione dell'EULA."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.0")
+        self.setMinimumSize(600, 500)
+        self.setModal(True) # Rende il dialogo bloccante
+
+        layout = QVBoxLayout(self)
+
+        self.text_browser = QTextBrowser()
+        self.text_browser.setReadOnly(True)
+        self.text_browser.setOpenExternalLinks(True)
+        layout.addWidget(self.text_browser)
+
+        # --- MODIFICA PULSANTI ---
+        # Usiamo pulsanti standard per un comportamento prevedibile
+        button_box = QDialogButtonBox(QDialogButtonBox.Accept | QDialogButtonBox.Reject)
+        button_box.button(QDialogButtonBox.Accept).setText("Accetto i Termini")
+        button_box.button(QDialogButtonBox.Reject).setText("Rifiuto ed Esci")
+
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        # --- FINE MODIFICA ---
+
+        layout.addWidget(button_box)
+
+        self._load_eula_text()
+
+
+    def _load_eula_text(self):
+        """Carica il testo dell'EULA dal file resources/EULA.txt."""
+        try:
+            eula_file_path = resource_path(os.path.join("resources", "EULA.txt"))
+            if os.path.exists(eula_file_path):
+                with open(eula_file_path, 'r', encoding='utf-8') as f:
+                    eula_text = f.read()
+                self.text_browser.setMarkdown(eula_text.replace('\n', '  \n'))
+            else:
+                self.text_browser.setText("ERRORE: File EULA.txt non trovato.")
+        except Exception as e:
+            self.text_browser.setText(f"Impossibile caricare il testo della licenza.\n\nErrore: {e}")
+            
 def qdate_to_datetime(q_date: QDate) -> Optional[date]:
     if q_date.isNull() or not q_date.isValid():  # Controlla anche isValid
         return None

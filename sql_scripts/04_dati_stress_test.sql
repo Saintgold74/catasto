@@ -215,7 +215,7 @@ DO $$ BEGIN
 END $$;
 
 CALL popola_dati_stress_test(
-    p_num_comuni => 5,
+    p_num_comuni => 20,
     p_possessori_per_comune => 100,
     p_partite_per_possessore_medio => 5,
     p_immobili_per_partita_media => 3,

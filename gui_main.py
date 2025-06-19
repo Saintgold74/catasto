@@ -46,7 +46,7 @@ from gui_widgets import (
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
     DBConfigDialog)
-from dialogs import CSVImportResultDialog
+from dialogs import CSVImportResultDialog,EulaDialog
 
 from custom_widgets import QPasswordLineEdit
 
@@ -495,6 +495,13 @@ class CatastoMainWindow(QMainWindow):
         show_manual_action = QAction("Visualizza Manuale Utente...", self)
         show_manual_action.triggered.connect(self._apri_manuale_utente)
         help_menu.addAction(show_manual_action)
+            # --- INIZIO MODIFICA ---
+        help_menu.addSeparator()
+
+        show_eula_action = QAction("Informazioni su Meridiana / EULA...", self)
+        show_eula_action.triggered.connect(self._show_about_eula_dialog)
+        help_menu.addAction(show_eula_action)
+        # --- FINE MODIFICA ---
 
     def _change_stylesheet(self, filename: str):
         """Carica, applica e salva il nuovo stylesheet selezionato."""
@@ -514,6 +521,11 @@ class CatastoMainWindow(QMainWindow):
             QMessageBox.information(self, "Cambio Tema", f"Tema '{filename.replace('.qss', '').title()}' applicato con successo.")
         else:
             QMessageBox.warning(self, "Errore Tema", f"Impossibile caricare il file di stile '{filename}'.")
+            
+    def _show_about_eula_dialog(self):
+        """Apre la finestra di dialogo con le informazioni su versione e licenza (EULA)."""
+        dialog = EulaDialog(self)
+        dialog.exec_()
 
     # --- FINE AGGIUNTA METODO MANCANTE -
     def create_status_bar_content(self):
@@ -1430,6 +1442,20 @@ def run_gui_app():
         if stylesheet:
             app.setStyleSheet(stylesheet)
         # --- FINE MODIFICA ---
+        # --- INIZIO BLOCCO CONTROLLO EULA ---
+        settings = QSettings()
+        eula_accepted = settings.value("EULA/accepted", False, type=bool)
+
+        if not eula_accepted:
+            eula_dialog = EulaDialog()
+            if eula_dialog.exec_() == QDialog.Accepted:
+                # L'utente ha accettato, salva l'impostazione e procedi
+                settings.setValue("EULA/accepted", True)
+                settings.sync()
+            else:
+                # L'utente ha rifiutato, esci dall'applicazione
+                sys.exit(0)
+        # --- FINE BLOCCO CONTROLLO EULA ---
         
         gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
         db_manager_gui: Optional[CatastoDBManager] = None

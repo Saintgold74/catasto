@@ -62,7 +62,7 @@ ON partita USING gin(to_tsvector('italian', COALESCE(suffisso_partita, '')));
 
 -- Per la tabella 'variazione'
 CREATE INDEX idx_gin_variazione_tipo ON catasto.variazione USING gin (tipo gin_trgm_ops);
-CREATE INDEX idx_gin_variazione_note ON catasto.variazione USING gin (note gin_trgm_ops);
+--CREATE INDEX idx_gin_variazione_note ON catasto.variazione USING gin (note gin_trgm_ops);
 
 -- Per la tabella 'contratto'
 CREATE INDEX idx_gin_contratto_tipo ON catasto.contratto USING gin (tipo gin_trgm_ops);
@@ -165,6 +165,19 @@ BEGIN
         JOIN comune c ON p.comune_id = c.id
         JOIN localita l ON i.localita_id = l.id
         WHERE COALESCE(i.consistenza, '') % query_text
+		UNION ALL
+        -- Ricerca per numero partita associato
+        SELECT 
+            i.id, i.partita_id, p.numero_partita, p.suffisso_partita, c.nome, l.nome, 
+            i.natura, i.classificazione, i.consistenza,
+            similarity(p.numero_partita::text, query_text) as sim_score,
+            'numero_partita' as search_field
+        FROM immobile i
+        JOIN partita p ON i.partita_id = p.id
+        JOIN comune c ON p.comune_id = c.id
+        JOIN localita l ON i.localita_id = l.id
+        WHERE p.numero_partita::text % query_text
+        -- --- FINE NUOVA SEZIONE ---
     )
     SELECT DISTINCT ON (ims.id) 
         ims.id,
@@ -276,6 +289,20 @@ BEGIN
         LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
         JOIN comune co ON po.comune_id = co.id
         WHERE COALESCE(v.numero_riferimento, '') % query_text
+		-- --- INIZIO NUOVA SEZIONE ---
+        UNION ALL
+        -- Ricerca per numero partita origine o destinazione
+        SELECT
+            v.id, v.partita_origine_id, po.numero_partita, v.partita_destinazione_id, pd.numero_partita,
+            v.tipo, v.data_variazione, v.numero_riferimento, v.nominativo_riferimento, co.nome,
+            GREATEST(similarity(po.numero_partita::text, query_text), similarity(pd.numero_partita::text, query_text)) as sim_score,
+            'numero_partita' as search_field
+        FROM variazione v
+        JOIN partita po ON v.partita_origine_id = po.id
+        LEFT JOIN partita pd ON v.partita_destinazione_id = pd.id
+        JOIN comune co ON po.comune_id = co.id
+        WHERE po.numero_partita::text % query_text OR pd.numero_partita::text % query_text
+        -- --- FINE NUOVA SEZIONE ---
     )
     SELECT DISTINCT ON (vs.id) 
         vs.id,
@@ -296,6 +323,7 @@ BEGIN
     LIMIT max_results;
 END;
 $$;
+
 
 -- Funzione per ricerca fuzzy in contratti
 CREATE OR REPLACE FUNCTION search_contratti_fuzzy(
@@ -383,6 +411,18 @@ BEGIN
             'note' as search_field
         FROM contratto c
         WHERE COALESCE(c.note, '') % query_text
+		-- --- INIZIO NUOVA SEZIONE ---
+        UNION ALL
+        -- Ricerca per numero partita associato tramite la variazione
+        SELECT 
+            c.id, c.variazione_id, c.tipo, c.data_contratto, c.notaio, c.repertorio, c.note,
+            similarity(p.numero_partita::text, query_text) as sim_score,
+            'numero_partita' as search_field
+        FROM contratto c
+        JOIN variazione v ON c.variazione_id = v.id
+        JOIN partita p ON v.partita_origine_id = p.id
+        WHERE p.numero_partita::text % query_text
+        -- --- FINE NUOVA SEZIONE ---
     )
     SELECT DISTINCT ON (cs.id) 
         cs.id,

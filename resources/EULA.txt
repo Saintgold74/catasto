@@ -1,0 +1,29 @@
+Contratto di Licenza con l'Utente Finale (EULA) per il software "Meridiana"
+=========================================================================
+
+LEGGERE ATTENTAMENTE I TERMINI E LE CONDIZIONI SEGUENTI PRIMA DI UTILIZZARE QUESTO SOFTWARE. L'UTILIZZO DEL SOFTWARE IMPLICA L'ACCETTAZIONE DI QUESTI TERMINI.
+
+Questo Contratto di Licenza con l'Utente Finale ("EULA") è un accordo legale tra l'utente finale (l'"Utente" o "Licenziatario") e l'autore del software, Marco Santoro (il "Licenziante").
+
+1. CONCESSIONE DELLA LICENZA
+Il Licenziante concede all'Archivio di Stato di Savona una licenza d'uso per il software "Meridiana" (il "Software") secondo i termini di un comodato d'uso gratuito. La presente licenza è concessa in via esclusiva, perpetua e non trasferibile, limitatamente all'uso da parte del personale autorizzato dell'Archivio di Stato di Savona per le finalità istituzionali di gestione dell'archivio catastale storico.
+
+2. COPYRIGHT E PROPRIETÀ INTELLETTUALE
+Il Software è di proprietà esclusiva di Marco Santoro e protetto dalle leggi italiane sul diritto d'autore e dai trattati internazionali. Tutti i diritti, titoli e interessi relativi al Software, inclusi tutti i diritti di proprietà intellettuale, sono e rimarranno di proprietà del Licenziante. La presente licenza non costituisce una vendita del Software, ma solo un diritto di utilizzo secondo i termini qui specificati.
+
+3. LIMITAZIONI D'USO
+L'Utente si impegna a non:
+a) Distribuire, sublicenziare, noleggiare, vendere, affittare o trasferire in altro modo il Software a terzi.
+b) Modificare, tradurre, decodificare, decompilare, disassemblare o tentare in altro modo di scoprire il codice sorgente del Software.
+c) Rimuovere o alterare qualsiasi avviso di copyright o altri avvisi di proprietà sul Software.
+
+4. ESCLUSIONE DI GARANZIA
+IL SOFTWARE È FORNITO "COSÌ COM'È" ("AS IS"), SENZA GARANZIE DI ALCUN TIPO, ESPLICITE O IMPLICITE, INCLUSE, MA NON LIMITATE A, LE GARANZIE DI COMMERCIABILITÀ, IDONEITÀ PER UNO SCOPO PARTICOLARE E NON VIOLAZIONE. IL LICENZIANTE NON GARANTISCE CHE IL FUNZIONAMENTO DEL SOFTWARE SARÀ ININTERROTTO O PRIVO DI ERRORI.
+
+5. LIMITAZIONE DI RESPONSABILITÀ
+IN NESSUN CASO IL LICENZIANTE SARÀ RESPONSABILE PER DANNI SPECIALI, DIRETTI, INDIRETTI, CONSEQUENZIALI, INCIDENTALI O PUNITIVI (INCLUSI, SENZA LIMITAZIONE, DANNI PER PERDITA DI PROFITTI, INTERRUZIONE DI ATTIVITÀ, PERDITA DI INFORMAZIONI) DERIVANTI DALL'USO O DALL'IMPOSSIBILITÀ DI UTILIZZARE IL SOFTWARE, ANCHE SE IL LICENZIANTE È STATO AVVISATO DELLA POSSIBILITÀ DI TALI DANNI.
+
+6. LEGGE APPLICABILE
+Il presente EULA sarà disciplinato e interpretato in conformità con le leggi della Repubblica Italiana.
+
+Copyright © 2025, Marco Santoro. Tutti i diritti riservati.

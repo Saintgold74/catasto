@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider)
+                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider, QCompleter)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal ,QThread
 
 
@@ -1829,124 +1829,180 @@ class InserimentoPartitaWidget(QWidget):
             QMessageBox.critical(self, "Errore Salvataggio", f"Impossibile salvare la partita:\n{e}")
 
 
-class RegistrazioneProprietaWidget(QWidget):
+class RegistrazioneProprietaWidget(LazyLoadedWidget):
     partita_creata_per_operazioni_collegate = pyqtSignal(int, int)
 
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
         self.comune_id: Optional[int] = None
-        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-
-        # Salva anche il nome per la UI
         self.comune_display_name: Optional[str] = None
+
+        # Liste per i dati temporanei
         self.possessori_data: List[Dict[str, Any]] = []
         self.immobili_data: List[Dict[str, Any]] = []
 
-        self._initUI()  # Ora questo chiamerà il metodo definito sotto
+        # Cache per i dati delle combobox
+        self.localita_cache: List[Dict[str, Any]] = []
+        self.possessori_cache: List[Dict[str, Any]] = []
+
+        self._initUI()
 
     def _initUI(self):
-        layout = QVBoxLayout(self)
+        """Crea l'interfaccia utente con form inline per un flusso di lavoro migliorato."""
+        main_layout = QVBoxLayout(self)
+        scroll_area = QScrollArea(); scroll_area.setWidgetResizable(True)
+        main_layout.addWidget(scroll_area)
+        container_widget = QWidget(); layout = QVBoxLayout(container_widget)
+        scroll_area.setWidget(container_widget)
 
-        # --- GRUPPO DATI NUOVA PROPRIETÀ (CON LAYOUT MIGLIORATO) ---
-        form_group = QGroupBox("Dati Nuova Proprietà")
-        # Usiamo un QGridLayout per un controllo preciso sulla disposizione
+        # --- 1. Gruppo Dati Partita (leggermente rivisto per chiarezza) ---
+        form_group = QGroupBox("1. Dati della Nuova Partita")
         form_layout = QGridLayout(form_group)
-        form_layout.setSpacing(10)
+        self.comune_button = QPushButton("Seleziona Comune..."); self.comune_button.clicked.connect(self._select_comune)
+        self.comune_display = QLabel("Nessun comune selezionato."); self.comune_display.setStyleSheet("font-weight: bold;")
+        form_layout.addWidget(QLabel("Comune (*):"), 0, 0); form_layout.addWidget(self.comune_display, 0, 1, 1, 2); form_layout.addWidget(self.comune_button, 0, 3)
 
-        # Riga 0: Selezione Comune
-        comune_label = QLabel("Comune (*):")
-        self.comune_display = QLabel("Nessun comune selezionato.")
-        self.comune_button = QPushButton("Seleziona Comune...")
-        self.comune_button.clicked.connect(self.select_comune)
-        form_layout.addWidget(comune_label, 0, 0)
-        form_layout.addWidget(self.comune_display, 0, 1, 1, 3) # Occupa 3 colonne
-        form_layout.addWidget(self.comune_button, 0, 4)
+        self.num_partita_edit = QSpinBox(); self.num_partita_edit.setRange(1, 9999999)
+        self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. A, bis")
+        self.data_edit = QDateEdit(calendarPopup=True); self.data_edit.setDate(QDate.currentDate()); self.data_edit.setDisplayFormat("yyyy-MM-dd")
 
-        # Riga 1: Numero e Suffisso Partita sulla stessa linea
-        num_partita_label = QLabel("Numero Partita (*):")
-        self.num_partita_edit = QSpinBox()
-        self.num_partita_edit.setRange(1, 9999999)
-        self.num_partita_edit.setMaximumWidth(150) # Dimensione fissa per un aspetto migliore
-
-        suffisso_label = QLabel("Suffisso Partita (opz.):")
-        self.suffisso_partita_edit = QLineEdit()
-        self.suffisso_partita_edit.setPlaceholderText("Es. bis, A")
-        self.suffisso_partita_edit.setMaxLength(20)
-        self.suffisso_partita_edit.setMaximumWidth(150) # Dimensione fissa
-
-        form_layout.addWidget(num_partita_label, 1, 0)
-        form_layout.addWidget(self.num_partita_edit, 1, 1)
-        form_layout.addWidget(suffisso_label, 1, 2, Qt.AlignRight) # Allinea a destra
-        form_layout.addWidget(self.suffisso_partita_edit, 1, 3)
-
-        # Riga 2: Data Impianto
-        data_label = QLabel("Data Impianto (*):")
-        self.data_edit = QDateEdit(calendarPopup=True)
-        self.data_edit.setDate(QDate.currentDate())
-        self.data_edit.setDisplayFormat("yyyy-MM-dd")
-        self.data_edit.setMaximumWidth(150) # Dimensione fissa
-
-        form_layout.addWidget(data_label, 2, 0)
-        form_layout.addWidget(self.data_edit, 2, 1)
-
-        # Aggiungiamo una colonna "elastica" che assorba lo spazio extra
-        form_layout.setColumnStretch(5, 1)
-        
+        form_layout.addWidget(QLabel("Numero Partita (*):"), 1, 0); form_layout.addWidget(self.num_partita_edit, 1, 1)
+        form_layout.addWidget(QLabel("Suffisso:"), 1, 2); form_layout.addWidget(self.suffisso_partita_edit, 1, 3)
+        form_layout.addWidget(QLabel("Data Impianto (*):"), 2, 0); form_layout.addWidget(self.data_edit, 2, 1)
         layout.addWidget(form_group)
 
-        # --- SEZIONI POSSESSORI E IMMOBILI (INVARIATE) ---
-        # Sezione Possessori
-        possessori_group = QGroupBox("Possessori Associati")
+        # --- 2. Sezione Possessori (MIGLIORATA CON FORM INLINE) ---
+        possessori_group = QGroupBox("2. Possessori Associati")
         possessori_layout = QVBoxLayout(possessori_group)
-        self.possessori_table = QTableWidget()
-        self.possessori_table.setColumnCount(4)
-        self.possessori_table.setHorizontalHeaderLabels(["ID Poss.", "Nome Completo", "Titolo", "Quota"])
+        self.possessori_table = QTableWidget(); self.possessori_table.setColumnCount(4); self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
+        self.possessori_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         possessori_layout.addWidget(self.possessori_table)
-        btn_add_poss = QPushButton("Aggiungi Possessore")
-        btn_add_poss.clicked.connect(self.add_possessore)
-        btn_rem_poss = QPushButton("Rimuovi Possessore")
-        btn_rem_poss.clicked.connect(self.remove_possessore)
-        h_layout_poss = QHBoxLayout()
-        h_layout_poss.addWidget(btn_add_poss)
-        h_layout_poss.addWidget(btn_rem_poss)
-        h_layout_poss.addStretch()
-        possessori_layout.addLayout(h_layout_poss)
+
+        add_poss_group = QGroupBox("Aggiungi Possessore alla Partita"); add_poss_layout = QGridLayout(add_poss_group)
+        self.possessore_search_combo = QComboBox(); self.possessore_search_combo.setEditable(True); self.possessore_search_combo.setInsertPolicy(QComboBox.NoInsert); self.possessore_search_combo.setPlaceholderText("Cerca per nome...")
+        self.possessore_search_combo.completer().setCompletionMode(QCompleter.PopupCompletion); self.possessore_search_combo.completer().setFilterMode(Qt.MatchContains)
+        self.btn_add_selected_poss = QPushButton("Aggiungi Selezionato"); self.btn_add_selected_poss.clicked.connect(self._add_selected_possessore)
+        self.btn_create_new_poss = QPushButton("Crea Nuovo Possessore..."); self.btn_create_new_poss.clicked.connect(self._create_and_add_new_possessore)
+        add_poss_layout.addWidget(QLabel("Cerca e Seleziona:"), 0, 0); add_poss_layout.addWidget(self.possessore_search_combo, 0, 1); add_poss_layout.addWidget(self.btn_add_selected_poss, 0, 2)
+        add_poss_layout.addWidget(self.btn_create_new_poss, 0, 3)
+        possessori_layout.addWidget(add_poss_group)
+
+        self.btn_rem_poss = QPushButton("Rimuovi Selezionato dalla Lista"); self.btn_rem_poss.clicked.connect(self.remove_possessore)
+        possessori_layout.addWidget(self.btn_rem_poss, 0, Qt.AlignRight)
         layout.addWidget(possessori_group)
 
-        # Sezione Immobili
-        immobili_group = QGroupBox("Immobili Associati")
+        # --- 3. Sezione Immobili (MIGLIORATA CON FORM INLINE) ---
+        immobili_group = QGroupBox("3. Immobili Associati")
         immobili_layout = QVBoxLayout(immobili_group)
-        self.immobili_table = QTableWidget()
-        self.immobili_table.setColumnCount(5)
-        self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Class.", "Consist.", "Piani/Vani"]) # Aggiornato header per chiarezza
+        self.immobili_table = QTableWidget(); self.immobili_table.setColumnCount(5); self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
+        self.immobili_table.horizontalHeader().setStretchLastSection(True)
         immobili_layout.addWidget(self.immobili_table)
-        btn_add_imm = QPushButton("Aggiungi Immobile")
-        btn_add_imm.clicked.connect(self.add_immobile)
-        btn_rem_imm = QPushButton("Rimuovi Immobile")
-        btn_rem_imm.clicked.connect(self.remove_immobile)
-        h_layout_imm = QHBoxLayout()
-        h_layout_imm.addWidget(btn_add_imm)
-        h_layout_imm.addWidget(btn_rem_imm)
-        h_layout_imm.addStretch()
-        immobili_layout.addLayout(h_layout_imm)
+
+        add_imm_group = QGroupBox("Aggiungi Immobile alla Partita"); add_imm_layout = QGridLayout(add_imm_group)
+        self.imm_natura_edit = QLineEdit(); add_imm_layout.addWidget(QLabel("Natura (*):"), 0, 0); add_imm_layout.addWidget(self.imm_natura_edit, 0, 1)
+        self.imm_localita_combo = QComboBox(); add_imm_layout.addWidget(QLabel("Località (*):"), 0, 2); add_imm_layout.addWidget(self.imm_localita_combo, 0, 3)
+        self.imm_classificazione_edit = QLineEdit(); add_imm_layout.addWidget(QLabel("Classificazione:"), 1, 0); add_imm_layout.addWidget(self.imm_classificazione_edit, 1, 1)
+        self.imm_consistenza_edit = QLineEdit(); add_imm_layout.addWidget(QLabel("Consistenza:"), 1, 2); add_imm_layout.addWidget(self.imm_consistenza_edit, 1, 3)
+        self.imm_piani_spin = QSpinBox(); self.imm_piani_spin.setRange(0, 99); add_imm_layout.addWidget(QLabel("Piani:"), 2, 0); add_imm_layout.addWidget(self.imm_piani_spin, 2, 1)
+        self.imm_vani_spin = QSpinBox(); self.imm_vani_spin.setRange(0, 99); add_imm_layout.addWidget(QLabel("Vani:"), 2, 2); add_imm_layout.addWidget(self.imm_vani_spin, 2, 3)
+        self.btn_add_inline_immobile = QPushButton("Aggiungi alla Lista"); self.btn_add_inline_immobile.clicked.connect(self._add_inline_immobile)
+        add_imm_layout.addWidget(self.btn_add_inline_immobile, 3, 3, Qt.AlignRight)
+        immobili_layout.addWidget(add_imm_group)
+
+        self.btn_rem_imm = QPushButton("Rimuovi Selezionato dalla Lista"); self.btn_rem_imm.clicked.connect(self.remove_immobile)
+        immobili_layout.addWidget(self.btn_rem_imm, 0, Qt.AlignRight)
         layout.addWidget(immobili_group)
 
-        # Pulsante Registra Proprietà
-        self.btn_registra_proprieta = QPushButton(QApplication.style().standardIcon(
-            QStyle.SP_DialogSaveButton), " Registra Nuova Proprietà")
-        self.btn_registra_proprieta.clicked.connect(self._salva_proprieta)
+        # --- 4. Pulsante Finale di Registrazione ---
+        self.btn_registra_proprieta = QPushButton("Registra Nuova Proprietà e Tutti i Componenti"); self.btn_registra_proprieta.clicked.connect(self._salva_proprieta)
+        self.btn_registra_proprieta.setStyleSheet("font-weight: bold; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb;")
         layout.addWidget(self.btn_registra_proprieta)
-
         layout.addStretch(1)
-    def select_comune(self):
-        """Apre il selettore di comuni."""
-        dialog = ComuneSelectionDialog(self.db_manager, self)
-        result = dialog.exec_()
 
-        if result == QDialog.Accepted and dialog.selected_comune_id:
+    # Metodi di supporto
+    def _load_data_on_first_show(self):
+        """Carica i dati la prima volta che il tab viene mostrato."""
+        self._load_possessori_for_combo()
+
+    def _select_comune(self):
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_comune_id:
             self.comune_id = dialog.selected_comune_id
-            self.comune_display.setText(dialog.selected_comune_name)
+            self.comune_display_name = dialog.selected_comune_name
+            self.comune_display.setText(f"{self.comune_display_name} (ID: {self.comune_id})")
+            self._load_localita_for_combo() # Carica le località del comune selezionato
+
+    def _load_possessori_for_combo(self):
+        self.possessore_search_combo.clear()
+        self.possessore_search_combo.addItem("--- Cerca Possessore ---", None)
+        try:
+            self.possessori_cache = self.db_manager.search_possessori_by_term_globally(None, limit=5000) # Pre-carica
+            for poss in self.possessori_cache:
+                display_text = f"{poss['nome_completo']} (Comune: {poss['comune_riferimento_nome']})"
+                self.possessore_search_combo.addItem(display_text, poss['id'])
+        except DBMError as e:
+            self.logger.error(f"Errore caricamento possessori globali: {e}")
+
+    def _load_localita_for_combo(self):
+        self.imm_localita_combo.clear()
+        if not self.comune_id: return
+        try:
+            self.localita_cache = self.db_manager.get_localita_by_comune(self.comune_id)
+            self.imm_localita_combo.addItem("--- Seleziona Località ---", None)
+            for loc in self.localita_cache:
+                display_text = f"{loc['nome']} ({loc['tipo']})"
+                if loc.get('civico'): display_text += f", {loc['civico']}"
+                self.imm_localita_combo.addItem(display_text, loc['id'])
+        except DBMError as e:
+             self.logger.error(f"Errore caricamento località per comune {self.comune_id}: {e}")
+
+    def _add_selected_possessore(self):
+        possessore_id = self.possessore_search_combo.currentData()
+        if not possessore_id:
+            QMessageBox.warning(self, "Selezione Mancante", "Seleziona un possessore dalla lista a discesa.")
+            return
+
+        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(self.possessore_search_combo.currentText(), 'principale', self)
+        if dettagli_legame:
+            self.possessori_data.append({"id": possessore_id, "nome_completo": self.possessore_search_combo.currentText(), **dettagli_legame})
+            self.update_possessori_table()
+
+    def _create_and_add_new_possessore(self):
+        dialog = PossessoreSelectionDialog(self.db_manager, comune_id=None, parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore:
+            possessore_info = dialog.selected_possessore
+            dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(possessore_info.get('nome_completo'), 'principale', self)
+            if dettagli_legame:
+                self.possessori_data.append({"id": possessore_info['id'], "nome_completo": possessore_info['nome_completo'], **dettagli_legame})
+                self.update_possessori_table()
+                self._load_possessori_for_combo() # Ricarica la cache dei possessori
+
+    def _add_inline_immobile(self):
+        natura = self.imm_natura_edit.text().strip()
+        localita_id = self.imm_localita_combo.currentData()
+        if not natura or localita_id is None:
+            QMessageBox.warning(self, "Dati Mancanti", "Natura e Località sono obbligatori per aggiungere un immobile.")
+            return
+
+        immobile_dict = {
+            'natura': natura,
+            'localita_id': localita_id,
+            'localita_nome': self.imm_localita_combo.currentText(),
+            'classificazione': self.imm_classificazione_edit.text().strip() or None,
+            'consistenza': self.imm_consistenza_edit.text().strip() or None,
+            'numero_piani': self.imm_piani_spin.value() or None,
+            'numero_vani': self.imm_vani_spin.value() or None
+        }
+        self.immobili_data.append(immobile_dict)
+        self.update_immobili_table()
+        self._pulisci_form_immobile()
+
+    def _pulisci_form_immobile(self):
+        self.imm_natura_edit.clear(); self.imm_classificazione_edit.clear(); self.imm_consistenza_edit.clear()
+        self.imm_localita_combo.setCurrentIndex(0); self.imm_piani_spin.setValue(0); self.imm_vani_spin.setValue(0)
+    
+    
 
     def add_possessore(self):
         """

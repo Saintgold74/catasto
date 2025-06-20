@@ -43,6 +43,11 @@ from dialogs import (DBConfigDialog, DocumentViewerDialog, ModificaPossessoreDia
 from custom_widgets import LazyLoadedWidget
 
 
+# Ottieni un logger specifico per questo modulo.
+logger = logging.getLogger("CatastoGUI.gui_widgets")
+
+
+
 
 
 

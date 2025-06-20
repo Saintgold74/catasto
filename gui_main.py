@@ -1424,6 +1424,13 @@ def setup_global_logging():
 def run_gui_app():
     try:
         app = QApplication(sys.argv)
+        # --- INIZIO MODIFICA ---
+        # Imposta i metadati dell'applicazione.
+        # Questo è FONDAMENTALE affinché QStandardPaths possa generare
+        # percorsi di dati scrivibili e univoci per l'app.
+        QCoreApplication.setOrganizationName("Marco Santoro")
+        QCoreApplication.setApplicationName("Meridiana")
+        # --- FINE MODIFICA ---
 
         # --- CHIAMATA ALLA NUOVA FUNZIONE QUI ---
         # Questo imposta il logging per l'intera applicazione prima che qualsiasi

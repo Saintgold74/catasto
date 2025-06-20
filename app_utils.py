@@ -1,12 +1,10 @@
 import logging,socket ,bcrypt,json, csv, os
 import sys
 from PyQt5.QtWidgets import QMessageBox
-# L'import ora è corretto e centralizzato
-# Importa solo il logger già pronto, non le sue dipendenze
+logger = logging.getLogger("CatastoGUI.app_utils")
 
-# Importa le utility necessarie
-# Importa la configurazione centralizzata
-from config import DEVELOPMENT_MODE, logger
+from config import DEVELOPMENT_MODE # Rimuovi 'logger' da questa riga
+
 
 
 

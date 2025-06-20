@@ -1,29 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-# ===================================================================
-#  File di Specifiche PyInstaller per Meridiana 1.0
-# ===================================================================
-
-# 'a' è l'analisi dello script principale e delle sue dipendenze.
+# Blocco di analisi principale
 a = Analysis(
-    ['gui_main.py'],  # Lo script Python principale da cui partire
-    pathex=[],
+    ['gui_main.py'],  # Lo script di avvio dell'applicazione.
+    pathex=['.'],  # Il percorso radice del progetto.
     binaries=[],
     datas=[
-        # Sezione FONDAMENTALE per includere le tue cartelle.
-        # La sintassi è ('sorgente', 'destinazione nel pacchetto')
-        ('resources', 'resources'),
-        ('styles', 'styles'),
-        ('sql_scripts', 'sql_scripts')
+        ('resources', 'resources'),  # Include l'intera cartella 'resources'.
+        ('styles', 'styles')        # Include l'intera cartella 'styles'.
     ],
     hiddenimports=[
-        # Moduli che PyInstaller potrebbe non trovare automaticamente.
-        'psycopg2._psycopg',
-        'PyQt5.sip',
-        'PyQt5.QtSvg',
-        'pandas',
-        'openpyxl',
-        'fpdf'
+        'psycopg2._psycopg'  # Importazione nascosta per il corretto funzionamento del driver PostgreSQL.
     ],
     hookspath=[],
     hooksconfig={},
@@ -31,28 +18,35 @@ a = Analysis(
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
+    cipher=None,
     noarchive=False,
 )
 
-# 'pyz' è il bundle di tutti i file Python.
-pyz = PYZ(a.pure)
+# Crea l'archivio Python con gli script compilati.
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-# 'exe' definisce le proprietà del file .exe finale.
+# Crea l'eseguibile (.exe).
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Meridiana',
+    name='Meridiana',  # Il nome del file .exe finale.
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False, # IMPORTANTISSIMO: Nasconde la finestra di console nera
-    icon='resources/logo_meridiana.ico' # Percorso del file icona (.ico)
+    console=False,  # Impostato a False per applicazioni GUI (nasconde la console).
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='resources/logo_meridiana.ico',  # Percorso dell'icona dell'applicazione.
+    version='file_version_info.txt'  # File per i metadati dell'eseguibile.
 )
 
-# 'coll' raggruppa tutto nella cartella di output finale.
+# Raccoglie tutti i file (eseguibile, librerie, dati) in un'unica cartella.
 coll = COLLECT(
     exe,
     a.binaries,
@@ -61,5 +55,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Meridiana'
+    name='Meridiana'  # Il nome della cartella di output che conterrà l'applicazione.
 )

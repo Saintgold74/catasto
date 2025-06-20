@@ -1,10 +1,14 @@
 # config.py
 
-import logging
+import logging,os
 from logging.handlers import RotatingFileHandler
 
 # Ora questo import è sicuro, perché app_paths è autonomo
 from app_paths import LOGS_DIR 
+
+from PyQt5.QtCore import QStandardPaths, QCoreApplication
+
+from logging.handlers import RotatingFileHandler
 
 # --- Nomi per le chiavi di QSettings (definisci globalmente o prima di run_gui_app) ---
 SETTINGS_DB_TYPE = "Database/Type"
@@ -40,69 +44,55 @@ NUOVE_ETICHETTE_POSSESSORI = ["id", "nome_completo", "codice_fiscale", "data_nas
 # --- MODALITÀ DI SVILUPPO ---
 DEVELOPMENT_MODE = True
 
-# --- CONFIGURAZIONE CENTRALIZZATA DEL LOGGER ---
-def setup_global_logging():
-    """Configura e restituisce il logger principale dell'applicazione."""
-    log_file = LOGS_DIR / "meridiana_app.log"
-    
-    logger = logging.getLogger("MeridianaAppLogger")
-    logger.setLevel(logging.DEBUG)
+def setup_global_logging(log_level=logging.INFO):
+    """
+    Configura il logging globale per l'applicazione, salvando i file
+    in una cartella dati utente scrivibile.
+    """
+    try:
+        # Ottiene il percorso standard per i dati dell'applicazione locale.
+        # Es: C:/Users/NOME_UTENTE/AppData/Local/Marco Santoro/Meridiana/logs
+        log_directory = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        
+        # Se il percorso non esiste, QStandardPaths può restituire una stringa vuota.
+        # In quel caso, usiamo un percorso di fallback (anche se raro).
+        if not log_directory:
+            log_directory = os.path.join(os.path.expanduser("~"), "MeridianaAppData")
 
-    if logger.hasHandlers():
+        # Aggiungiamo una sottocartella 'logs'
+        log_directory = os.path.join(log_directory, "logs")
+
+        # Crea la cartella di log se non esiste
+        os.makedirs(log_directory, exist_ok=True)
+
+        log_file_path = os.path.join(log_directory, "meridiana_gui.log")
+
+        # Configurazione del logger 'CatastoGUI'
+        logger = logging.getLogger("CatastoGUI")
+        logger.setLevel(log_level)
         logger.handlers.clear()
 
-    formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
-    )
+        # Formattatore
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+        )
 
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
+        # Handler per file con rotazione
+        handler_file = RotatingFileHandler(
+            log_file_path, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8'
+        )
+        handler_file.setFormatter(formatter)
+        logger.addHandler(handler_file)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
+        # Handler per console (per debug)
+        handler_console = logging.StreamHandler()
+        handler_console.setFormatter(formatter)
+        logger.addHandler(handler_console)
 
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
+        logger.info(f"Logging configurato. File di log in: {log_file_path}")
 
-logger = setup_global_logging()
-
-
-def setup_global_logging():
-    """Configura e restituisce il logger principale dell'applicazione."""
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    log_file = LOGS_DIR / "meridiana_app.log"
-    
-    logger = logging.getLogger("MeridianaAppLogger")
-    logger.setLevel(logging.DEBUG)
-
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
-    )
-
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
-
-# Crea l'istanza del logger che verrà importata da tutti gli altri moduli.
-# Il nome 'logger' è più standard e breve.
-logger = setup_global_logging()
+    except Exception as e:
+        print(f"ERRORE CRITICO durante la configurazione del logging: {e}")
+        # Configurazione di un logger di fallback basico in caso di errore
+        logging.basicConfig(level=logging.WARNING)
+        logging.warning("Utilizzo configurazione di logging di fallback.")

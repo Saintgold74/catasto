@@ -18,7 +18,7 @@ SetupIconFile=resources\logo_meridiana.ico
 UninstallDisplayIcon={app}\Meridiana.exe
 
 ; Impostazioni di output
-OutputBaseFilename=Setup-Meridiana-1.2
+OutputBaseFilename=Setup Meridiana 1.2
 OutputDir=installer_output
 Compression=lzma
 SolidCompression=yes
@@ -26,7 +26,7 @@ SolidCompression=yes
 ; Stile, permessi e copyright
 WizardStyle=modern
 PrivilegesRequired=admin
-Copyright=Copyright © 2025 Marco Santoro
+;Copyright=Copyright © 2025 Marco Santoro
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"

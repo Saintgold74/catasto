@@ -5308,7 +5308,7 @@ class EulaDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.0")
         self.setMinimumSize(600, 500)
-        self.setModal(True) # Rende il dialogo bloccante
+        self.setModal(True)
 
         layout = QVBoxLayout(self)
 
@@ -5317,15 +5317,19 @@ class EulaDialog(QDialog):
         self.text_browser.setOpenExternalLinks(True)
         layout.addWidget(self.text_browser)
 
-        # --- MODIFICA PULSANTI ---
-        # Usiamo pulsanti standard per un comportamento prevedibile
-        button_box = QDialogButtonBox(QDialogButtonBox.Accept | QDialogButtonBox.Reject)
-        button_box.button(QDialogButtonBox.Accept).setText("Accetto i Termini")
-        button_box.button(QDialogButtonBox.Reject).setText("Rifiuto ed Esci")
+        # --- INIZIO CORREZIONE ---
+        # Usiamo i pulsanti standard 'Ok' e 'Cancel'
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 
+        # E poi ne personalizziamo il testo
+        button_box.button(QDialogButtonBox.Ok).setText("Accetto i Termini")
+        button_box.button(QDialogButtonBox.Cancel).setText("Rifiuto ed Esci")
+
+        # Le connessioni ai segnali 'accepted' e 'rejected' funzionano correttamente
+        # perché si basano sul "ruolo" del pulsante (AcceptRole, RejectRole), non sul testo.
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
-        # --- FINE MODIFICA ---
+        # --- FINE CORREZIONE ---
 
         layout.addWidget(button_box)
 

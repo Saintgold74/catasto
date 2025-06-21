@@ -6001,7 +6001,9 @@ class DashboardWidget(QWidget):
         super().__init__(parent)
         self.db_manager = db_manager
         self.current_user_info = current_user_info
+        
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self.is_admin = self.current_user_info.get('ruolo') == 'admin' if self.current_user_info else False
         self._initUI()
         self.load_initial_data() # Lazy loading
 
@@ -6057,13 +6059,30 @@ class DashboardWidget(QWidget):
 
         actions_group = QGroupBox("Azioni Rapide")
         actions_layout = QVBoxLayout(actions_group)
-        btn_new_prop = QPushButton("Registra Nuova Proprietà"); btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registrazione Proprietà"))
-        btn_new_partita = QPushButton("Inserisci Nuova Partita"); btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Nuova Partita"))
+        btn_new_prop = QPushButton("Registra Nuova Proprietà"); 
+        btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registrazione Proprietà"))
+        btn_new_partita = QPushButton("Inserisci Nuova Partita"); 
+        btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Nuova Partita"))
         # --- INIZIO MODIFICA ---
         btn_new_consult = QPushButton("Registra Consultazione")
         btn_new_consult.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registra Consultazione"))
 # --- FINE MODIFICA ---
-        btn_reports = QPushButton("Vai alla Reportistica"); btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Reportistica", ""))
+        btn_reports = QPushButton("Vai alla Reportistica"); 
+        btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Reportistica", ""))
+        # --- INIZIO MODIFICA: Pulsante visibile solo per admin ---
+        if self.is_admin:
+            actions_layout.addSpacing(15)
+
+            # Creiamo un pulsante specifico per il backup
+            btn_backup = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), " Esegui Backup")
+            #btn_backup.setStyleSheet("background-color: #ffeeba; border: 1px solid #ffc107;")
+
+            # Collega il segnale per andare al tab "Sistema" e al sotto-tab "Backup/Ripristino DB"
+            btn_backup.clicked.connect(lambda: self.go_to_tab_signal.emit("Sistema", "Backup/Ripristino DB"))
+
+            actions_layout.addWidget(btn_backup)
+        # --- FINE MODIFICA ---
+        
         actions_layout.addWidget(btn_new_prop); actions_layout.addWidget(btn_new_partita); actions_layout.addWidget(btn_new_consult) ; actions_layout.addWidget(btn_reports)
         actions_layout.addStretch()
         bottom_layout.addWidget(actions_group, 1)

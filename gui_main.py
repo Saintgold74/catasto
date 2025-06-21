@@ -35,6 +35,7 @@ from catasto_db_manager import CatastoDBManager
 from app_utils import get_local_ip_address, get_password_from_keyring 
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, resource_path
+from dialogs import CSVImportResultDialog, EulaDialog,BackupReminderSettingsDialog
 
 
 # Dai nuovi moduli che creeremo:
@@ -436,10 +437,41 @@ class CatastoMainWindow(QMainWindow):
          # --- AGGIUNGERE QUESTA CHIAMATA ALLA FINE ---
         self.check_mv_refresh_status()
         # --- FINE AGGIUNTA ---
+# In gui_main.py, SOSTITUISCI il metodo _check_backup_reminder
 
-    # All'interno della classe CatastoMainWindow in prova.py
+    def _check_backup_reminder(self):
+        settings = QSettings()
+        reminder_days = settings.value("Backup/ReminderDays", 0, type=int)
 
-    # In gui_main.py, SOSTITUISCI il metodo create_menu_bar con questo
+        # Se il promemoria è disattivato, esci subito
+        if reminder_days == 0:
+            return
+
+        last_backup_str = settings.value("Backup/LastBackupTimestamp", "")
+        reason = ""
+        show_reminder = False
+
+        if not last_backup_str:
+            show_reminder = True
+            reason = "Non risulta essere mai stato eseguito un backup tramite il programma."
+        else:
+            try:
+                last_backup_date = datetime.fromisoformat(last_backup_str)
+                days_since_backup = (datetime.now() - last_backup_date).days
+                if days_since_backup >= reminder_days:
+                    show_reminder = True
+                    reason = f"Sono passati {days_since_backup} giorni dall'ultimo backup (limite impostato: {reminder_days})."
+            except ValueError:
+                self.logger.warning("Timestamp dell'ultimo backup non valido.")
+                show_reminder = True # In dubbio, meglio mostrare l'avviso
+                reason = "Impossibile determinare la data dell'ultimo backup."
+
+        if show_reminder:
+            reply = QMessageBox.question(self, "Promemoria Backup",
+                                        f"{reason}\nÈ fortemente consigliato eseguire un backup dei dati.\n\nVuoi andare alla sezione di backup ora?",
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if reply == QMessageBox.Yes:
+                self.activate_tab_and_sub_tab("Sistema", "Backup/Ripristino DB")
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -447,6 +479,13 @@ class CatastoMainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("&File")
         settings_menu = menu_bar.addMenu("&Impostazioni")
         help_menu = menu_bar.addMenu("&Help")
+        
+            # --- INIZIO AGGIUNTA ---
+        settings_menu.addSeparator()
+        backup_reminder_action = QAction("Promemoria Backup...", self)
+        backup_reminder_action.triggered.connect(self._show_backup_settings_dialog)
+        settings_menu.addAction(backup_reminder_action)
+        # --- FINE AGGIUNTA ---
         
         # --- Azioni per il menu File ---
         import_possessori_action = QAction("Importa Possessori da CSV...", self)
@@ -1343,6 +1382,10 @@ class CatastoMainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Errore imprevisto durante l'apertura del manuale: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore", f"Impossibile aprire il manuale:\n{e}")
+            
+    def _show_backup_settings_dialog(self):
+        dialog = BackupReminderSettingsDialog(self)
+        dialog.exec_()
 
 
 
@@ -1405,7 +1448,6 @@ def setup_global_logging():
     )
     
     logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
-
 
 def run_gui_app():
     try:

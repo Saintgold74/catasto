@@ -39,7 +39,9 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QVBoxLayout,QProgressDialog)
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal,QProcessEnvironment)
+                          pyqtSignal,QProcessEnvironment,QObject)
+
+
 
 
 
@@ -70,6 +72,7 @@ class DBDataError(DBMError):
 # -------------------------------------------------
 
 class CatastoDBManager:
+    
     def __init__(self, dbname, user, password, host, port,
                  schema="catasto",
                  application_name="CatastoApp_Pool",
@@ -77,6 +80,7 @@ class CatastoDBManager:
                  log_level=logging.DEBUG, # O il suo default
                  min_conn=2,
                  max_conn=20):
+       
         
         self._main_db_conn_params = {"dbname": dbname, "user": user, "password": password, "host": host, "port": port}
         self._maintenance_db_name = "postgres" 

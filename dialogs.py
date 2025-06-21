@@ -5473,7 +5473,46 @@ class CSVImportResultDialog(QDialog):
         table.resizeColumnsToContents()
         table.horizontalHeader().setStretchLastSection(True)
         return table
-    
+# In dialogs.py, aggiungi questa nuova classe
+
+# In dialogs.py, SOSTITUISCI l'intera classe BackupReminderSettingsDialog
+
+class BackupReminderSettingsDialog(QDialog):
+    """Dialogo per configurare il trigger temporale del promemoria di backup."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.settings = QSettings()
+        self.setWindowTitle("Impostazioni Promemoria Backup")
+
+        layout = QFormLayout(self)
+
+        self.days_spinbox = QSpinBox()
+        self.days_spinbox.setRange(0, 365) # 0 per disattivare
+        self.days_spinbox.setSuffix(" giorni")
+        self.days_spinbox.setSpecialValueText("Mai (disattivato)")
+        layout.addRow("Mostra promemoria ogni:", self.days_spinbox)
+
+        info_label = QLabel("Impostando a '0', il promemoria verrà disattivato.")
+        info_label.setStyleSheet("font-style: italic; color: #555;")
+        layout.addRow(info_label)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+        self.load_settings()
+
+    def load_settings(self):
+        days = self.settings.value("Backup/ReminderDays", 30, type=int) # Default 30 giorni
+        self.days_spinbox.setValue(days)
+
+    def accept(self):
+        self.settings.setValue("Backup/ReminderDays", self.days_spinbox.value())
+        # Rimuoviamo la vecchia impostazione per pulizia
+        self.settings.remove("Backup/ReminderInserts")
+        QMessageBox.information(self, "Impostazioni Salve", "Le impostazioni per il promemoria di backup sono state salvate.")
+        super().accept()
 class EulaDialog(QDialog):
     """Dialogo per la visualizzazione e l'accettazione dell'EULA."""
     def __init__(self, parent=None):

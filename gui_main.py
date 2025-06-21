@@ -273,9 +273,12 @@ except ImportError as e:
 
 class CatastoMainWindow(QMainWindow):
     
-    def __init__(self, client_ip_address_gui: str):
+    def __init__(self, client_ip_address_gui: str, connection_type: str):
         super(CatastoMainWindow, self).__init__()
         self.logger = logging.getLogger("CatastoGUI")
+        # --- AGGIUNTA: Salva il tipo di connessione ---
+        self.connection_type = connection_type
+    
         self.db_manager: Optional[CatastoDBManager] = None
         self.logged_in_user_id: Optional[int] = None
         self.logged_in_user_info: Optional[Dict] = None
@@ -315,7 +318,10 @@ class CatastoMainWindow(QMainWindow):
         self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
         self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
-        self.setWindowTitle("Meridiana 1.0 - Gestionale Catasto Storico")
+        # --- INIZIO MODIFICA TITOLO ---
+        mode_str = "Locale" if self.connection_type == "local" else "Remoto"
+        self.setWindowTitle(f"Meridiana 1.2 - Gestionale Catasto Storico [{mode_str}]")
+    # --- FINE MODIFICA TITOLO ---
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
@@ -607,13 +613,20 @@ class CatastoMainWindow(QMainWindow):
         self.consultazione_sub_tabs = QTabWidget()
         self.inserimento_sub_tabs = QTabWidget()
         self.sistema_sub_tabs = QTabWidget()
+        self.reportistica_sub_tabs = QTabWidget()
         
-            # --- INIZIO MODIFICA ---
-        # Collega anche i sotto-tab al gestore di eventi universale
+        
+            # --- CORREZIONE DEFINITIVA ---
+        # Colleghiamo TUTTI i contenitori di tab allo stesso gestore.
+        # La connessione per self.tabs è già in initUI(), ma riaffermarla qui non crea problemi.
+        self.tabs.currentChanged.connect(self.handle_tab_changed)
+
+        # QUESTE SONO LE CONNESSIONI FONDAMENTALI CHE MANCAVANO:
         self.consultazione_sub_tabs.currentChanged.connect(self.handle_tab_changed)
         self.inserimento_sub_tabs.currentChanged.connect(self.handle_tab_changed)
+        self.reportistica_sub_tabs.currentChanged.connect(self.handle_tab_changed)
         self.sistema_sub_tabs.currentChanged.connect(self.handle_tab_changed)
-    # --- FINE MODIFICA ---
+        # --- FINE CORREZIONE ---
 
         # 1. Tab Dashboard
         self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
@@ -622,6 +635,7 @@ class CatastoMainWindow(QMainWindow):
         self.dashboard_widget.ricerca_globale_richiesta.connect(self.avvia_ricerca_globale_da_dashboard)
 
         # 2. Tab Consultazione e Modifica
+
         consultazione_contenitore = QWidget()
         layout_consultazione = QVBoxLayout(consultazione_contenitore)
         self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager)
@@ -853,37 +867,23 @@ class CatastoMainWindow(QMainWindow):
 
     # In gui_main.py, SOSTITUISCI il vecchio handle_main_tab_changed con questo:
 
+    # In gui_main.py -> classe CatastoMainWindow
     def handle_tab_changed(self, index: int):
         """
         Gestore universale per il cambio di tab (principali o sotto-tab).
         Implementa il lazy loading per il widget appena visualizzato.
         """
-        if not self.db_manager or not self.db_manager.pool:
-            return
-
-        # self.sender() ci dice quale QTabWidget ha emesso il segnale
         tab_widget = self.sender()
         if not isinstance(tab_widget, QTabWidget):
-            self.logger.warning("handle_tab_changed chiamato da un oggetto non QTabWidget.")
             return
 
         widget_to_load = tab_widget.widget(index)
 
-        # Se il widget appena attivato è un contenitore per altri sotto-tab,
-        # dobbiamo caricare il primo dei suoi figli.
-        if widget_to_load:
-            sub_tabs = widget_to_load.findChildren(QTabWidget)
-            if sub_tabs:
-                widget_to_load = sub_tabs[0].currentWidget()
-
-        # Infine, se abbiamo un widget valido, chiamiamo il suo metodo di lazy loading.
-        if hasattr(widget_to_load, 'load_initial_data'):
+        if widget_to_load and hasattr(widget_to_load, 'load_initial_data'):
             try:
                 widget_to_load.load_initial_data()
             except Exception as e:
-                self.logger.error(f"Errore durante il lazy loading del widget '{widget_to_load.__class__.__name__}': {e}", exc_info=True)
-                QMessageBox.critical(self, "Errore Caricamento Widget", f"Impossibile caricare i dati per la sezione selezionata:\n{e}")
-
+                self.logger.error(f"Errore lazy loading per '{widget_to_load.__class__.__name__}': {e}", exc_info=True)
     def update_ui_based_on_role(self):
         self.logger.info(
             ">>> CatastoMainWindow: Chiamata a update_ui_based_on_role")
@@ -1497,9 +1497,16 @@ def run_gui_app():
         
         gui_logger.info("Avvio dell'applicazione GUI Catasto Storico...")
         db_manager_gui: Optional[CatastoDBManager] = None
-        main_window_instance = CatastoMainWindow(client_ip_address_gui)
-
-        # --- NUOVO FLUSSO DI AVVIO ---
+        db_type = settings.value("Database/Type", "local", type=str)
+        main_window_instance = CatastoMainWindow(
+            client_ip_address_gui=client_ip_address_gui,
+            connection_type=db_type
+        )
+        # --- INIZIO CORREZIONE: Aggiungere questa riga mancante ---
+        # Comunichiamo esplicitamente alla finestra che il pool del DB
+        # è stato inizializzato con successo nel loop precedente.
+        main_window_instance.pool_initialized_successful = True
+        # --- FINE CORREZIONE ---
 
         # 1. TENTATIVO DI CONNESSIONE AUTOMATICA
         gui_logger.info("Tentativo di connessione automatica con le impostazioni salvate...")
@@ -1562,6 +1569,7 @@ def run_gui_app():
         # --- INIZIO MODIFICA ---
         # Passiamo la variabile 'client_ip_address_gui' al costruttore del LoginDialog
         login_dialog = LoginDialog(db_manager_gui, client_ip_address_gui, parent=main_window_instance)
+        
         # --- FINE MODIFICA ---
         if login_dialog.exec_() != QDialog.Accepted:
             gui_logger.info("Login utente annullato. Uscita.")
@@ -1576,7 +1584,7 @@ def run_gui_app():
         if welcome_screen.exec_() != QDialog.Accepted:
             gui_logger.info("Welcome screen chiusa. Uscita.")
             sys.exit(0)
-            
+           
         main_window_instance.perform_initial_setup(
             db_manager_gui,
             login_dialog.logged_in_user_id,

@@ -143,6 +143,28 @@ class DBConfigDialog(QDialog):
         
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.button(QDialogButtonBox.Ok).setText("Testa e Salva")
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText("Testa e Salva")
+        buttons.accepted.connect(self._handle_save_and_connect)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        # --- INIZIO AGGIUNTA: Sezione Operazioni di Emergenza ---
+        emergency_group = QGroupBox("Operazioni di Emergenza")
+        emergency_layout = QHBoxLayout(emergency_group)
+
+        emergency_label = QLabel("Usare solo se il database principale è corrotto o inaccessibile.")
+        emergency_label.setWordWrap(True)
+
+        self.btn_emergency_restore = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogResetButton), " Ripristina Database da Backup...")
+        self.btn_emergency_restore.clicked.connect(self._handle_emergency_restore)
+
+        emergency_layout.addWidget(emergency_label, 1)
+        emergency_layout.addWidget(self.btn_emergency_restore)
+
+        layout.addWidget(emergency_group)
+        # --- FINE AGGIUNTA ---
+
         
         layout.addLayout(form_layout)
         layout.addWidget(buttons)
@@ -398,6 +420,64 @@ class DBConfigDialog(QDialog):
         self.settings.sync() # Forza la scrittura su disco
         logging.getLogger("CatastoGUI").info(f"Impostazioni di connessione al database salvate (senza password) in: {self.settings.fileName()}")
     # Metodo getter modificato per includere la password (opzionale)
+    # In dialogs.py, aggiungi questo metodo alla classe DBConfigDialog
+
+    def _handle_emergency_restore(self):
+        """Gestisce il flusso di ripristino di emergenza."""
+        reply = QMessageBox.critical(
+            self,
+            "ATTENZIONE: OPERAZIONE DISTRUTTIVA",
+            "Stai per CANCELLARE il database corrente e sostituirlo con un backup.\n"
+            "Questa operazione è irreversibile e va usata solo se il database è corrotto o inaccessibile.\n\n"
+            "Sei assolutamente sicuro di voler procedere?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            self.logger.info("Ripristino di emergenza annullato dall'utente.")
+            return
+
+        # Raccogli i dati di connessione dal dialogo
+        config = self.get_config_values(include_password=True)
+        if not all(config.values()):
+            QMessageBox.warning(self, "Dati Mancanti", "Compila tutti i campi di connessione per procedere.")
+            return
+
+        # Chiedi all'utente di selezionare il file di backup
+        backup_file, _ = QFileDialog.getOpenFileName(
+            self, "Seleziona File di Backup", "", "File Dump (*.dump);;Tutti i file (*)")
+
+        if not backup_file:
+            return
+
+        # Conferma finale
+        reply2 = QMessageBox.question(self, "Conferma Finale",
+            f"Confermi di voler CANCELLARE il database '{config['dbname']}' e ripristinarlo dal file:\n{os.path.basename(backup_file)}?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply2 != QMessageBox.Yes:
+            return
+
+        # Crea un DB Manager temporaneo per l'operazione
+        emergency_db_manager = CatastoDBManager(
+            host=config["host"], port=config["port"],
+            dbname=config["dbname"], user=config["user"],
+            password=config["password"]
+        )
+
+        # Esegui l'operazione
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            success, message = emergency_db_manager.execute_restore_from_file_emergency(backup_file)
+            if success:
+                QMessageBox.information(self, "Successo", message)
+                # Se il ripristino ha successo, potremmo voler accettare il dialogo
+                # per forzare un nuovo tentativo di connessione all'avvio.
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Fallimento Ripristino", message)
+        finally:
+            QApplication.restoreOverrideCursor()
     def get_config_values(self, include_password: bool = False) -> Dict[str, Any]:
         """
         Recupera i valori di configurazione dai campi della UI.

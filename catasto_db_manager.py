@@ -39,7 +39,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QVBoxLayout,QProgressDialog)
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal)
+                          pyqtSignal,QProcessEnvironment)
 
 
 
@@ -3970,7 +3970,83 @@ class CatastoDBManager:
         finally:
             if conn:
                 self.release_connection(conn)
+    # In catasto_db_manager.py, aggiungi questo metodo alla classe
 
+    def execute_restore_from_file_emergency(self, backup_file_path: str) -> Tuple[bool, str]:
+        """
+        Esegue un ripristino DRUPIDO E DISTRUTTIVO del database.
+        1. CANCELLA il database esistente.
+        2. LO RICREA vuoto.
+        3. LO RIPRISTINA dal file di backup.
+        Questa operazione richiede una connessione al database di manutenzione (es. 'postgres').
+        """
+        # Ottieni i parametri necessari dal gestore stesso
+        db_user = self._main_db_conn_params.get("user")
+        db_password = self._main_db_conn_params.get("password") # Richiede la password per i tool
+        db_host = self._main_db_conn_params.get("host")
+        db_port = str(self._main_db_conn_params.get("port"))
+        db_name = self._main_db_conn_params.get("dbname")
+
+        # Trova i percorsi degli eseguibili
+        dropdb_path = self._resolve_executable_path(None, "dropdb.exe")
+        createdb_path = self._resolve_executable_path(None, "createdb.exe")
+        pg_restore_path = self._resolve_executable_path(None, "pg_restore.exe")
+
+        if not all([dropdb_path, createdb_path, pg_restore_path]):
+            msg = "Impossibile trovare gli eseguibili di PostgreSQL (dropdb, createdb, pg_restore) nel PATH di sistema."
+            self.logger.error(msg)
+            return False, msg
+
+        # Comando per CANCELLARE il database esistente
+        drop_command = [dropdb_path, "-U", db_user, "-h", db_host, "-p", db_port, "--if-exists", "-f", db_name]
+
+        # Comando per RICREARE il database vuoto
+        create_command = [createdb_path, "-U", db_user, "-h", db_host, "-p", db_port, "-T", "template0", db_name]
+
+        # Comando per RIPRISTINARE il backup
+        restore_command = [pg_restore_path, "-U", db_user, "-h", db_host, "-p", db_port, "-d", db_name, "--clean", "--if-exists", "-v", backup_file_path]
+
+        commands = [
+            ("Cancellazione DB esistente", drop_command),
+            ("Creazione DB vuoto", create_command),
+            ("Ripristino dati da backup", restore_command)
+        ]
+
+        # Imposta la variabile d'ambiente per la password
+        env = os.environ.copy()
+        env['PGPASSWORD'] = db_password
+
+        for description, command in commands:
+            self.logger.info(f"Esecuzione emergenza: {description}...")
+            process = QProcess()
+            process.setProcessEnvironment(self.create_clean_environment()) # Usa un ambiente pulito
+            process.setEnvironment(list(f"{k}={v}" for k,v in env.items()))
+
+            process.start(command[0], command[1:])
+            if not process.waitForFinished(-1):
+                error_msg = f"Timeout o errore durante: {description}. Errore: {process.errorString()}"
+                self.logger.error(error_msg)
+                return False, error_msg
+
+            exit_code = process.exitCode()
+            if exit_code != 0:
+                error_output = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                error_msg = f"Fallimento durante '{description}' (codice: {exit_code}).\nErrore:\n{error_output}"
+                self.logger.error(error_msg)
+                return False, error_msg
+
+        success_msg = f"Ripristino del database '{db_name}' completato con successo."
+        self.logger.info(success_msg)
+        return True, success_msg
+    # In catasto_db_manager.py, aggiungi questi metodi alla classe CatastoDBManager
+
+    def create_clean_environment(self) -> 'QProcessEnvironment':
+        """Crea un ambiente pulito per QProcess, ereditando le variabili di sistema."""
+        from PyQt5.QtCore import QProcessEnvironment
+        env = QProcessEnvironment.systemEnvironment()
+        return env
+
+    
 
     
         

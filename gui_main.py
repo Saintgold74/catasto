@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (QAction, QActionGroup, QApplication, # <-- AGGIUNTO
 
 
 from catasto_db_manager import CatastoDBManager
-from app_utils import get_local_ip_address
+from app_utils import get_local_ip_address, get_password_from_keyring 
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, resource_path
 
@@ -1030,44 +1030,30 @@ class CatastoMainWindow(QMainWindow):
                 f"Dialogo inserimento comune annullato da utente '{utente_login_username}'.")
 
     def _apri_dialogo_configurazione_db(self):
-        logging.getLogger("CatastoGUI").info(
-            "Apertura dialogo configurazione DB da menu.")
-        current_config_for_dialog = {}
-        settings = QSettings(QSettings.IniFormat, QSettings.UserScope,
-                             "ArchivioDiStatoSavona", "CatastoStoricoApp")
+        """Apre il dialogo di configurazione DB, pre-compilandolo con i valori correnti."""
+        self.logger.info("Apertura dialogo configurazione DB dal menu.")
+        settings = QSettings()
 
-        current_config_for_dialog[SETTINGS_DB_TYPE] = settings.value(
-            SETTINGS_DB_TYPE, "Locale (localhost)")
-        current_config_for_dialog[SETTINGS_DB_HOST] = settings.value(
-            SETTINGS_DB_HOST, "localhost")
-        # Fornisci un default stringa e converti qui per assicurare che il tipo sia corretto per int()
-        # Leggi come stringa, default a stringa "5432"
-        port_str_val = settings.value(SETTINGS_DB_PORT, "5432")
-        try:
-            current_config_for_dialog[SETTINGS_DB_PORT] = int(port_str_val)
-        except (ValueError, TypeError):
-            # Fallback se la stringa non è un intero valido
-            current_config_for_dialog[SETTINGS_DB_PORT] = 5432
-            logging.getLogger("CatastoGUI").warning(
-                f"Valore porta non valido '{port_str_val}' letto da QSettings, usando default 5432.")
+        # Raccoglie la configurazione attuale da QSettings
+        current_config = {
+            "db_type": settings.value("Database/Type", "local", type=str),
+            "host": settings.value("Database/Host", "localhost", type=str),
+            "port": settings.value("Database/Port", 5432, type=int),
+            "dbname": settings.value("Database/DBName", "catasto_storico", type=str),
+            "user": settings.value("Database/User", "postgres", type=str)
+        }
 
-        current_config_for_dialog[SETTINGS_DB_NAME] = settings.value(
-            SETTINGS_DB_NAME, "catasto_storico")
-        current_config_for_dialog[SETTINGS_DB_USER] = settings.value(
-            SETTINGS_DB_USER, "postgres")
-        current_config_for_dialog[SETTINGS_DB_SCHEMA] = settings.value(
-            SETTINGS_DB_SCHEMA, "catasto")
+        # Passa il dizionario di configurazione usando il nome corretto del parametro
+        config_dialog = DBConfigDialog(self, initial_config=current_config)
 
-        config_dialog = DBConfigDialog(
-            self, initial_config=current_config_for_dialog)
         if config_dialog.exec_() == QDialog.Accepted:
-            # Le impostazioni sono state salvate dal dialogo stesso
-            QMessageBox.information(self, "Configurazione Salvata",
-                                    "Le impostazioni del database sono state aggiornate.\n"
-                                    "È necessario riavviare l'applicazione per applicare le modifiche.")
-            # Qui, il riavvio è la strada più semplice. Modificare un DBManager attivo
-            # con un nuovo pool e nuovi parametri è complesso e soggetto a errori.
-
+            QMessageBox.information(
+                self, "Riavvio Necessario",
+                "Le nuove impostazioni del database sono state salvate.\n"
+                "È necessario riavviare l'applicazione per applicarle."
+            )
+            # Potremmo anche chiudere l'applicazione qui per forzare il riavvio
+            # self.close()
     def handle_logout(self):
         if self.logged_in_user_id is not None and self.current_session_id and self.db_manager:
             # Chiama il logout_user del db_manager passando l'ID utente e l'ID sessione correnti
@@ -1501,6 +1487,14 @@ def run_gui_app():
 
             while True: # Loop per riprovare la configurazione manuale
                 config_dialog = DBConfigDialog(parent=None)
+                # --- INIZIO MODIFICA: Leggiamo le impostazioni AD OGNI ciclo ---
+                db_type = settings.value("Database/Type", "local", type=str)
+                db_host = settings.value("Database/Host", "localhost", type=str)
+                db_port = settings.value("Database/Port", 5432, type=int)
+                db_name = settings.value("Database/DBName", "catasto_storico", type=str)
+                db_user = settings.value("Database/User", "postgres", type=str)
+                db_password = get_password_from_keyring(db_host, db_user)
+            # --- FINE MODIFICA ---
                 if config_dialog.exec_() != QDialog.Accepted:
                     gui_logger.info("Configurazione manuale annullata. Uscita.")
                     sys.exit(0)

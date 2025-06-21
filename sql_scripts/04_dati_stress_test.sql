@@ -219,7 +219,7 @@ CALL popola_dati_stress_test(
     p_possessori_per_comune => 100,
     p_partite_per_possessore_medio => 5,
     p_immobili_per_partita_media => 3,
-    p_percentuale_variazioni => 0.10
+    p_percentuale_variazioni => 0.40
 );
 
 DO $$ BEGIN

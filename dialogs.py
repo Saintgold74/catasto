@@ -28,8 +28,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget, QDateEdit,
-                             QGraphicsScene, QGraphicsView,QDialog, QVBoxLayout, 
-                             QTextBrowser, QDialogButtonBox)
+                             QGraphicsScene, QGraphicsView, QDialog, QVBoxLayout, 
+                             QTextBrowser, QDialogButtonBox, QRadioButton)
 
 from PyQt5.QtGui import QPainter
 from app_paths import resource_path
@@ -51,6 +51,16 @@ from custom_widgets import QPasswordLineEdit,ImmobiliTableWidget
 from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
                        gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
                        GenericTextReportPDF, FPDF_AVAILABLE, prompt_to_open_file,PDFApreviewDialog) # <-- AGGIUNGI QUI
+
+# --- INIZIO CORREZIONE: Importazione sicura di keyring ---
+try:
+    import keyring
+except ImportError:
+    keyring = None
+    logging.getLogger("CatastoGUI").warning(
+        "Libreria 'keyring' non trovata. La funzionalità di salvataggio sicuro della password non sarà disponibile."
+    )
+# --- FINE CORREZIONE ---
 
 try:
     from fpdf import FPDF
@@ -93,45 +103,77 @@ except ImportError:
 
 
 class DBConfigDialog(QDialog):
-    # AGGIUNTO UN SEGNALE per comunicare la password al chiamante (run_gui_app)
-    # in modo da non salvarla permanentemente e passarla solo quando serve.
-    # Non verrà usato in questo caso, perché il dialogo ora la gestisce internamente.
-    # config_accepted_with_password = pyqtSignal(dict, str) # Questo segnale non è più necessario così com'è
-    def __init__(self, parent=None, initial_config: Optional[Dict[str, Any]] = None, allow_test_connection: bool = True):
+    def __init__(self, parent=None, initial_config: Optional[Dict] = None):
         super().__init__(parent)
+        # --- INIZIO CORREZIONE: Aggiungere questa riga ---
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        # --- FINE CORREZIONE ---
         self.setWindowTitle("Configurazione Connessione Database")
         self.setModal(True)
-        self.setMinimumWidth(500)
-
-        self.settings = QSettings() # Usa le impostazioni globali dell'app
-        self.db_manager_test: Optional[CatastoDBManager] = None
-        self.allow_test_connection = allow_test_connection
-
-        layout = QFormLayout(self)
-        # ... (tutti i campi esistenti: db_type_combo, host_edit, etc. rimangono invariati) ...
-        self.db_type_combo = QComboBox(); self.db_type_combo.addItems(["Locale (localhost)", "Remoto (Server Specifico)"]); self.db_type_combo.currentIndexChanged.connect(self._db_type_changed); layout.addRow("Tipo di Server Database:", self.db_type_combo)
-        self.host_label = QLabel("Indirizzo Server Host (*):"); self.host_edit = QLineEdit(); self.host_edit.setPlaceholderText("Es. 192.168.1.100"); layout.addRow(self.host_label, self.host_edit)
-        self.port_spinbox = QSpinBox(); self.port_spinbox.setRange(1, 65535); self.port_spinbox.setValue(5432); layout.addRow("Porta Server (*):", self.port_spinbox)
-        self.dbname_edit = QLineEdit(); self.dbname_edit.setPlaceholderText("Es. catasto_storico"); layout.addRow("Nome Database (*):", self.dbname_edit)
-        self.user_edit = QLineEdit(); self.user_edit.setPlaceholderText("Es. postgres"); layout.addRow("Utente Database (*):", self.user_edit)
-        self.password_edit = QPasswordLineEdit(); self.password_edit.setPlaceholderText("Password dell'utente database"); layout.addRow("Password Database (*):", self.password_edit)
-        self.schema_edit = QLineEdit(); self.schema_edit.setPlaceholderText("Es. catasto"); layout.addRow("Schema Database (opz.):", self.schema_edit)
-
-        # --- AGGIUNTA CHECKBOX SALVA PASSWORD ---
-        self.save_password_check = QCheckBox("Salva password per connessione automatica (non sicuro, solo per comodità)")
-        layout.addRow(self.save_password_check)
-        # --- FINE AGGIUNTA ---
-
-        # ... (layout pulsanti e resto della logica __init__ rimane invariato)
-        bottom_buttons_layout = QHBoxLayout(); self.test_connection_button = QPushButton("Test Connessione"); self.test_connection_button.clicked.connect(self._test_connection); bottom_buttons_layout.addWidget(self.test_connection_button); bottom_buttons_layout.addStretch()
-        self.button_box = QDialogButtonBox(); self.button_box.addButton("Salva e Connetti", QDialogButtonBox.AcceptRole); self.button_box.addButton(QDialogButtonBox.Cancel); self.button_box.accepted.connect(self._handle_save_and_connect); self.button_box.rejected.connect(self.reject); bottom_buttons_layout.addWidget(self.button_box)
-        layout.addRow(bottom_buttons_layout)
+        self.setMinimumWidth(450)
         
-        self.default_preset_config = { SETTINGS_DB_TYPE: "Remoto (Server Specifico)", SETTINGS_DB_HOST: "10.99.80.131", SETTINGS_DB_PORT: 5432, SETTINGS_DB_NAME: "catasto_storico", SETTINGS_DB_USER: "postgres", SETTINGS_DB_SCHEMA: "catasto" }
-        self._load_settings()
-        self._db_type_changed(self.db_type_combo.currentIndex())
+        config = initial_config if initial_config else {}
 
-    
+        # --- UI Setup ---
+        layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+        
+        self.local_radio = QRadioButton("Locale (localhost)")
+        self.remote_radio = QRadioButton("Remoto (Server Specifico)")
+        type_layout = QHBoxLayout()
+        type_layout.addWidget(self.local_radio)
+        type_layout.addWidget(self.remote_radio)
+        form_layout.addRow("Tipo di Server:", type_layout)
+        
+        self.host_edit = QLineEdit()
+        self.port_spinbox = QSpinBox()
+        self.port_spinbox.setRange(1, 65535)
+        self.dbname_edit = QLineEdit()
+        self.user_edit = QLineEdit()
+        self.password_edit = QPasswordLineEdit()
+        self.save_password_check = QCheckBox("Salva password (non sicuro)")
+        
+        self.host_label = QLabel("Indirizzo Server Host:")
+        form_layout.addRow(self.host_label, self.host_edit)
+        form_layout.addRow("Porta Server:", self.port_spinbox)
+        form_layout.addRow("Nome Database:", self.dbname_edit)
+        form_layout.addRow("Utente Database:", self.user_edit)
+        form_layout.addRow("Password Database:", self.password_edit)
+        form_layout.addRow(self.save_password_check)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        buttons.button(QDialogButtonBox.Ok).setText("Testa e Salva")
+        
+        layout.addLayout(form_layout)
+        layout.addWidget(buttons)
+        
+        # --- Connessioni e Pre-compilazione ---
+        self.local_radio.toggled.connect(self._toggle_host_field) # Collega al nuovo metodo
+        
+        db_type = config.get("db_type", "local")
+        if db_type == "remote":
+            self.remote_radio.setChecked(True)
+        else:
+            self.local_radio.setChecked(True)
+        
+        self.host_edit.setText(config.get("host", "localhost"))
+        self.port_spinbox.setValue(config.get("port", 5432))
+        self.dbname_edit.setText(config.get("dbname", "catasto_storico"))
+        self.user_edit.setText(config.get("user", "postgres"))
+        
+        self._toggle_host_field() # Chiamata iniziale per impostare lo stato corretto della UI
+
+        buttons.accepted.connect(self._handle_save_and_connect)
+        buttons.rejected.connect(self.reject)
+    def _toggle_host_field(self):
+        """
+        Abilita o disabilita il campo di testo dell'host in base alla selezione
+        del radio button per la connessione locale/remota.
+        """
+        # Il campo dell'host è visibile solo se è selezionato "Remoto"
+        is_remote = self.remote_radio.isChecked()
+        self.host_label.setVisible(is_remote)
+        self.host_edit.setVisible(is_remote)
     def _load_settings(self):
         """Carica le impostazioni da QSettings, usando self.default_preset_config come fallback."""
         config_to_load = {}
@@ -187,24 +229,60 @@ class DBConfigDialog(QDialog):
 
 
     # --- NUOVI METODI WRAPPER PER accepted() e rejected() ---
+    # In dialogs.py, modifica il metodo _handle_save_and_connect in DBConfigDialog
+
+    # In dialogs.py, puoi sostituire l'intero metodo in DBConfigDialog
+
     def _handle_save_and_connect(self):
-        """Gestisce il click su 'Salva e Connetti', include validazione e poi accetta il dialogo."""
-        config_values = self.get_config_values(include_password=True)
+        """
+        Recupera i valori, testa la connessione, salva le impostazioni
+        e chiude il dialogo se tutto va a buon fine.
+        """
+        config = self.get_config_values(include_password=True)
+        
+        # Testa la connessione con i nuovi parametri
+        test_db_manager = CatastoDBManager(
+            host=config["host"],
+            port=config["port"],
+            dbname=config["dbname"],
+            user=config["user"],
+            password=config["password"]
+        )
+        
+        # --- INIZIO CORREZIONE ---
+        # Usiamo il metodo corretto per testare la connessione e inizializzare il pool
+        if test_db_manager.initialize_main_pool():
+        # --- FINE CORREZIONE ---
+            self.logger.info("Test di connessione riuscito.")
+            
+            # Se il test ha successo, salva le impostazioni
+            settings = QSettings()
+            
+            if self.remote_radio.isChecked():
+                settings.setValue("Database/Type", "remote")
+                settings.setValue("Database/Host", config["host"])
+            else:
+                settings.setValue("Database/Type", "local")
+                settings.setValue("Database/Host", "localhost")
 
-        if not all([config_values["dbname"], config_values["user"], config_values["password"]]):
-            QMessageBox.warning(self, "Dati Mancanti", "Compilare tutti i campi obbligatori (Nome DB, Utente DB, Password DB).")
-            return
-
-        is_remoto = (self.db_type_combo.currentIndex() == 1)
-        if is_remoto and not config_values["host"]:
-            QMessageBox.warning(self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto.")
-            return
-
-        # Se la validazione passa, salva le impostazioni (senza password permanente)
-        self._save_settings() 
-        # Chiudi il dialogo con QDialog.Accepted.
-        # Questa chiamata è fondamentale per far sì che config_dialog.exec_() restituisca Accepted.
-        super().accept() 
+            settings.setValue("Database/Port", config["port"])
+            settings.setValue("Database/DBName", config["dbname"])
+            settings.setValue("Database/User", config["user"])
+            
+            if config.get("save_password", False) and config.get("password"):
+                if keyring:
+                    try:
+                        keyring.set_password(f"meridiana_db_{config['host']}", config['user'], config['password'])
+                        self.logger.info("Password salvata nel keyring di sistema.")
+                    except Exception as e:
+                        self.logger.error(f"Impossibile salvare la password nel keyring: {e}")
+                        QMessageBox.warning(self, "Salvataggio Password Fallito", f"Impossibile salvare la password nel portachiavi di sistema:\n{e}")
+            
+            settings.sync()
+            QMessageBox.information(self, "Successo", "Connessione riuscita e impostazioni salvate.")
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Connessione Fallita", "Impossibile connettersi al database con i parametri forniti.\nControlla i dati e riprova.")
 
     def _handle_cancel(self):
         """Gestisce il click su 'Annulla'."""
@@ -321,16 +399,30 @@ class DBConfigDialog(QDialog):
         logging.getLogger("CatastoGUI").info(f"Impostazioni di connessione al database salvate (senza password) in: {self.settings.fileName()}")
     # Metodo getter modificato per includere la password (opzionale)
     def get_config_values(self, include_password: bool = False) -> Dict[str, Any]:
-        host_val = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
+        """
+        Recupera i valori di configurazione dai campi della UI.
+        Corretto per leggere dai radio button invece che da una combobox.
+        """
+        # --- INIZIO CORREZIONE ---
+        if self.local_radio.isChecked():
+            db_type_val = "local"
+            host_val = "localhost"
+        else:
+            db_type_val = "remote"
+            host_val = self.host_edit.text().strip()
+        # --- FINE CORREZIONE ---
+
         config = {
+            "db_type": db_type_val,
             "host": host_val,
             "port": self.port_spinbox.value(),
             "dbname": self.dbname_edit.text().strip(),
             "user": self.user_edit.text().strip(),
-            "schema": self.schema_edit.text().strip() or "catasto",
+            "save_password": self.save_password_check.isChecked()
         }
         if include_password:
             config["password"] = self.password_edit.text()
+
         return config
     
     

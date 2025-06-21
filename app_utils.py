@@ -35,6 +35,12 @@ except ImportError:
     class BulkReportPDF: pass
 
 # --- Funzioni Helper ---
+# All'inizio di app_utils.py
+try:
+    import keyring
+except ImportError:
+    keyring = None
+    logging.warning("Libreria 'keyring' non trovata. Salvataggio sicuro password non disponibile.")
 
 
 # --- Classi PDF (versione moderna con new_x e new_y) ---
@@ -764,6 +770,25 @@ def _get_default_export_path(default_filename: str) -> str:
     # Unisce il percorso della cartella con il nome del file suggerito
     return os.path.join(full_dir_path, default_filename)
 # In app_utils.py, aggiungi questa nuova funzione
+
+def get_password_from_keyring(service_name: str, username: str) -> Optional[str]:
+    """
+    Recupera una password dal keyring di sistema in modo sicuro.
+    Restituisce None se keyring non è disponibile o la password non è trovata.
+    """
+    if not keyring:
+        return None # La libreria non è installata
+
+    try:
+        password = keyring.get_password(service_name, username)
+        if password:
+            logging.getLogger("CatastoGUI").info(f"Password recuperata dal keyring per il servizio '{service_name}' e utente '{username}'.")
+        else:
+            logging.getLogger("CatastoGUI").info(f"Nessuna password trovata nel keyring per il servizio '{service_name}' e utente '{username}'.")
+        return password
+    except Exception as e:
+        logging.getLogger("CatastoGUI").error(f"Errore durante il recupero della password dal keyring: {e}", exc_info=True)
+        return None
 
 def prompt_to_open_file(parent_widget, filename: str):
     """

@@ -46,7 +46,7 @@ from gui_widgets import (
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
-    DBConfigDialog)
+    DBConfigDialog,InserimentoPartitaWidget)
 from dialogs import CSVImportResultDialog,EulaDialog
 
 from custom_widgets import QPasswordLineEdit
@@ -624,9 +624,12 @@ class CatastoMainWindow(QMainWindow):
         # 2. Tab Consultazione e Modifica
         consultazione_contenitore = QWidget()
         layout_consultazione = QVBoxLayout(consultazione_contenitore)
-        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager)
-        self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Elenco Comuni")
-        # (Aggiungi qui altri eventuali sotto-tab di consultazione)
+        self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Principale")
+        self.ricerca_partite_widget_ref = RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_partite_widget_ref, "Ricerca Partite")
+        self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs)
+        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
         layout_consultazione.addWidget(self.consultazione_sub_tabs)
         self.tabs.addTab(consultazione_contenitore, "Consultazione e Modifica")
 
@@ -650,8 +653,14 @@ class CatastoMainWindow(QMainWindow):
 
         self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(self.db_manager)
         self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Nuovo Possessore")
-
-        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager)
+        
+        self.inserimento_possessore_widget_ref.import_csv_requested.connect(self._import_possessori_csv)
+        
+        self.inserimento_partite_widget_ref = InserimentoPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
+        self.inserimento_sub_tabs.addTab(self.inserimento_partite_widget_ref, "Nuova Partita")
+        self.inserimento_partite_widget_ref.import_csv_requested.connect(self._import_partite_csv)
+      
+        self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs)
         self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Nuova Località")
 
         self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(self.db_manager)

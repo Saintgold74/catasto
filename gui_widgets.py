@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider, QCompleter)
+                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider, QCompleter,QSplitter)
 from PyQt5.QtCore import Qt, QSettings, pyqtSlot,pyqtSignal ,QThread
 
 
@@ -37,8 +37,8 @@ from config import (
     COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
     NUOVE_ETICHETTE_POSSESSORI)
 
-from dialogs import (DBConfigDialog, DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
-                     PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog, PeriodoStoricoDetailsDialog,
+from dialogs import ( ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
+                     PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog, 
                      PartitaDetailsDialog, CreateUserDialog,ModificaLocalitaDialog,PeriodoStoricoEditDialog, CreatePossessoreDialog)
 from custom_widgets import LazyLoadedWidget
 
@@ -69,7 +69,7 @@ from dialogs import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelec
 
 from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
                        gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
-                       GenericTextReportPDF,FPDF_AVAILABLE, GenericTextReportPDF)
+                       GenericTextReportPDF,FPDF_AVAILABLE, is_file_locked,get_alternative_filename)
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
 
@@ -3473,7 +3473,7 @@ class EsportazioniWidget(LazyLoadedWidget):
         format_group = QGroupBox("Formato di Esportazione")
         format_layout = QHBoxLayout(format_group)
         format_layout.setSpacing(10)
-
+        format_layout.setContentsMargins(10, 10, 10, 10)
         self.btn_export_csv = QPushButton("Esporta in CSV")
         self.btn_export_csv.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         self.btn_export_csv.clicked.connect(self._handle_export_csv)
@@ -3604,29 +3604,61 @@ class EsportazioniWidget(LazyLoadedWidget):
         elif export_type == "Report Consistenza Patrimoniale":
             return self.db_manager.get_report_consistenza_patrimoniale(comune_id)
         return None
-        
+    
+# In gui_widgets.py, all'interno della classe EsportazioniWidget
 
     def _handle_export_csv(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
+
         data = self._fetch_data_for_export(export_type, comune_id)
-        self.logger.debug(f"Dati recuperati per CSV: {data}")
-        # --- INIZIO NUOVA/RAFFORZATA CORREZIONE ---
+
+        # Controllo fondamentale - deve essere il primo punto di uscita
         if not data:
-            self.logger.warning("Nessun dato restituito dalla query per l'esportazione CSV. Annullamento operazione.")
-            QMessageBox.warning(self, "Nessun Dato", "La query non ha restituito alcun dato da esportare in formato CSV.")
-            return # Termina la funzione qui se non ci sono dati
-        # --- FINE NUOVA/RAFFORZATA CORREZIONE ---
+            QMessageBox.warning(self, "Nessun Dato da Esportare",
+                                "Non sono presenti dati da esportare in formato CSV. La query non ha restituito risultati.")
+            self.logger.info("Tentativo di esportazione CSV fallito: nessun dato da esportare.")
+            return
 
-
-        header_map = self.HEADER_MAPPINGS.get(export_type, {})
-        if header_map: # Assumendo che header_map sia definito o passato a questa funzione
-            ordered_keys = list(header_map.keys())
+        # Gestione speciale per il Report Consistenza Patrimoniale che restituisce un dizionario
+        if export_type == "Report Consistenza Patrimoniale":
+            # Per questo report speciale, convertiamo il dizionario in una lista piatta
+            flat_data = []
+            for possessore_nome, partite_list in data.items():
+                for partita in partite_list:
+                    flat_row = {
+                        'possessore_nome': possessore_nome,
+                        'numero_partita': partita.get('numero_partita'),
+                        'suffisso_partita': partita.get('suffisso_partita'),
+                        'titolo': partita.get('titolo'),
+                        'quota': partita.get('quota'),
+                        'stato': partita.get('stato')
+                    }
+                    flat_data.append(flat_row)
+            
+            # Sostituiamo data con la versione appiattita
+            data = flat_data
+            
+            # Header mapping specifico per questo report
+            header_map = {
+                'possessore_nome': 'Nome Possessore',
+                'numero_partita': 'Numero Partita',
+                'suffisso_partita': 'Suffisso',
+                'titolo': 'Titolo',
+                'quota': 'Quota',
+                'stato': 'Stato'
+            }
         else:
-            # Qui si verifica l'errore se 'data' è vuota
-            # Ora 'data' è garantita non essere vuota grazie al controllo sopra
-            ordered_keys = list(data[0].keys())
-        # Se non c'è una mappa, usa le chiavi originali come fallback
+            # Per tutti gli altri tipi di export, usa il mapping esistente
+            header_map = self.HEADER_MAPPINGS.get(export_type, {})
+
+        # Ora data è garantito essere una lista di dizionari
+        if not data:  # Controllo aggiuntivo dopo la conversione
+            QMessageBox.warning(self, "Nessun Dato da Esportare",
+                                "Non sono presenti dati da esportare.")
+            return
+
+        # Determina le chiavi ordinate e le intestazioni user-friendly
         ordered_keys = list(header_map.keys()) if header_map else list(data[0].keys())
         user_friendly_headers = list(header_map.values()) if header_map else ordered_keys
 
@@ -3640,18 +3672,16 @@ class EsportazioniWidget(LazyLoadedWidget):
         try:
             with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile, delimiter=';')
-                writer.writerow(user_friendly_headers) # Scrive le intestazioni "belle"
-                # Scrive i dati accedendovi tramite le chiavi originali ordinate
+                writer.writerow(user_friendly_headers)
+                # Scrive i dati accedendoli tramite le chiavi originali ordinate
                 for row_dict in data:
                     writer.writerow([row_dict.get(key) for key in ordered_keys])
             
-            self.status_log.append(f"<font color='green'>Esportazione CSV completata con successo.")
+            self.log_status(f"Esportazione CSV completata con successo.", link=filename)
             QMessageBox.information(self, "Successo", f"{len(data)} record esportati con successo.")
         except Exception as e:
+            self.logger.error(f"Errore durante l'esportazione CSV: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file CSV:\n{e}")
-
-
-    # --- NUOVI METODI PER XLS E PDF ---
 
     def _handle_export_xls(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
@@ -3869,10 +3899,10 @@ class ReportisticaWidget(LazyLoadedWidget):
         self.tabs_report_specifici = QTabWidget()
 
         # Creazione e aggiunta dei sotto-tab
-        self.tabs_report_specifici.addTab(self._create_report_proprieta_tab(), "Report Proprietà")
-        self.tabs_report_specifici.addTab(self._create_report_genealogico_tab(), "Report Genealogico")
-        self.tabs_report_specifici.addTab(self._create_report_possessore_tab(), "Report Possessore")
-        self.tabs_report_specifici.addTab(self._create_report_consultazioni_tab(), "Report Consultazioni")
+        self.tabs_report_specifici.addTab(self._create_report_proprieta_tab(), "Proprietà")
+        self.tabs_report_specifici.addTab(self._create_report_genealogico_tab(), "Genealogico")
+        self.tabs_report_specifici.addTab(self._create_report_possessore_tab(), "Possessore")
+        self.tabs_report_specifici.addTab(self._create_report_consultazioni_tab(), "Consultazioni")
 
         generation_layout.addWidget(self.tabs_report_specifici)
         main_layout.addWidget(generation_group)
@@ -4027,6 +4057,8 @@ class ReportisticaWidget(LazyLoadedWidget):
         self.report_output_browser.setPlainText(self.current_report_content)
         # --- FINE CORREZIONE ---
 
+    # In gui_widgets.py, nella classe ReportisticaWidget
+
     def _export_current_report_txt(self):
         if not self.current_report_content.strip():
             QMessageBox.warning(self, "Nessun Contenuto", "Generare un report prima di esportarlo.")
@@ -4038,23 +4070,92 @@ class ReportisticaWidget(LazyLoadedWidget):
         filename, _ = QFileDialog.getSaveFileName(self, "Salva Report TXT", full_default_path, "File di testo (*.txt)")
         if not filename: return
 
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(self.current_report_content) # Usa la variabile di stato
-
-            # --- INIZIO CORREZIONE VISUALIZZAZIONE ---
-            # 1. Pulisci e reimposta il testo originale per sicurezza
-            self.report_output_browser.clear()
-            self.report_output_browser.setPlainText(self.current_report_content)
-
-            # 2. Ora aggiungi il link HTML
-            file_url = QUrl.fromLocalFile(filename).toString()
-            base_name = os.path.basename(filename)
-            link_html = f"<hr><p style='color:green;'>Report esportato con successo: <a href='{file_url}'>{base_name}</a></p>"
-            self.report_output_browser.append(link_html)
-            # --- FINE CORREZIONE VISUALIZZAZIONE ---
-        except Exception as e:
-            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file:\n{e}")
+        # Gestione migliorata degli errori
+        max_attempts = 3
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(self.current_report_content)
+                
+                # Se arriviamo qui, il file è stato salvato con successo
+                self.report_output_browser.clear()
+                self.report_output_browser.setPlainText(self.current_report_content)
+                
+                file_url = QUrl.fromLocalFile(filename).toString()
+                base_name = os.path.basename(filename)
+                link_html = f"<hr><p style='color:green;'>Report esportato con successo: <a href='{file_url}'>{base_name}</a></p>"
+                self.report_output_browser.append(link_html)
+                
+                # Chiedi se aprire il file
+                reply = QMessageBox.question(
+                    self, 
+                    "File Salvato", 
+                    f"Report salvato con successo!\n\nVuoi aprire il file ora?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(filename))
+                
+                break  # Esci dal loop se tutto è andato bene
+                
+            except PermissionError as e:
+                attempt += 1
+                if attempt >= max_attempts:
+                    QMessageBox.critical(
+                        self, 
+                        "Errore di Accesso al File",
+                        f"Impossibile salvare il file '{base_name}'.\n\n"
+                        f"Il file potrebbe essere aperto in un altro programma.\n"
+                        f"Chiudi il file e riprova.\n\n"
+                        f"Dettagli errore: {str(e)}"
+                    )
+                else:
+                    # Proponi un nome alternativo
+                    base, ext = os.path.splitext(filename)
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    new_filename = f"{base}_{timestamp}{ext}"
+                    
+                    reply = QMessageBox.question(
+                        self,
+                        "File in Uso",
+                        f"Il file '{base_name}' sembra essere in uso.\n\n"
+                        f"Vuoi salvare con un nome diverso?\n"
+                        f"Nuovo nome proposto: {os.path.basename(new_filename)}",
+                        QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                    )
+                    
+                    if reply == QMessageBox.Yes:
+                        filename = new_filename
+                    elif reply == QMessageBox.No:
+                        # Riprova con lo stesso nome
+                        QMessageBox.information(
+                            self,
+                            "Suggerimento",
+                            "Chiudi il file nel programma che lo sta utilizzando e premi OK."
+                        )
+                    else:
+                        # Cancel
+                        break
+                        
+            except IOError as e:
+                QMessageBox.critical(
+                    self, 
+                    "Errore di Scrittura",
+                    f"Errore durante il salvataggio del file:\n{str(e)}\n\n"
+                    f"Verifica di avere i permessi di scrittura nella cartella selezionata."
+                )
+                break
+                
+            except Exception as e:
+                QMessageBox.critical(
+                    self, 
+                    "Errore Imprevisto",
+                    f"Si è verificato un errore inatteso:\n{str(e)}"
+                )
+                break
 
     def _export_current_report_pdf(self):
         if not self.current_report_content.strip():
@@ -4067,24 +4168,100 @@ class ReportisticaWidget(LazyLoadedWidget):
         filename, _ = QFileDialog.getSaveFileName(self, "Salva Report PDF", full_default_path, "File PDF (*.pdf)")
         if not filename: return
 
-        try:
-            pdf = GenericTextReportPDF(report_title="Report Catasto Storico")
-            pdf.add_page()
-            pdf.add_report_text(self.current_report_content) # Usa la variabile di stato
-            pdf.output(filename)
-
-            # --- INIZIO CORREZIONE VISUALIZZAZIONE (stessa logica del TXT) ---
-            self.report_output_browser.clear()
-            self.report_output_browser.setPlainText(self.current_report_content)
-
-            file_url = QUrl.fromLocalFile(filename).toString()
-            base_name = os.path.basename(filename)
-            link_html = f"<hr><p style='color:green;'>Report PDF esportato: <a href='{file_url}'>{base_name}</a></p>"
-            self.report_output_browser.append(link_html)
-            # --- FINE CORREZIONE VISUALIZZAZIONE ---
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
+        # Progress dialog per PDF (può richiedere tempo)
+        progress = QProgressDialog("Generazione PDF in corso...", "Annulla", 0, 100, self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(10)
+        
+        max_attempts = 3
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                if progress.wasCanceled():
+                    break
+                    
+                progress.setValue(30)
+                pdf = GenericTextReportPDF(report_title="Report Catasto Storico")
+                
+                progress.setValue(50)
+                pdf.add_page()
+                pdf.add_report_text(self.current_report_content)
+                
+                progress.setValue(80)
+                pdf.output(filename)
+                
+                progress.setValue(100)
+                
+                # Successo
+                self.report_output_browser.clear()
+                self.report_output_browser.setPlainText(self.current_report_content)
+                
+                file_url = QUrl.fromLocalFile(filename).toString()
+                base_name = os.path.basename(filename)
+                link_html = f"<hr><p style='color:green;'>Report PDF esportato: <a href='{file_url}'>{base_name}</a></p>"
+                self.report_output_browser.append(link_html)
+                
+                # Chiedi se aprire il file
+                reply = QMessageBox.question(
+                    self, 
+                    "PDF Creato", 
+                    f"PDF creato con successo!\n\nVuoi aprire il file ora?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(filename))
+                    
+                break
+                
+            except PermissionError:
+                attempt += 1
+                base_name = os.path.basename(filename)
+                
+                if attempt >= max_attempts:
+                    QMessageBox.critical(
+                        self, 
+                        "Errore di Accesso al File PDF",
+                        f"Impossibile salvare il file '{base_name}'.\n\n"
+                        f"Il file PDF potrebbe essere aperto in un lettore PDF.\n"
+                        f"Chiudi il file e riprova."
+                    )
+                else:
+                    # Proponi nome alternativo
+                    base, ext = os.path.splitext(filename)
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    new_filename = f"{base}_{timestamp}{ext}"
+                    
+                    reply = QMessageBox.warning(
+                        self,
+                        "PDF in Uso",
+                        f"Il file '{base_name}' è aperto in un altro programma.\n\n"
+                        f"Opzioni:\n"
+                        f"• Salvare con nome: {os.path.basename(new_filename)}\n"
+                        f"• Chiudere il PDF e riprovare\n"
+                        f"• Annullare l'operazione",
+                        QMessageBox.Save | QMessageBox.Retry | QMessageBox.Cancel,
+                        QMessageBox.Save
+                    )
+                    
+                    if reply == QMessageBox.Save:
+                        filename = new_filename
+                    elif reply == QMessageBox.Retry:
+                        continue
+                    else:
+                        break
+                        
+            except Exception as e:
+                QMessageBox.critical(
+                    self, 
+                    "Errore Generazione PDF",
+                    f"Impossibile generare il PDF:\n{str(e)}"
+                )
+                break
+            finally:
+                progress.close()    
     def _open_export_file_link(self, url: QUrl):
         """Apre il file locale puntato dall'URL cliccato nel log."""
         self.logger.info(f"Tentativo di aprire il file dal link: {url.toLocalFile()}")
@@ -4569,16 +4746,11 @@ class GestioneUtentiWidget(LazyLoadedWidget):
                     self, "Annullato", "Username non corrispondente. Eliminazione annullata.")
             # else: l'utente ha premuto annulla su QInputDialog
 
-# Altri Widget per i Tab (da creare)
-
-
-# In gui_widgets.py, SOSTITUISCI l'intera classe AuditLogViewerWidget con questa:
 
 class AuditLogViewerWidget(LazyLoadedWidget):
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-       
         
         # Stato per la paginazione
         self.current_page = 1
@@ -4587,130 +4759,250 @@ class AuditLogViewerWidget(LazyLoadedWidget):
         self.total_pages = 0
         self.current_filters = {}
         
-        
         self._init_ui()
-        
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # --- Gruppo Filtri e Azioni ---
-        filters_group = QGroupBox("Filtri e Azioni")
-        top_layout = QVBoxLayout(filters_group)
+        # === SEZIONE 1: FILTRI (più compatta) ===
+        filters_group = QGroupBox("Filtri Ricerca")
+        filters_group.setMaximumHeight(140)
+        filters_layout = QVBoxLayout(filters_group)
         
-        # --- INIZIO MODIFICA: Usiamo QGridLayout invece di QFormLayout ---
-        filters_grid_layout = QGridLayout()
-        filters_grid_layout.setSpacing(10)
-
-        # Riga 0: Nome Tabella e Username
+        # Prima riga di filtri
+        filters_row1 = QHBoxLayout()
+        filters_row1.setSpacing(10)
+        
+        # Tabella
+        filters_row1.addWidget(QLabel("Tabella:"))
         self.filter_table_name_edit = QLineEdit()
-        self.filter_app_user_id_edit = QLineEdit()
-        self.filter_app_user_id_edit.setPlaceholderText("ID o nome utente (opzionale)")
+        self.filter_table_name_edit.setPlaceholderText("Nome tabella...")
+        self.filter_table_name_edit.setMaximumWidth(150)
+        filters_row1.addWidget(self.filter_table_name_edit)
         
-        filters_grid_layout.addWidget(QLabel("Nome Tabella:"), 0, 0)
-        filters_grid_layout.addWidget(self.filter_table_name_edit, 0, 1)
-        filters_grid_layout.addWidget(QLabel("Username:"), 0, 2)
-        filters_grid_layout.addWidget(self.filter_app_user_id_edit, 0, 3)
-
-        # Riga 1: Data Inizio e Data Fine
-        self.filter_start_datetime_edit = QDateTimeEdit(self)
+        # Username
+        filters_row1.addWidget(QLabel("Utente:"))
+        self.filter_app_user_id_edit = QLineEdit()
+        self.filter_app_user_id_edit.setPlaceholderText("Username...")
+        self.filter_app_user_id_edit.setMaximumWidth(150)
+        filters_row1.addWidget(self.filter_app_user_id_edit)
+        
+        # Operazione
+        filters_row1.addWidget(QLabel("Operazione:"))
+        self.filter_operation_combo = QComboBox()
+        self.filter_operation_combo.addItems(["Tutte", "INSERT", "UPDATE", "DELETE"])
+        self.filter_operation_combo.setMaximumWidth(100)
+        filters_row1.addWidget(self.filter_operation_combo)
+        
+        filters_row1.addStretch()
+        
+        # Seconda riga: Date
+        filters_row2 = QHBoxLayout()
+        filters_row2.setSpacing(10)
+        
+        filters_row2.addWidget(QLabel("Da:"))
+        self.filter_start_datetime_edit = QDateTimeEdit()
         self.filter_start_datetime_edit.setDateTime(QDateTime.currentDateTime().addDays(-7))
         self.filter_start_datetime_edit.setCalendarPopup(True)
-        self.filter_start_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.filter_start_datetime_edit.setDisplayFormat("dd/MM/yyyy HH:mm")
+        self.filter_start_datetime_edit.setMaximumWidth(150)
+        filters_row2.addWidget(self.filter_start_datetime_edit)
         
-        self.filter_end_datetime_edit = QDateTimeEdit(self)
+        filters_row2.addWidget(QLabel("A:"))
+        self.filter_end_datetime_edit = QDateTimeEdit()
         self.filter_end_datetime_edit.setDateTime(QDateTime.currentDateTime())
         self.filter_end_datetime_edit.setCalendarPopup(True)
-        self.filter_end_datetime_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-
-        filters_grid_layout.addWidget(QLabel("Da Data/Ora:"), 1, 0)
-        filters_grid_layout.addWidget(self.filter_start_datetime_edit, 1, 1)
-        filters_grid_layout.addWidget(QLabel("A Data/Ora:"), 1, 2)
-        filters_grid_layout.addWidget(self.filter_end_datetime_edit, 1, 3)
-
-        # Riga 2: Operazione (occupa meno spazio, può stare da sola)
-        self.filter_operation_combo = QComboBox()
-        self.filter_operation_combo.addItems(["Tutte", "INSERT (I)", "UPDATE (U)", "DELETE (D)"])
-        filters_grid_layout.addWidget(QLabel("Operazione:"), 2, 0)
-        filters_grid_layout.addWidget(self.filter_operation_combo, 2, 1)
-
-        # Imposta le colonne dei campi di input per espandersi, mentre le etichette rimangono fisse
-        filters_grid_layout.setColumnStretch(1, 1)
-        filters_grid_layout.setColumnStretch(3, 1)
+        self.filter_end_datetime_edit.setDisplayFormat("dd/MM/yyyy HH:mm")
+        self.filter_end_datetime_edit.setMaximumWidth(150)
+        filters_row2.addWidget(self.filter_end_datetime_edit)
         
-        top_layout.addLayout(filters_grid_layout)
-        # --- FINE MODIFICA ---
-        
-        # Pulsanti di azione
-        action_layout = QHBoxLayout()
-        self.search_button = QPushButton("Applica Filtri"); self.search_button.setIcon(self.style().standardIcon(QStyle.SP_DialogApplyButton))
+        # Pulsanti filtro
+        self.search_button = QPushButton("Applica")
+        self.search_button.setIcon(self.style().standardIcon(QStyle.SP_DialogApplyButton))
         self.search_button.clicked.connect(self._apply_filters_and_search)
-        self.reset_button = QPushButton("Resetta Filtri"); self.reset_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
+        self.search_button.setMaximumWidth(100)
+        filters_row2.addWidget(self.search_button)
+        
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
         self.reset_button.clicked.connect(self._reset_filters)
-        self.export_csv_button = QPushButton("Esporta CSV"); self.export_csv_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.export_csv_button.clicked.connect(self._handle_export_csv)
-        self.export_xls_button = QPushButton("Esporta Excel"); self.export_xls_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.export_xls_button.clicked.connect(self._handle_export_xls)
+        self.reset_button.setMaximumWidth(100)
+        filters_row2.addWidget(self.reset_button)
         
-            # --- NUOVA SEZIONE: Pulizia Log ---
-        cleanup_group = QGroupBox("Pulizia Log di Audit")
-        cleanup_layout = QHBoxLayout(cleanup_group)
-        cleanup_label = QLabel("Elimina log più vecchi di:")
-        self.days_to_keep_spinbox = QSpinBox()
-        self.days_to_keep_spinbox.setRange(1, 365 * 10) # Da 1 giorno a 10 anni
-        self.days_to_keep_spinbox.setValue(90) # Default: 90 giorni
-        self.days_to_keep_spinbox.setMinimumWidth(60)
-        self.days_unit_combo = QComboBox()
-        self.days_unit_combo.addItems(["Giorni", "Mesi", "Anni"])
-        self.days_unit_combo.setMinimumWidth(80)
-        self.btn_cleanup_logs = QPushButton(self.style().standardIcon(QStyle.SP_DialogResetButton), "Pulisci Ora")
-        self.btn_cleanup_logs.clicked.connect(self._confirm_and_cleanup_logs)
-        cleanup_layout.addWidget(cleanup_label)
-        cleanup_layout.addWidget(self.days_to_keep_spinbox)
-        cleanup_layout.addWidget(self.days_unit_combo)
-        cleanup_layout.addStretch()
-        cleanup_layout.addWidget(self.btn_cleanup_logs)
-        main_layout.addWidget(cleanup_group)
-        # --- FINE NUOVA SEZIONE ---
+        filters_row2.addStretch()
         
-        action_layout.addWidget(self.search_button)
-        action_layout.addWidget(self.reset_button)
-        action_layout.addStretch()
-        action_layout.addWidget(self.export_csv_button)
-        action_layout.addWidget(self.export_xls_button)
-        top_layout.addLayout(action_layout)
-
+        filters_layout.addLayout(filters_row1)
+        filters_layout.addLayout(filters_row2)
         main_layout.addWidget(filters_group)
 
-        # --- Tabella Risultati ---
+        # === SEZIONE 2: AZIONI (toolbar orizzontale) ===
+        actions_toolbar = QHBoxLayout()
+        actions_toolbar.setSpacing(10)
+        
+        # Gruppo Pulizia (a sinistra)
+        cleanup_frame = QFrame()
+        cleanup_frame.setFrameStyle(QFrame.StyledPanel)
+        cleanup_layout = QHBoxLayout(cleanup_frame)
+        cleanup_layout.setContentsMargins(10, 5, 10, 5)
+        
+        cleanup_layout.addWidget(QLabel("Elimina log più vecchi di:"))
+        self.days_to_keep_spinbox = QSpinBox()
+        self.days_to_keep_spinbox.setRange(1, 3650)
+        self.days_to_keep_spinbox.setValue(90)
+        self.days_to_keep_spinbox.setMaximumWidth(80)
+        cleanup_layout.addWidget(self.days_to_keep_spinbox)
+        
+        self.days_unit_combo = QComboBox()
+        self.days_unit_combo.addItems(["Giorni", "Mesi", "Anni"])
+        self.days_unit_combo.setMaximumWidth(80)
+        cleanup_layout.addWidget(self.days_unit_combo)
+        
+        self.btn_cleanup_logs = QPushButton("Pulisci")
+        self.btn_cleanup_logs.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
+        self.btn_cleanup_logs.clicked.connect(self._confirm_and_cleanup_logs)
+        cleanup_layout.addWidget(self.btn_cleanup_logs)
+        
+        actions_toolbar.addWidget(cleanup_frame)
+        actions_toolbar.addStretch()
+        
+        # Gruppo Esportazione (a destra)
+        export_frame = QFrame()
+        export_frame.setFrameStyle(QFrame.StyledPanel)
+        export_layout = QHBoxLayout(export_frame)
+        export_layout.setContentsMargins(10, 5, 10, 5)
+        
+        self.export_csv_button = QPushButton("CSV")
+        self.export_csv_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        self.export_csv_button.clicked.connect(self._handle_export_csv)
+        export_layout.addWidget(self.export_csv_button)
+        
+        self.export_xls_button = QPushButton("Excel")
+        self.export_xls_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        self.export_xls_button.clicked.connect(self._handle_export_xls)
+        export_layout.addWidget(self.export_xls_button)
+        
+        actions_toolbar.addWidget(export_frame)
+        main_layout.addLayout(actions_toolbar)
+
+        # === SEZIONE 3: SPLITTER per tabella e dettagli ===
+        splitter = QSplitter(Qt.Vertical)
+        
+        # Parte superiore: Tabella con paginazione
+        table_widget = QWidget()
+        table_layout = QVBoxLayout(table_widget)
+        table_layout.setContentsMargins(0, 0, 0, 0)
+        table_layout.setSpacing(5)
+        
+        # Tabella risultati
         self.log_table = QTableWidget()
         self.log_table.setColumnCount(8)
-        self.log_table.setHorizontalHeaderLabels(["ID", "Timestamp", "Username", "Sessione", "Tabella", "Operazione", "ID Record", "IP"])
-        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers); self.log_table.setSelectionBehavior(QTableWidget.SelectRows); self.log_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents); self.log_table.horizontalHeader().setStretchLastSection(True); self.log_table.setAlternatingRowColors(True)
-        self.log_table.itemSelectionChanged.connect(self._display_log_details)
-        main_layout.addWidget(self.log_table, 1) # Stretch factor per la tabella
-
-        # --- Controlli di Paginazione ---
-        pagination_layout = QHBoxLayout()
-        self.btn_first_page = QPushButton("<< Prima"); self.btn_first_page.clicked.connect(self._go_to_first_page)
-        self.btn_prev_page = QPushButton("< Prec"); self.btn_prev_page.clicked.connect(self._go_to_previous_page)
-        self.page_info_label = QLabel("Pagina 1 / 1 (0 risultati)"); self.page_info_label.setAlignment(Qt.AlignCenter)
-        self.btn_next_page = QPushButton("Succ >"); self.btn_next_page.clicked.connect(self._go_to_next_page)
-        self.btn_last_page = QPushButton("Ultima >>"); self.btn_last_page.clicked.connect(self._go_to_last_page)
-        pagination_layout.addStretch(); pagination_layout.addWidget(self.btn_first_page); pagination_layout.addWidget(self.btn_prev_page)
-        pagination_layout.addWidget(self.page_info_label); pagination_layout.addWidget(self.btn_next_page); pagination_layout.addWidget(self.btn_last_page); pagination_layout.addStretch()
-        main_layout.addLayout(pagination_layout)
+        self.log_table.setHorizontalHeaderLabels(["ID", "Data/Ora", "Utente", "Sessione", "Tabella", "Azione", "Record", "IP"])
+        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.log_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.log_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.log_table.setAlternatingRowColors(True)
         
-        # --- Area Dettagli JSON ---
-        details_group = QGroupBox("Dettagli Modifica (JSON)")
-        details_layout = QHBoxLayout(details_group)
-        self.details_before_text = QTextEdit(); self.details_before_text.setReadOnly(True); self.details_before_text.setPlaceholderText("Dati prima della modifica...")
-        self.details_after_text = QTextEdit(); self.details_after_text.setReadOnly(True); self.details_after_text.setPlaceholderText("Dati dopo la modifica...")
-        details_layout.addWidget(QLabel("Dati Prima:")); details_layout.addWidget(self.details_before_text)
-        details_layout.addWidget(QLabel("Dati Dopo:")); details_layout.addWidget(self.details_after_text)
-        main_layout.addWidget(details_group)
+        # Configurazione colonne
+        header = self.log_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Data/Ora
+        header.setSectionResizeMode(2, QHeaderView.Interactive)       # Utente
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Sessione
+        header.setSectionResizeMode(4, QHeaderView.Stretch)          # Tabella
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Azione
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Record
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # IP
+        
+        self.log_table.itemSelectionChanged.connect(self._display_log_details)
+        table_layout.addWidget(self.log_table)
+        
+        # Controlli paginazione
+        pagination_frame = QFrame()
+        pagination_frame.setFrameStyle(QFrame.StyledPanel)
+        pagination_frame.setMaximumHeight(40)
+        pagination_layout = QHBoxLayout(pagination_frame)
+        pagination_layout.setContentsMargins(5, 2, 5, 2)
+        
+        self.btn_first_page = QPushButton("<<")
+        self.btn_first_page.setToolTip("Prima pagina")
+        self.btn_first_page.setMaximumWidth(40)
+        self.btn_first_page.clicked.connect(self._go_to_first_page)
+        
+        self.btn_prev_page = QPushButton("<")
+        self.btn_prev_page.setToolTip("Pagina precedente")
+        self.btn_prev_page.setMaximumWidth(40)
+        self.btn_prev_page.clicked.connect(self._go_to_previous_page)
+        
+        self.page_info_label = QLabel("Pagina 1 / 1")
+        self.page_info_label.setAlignment(Qt.AlignCenter)
+        self.page_info_label.setMinimumWidth(150)
+        
+        self.btn_next_page = QPushButton(">")
+        self.btn_next_page.setToolTip("Pagina successiva")
+        self.btn_next_page.setMaximumWidth(40)
+        self.btn_next_page.clicked.connect(self._go_to_next_page)
+        
+        self.btn_last_page = QPushButton(">>")
+        self.btn_last_page.setToolTip("Ultima pagina")
+        self.btn_last_page.setMaximumWidth(40)
+        self.btn_last_page.clicked.connect(self._go_to_last_page)
+        
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.btn_first_page)
+        pagination_layout.addWidget(self.btn_prev_page)
+        pagination_layout.addWidget(self.page_info_label)
+        pagination_layout.addWidget(self.btn_next_page)
+        pagination_layout.addWidget(self.btn_last_page)
+        pagination_layout.addStretch()
+        
+        table_layout.addWidget(pagination_frame)
+        splitter.addWidget(table_widget)
+        
+        # Parte inferiore: Dettagli JSON
+        details_widget = QWidget()
+        details_widget.setMaximumHeight(200)
+        details_layout = QVBoxLayout(details_widget)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        
+        details_label = QLabel("Dettagli Modifica (seleziona una riga)")
+        details_label.setStyleSheet("font-weight: bold; padding: 5px;")
+        details_layout.addWidget(details_label)
+        
+        details_splitter = QSplitter(Qt.Horizontal)
+        
+        # Prima colonna
+        before_widget = QWidget()
+        before_layout = QVBoxLayout(before_widget)
+        before_layout.setContentsMargins(5, 0, 5, 0)
+        before_layout.addWidget(QLabel("Prima:"))
+        self.details_before_text = QTextEdit()
+        self.details_before_text.setReadOnly(True)
+        self.details_before_text.setFont(QFont("Consolas", 9))
+        before_layout.addWidget(self.details_before_text)
+        
+        # Seconda colonna
+        after_widget = QWidget()
+        after_layout = QVBoxLayout(after_widget)
+        after_layout.setContentsMargins(5, 0, 5, 0)
+        after_layout.addWidget(QLabel("Dopo:"))
+        self.details_after_text = QTextEdit()
+        self.details_after_text.setReadOnly(True)
+        self.details_after_text.setFont(QFont("Consolas", 9))
+        after_layout.addWidget(self.details_after_text)
+        
+        details_splitter.addWidget(before_widget)
+        details_splitter.addWidget(after_widget)
+        details_splitter.setSizes([400, 400])
+        
+        details_layout.addWidget(details_splitter)
+        splitter.addWidget(details_widget)
+        
+        # Imposta proporzioni iniziali (70% tabella, 30% dettagli)
+        splitter.setSizes([500, 200])
+        
+        main_layout.addWidget(splitter)
 
     def _load_data_on_first_show(self):
         """

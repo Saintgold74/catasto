@@ -815,6 +815,31 @@ def prompt_to_open_file(parent_widget, filename: str):
         except Exception as e:
             logging.getLogger("CatastoGUI").error(f"Impossibile aprire il file {filename}: {e}", exc_info=True)
             QMessageBox.critical(parent_widget, "Errore Apertura File", f"Impossibile aprire il file:\n{e}")
+            
+# In app_utils.py o come metodo statico
+
+def is_file_locked(filepath):
+    """
+    Verifica se un file è bloccato/in uso da un altro processo.
+    """
+    if not os.path.exists(filepath):
+        return False
+    
+    try:
+        # Prova ad aprire il file in modalità esclusiva
+        with open(filepath, 'a') as f:
+            pass
+        return False
+    except (IOError, PermissionError):
+        return True
+
+def get_alternative_filename(original_path):
+    """
+    Genera un nome file alternativo aggiungendo un timestamp.
+    """
+    base, ext = os.path.splitext(original_path)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{base}_{timestamp}{ext}"
 
 
 if FPDF_AVAILABLE:

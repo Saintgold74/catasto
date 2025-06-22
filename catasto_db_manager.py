@@ -954,10 +954,24 @@ class CatastoDBManager:
         """Recupera un elenco completo di variazioni, usando la vista aggiornata."""
         query = f"SELECT * FROM {self.schema}.v_variazioni_complete"
         params = []
+        
         if comune_id:
-            # Ora filtriamo direttamente sull'ID, più efficiente e sicuro
-            query += " WHERE partita_origine_comune_id = %s"
-            params.append(comune_id)
+            # Recupera il nome del comune dall'ID per filtrare sulla vista
+            # Questa è una chiamata aggiuntiva al DB.
+            # Se la vista potesse includere direttamente l'ID, sarebbe più efficiente.
+            comune_info = self.get_comune_by_id(comune_id) # Presumo esista o lo creiamo
+            if comune_info and comune_info.get('nome_comune'): # Usa 'nome_comune' come chiave
+                comune_nome = comune_info['nome_comune']
+                # --- INIZIO CORREZIONE: Filtra sulla colonna 'partita_origine_comune' ---
+                query += " WHERE partita_origine_comune = %s"
+                params.append(comune_nome)
+                # --- FINE CORREZIONE ---
+            else:
+                self.logger.warning(f"Nome comune non trovato per ID {comune_id}. Impossibile filtrare le variazioni.")
+                # Se il comune ID non è valido o non trova il nome, non aggiunge il filtro.
+                # Questo potrebbe portare a un elenco completo anziché filtrato.
+                # Decidi se vuoi sollevare un'eccezione o restituire una lista vuota in questo caso.
+                # Per ora, non filtra e procede con l'elenco completo.
 
         query += " ORDER BY data_variazione DESC;"
 
@@ -967,7 +981,31 @@ class CatastoDBManager:
                     cur.execute(query, params)
                     return [dict(row) for row in cur.fetchall()]
         except Exception as e:
+            # Incapsula l'errore per dare più contesto al chiamante GUI
             raise DBMError(f"Impossibile recuperare l'elenco delle variazioni: {e}") from e
+
+    # --- NUOVO METODO: Aggiungi questo metodo alla classe CatastoDBManager ---
+    def get_comune_by_id(self, comune_id: int) -> Optional[Dict[str, Any]]:
+        """Recupera i dettagli di un comune tramite il suo ID."""
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            self.logger.error(f"get_comune_by_id: ID comune non valido: {comune_id}")
+            return None
+        
+        query = f"""
+            SELECT id, nome AS nome_comune, provincia, regione, codice_catastale, periodo_id,
+                   data_istituzione, data_soppressione, note
+            FROM {self.schema}.comune
+            WHERE id = %s;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (comune_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_comune_by_id (ID: {comune_id}): {e}", exc_info=True)
+            return None
     def get_report_consistenza_patrimoniale(self, comune_id: int) -> Dict[str, List[Dict]]:
         """
         Genera i dati per un report di consistenza patrimoniale per un dato comune.

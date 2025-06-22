@@ -1,4 +1,4 @@
-/* Stile "Verde Archivio" - Versione ottimizzata con tab abbreviati */
+/* Stile "Verde Archivio" - Ispirato ai registri storici */
 QWidget {
     font-family: 'Roboto', 'Arial', sans-serif;
     font-size: 10pt;
@@ -66,16 +66,14 @@ QTabWidget::pane {
     background-color: #FFFFFF;
 }
 
-/* TAB OTTIMIZZATI CON GRASSETTO */
 QTabBar::tab {
     background: #DCEDC8;
     border: 1px solid #AED581;
     border-bottom: none;
-    padding: 10px 18px;
+    padding: 8px 16px;
     min-width: 70px;
     min-height: 20px;
     margin-right: 2px;
-    text-align: center;
 }
 
 QTabBar::tab:selected {
@@ -84,33 +82,11 @@ QTabBar::tab:selected {
     font-weight: bold;
     color: #33691E;
     border-top: 3px solid #558B2F;
-    padding-top: 8px;
+    padding-top: 6px;
 }
 
 QTabBar::tab:hover:!selected {
     background: #C5E1A5;
-    color: #33691E;
-}
-
-/* Tab principali - più spaziosi */
-QTabWidget > QTabBar::tab {
-    min-width: 90px;
-    padding: 10px 20px;
-}
-
-/* Sotto-tab - più compatti */
-QTabWidget QTabWidget QTabBar::tab {
-    min-width: 70px;
-    padding: 8px 15px;
-    font-size: 9pt;
-}
-
-/* Tab con icone emoji */
-QTabBar::tab[text*="🏠"], 
-QTabBar::tab[text*="🔍"], 
-QTabBar::tab[text*="📤"] {
-    padding-left: 15px;
-    padding-right: 15px;
 }
 
 QTableWidget {
@@ -134,11 +110,6 @@ QTableWidget::item:selected {
 
 QTableWidget::item:alternate {
     background-color: #F1F8E9;
-}
-
-QTabWidget QPushButton {
-    padding: 6px 12px;
-    min-height: 30px;
 }
 
 QToolTip {

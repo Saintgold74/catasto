@@ -1,0 +1,170 @@
+/* Stile "Moderno Scuro" - Versione ottimizzata con tab abbreviati */
+QWidget {
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-size: 10pt;
+    color: #E0E0E0;
+}
+
+QMainWindow, QDialog {
+    background-color: #1E1E1E;
+}
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #424242;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    background-color: #2A2A2A;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 10px;
+    left: 15px;
+    color: #64B5F6;
+}
+
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QComboBox {
+    background-color: #333333;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 6px;
+    color: #E0E0E0;
+}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QComboBox:focus {
+    border-color: #64B5F6;
+    border-width: 2px;
+    background-color: #3A3A3A;
+}
+
+QPushButton {
+    background-color: #2196F3;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 15px;
+    min-width: 100px;
+}
+
+QPushButton:hover {
+    background-color: #1976D2;
+}
+
+QPushButton:pressed {
+    background-color: #1565C0;
+}
+
+QPushButton:disabled {
+    background-color: #424242;
+    color: #666666;
+}
+
+QTabWidget::pane {
+    border: 1px solid #424242;
+    border-radius: 0px 0px 8px 8px;
+    padding: 12px;
+    background-color: #2A2A2A;
+}
+
+/* TAB OTTIMIZZATI CON GRASSETTO */
+QTabBar::tab {
+    background: #333333;
+    border: 1px solid #424242;
+    border-bottom: none;
+    padding: 10px 18px;
+    min-width: 70px;
+    min-height: 20px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+    color: #B0B0B0;
+    text-align: center;
+}
+
+QTabBar::tab:selected {
+    background: #2A2A2A;
+    border-color: #424242;
+    font-weight: bold;
+    color: #64B5F6;
+    border-top: 2px solid #2196F3;
+    padding-top: 9px;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #3A3A3A;
+    color: #E0E0E0;
+}
+
+/* Tab principali - più spaziosi */
+QTabWidget > QTabBar::tab {
+    min-width: 90px;
+    padding: 10px 20px;
+}
+
+/* Sotto-tab - più compatti */
+QTabWidget QTabWidget QTabBar::tab {
+    min-width: 70px;
+    padding: 8px 15px;
+    font-size: 9pt;
+}
+
+/* Tab con icone emoji */
+QTabBar::tab[text*="🏠"], 
+QTabBar::tab[text*="🔍"], 
+QTabBar::tab[text*="📤"] {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+QTableWidget {
+    border: 1px solid #424242;
+    gridline-color: #333333;
+    background-color: #2A2A2A;
+    alternate-background-color: #333333;
+}
+
+QHeaderView::section {
+    background-color: #1976D2;
+    padding: 6px;
+    border: none;
+    font-weight: bold;
+    color: white;
+}
+
+QTableWidget::item:selected {
+    background-color: #2196F3;
+    color: white;
+}
+
+QScrollBar:vertical {
+    background: #2A2A2A;
+    width: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background: #555555;
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #666666;
+}
+
+QTabWidget QPushButton {
+    padding: 6px 12px;
+    min-height: 30px;
+}
+
+QToolTip {
+    background-color: #424242;
+    border: 1px solid #64B5F6;
+    padding: 6px;
+    border-radius: 4px;
+    color: #E0E0E0;
+}

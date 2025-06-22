@@ -608,16 +608,14 @@ class CatastoMainWindow(QMainWindow):
         self.inserimento_sub_tabs = QTabWidget()
         self.sistema_sub_tabs = QTabWidget()
         
-            # --- INIZIO MODIFICA ---
         # Collega anche i sotto-tab al gestore di eventi universale
         self.consultazione_sub_tabs.currentChanged.connect(self.handle_tab_changed)
         self.inserimento_sub_tabs.currentChanged.connect(self.handle_tab_changed)
         self.sistema_sub_tabs.currentChanged.connect(self.handle_tab_changed)
-    # --- FINE MODIFICA ---
 
         # 1. Tab Dashboard
         self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
-        self.tabs.addTab(self.dashboard_widget, "🏠 Home / Dashboard")
+        self.tabs.addTab(self.dashboard_widget, "🏠 Home")
         self.dashboard_widget.go_to_tab_signal.connect(self.activate_tab_and_sub_tab)
         self.dashboard_widget.ricerca_globale_richiesta.connect(self.avvia_ricerca_globale_da_dashboard)
 
@@ -629,16 +627,22 @@ class CatastoMainWindow(QMainWindow):
         self.ricerca_partite_widget_ref = RicercaPartiteWidget(self.db_manager, self.consultazione_sub_tabs)
         self.consultazione_sub_tabs.addTab(self.ricerca_partite_widget_ref, "Ricerca Partite")
         self.ricerca_avanzata_immobili_widget_ref = RicercaAvanzataImmobiliWidget(self.db_manager, self.consultazione_sub_tabs)
-        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili Avanzata")
+        self.consultazione_sub_tabs.addTab(self.ricerca_avanzata_immobili_widget_ref, "Ricerca Immobili")
+        
+        # Tooltip per i sotto-tab di consultazione
+        self.consultazione_sub_tabs.setTabToolTip(0, "Visualizza l'elenco principale dei comuni registrati")
+        self.consultazione_sub_tabs.setTabToolTip(1, "Ricerca partite per comune, numero, possessore o natura immobile")
+        self.consultazione_sub_tabs.setTabToolTip(2, "Ricerca avanzata immobili con filtri multipli")
+        
         layout_consultazione.addWidget(self.consultazione_sub_tabs)
-        self.tabs.addTab(consultazione_contenitore, "Consultazione e Modifica")
+        self.tabs.addTab(consultazione_contenitore, "Consultazione")
 
         # 3. Tab Ricerca Globale
         if FUZZY_SEARCH_AVAILABLE:
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
-            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
+            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca")
 
-        # 4. Tab Inserimento e Gestione (SEZIONE MODIFICATA)
+        # 4. Tab Inserimento e Gestione
         inserimento_contenitore = QWidget()
         layout_inserimento = QVBoxLayout(inserimento_contenitore)
         utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
@@ -647,77 +651,103 @@ class CatastoMainWindow(QMainWindow):
         self.inserimento_comune_widget_ref = InserimentoComuneWidget(
             db_manager=self.db_manager,
             utente_attuale_info=utente_per_inserimenti,
-            parent=self.inserimento_sub_tabs  # Specificare sempre il parent con il suo nome
+            parent=self.inserimento_sub_tabs
         )
-        self.inserimento_sub_tabs.addTab(self.inserimento_comune_widget_ref, "Nuovo Comune")
+        self.inserimento_sub_tabs.addTab(self.inserimento_comune_widget_ref, "Comune")
 
         self.inserimento_possessore_widget_ref = InserimentoPossessoreWidget(self.db_manager)
-        self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Nuovo Possessore")
-        
+        self.inserimento_sub_tabs.addTab(self.inserimento_possessore_widget_ref, "Possessore")
         self.inserimento_possessore_widget_ref.import_csv_requested.connect(self._import_possessori_csv)
         
         self.inserimento_partite_widget_ref = InserimentoPartitaWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.inserimento_partite_widget_ref, "Nuova Partita")
+        self.inserimento_sub_tabs.addTab(self.inserimento_partite_widget_ref, "Partita")
         self.inserimento_partite_widget_ref.import_csv_requested.connect(self._import_partite_csv)
-      
+    
         self.inserimento_localita_widget_ref = InserimentoLocalitaWidget(self.db_manager, self.inserimento_sub_tabs)
-        self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Nuova Località")
+        self.inserimento_sub_tabs.addTab(self.inserimento_localita_widget_ref, "Località")
 
         self.registrazione_proprieta_widget_ref = RegistrazioneProprietaWidget(self.db_manager)
-        self.inserimento_sub_tabs.addTab(self.registrazione_proprieta_widget_ref, "Registrazione Proprietà")
+        self.inserimento_sub_tabs.addTab(self.registrazione_proprieta_widget_ref, "Reg. Proprietà")
 
         self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager)
-        self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni Partita")
+        self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni")
 
         self.registra_consultazione_widget_ref = RegistraConsultazioneWidget(self.db_manager, self.logged_in_user_info)
-        self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Registra Consultazione")
+        self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Reg. Consultazione")
 
-        # --- INIZIO SPOSTAMENTO ---
-        # Aggiungiamo qui i widget di gestione che prima erano in "Sistema"
-        # Questa logica deve essere eseguita solo se l'utente è admin
+        # Widget di gestione (solo per admin)
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.gestione_tipi_localita_widget = GestioneTipiLocalitaWidget(self.db_manager)
-            self.inserimento_sub_tabs.addTab(self.gestione_tipi_localita_widget, "Gestione Tipi Località")
+            self.inserimento_sub_tabs.addTab(self.gestione_tipi_localita_widget, "Tipi Località")
 
             self.gestione_periodi_widget = GestionePeriodiStoriciWidget(self.db_manager)
-            self.inserimento_sub_tabs.addTab(self.gestione_periodi_widget, "Gestione Periodi Storici")
-        # --- FINE SPOSTAMENTO ---
+            self.inserimento_sub_tabs.addTab(self.gestione_periodi_widget, "Periodi")
+
+        # Tooltip per i sotto-tab di inserimento
+        tab_idx = 0
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Inserisci Nuovo Comune\nRegistra un nuovo comune nel database"); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Inserisci Nuovo Possessore\nAggiungi un nuovo possessore al database"); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Inserisci Nuova Partita\nCrea una nuova partita catastale"); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Inserisci Nuova Località\nAggiungi vie, piazze, borgate, ecc."); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Registrazione Proprietà\nRegistra una nuova proprietà completa con possessori e immobili"); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Operazioni Partita\nDuplica partite, trasferisci immobili, passaggio proprietà (voltura)"); tab_idx += 1
+        self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Registra Consultazione\nRegistra gli accessi all'archivio per tracciabilità"); tab_idx += 1
+        
+        if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
+            self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Tipi Località\nGestisci le tipologie di località (Via, Piazza, ecc.)"); tab_idx += 1
+            self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Periodi Storici\nDefinisci i periodi storici di riferimento")
 
         layout_inserimento.addWidget(self.inserimento_sub_tabs)
-        self.tabs.addTab(inserimento_contenitore, "Inserimento e Gestione")
+        self.tabs.addTab(inserimento_contenitore, "Inserimento")
 
-        # 5. Altri Tab (invariati)
+        # 5. Altri Tab
         self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager)
-        self.tabs.addTab(self.esportazioni_widget_ref, "🗄️ Esportazioni Massive")
+        self.tabs.addTab(self.esportazioni_widget_ref, "📤 Esportazioni")
 
         self.reportistica_widget_ref = ReportisticaWidget(self.db_manager)
-        self.tabs.addTab(self.reportistica_widget_ref, "Reportistica")
+        self.tabs.addTab(self.reportistica_widget_ref, "Report")
 
         self.statistiche_widget_ref = StatisticheWidget(self.db_manager)
-        self.tabs.addTab(self.statistiche_widget_ref, "Statistiche e Viste")
+        self.tabs.addTab(self.statistiche_widget_ref, "Statistiche")
 
-        # 6. Tab Admin (SEZIONE MODIFICATA)
+        # Conta i tab per i tooltip (utile per i tab condizionali)
+        main_tab_idx = 0
+        self.tabs.setTabToolTip(main_tab_idx, "Home / Dashboard\nPannello principale con statistiche e accesso rapido"); main_tab_idx += 1
+        self.tabs.setTabToolTip(main_tab_idx, "Consultazione e Modifica\nVisualizza e modifica comuni, partite e possessori"); main_tab_idx += 1
+        
+        if FUZZY_SEARCH_AVAILABLE:
+            self.tabs.setTabToolTip(main_tab_idx, "Ricerca Globale\nRicerca fuzzy avanzata in tutto il database"); main_tab_idx += 1
+        
+        self.tabs.setTabToolTip(main_tab_idx, "Inserimento e Gestione\nInserisci nuovi dati e gestisci le proprietà"); main_tab_idx += 1
+        self.tabs.setTabToolTip(main_tab_idx, "Esportazioni Massive\nEsporta dati in CSV, Excel e PDF"); main_tab_idx += 1
+        self.tabs.setTabToolTip(main_tab_idx, "Reportistica\nGenera report dettagliati e certificati"); main_tab_idx += 1
+        self.tabs.setTabToolTip(main_tab_idx, "Statistiche e Viste\nVisualizza statistiche e gestisci le viste materializzate"); main_tab_idx += 1
+
+        # 6. Tab Admin
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.gestione_utenti_widget_ref = GestioneUtentiWidget(self.db_manager, self.logged_in_user_info)
-            self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
+            self.tabs.addTab(self.gestione_utenti_widget_ref, "Utenti")
+            self.tabs.setTabToolTip(main_tab_idx, "Gestione Utenti\nGestisci utenti, ruoli e permessi"); main_tab_idx += 1
 
             sistema_contenitore = QWidget()
             layout_sistema = QVBoxLayout(sistema_contenitore)
 
             self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager)
-            self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log di Audit")
+            self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log Audit")
 
             self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager)
-            self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino DB")
+            self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino")
 
-            # I widget per Tipi Località e Periodi Storici sono stati RIMOSSI da qui
+            # Tooltip per i sotto-tab di sistema
+            self.sistema_sub_tabs.setTabToolTip(0, "Log di Audit\nVisualizza tutte le operazioni effettuate nel sistema")
+            self.sistema_sub_tabs.setTabToolTip(1, "Backup/Ripristino DB\nEsegui backup del database o ripristina da backup esistente")
 
             layout_sistema.addWidget(self.sistema_sub_tabs)
             self.tabs.addTab(sistema_contenitore, "Sistema")
+            self.tabs.setTabToolTip(main_tab_idx, "Sistema\nConfigurazione, backup, log di audit")
 
         self.tabs.setCurrentIndex(0)
-        self.logger.info("Setup dei tab completato con la nuova struttura.")
-    
+        self.logger.info("Setup dei tab completato con nomi abbreviati e tooltip.")
     def activate_tab_and_sub_tab(self, main_tab_name: str, sub_tab_name: str, activate_report_sub_tab: bool = False):
         self.logger.info(
             f"Richiesta attivazione: Tab Principale='{main_tab_name}', Sotto-Tab='{sub_tab_name}'")

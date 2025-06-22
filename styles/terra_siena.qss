@@ -1,17 +1,17 @@
-/* Stile "Blu Savoia" - Versione ottimizzata con tab abbreviati */
+/* Stile "Terra di Siena" - Versione ottimizzata con tab abbreviati */
 QWidget {
-    font-family: 'Segoe UI', Arial, sans-serif;
+    font-family: 'Georgia', 'Times New Roman', serif;
     font-size: 10pt;
-    color: #212529;
+    color: #3E2723;
 }
 
 QMainWindow, QDialog {
-    background-color: #F8F9FA;
+    background-color: #FFF8E1;
 }
 
 QGroupBox {
     font-weight: bold;
-    border: 1px solid #D3D3D3;
+    border: 2px solid #8D6E63;
     border-radius: 8px;
     margin-top: 10px;
 }
@@ -21,21 +21,23 @@ QGroupBox::title {
     subcontrol-position: top left;
     padding: 0 5px;
     left: 10px;
+    color: #5D4037;
 }
 
 QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QComboBox {
     background-color: #FFFFFF;
-    border: 1px solid #ced4da;
+    border: 1px solid #BCAAA4;
     border-radius: 4px;
     padding: 5px;
 }
 
 QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QComboBox:focus {
-    border-color: #357EC7;
+    border-color: #6D4C41;
+    border-width: 2px;
 }
 
 QPushButton {
-    background-color: #357EC7;
+    background-color: #795548;
     color: white;
     font-weight: bold;
     border: none;
@@ -45,63 +47,52 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #2a6ead;
+    background-color: #6D4C41;
 }
 
 QPushButton:pressed {
-    background-color: #215a8c;
+    background-color: #5D4037;
 }
 
 QPushButton:disabled {
-    background-color: #A9A9A9;
-    color: #E0E0E0;
+    background-color: #D7CCC8;
+    color: #BCAAA4;
 }
 
 QTabWidget::pane {
-    border-top: 2px solid #D3D3D3;
+    border-top: 3px solid #8D6E63;
     padding: 10px;
     background-color: #FFFFFF;
 }
 
 /* TAB OTTIMIZZATI CON GRASSETTO */
 QTabBar::tab {
-    background: #E9ECEF;
-    border: 1px solid #D3D3D3;
+    background: #EFEBE9;
+    border: 1px solid #BCAAA4;
     border-bottom: none;
-    /* Padding bilanciato per i nomi abbreviati */
     padding: 10px 18px;
-    /* Larghezza minima appropriata per tab corti */
     min-width: 70px;
-    /* Altezza uniforme */
     min-height: 20px;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    /* Spazio tra i tab */
-    margin-right: 2px;
-    /* Allineamento centrale del testo */
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 3px;
     text-align: center;
 }
 
 QTabBar::tab:selected {
     background: #FFFFFF;
-    border-color: #D3D3D3;
-    /* Ripristina il grassetto per il tab selezionato */
+    border-color: #8D6E63;
     font-weight: bold;
-    /* Colore blu per evidenziare */
-    color: #357EC7;
-    /* Bordo superiore colorato */
-    border-top: 3px solid #357EC7;
-    /* Compensa il bordo più spesso */
+    color: #5D4037;
+    border-top: 3px solid #795548;
     padding-top: 8px;
 }
 
 QTabBar::tab:hover:!selected {
-    background: #F0F0F0;
-    /* Colore più scuro al passaggio del mouse */
-    color: #357EC7;
+    background: #D7CCC8;
+    color: #5D4037;
 }
 
-/* Differenziazione per tab principali e sotto-tab */
 /* Tab principali - più spaziosi */
 QTabWidget > QTabBar::tab {
     min-width: 90px;
@@ -115,44 +106,42 @@ QTabWidget QTabWidget QTabBar::tab {
     font-size: 9pt;
 }
 
-/* Stile specifico per i tab con icone emoji */
+/* Tab con icone emoji */
 QTabBar::tab[text*="🏠"], 
 QTabBar::tab[text*="🔍"], 
 QTabBar::tab[text*="📤"] {
-    /* Padding extra per bilanciare le icone */
     padding-left: 15px;
     padding-right: 15px;
 }
 
 QTableWidget {
-    border: 1px solid #D3D3D3;
-    gridline-color: #E0E0E0;
+    border: 1px solid #BCAAA4;
+    gridline-color: #D7CCC8;
     background-color: #FFFFFF;
 }
 
 QHeaderView::section {
-    background-color: #E6F7FF;
+    background-color: #EFEBE9;
     padding: 5px;
-    border: 1px solid #D3D3D3;
+    border: 1px solid #BCAAA4;
     font-weight: bold;
+    color: #5D4037;
 }
 
 QTableWidget::item:selected {
-    background-color: #7FB3D5;
+    background-color: #A1887F;
     color: white;
 }
 
-/* Stile per i pulsanti nei tab (come "Aggiorna Statistiche Comuni") */
 QTabWidget QPushButton {
     padding: 6px 12px;
     min-height: 30px;
 }
 
-/* Migliora l'aspetto dei tooltip */
 QToolTip {
-    background-color: #FFFBDD;
-    border: 1px solid #D3D3D3;
+    background-color: #FFF3E0;
+    border: 1px solid #8D6E63;
     padding: 5px;
     border-radius: 3px;
-    color: #000000;
+    color: #3E2723;
 }

@@ -1,95 +1,99 @@
-/* Stile "Verde Archivio" - Versione ottimizzata con tab abbreviati */
+/* Stile "Azzurro Ligure" - Versione ottimizzata con tab abbreviati */
 QWidget {
-    font-family: 'Roboto', 'Arial', sans-serif;
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
     font-size: 10pt;
-    color: #1B5E20;
+    color: #263238;
 }
 
 QMainWindow, QDialog {
-    background-color: #F1F8E9;
+    background-color: #F5F5F5;
 }
 
 QGroupBox {
     font-weight: bold;
-    border: 1px solid #689F38;
-    border-radius: 5px;
-    margin-top: 10px;
-    padding-top: 10px;
+    border: 2px solid #0288D1;
+    border-radius: 10px;
+    margin-top: 12px;
+    background-color: rgba(224, 247, 250, 0.3);
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 10px;
-    left: 20px;
-    color: #33691E;
+    padding: 0 8px;
+    left: 15px;
+    color: #01579B;
 }
 
 QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QComboBox {
     background-color: #FFFFFF;
-    border: 1px solid #AED581;
-    border-radius: 3px;
-    padding: 5px 8px;
+    border: 2px solid #B3E5FC;
+    border-radius: 6px;
+    padding: 6px;
 }
 
 QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QComboBox:focus {
-    border-color: #689F38;
-    border-width: 2px;
+    border-color: #0288D1;
+    background-color: #E1F5FE;
 }
 
 QPushButton {
-    background-color: #689F38;
+    background-color: #03A9F4;
     color: white;
     font-weight: bold;
     border: none;
-    border-radius: 3px;
-    padding: 8px 15px;
+    border-radius: 6px;
+    padding: 10px 15px;
     min-width: 100px;
 }
 
 QPushButton:hover {
-    background-color: #558B2F;
+    background-color: #0288D1;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton:pressed {
-    background-color: #33691E;
+    background-color: #01579B;
 }
 
 QPushButton:disabled {
-    background-color: #C5E1A5;
-    color: #E8F5E9;
+    background-color: #B3E5FC;
+    color: #E1F5FE;
 }
 
 QTabWidget::pane {
-    border: 1px solid #689F38;
-    padding: 10px;
+    border: 2px solid #0288D1;
+    border-radius: 0px 8px 8px 8px;
+    padding: 12px;
     background-color: #FFFFFF;
 }
 
 /* TAB OTTIMIZZATI CON GRASSETTO */
 QTabBar::tab {
-    background: #DCEDC8;
-    border: 1px solid #AED581;
+    background: #E1F5FE;
+    border: 2px solid #B3E5FC;
     border-bottom: none;
     padding: 10px 18px;
     min-width: 70px;
-    min-height: 20px;
+    min-height: 22px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
     margin-right: 2px;
     text-align: center;
 }
 
 QTabBar::tab:selected {
     background: #FFFFFF;
-    border-color: #689F38;
+    border-color: #0288D1;
+    border-bottom: 2px solid #FFFFFF;
     font-weight: bold;
-    color: #33691E;
-    border-top: 3px solid #558B2F;
-    padding-top: 8px;
+    color: #01579B;
+    margin-bottom: -2px;
 }
 
 QTabBar::tab:hover:!selected {
-    background: #C5E1A5;
-    color: #33691E;
+    background: #B3E5FC;
+    color: #01579B;
 }
 
 /* Tab principali - più spaziosi */
@@ -114,26 +118,24 @@ QTabBar::tab[text*="📤"] {
 }
 
 QTableWidget {
-    border: 1px solid #AED581;
-    gridline-color: #DCEDC8;
+    border: 2px solid #B3E5FC;
+    gridline-color: #E1F5FE;
     background-color: #FFFFFF;
+    alternate-background-color: #F5F5F5;
 }
 
 QHeaderView::section {
-    background-color: #8BC34A;
-    padding: 5px;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #03A9F4, stop: 1 #0288D1);
+    padding: 6px;
     border: none;
     font-weight: bold;
     color: white;
 }
 
 QTableWidget::item:selected {
-    background-color: #9CCC65;
+    background-color: #4FC3F7;
     color: white;
-}
-
-QTableWidget::item:alternate {
-    background-color: #F1F8E9;
 }
 
 QTabWidget QPushButton {
@@ -142,9 +144,9 @@ QTabWidget QPushButton {
 }
 
 QToolTip {
-    background-color: #DCEDC8;
-    border: 1px solid #689F38;
-    padding: 5px;
-    border-radius: 3px;
-    color: #1B5E20;
+    background-color: #E1F5FE;
+    border: 2px solid #0288D1;
+    padding: 6px;
+    border-radius: 4px;
+    color: #01579B;
 }

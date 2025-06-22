@@ -3532,6 +3532,42 @@ class EsportazioniWidget(LazyLoadedWidget):
             self._data_loaded = True
         except DBMError as e:
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare l'elenco dei comuni:\n{e}")
+    # In gui_widgets.py, nella classe EsportazioniWidget, SOSTITUISCI il metodo log_status
+
+    def log_status(self, message: str, error: bool = False, link: Optional[str] = None):
+        """
+        Aggiunge un messaggio al log, con timestamp e formattazione opzionale
+        per errori e link cliccabili.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Costruisce il messaggio base
+        log_message = f"[{timestamp}] {message}"
+
+        # Se è stato fornito un link, lo aggiunge come HTML
+        if link and os.path.exists(link):
+            file_url = QUrl.fromLocalFile(link).toString()
+            base_name = os.path.basename(link)
+            # Aggiunge il link cliccabile al messaggio
+            log_message += f" -> <a href='{file_url}'>{base_name}</a>"
+
+        # Applica il colore per gli errori o per i successi con link
+        if error:
+            # Usa il tag <font> per colorare il testo di rosso
+            self.status_log.append(f"<font color='red'>{log_message}</font>")
+        elif link:
+            # Se c'è un link, coloriamo il testo di verde per indicare successo
+            self.status_log.append(f"<font color='green'>{log_message}</font>")
+        else:
+            # Messaggio standard senza formattazione speciale
+            self.status_log.append(log_message)
+
+        # Scorri automaticamente verso il basso per mostrare l'ultimo messaggio
+        self.status_log.verticalScrollBar().setValue(
+            self.status_log.verticalScrollBar().maximum())
+
+        # Forza l'aggiornamento della UI per mostrare il messaggio immediatamente
+        QApplication.processEvents()
 
     def _get_export_parameters(self):
         export_type = self.export_type_combo.currentText()
@@ -3680,101 +3716,108 @@ class ReportisticaWidget(LazyLoadedWidget):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        # Il logger è ereditato da LazyLoadedWidget
-
-        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.current_report_content = ""  # Memorizza il report corrente come testo semplice
+        self.current_report_content = ""  # Memorizza il report corrente
         self._initUI()
-        
 
     def _initUI(self):
         main_layout = QVBoxLayout(self)
-        self.tabs = QTabWidget()
 
-        # --- Tab Report Proprietà ---
-        report_tab = QWidget()
-        report_layout = QFormLayout(report_tab) # Usiamo QFormLayout per un aspetto più ordinato
-        
-        # Selezione Partita
-        partita_select_layout_prop = QHBoxLayout()
-        self.partita_id_edit = QSpinBox(); self.partita_id_edit.setRange(1, 9999999)
-        self.search_partita_button = QPushButton("Cerca..."); self.search_partita_button.clicked.connect(self.search_partita_prop)
-        partita_select_layout_prop.addWidget(self.partita_id_edit)
-        partita_select_layout_prop.addWidget(self.search_partita_button)
-        report_layout.addRow("ID Partita:", partita_select_layout_prop)
+        # Contenitore principale per tutti i controlli di generazione report
+        generation_group = QGroupBox("Seleziona il Report da Generare")
+        generation_layout = QVBoxLayout(generation_group)
 
-        # Label per mostrare i dettagli della partita selezionata (incluso suffisso)
-        self.partita_info_label_prop = QLabel("Nessuna partita selezionata.")
-        self.partita_info_label_prop.setStyleSheet("font-style: italic; color: #555;")
-        report_layout.addRow(self.partita_info_label_prop)
+        # Creiamo il QTabWidget interno con un nome coerente
+        self.tabs_report_specifici = QTabWidget()
 
-        self.generate_cert_button = QPushButton("Genera Report Proprietà"); self.generate_cert_button.clicked.connect(self.generate_report_proprieta)
-        report_layout.addRow(self.generate_cert_button)
-        
-        self.tabs.addTab(report_tab, "Report Proprietà")
+        # Creazione e aggiunta dei sotto-tab
+        self.tabs_report_specifici.addTab(self._create_report_proprieta_tab(), "Report Proprietà")
+        self.tabs_report_specifici.addTab(self._create_report_genealogico_tab(), "Report Genealogico")
+        self.tabs_report_specifici.addTab(self._create_report_possessore_tab(), "Report Possessore")
+        self.tabs_report_specifici.addTab(self._create_report_consultazioni_tab(), "Report Consultazioni")
 
-        # --- Tab Report Genealogico ---
-        genealogico_tab = QWidget()
-        genealogico_layout = QFormLayout(genealogico_tab)
+        generation_layout.addWidget(self.tabs_report_specifici)
+        main_layout.addWidget(generation_group)
 
-        partita_select_layout_gen = QHBoxLayout()
-        self.partita_id_gen_edit = QSpinBox(); self.partita_id_gen_edit.setRange(1, 9999999)
-        self.search_partita_gen_button = QPushButton("Cerca..."); self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
-        partita_select_layout_gen.addWidget(self.partita_id_gen_edit)
-        partita_select_layout_gen.addWidget(self.search_partita_gen_button)
-        genealogico_layout.addRow("ID Partita:", partita_select_layout_gen)
-
-        self.partita_info_label_gen = QLabel("Nessuna partita selezionata.")
-        self.partita_info_label_gen.setStyleSheet("font-style: italic; color: #555;")
-        genealogico_layout.addRow(self.partita_info_label_gen)
-
-        self.generate_gen_button = QPushButton("Genera Report Genealogico"); self.generate_gen_button.clicked.connect(self.generate_genealogico)
-        genealogico_layout.addRow(self.generate_gen_button)
-        
-        self.tabs.addTab(genealogico_tab, "Report Genealogico")
-
-        # --- Tab Report Possessore (logica di selezione e generazione invariata) ---
-        possessore_tab = QWidget()
-        # ... (la UI di questo tab può rimanere la stessa, ma la aggiungeremo al nostro layout principale)
-        possessore_layout = QFormLayout(possessore_tab)
-        self.possessore_id_edit = QSpinBox(); self.possessore_id_edit.setRange(1, 9999999)
-        self.search_possessore_button = QPushButton("Cerca..."); self.search_possessore_button.clicked.connect(self.search_possessore)
-        possessore_select_layout = QHBoxLayout(); possessore_select_layout.addWidget(self.possessore_id_edit); possessore_select_layout.addWidget(self.search_possessore_button)
-        possessore_layout.addRow("ID Possessore:", possessore_select_layout)
-        self.generate_pos_button = QPushButton("Genera Report Possessore"); self.generate_pos_button.clicked.connect(self.generate_possessore)
-        possessore_layout.addRow(self.generate_pos_button)
-        self.tabs.addTab(possessore_tab, "Report Possessore")
-
-        # --- Tab Report Consultazioni (invariato) ---
-        consultazioni_tab = QWidget()
-        # ... (la UI di questo tab è già funzionale)
-        consultazioni_layout = QVBoxLayout(consultazioni_tab)
-        # ... (aggiungi qui la UI del tab consultazioni come era prima)
-        self.tabs.addTab(consultazioni_tab, "Report Consultazioni")
-        
-        main_layout.addWidget(self.tabs)
-
-        # --- NUOVO: Area di output per i report e log esportazioni ---
+        # Area di output per i report e log esportazioni
         output_group = QGroupBox("Anteprima Report e Log Esportazioni")
         output_layout = QVBoxLayout(output_group)
-        self.report_output_browser = QTextBrowser() # Usiamo QTextBrowser per i link
+        self.report_output_browser = QTextBrowser()
         self.report_output_browser.setOpenLinks(False)
+        # --- INIZIO CORREZIONE ---
+        # Collega il segnale al nuovo metodo corretto
         self.report_output_browser.anchorClicked.connect(self._open_export_file_link)
-        self.report_output_browser.setPlaceholderText("L'anteprima del report generato e i link ai file esportati appariranno qui.")
+        # --- FINE CORREZIONE ---
+        self.report_output_browser.setPlaceholderText("L'anteprima del report generato apparirà qui.")
         output_layout.addWidget(self.report_output_browser)
-        
+
         export_buttons_layout = QHBoxLayout()
-        self.export_txt_button = QPushButton("Esporta Report in TXT"); self.export_txt_button.clicked.connect(self._export_current_report_txt)
-        self.export_pdf_button = QPushButton("Esporta Report in PDF"); self.export_pdf_button.clicked.connect(self._export_current_report_pdf); self.export_pdf_button.setEnabled(FPDF_AVAILABLE)
+        self.export_txt_button = QPushButton("Esporta come TXT"); self.export_txt_button.clicked.connect(self._export_current_report_txt)
+        self.export_pdf_button = QPushButton("Esporta come PDF"); self.export_pdf_button.clicked.connect(self._export_current_report_pdf); self.export_pdf_button.setEnabled(FPDF_AVAILABLE)
         export_buttons_layout.addStretch(); export_buttons_layout.addWidget(self.export_txt_button); export_buttons_layout.addWidget(self.export_pdf_button)
         output_layout.addLayout(export_buttons_layout)
 
-        main_layout.addWidget(output_group, 1) # Stretch factor 1 per dare spazio
-        self.setLayout(main_layout)
+        main_layout.addWidget(output_group, 1)
 
-    def _open_export_file_link(self, url: QUrl):
-        QDesktopServices.openUrl(url)
+    # --- Metodi per creare i singoli sotto-tab ---
 
+    def _create_report_proprieta_tab(self) -> QWidget:
+        widget = QWidget(); layout = QFormLayout(widget)
+        select_layout = QHBoxLayout()
+        self.partita_id_edit = QSpinBox(); self.partita_id_edit.setRange(1, 9999999)
+        self.search_partita_prop_button = QPushButton("Cerca..."); self.search_partita_prop_button.clicked.connect(self.search_partita_prop)
+        select_layout.addWidget(self.partita_id_edit); select_layout.addWidget(self.search_partita_prop_button)
+        layout.addRow("ID Partita (*):", select_layout)
+        self.partita_info_label_prop = QLabel("Nessuna partita selezionata."); layout.addRow(self.partita_info_label_prop)
+        self.generate_cert_button = QPushButton("Genera Report Proprietà"); self.generate_cert_button.clicked.connect(self.generate_report_proprieta)
+        layout.addRow(self.generate_cert_button)
+        return widget
+
+    def _create_report_genealogico_tab(self) -> QWidget:
+        widget = QWidget(); layout = QFormLayout(widget)
+        select_layout = QHBoxLayout()
+        self.partita_id_gen_edit = QSpinBox(); self.partita_id_gen_edit.setRange(1, 9999999)
+        self.search_partita_gen_button = QPushButton("Cerca..."); self.search_partita_gen_button.clicked.connect(self.search_partita_gen)
+        select_layout.addWidget(self.partita_id_gen_edit); select_layout.addWidget(self.search_partita_gen_button)
+        layout.addRow("ID Partita (*):", select_layout)
+        self.partita_info_label_gen = QLabel("Nessuna partita selezionata."); layout.addRow(self.partita_info_label_gen)
+        self.generate_gen_button = QPushButton("Genera Report Genealogico"); self.generate_gen_button.clicked.connect(self.generate_genealogico)
+        layout.addRow(self.generate_gen_button)
+        return widget
+
+    def _create_report_possessore_tab(self) -> QWidget:
+        widget = QWidget(); layout = QFormLayout(widget)
+        select_layout = QHBoxLayout()
+        self.possessore_id_edit = QSpinBox(); self.possessore_id_edit.setRange(1, 9999999)
+        self.search_possessore_button = QPushButton("Cerca..."); self.search_possessore_button.clicked.connect(self.search_possessore)
+        select_layout.addWidget(self.possessore_id_edit); select_layout.addWidget(self.search_possessore_button)
+        layout.addRow("ID Possessore (*):", select_layout)
+        self.generate_pos_button = QPushButton("Genera Report Possessore"); self.generate_pos_button.clicked.connect(self.generate_possessore)
+        layout.addRow(self.generate_pos_button)
+        return widget
+
+    def _create_report_consultazioni_tab(self) -> QWidget:
+        widget = QWidget(); layout = QFormLayout(widget)
+        self.consult_data_inizio_edit = QDateEdit(calendarPopup=True); self.consult_data_inizio_edit.setDate(QDate.currentDate().addMonths(-1))
+        self.consult_data_fine_edit = QDateEdit(calendarPopup=True); self.consult_data_fine_edit.setDate(QDate.currentDate())
+        self.consult_richiedente_edit = QLineEdit(); self.consult_richiedente_edit.setPlaceholderText("Lascia vuoto per tutti")
+        layout.addRow("Data Inizio:", self.consult_data_inizio_edit)
+        layout.addRow("Data Fine:", self.consult_data_fine_edit)
+        layout.addRow("Richiedente (contiene):", self.consult_richiedente_edit)
+        self.generate_consult_button = QPushButton("Genera Report Consultazioni"); self.generate_consult_button.clicked.connect(self.generate_report_consultazioni)
+        layout.addRow(self.generate_consult_button)
+        return widget
+    
+    def generate_report_consultazioni(self):
+        data_inizio = self.consult_data_inizio_edit.date().toPyDate()
+        data_fine = self.consult_data_fine_edit.date().toPyDate()
+        richiedente = self.consult_richiedente_edit.text().strip() or None
+
+        try:
+            report_text = self.db_manager.genera_report_consultazioni(data_inizio, data_fine, richiedente)
+            self.current_report_content = report_text or "Nessuna consultazione trovata per i criteri specificati."
+            self.report_output_browser.setPlainText(self.current_report_content)
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Report", f"Impossibile generare il report delle consultazioni:\n{e}")
     def _update_partita_info_label(self, label_widget, partita_id):
         """Aggiorna una label con i dettagli (numero, suffisso, comune) di una partita."""
         if partita_id is None:
@@ -3882,6 +3925,13 @@ class ReportisticaWidget(LazyLoadedWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
+    def _open_export_file_link(self, url: QUrl):
+        """Apre il file locale puntato dall'URL cliccato nel log."""
+        self.logger.info(f"Tentativo di aprire il file dal link: {url.toLocalFile()}")
+        # QDesktopServices è il modo corretto e multipiattaforma per aprire file e URL
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(self, "Errore Apertura", f"Impossibile aprire il link:\n{url.toString()}")
+
 # In gui_widgets.py, SOSTITUISCI l'intera classe StatisticheWidget con questa
 
 # Assicurati che LazyLoadedWidget sia importato da custom_widgets

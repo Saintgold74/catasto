@@ -4024,7 +4024,13 @@ class CatastoDBManager:
             self.logger.info(f"Esecuzione emergenza: {description}...")
             process = QProcess()
             process.setProcessEnvironment(self.create_clean_environment()) # Usa un ambiente pulito
-            process.setEnvironment(list(f"{k}={v}" for k,v in env.items()))
+            # Crea un oggetto QProcessEnvironment
+            env_process = QProcessEnvironment()
+            for k, v in env.items():
+                env_process.insert(k, v)
+
+            # Imposta l'ambiente del processo
+            process.setProcessEnvironment(env_process)
 
             process.start(command[0], command[1:])
             if not process.waitForFinished(-1):

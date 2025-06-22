@@ -226,12 +226,11 @@ class DBConfigDialog(QDialog):
         logging.getLogger("CatastoGUI").debug(f"Popolando DBConfigDialog con: { {k:v for k,v in config.items() if k != 'password'} }")
 
         db_type_str = config.get(SETTINGS_DB_TYPE, self.default_preset_config[SETTINGS_DB_TYPE])
-        type_index = self.db_type_combo.findText(db_type_str, Qt.MatchFixedString)
-        if type_index >= 0:
-            self.db_type_combo.setCurrentIndex(type_index)
+        if db_type_str == "remote":
+            self.remote_radio.setChecked(True)
         else:
-            # Fallback se il testo non matcha (dovrebbe essere raro se i valori sono coerenti)
-            self.db_type_combo.setCurrentIndex(0) 
+            self.local_radio.setChecked(True)
+        self._toggle_host_field() # Assicurati che l'UI rifletta la selezione
 
         self.host_edit.setText(config.get(SETTINGS_DB_HOST, self.default_preset_config[SETTINGS_DB_HOST]))
         
@@ -313,25 +312,7 @@ class DBConfigDialog(QDialog):
         super().reject()
     # --- FINE NUOVI METODI WRAPPER ---
     
-    def _db_type_changed(self, index: int):
-        """
-        Gestisce il cambio del tipo di server DB (locale/remoto) per mostrare/nascondere il campo host.
-        """
-        is_remoto = (index == 1) # 0 è "Locale", 1 è "Remoto"
-        self.host_label.setVisible(is_remoto)
-        self.host_edit.setVisible(is_remoto)
-        
-        if not is_remoto:
-            self.host_edit.setText("localhost")
-            self.host_edit.setReadOnly(True)
-        else:
-            self.host_edit.setReadOnly(False)
-            # Pulisce il campo host se prima era "localhost"
-            if self.host_edit.text() == "localhost":
-                self.host_edit.clear()
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
-
-    # --- NUOVO METODO PER IL TEST DI CONNESSIONE ---
+    
     def _test_connection(self):
         config_values = self.get_config_values(include_password=True) # Ottieni anche la password
         
@@ -379,7 +360,7 @@ class DBConfigDialog(QDialog):
         if not all([config_values["dbname"], config_values["user"], config_values["password"]]):
             QMessageBox.warning(self, "Dati Mancanti", "Compilare tutti i campi obbligatori (Nome DB, Utente DB, Password DB).")
             return
-        is_remoto = (self.db_type_combo.currentIndex() == 1)
+        is_remoto = self.remote_radio.isChecked()
         if is_remoto and not config_values["host"]:
             QMessageBox.warning(self, "Dati Mancanti", "L'indirizzo del server host è obbligatorio per database remoto.")
             return
@@ -394,8 +375,12 @@ class DBConfigDialog(QDialog):
     
 
     def _save_settings(self):
-        self.settings.setValue(SETTINGS_DB_TYPE, self.db_type_combo.currentText())
-        host_to_save = "localhost" if self.db_type_combo.currentIndex() == 0 else self.host_edit.text().strip()
+        if self.local_radio.isChecked():
+            self.settings.setValue(SETTINGS_DB_TYPE, "local")
+            host_to_save = "localhost"
+        else:
+            self.settings.setValue(SETTINGS_DB_TYPE, "remote")
+            host_to_save = self.host_edit.text().strip()
         self.settings.setValue(SETTINGS_DB_HOST, host_to_save)
         self.settings.setValue(SETTINGS_DB_PORT, self.port_spinbox.value())
         self.settings.setValue(SETTINGS_DB_NAME, self.dbname_edit.text().strip())

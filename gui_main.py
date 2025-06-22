@@ -131,7 +131,7 @@ class LoginDialog(QDialog):
         # NUOVO attributo per conservare l'UUID
         self.current_session_id_from_dialog: Optional[str] = None
 
-        self.setWindowTitle("Login - Meridiana 1.0")
+        self.setWindowTitle("Login - Meridiana 1.2")
         self.setMinimumWidth(350)
         self.setModal(True)
 
@@ -315,7 +315,7 @@ class CatastoMainWindow(QMainWindow):
         self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
         self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
-        self.setWindowTitle("Meridiana 1.0 - Gestionale Catasto Storico")
+        self.setWindowTitle("Meridiana 1.2 - Gestionale Catasto Storico")
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)

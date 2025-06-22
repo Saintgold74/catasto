@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 # ===================================================================
-#  File di Specifiche PyInstaller Definitivo per Meridiana 1.0
+#  File di Specifiche PyInstaller Definitivo per Meridiana 1.2
 # ===================================================================
 
 a = Analysis(

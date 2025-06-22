@@ -239,25 +239,28 @@ GROUP BY p.id, c.nome, p.numero_partita, p.tipo, p.data_impianto, p.data_chiusur
 
 -- 9. Vista per le variazioni complete con contratti (MODIFICATA: join con comune)
 -- DROP VIEW IF EXISTS v_variazioni_complete; -- Rimuovi se necessario ricrearla
-CREATE OR REPLACE VIEW v_variazioni_complete AS
+CREATE OR REPLACE VIEW catasto.v_variazioni_complete AS
 SELECT
     v.id AS variazione_id,
     v.tipo AS tipo_variazione,
     v.data_variazione,
+    p_orig.id as partita_origine_id,
     p_orig.numero_partita AS partita_origine_numero,
-    c_orig.nome AS partita_origine_comune, -- Seleziona c_orig.nome
+    c_orig.nome AS partita_origine_comune,
+    p_orig.comune_id AS partita_origine_comune_id, -- <-- AGGIUNTA CHIAVE
+    p_dest.id as partita_destinazione_id,
     p_dest.numero_partita AS partita_dest_numero,
-    c_dest.nome AS partita_dest_comune, -- Seleziona c_dest.nome
-    con.tipo AS tipo_contratto, -- Alias 'con' per contratto
+    c_dest.nome AS partita_dest_comune,
+    con.tipo AS tipo_contratto,
     con.data_contratto,
     con.notaio,
     con.repertorio
 FROM variazione v
 JOIN partita p_orig ON v.partita_origine_id = p_orig.id
-JOIN comune c_orig ON p_orig.comune_id = c_orig.id -- *** JOIN AGGIUNTO ***
+JOIN comune c_orig ON p_orig.comune_id = c_orig.id
 LEFT JOIN partita p_dest ON v.partita_destinazione_id = p_dest.id
-LEFT JOIN comune c_dest ON p_dest.comune_id = c_dest.id -- *** JOIN AGGIUNTO ***
-LEFT JOIN contratto con ON v.id = con.variazione_id; -- Alias 'con'
+LEFT JOIN comune c_dest ON p_dest.comune_id = c_dest.id
+LEFT JOIN contratto con ON v.id = con.variazione_id;
 
 -- 10. Funzione per ricerca full-text di possessori (MODIFICATA: join con comune)
 CREATE OR REPLACE FUNCTION cerca_possessori(p_query TEXT)

@@ -3418,36 +3418,36 @@ class OperazioniPartitaWidget(QWidget):
 
 
 class EsportazioniWidget(LazyLoadedWidget):
-    # --- AGGIUNGERE QUESTO ATTRIBUTO DI CLASSE IN CIMA ---
     HEADER_MAPPINGS = {
         "Elenco Possessori": {
-            "id": "ID Possessore",
-            "comune_nome": "Comune di Riferimento",
-            "cognome_nome": "Cognome e Nome",
-            "paternita": "Paternità",
-            "nome_completo": "Nome Completo",
-            "attivo": "Stato Attivo",
-            "num_partite": "Numero Partite Associate"
+            "id": "ID Possessore", "comune_nome": "Comune di Riferimento", "nome_completo": "Nome Completo",
+            "attivo": "Stato Attivo", "num_partite": "Numero Partite"
         },
         "Elenco Partite": {
-            "id": "ID Partita",
-            "numero_partita": "Numero Partita",
-            "suffisso_partita": "Suffisso",
-            "tipo": "Tipo",
-            "stato": "Stato",
-            "data_impianto": "Data Impianto",
-            "num_possessori": "Num. Possessori",
-            "num_immobili": "Num. Immobili",
-            "num_documenti_allegati": "Num. Documenti"
+            "id": "ID Partita", "numero_partita": "Numero Partita", "suffisso_partita": "Suffisso",
+            "stato": "Stato", "data_impianto": "Data Impianto", "num_possessori": "Num. Possessori",
+            "num_immobili": "Num. Immobili"
+        },
+        "Elenco Immobili": {
+            "id_immobile": "ID Immobile", "natura": "Natura", "classificazione": "Classificazione",
+            "localita_nome": "Località", "numero_partita": "Numero Partita", "comune_nome": "Comune"
+        },
+        "Elenco Località": {
+            "id": "ID Località", "nome": "Nome", "tipo": "Tipo", "civico": "Civico", "comune_nome": "Comune"
+        },
+        "Elenco Variazioni": {
+            "variazione_id": "ID Variazione", "tipo_variazione": "Tipo Variazione", "data_variazione": "Data",
+            "partita_origine_numero": "Partita Origine", "partita_origine_comune": "Comune Origine",
+            "partita_dest_numero": "Partita Destinazione", "partita_dest_comune": "Comune Destinazione",
+            "tipo_contratto": "Tipo Contratto", "notaio": "Notaio"
         }
     }
-    # --- FINE AGGIUNTA ---
+
     def __init__(self, db_manager: CatastoDBManager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        
-
         self._initUI()
+
 
     def _initUI(self):
         main_layout = QVBoxLayout(self)
@@ -3459,7 +3459,10 @@ class EsportazioniWidget(LazyLoadedWidget):
         selection_layout.setSpacing(10)
 
         self.export_type_combo = QComboBox()
-        self.export_type_combo.addItems(["Elenco Possessori", "Elenco Partite"])
+        self.export_type_combo.addItems([
+            "Elenco Possessori", "Elenco Partite", "Elenco Immobili", "Elenco Località",
+            "Elenco Variazioni", "Report Consistenza Patrimoniale" # <-- NUOVE OPZIONI
+        ])
         selection_layout.addRow("Tipo di Esportazione:", self.export_type_combo)
 
         self.comune_filter_combo = QComboBox()
@@ -3573,29 +3576,56 @@ class EsportazioniWidget(LazyLoadedWidget):
         export_type = self.export_type_combo.currentText()
         comune_id = self.comune_filter_combo.currentData()
         comune_name = self.comune_filter_combo.currentText()
-        if comune_id is None:
+        if export_type == "Report Consistenza Patrimoniale" and comune_id is None:
+            QMessageBox.warning(self, "Selezione Mancante", "Il 'Report Consistenza Patrimoniale' richiede la selezione di un comune specifico.")
+            return None, None, None
+        elif comune_id is None:
             QMessageBox.warning(self, "Selezione Mancante", "Per favore, seleziona un comune.")
             return None, None, None
+
         return export_type, comune_id, comune_name
 
     def _fetch_data_for_export(self, export_type, comune_id):
-        self.status_log.append(f"Recupero dati per '{export_type}' del comune ID {comune_id}...")
+        """Recupera i dati dal DB Manager in base al tipo di esportazione selezionato."""
+        self.log_status(f"Recupero dati per '{export_type}' del comune ID {comune_id}...")
         QApplication.processEvents()
+
         if export_type == "Elenco Possessori":
             return self.db_manager.get_possessori_by_comune(comune_id)
         elif export_type == "Elenco Partite":
             return self.db_manager.get_partite_by_comune(comune_id)
+        # --- INIZIO NUOVA LOGICA ---
+        elif export_type == "Elenco Immobili":
+            return self.db_manager.get_elenco_immobili_per_esportazione(comune_id)
+        elif export_type == "Elenco Località":
+            return self.db_manager.get_elenco_localita_per_esportazione(comune_id)
+        elif export_type == "Elenco Variazioni":
+            return self.db_manager.get_elenco_variazioni_per_esportazione(comune_id)
+        elif export_type == "Report Consistenza Patrimoniale":
+            return self.db_manager.get_report_consistenza_patrimoniale(comune_id)
         return None
+        
 
     def _handle_export_csv(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
         data = self._fetch_data_for_export(export_type, comune_id)
+        self.logger.debug(f"Dati recuperati per CSV: {data}")
+        # --- INIZIO NUOVA/RAFFORZATA CORREZIONE ---
         if not data:
-            QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per i criteri selezionati.")
-            return
+            self.logger.warning("Nessun dato restituito dalla query per l'esportazione CSV. Annullamento operazione.")
+            QMessageBox.warning(self, "Nessun Dato", "La query non ha restituito alcun dato da esportare in formato CSV.")
+            return # Termina la funzione qui se non ci sono dati
+        # --- FINE NUOVA/RAFFORZATA CORREZIONE ---
+
 
         header_map = self.HEADER_MAPPINGS.get(export_type, {})
+        if header_map: # Assumendo che header_map sia definito o passato a questa funzione
+            ordered_keys = list(header_map.keys())
+        else:
+            # Qui si verifica l'errore se 'data' è vuota
+            # Ora 'data' è garantita non essere vuota grazie al controllo sopra
+            ordered_keys = list(data[0].keys())
         # Se non c'è una mappa, usa le chiavi originali come fallback
         ordered_keys = list(header_map.keys()) if header_map else list(data[0].keys())
         user_friendly_headers = list(header_map.values()) if header_map else ordered_keys
@@ -3626,6 +3656,11 @@ class EsportazioniWidget(LazyLoadedWidget):
     def _handle_export_xls(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
+        # --- INIZIO LOGICA DEDICATA PER IL REPORT AVANZATO ---
+        if export_type == "Report Consistenza Patrimoniale":
+            self._export_consistenza_patrimoniale_xls(comune_id, comune_name)
+            return
+        # --- FINE LOGICA DEDICATA --
         data = self._fetch_data_for_export(export_type, comune_id)
         if not data:
             QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
@@ -3667,6 +3702,11 @@ class EsportazioniWidget(LazyLoadedWidget):
     def _handle_export_pdf(self):
         export_type, comune_id, comune_name = self._get_export_parameters()
         if not export_type: return
+            # --- INIZIO MODIFICA: Gestione dedicata per il report speciale ---
+        if export_type == "Report Consistenza Patrimoniale":
+            self._export_consistenza_patrimoniale_pdf(comune_id, comune_name)
+            return # Termina qui l'esecuzione per questo report
+        # --- FINE MODIFICA ---
         data = self._fetch_data_for_export(export_type, comune_id)
         if not data:
             QMessageBox.information(self, "Nessun Dato", "Nessun dato trovato per l'esportazione.")
@@ -3704,10 +3744,109 @@ class EsportazioniWidget(LazyLoadedWidget):
         except Exception as e:
             self.logger.error(f"Errore durante l'esportazione PDF di '{export_type}': {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file PDF:\n{e}")
+    def _export_consistenza_patrimoniale_xls(self, comune_id: int, comune_name: str):
+        """Logica di esportazione specifica per il report di consistenza patrimoniale."""
+        self.log_status("Recupero dati per Report Consistenza Patrimoniale...")
+        QApplication.processEvents()
+
+        try:
+            report_data = self._fetch_data_for_export("Report Consistenza Patrimoniale", comune_id)
+            if not report_data:
+                QMessageBox.information(self, "Nessun Dato", f"Nessun possessore con proprietà trovato per il comune di {comune_name}.")
+                return
+
+            default_filename = f"report_consistenza_{comune_name.replace(' ', '_')}_{date.today()}.xlsx"
+            filename, _ = QFileDialog.getSaveFileName(self, "Salva Report Excel", default_filename, "File Excel (*.xlsx)")
+            if not filename: return
+
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                for possessore_nome, partite_list in report_data.items():
+                    # Tronca il nome del foglio se troppo lungo per Excel (max 31 caratteri)
+                    sheet_name = possessore_nome.replace('[', '').replace(']', '').replace('*', '').replace(':', '').replace('?', '/').replace('\\', '')
+                    sheet_name = sheet_name[:31]
+
+                    df = pd.DataFrame(partite_list)
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+            self.log_status(f"Report Consistenza Patrimoniale per {comune_name} esportato con successo.", link=filename)
+        except Exception as e:
+            self.log_status(f"Errore durante l'esportazione del report di consistenza: {e}", error=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile creare il file Excel:\n{e}")
+    # In gui_widgets.py, aggiungi questo metodo alla classe EsportazioniWidget
+
+    def _export_consistenza_patrimoniale_pdf(self, comune_id: int, comune_name: str):
+        """Logica di esportazione specifica per il PDF del report di consistenza patrimoniale."""
+        self.log_status("Recupero dati per Report Consistenza Patrimoniale (PDF)...")
+        QApplication.processEvents()
+
+        try:
+            report_data = self._fetch_data_for_export("Report Consistenza Patrimoniale", comune_id)
+            if not report_data:
+                QMessageBox.information(self, "Nessun Dato", f"Nessun possessore con proprietà trovato per il comune di {comune_name}.")
+                return
+
+            default_filename = f"report_consistenza_{comune_name.replace(' ', '_')}_{date.today()}.pdf"
+            full_default_path = _get_default_export_path(default_filename)
+            filename, _ = QFileDialog.getSaveFileName(self, "Salva Report PDF", full_default_path, "File PDF (*.pdf)")
+            if not filename: return
+
+            pdf = BulkReportPDF(report_title=f"Report Consistenza Patrimoniale - Comune di {comune_name}")
+            pdf.alias_nb_pages()
+            pdf.add_page()
+
+            # --- INIZIO LOGICA DI RENDERIZZAZIONE CORRETTA ---
+            for possessore_nome, partite_list in report_data.items():
+                pdf.set_font('Helvetica', 'B', 14)
+                # Usiamo multi_cell per il nome del possessore nel caso sia molto lungo
+                pdf.multi_cell(0, 8, f"Possessore: {possessore_nome}", border='B', align='L')
+                pdf.ln(5) # Spazio dopo il nome del possessore
+
+                for partita in partite_list:
+                    # Intestazione della Partita
+                    pdf.set_font('Helvetica', 'B', 11)
+                    suffisso = f" (suffisso: {partita.get('suffisso_partita')})" if partita.get('suffisso_partita') else ""
+                    # Indentiamo leggermente l'intestazione della partita
+                    pdf.set_x(pdf.l_margin + 5)
+                    pdf.cell(0, 6, f"- Partita N. {partita.get('numero_partita')}{suffisso}", ln=True)
+
+                    # Dettagli della Partita
+                    pdf.set_font('Helvetica', '', 10)
+
+                    # Usiamo celle separate e indentate per ogni dettaglio per un controllo migliore
+                    pdf.set_x(pdf.l_margin + 10) # Indentazione maggiore per i dettagli
+                    pdf.cell(0, 5, f"Titolo: {partita.get('titolo', 'N/D')}", ln=True)
+
+                    pdf.set_x(pdf.l_margin + 10)
+                    pdf.cell(0, 5, f"Quota: {partita.get('quota') or 'N/A'}", ln=True)
+
+                    pdf.set_x(pdf.l_margin + 10)
+                    pdf.cell(0, 5, f"Stato: {partita.get('stato', 'N/D')}", ln=True)
+
+                    pdf.ln(3) # Aggiunge un piccolo spazio prima della prossima partita
+
+                pdf.ln(7) # Aggiunge uno spazio più grande tra un possessore e l'altro
+
+            # --- FINE LOGICA DI RENDERIZZAZIONE CORRETTA ---
+            pdf.output(filename)
+            self.log_status(f"Report PDF per {comune_name} esportato con successo.", link=filename)
+
+        except Exception as e:
+            self.log_status(f"Errore durante l'esportazione del report PDF: {e}", error=True)
+            QMessageBox.critical(self, "Errore Esportazione", f"Impossibile creare il file PDF:\n{e}")
+
+
+    
     def _open_export_file_link(self, url: QUrl):
         """Apre il file locale puntato dall'URL cliccato nel log."""
         self.logger.info(f"Tentativo di aprire il file dal link: {url.toLocalFile()}")
         QDesktopServices.openUrl(url)
+    def _on_export_type_changed(self, text):
+        """Disabilita "Tutti i Comuni" se viene scelto un report che lo richiede."""
+        if text == "Report Consistenza Patrimoniale":
+            if self.comune_filter_combo.itemText(0) == "Tutti i Comuni":
+                self.comune_filter_combo.removeItem(0)
+        elif self.comune_filter_combo.itemText(0) != "Tutti i Comuni":
+            self.comune_filter_combo.insertItem(0, "Tutti i Comuni", None)
 
 
 # In gui_widgets.py, SOSTITUISCI l'intera classe ReportisticaWidget con questa:
@@ -3853,16 +3992,27 @@ class ReportisticaWidget(LazyLoadedWidget):
         if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
 
         report_text = self.db_manager.genera_report_proprieta(partita_id)
+        # --- INIZIO CORREZIONE ---
         self.current_report_content = report_text or f"Nessun report generato per la partita ID {partita_id}."
+
+        # 1. Pulisci completamente il widget
+        self.report_output_browser.clear()
+        # 2. Imposta il nuovo contenuto come testo semplice
         self.report_output_browser.setPlainText(self.current_report_content)
+        # --- FINE CORREZIONE ---
 
     def generate_genealogico(self):
         partita_id = self.partita_id_gen_edit.value()
         if partita_id <= 0: return QMessageBox.warning(self, "Errore", "Selezionare un ID partita valido.")
 
         report_text = self.db_manager.genera_report_genealogico(partita_id)
-        self.current_report_content = report_text or f"Nessun report genealogico generato per la partita ID {partita_id}."
+        self.current_report_content = report_text or f"Nessun report generato per la partita ID {partita_id}."
+
+        # 1. Pulisci completamente il widget
+        self.report_output_browser.clear()
+        # 2. Imposta il nuovo contenuto come testo semplice
         self.report_output_browser.setPlainText(self.current_report_content)
+        # --- FINE CORREZIONE ---
 
     def generate_possessore(self):
         possessore_id = self.possessore_id_edit.value()
@@ -3870,7 +4020,12 @@ class ReportisticaWidget(LazyLoadedWidget):
 
         report_text = self.db_manager.genera_report_possessore(possessore_id)
         self.current_report_content = report_text or f"Nessun report generato per il possessore ID {possessore_id}."
+
+        # 1. Pulisci completamente il widget
+        self.report_output_browser.clear()
+        # 2. Imposta il nuovo contenuto come testo semplice
         self.report_output_browser.setPlainText(self.current_report_content)
+        # --- FINE CORREZIONE ---
 
     def _export_current_report_txt(self):
         if not self.current_report_content.strip():
@@ -3887,14 +4042,17 @@ class ReportisticaWidget(LazyLoadedWidget):
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(self.current_report_content) # Usa la variabile di stato
 
-            # --- INIZIO MODIFICA VISUALIZZAZIONE ---
+            # --- INIZIO CORREZIONE VISUALIZZAZIONE ---
+            # 1. Pulisci e reimposta il testo originale per sicurezza
+            self.report_output_browser.clear()
+            self.report_output_browser.setPlainText(self.current_report_content)
+
+            # 2. Ora aggiungi il link HTML
             file_url = QUrl.fromLocalFile(filename).toString()
             base_name = os.path.basename(filename)
             link_html = f"<hr><p style='color:green;'>Report esportato con successo: <a href='{file_url}'>{base_name}</a></p>"
-            report_html = self.current_report_content.replace('\n', '<br>')
-            self.report_output_browser.setHtml(report_html + link_html)
-            # --- FINE MODIFICA VISUALIZZAZIONE ---
-
+            self.report_output_browser.append(link_html)
+            # --- FINE CORREZIONE VISUALIZZAZIONE ---
         except Exception as e:
             QMessageBox.critical(self, "Errore Esportazione", f"Impossibile salvare il file:\n{e}")
 
@@ -3915,13 +4073,15 @@ class ReportisticaWidget(LazyLoadedWidget):
             pdf.add_report_text(self.current_report_content) # Usa la variabile di stato
             pdf.output(filename)
 
-            # --- INIZIO MODIFICA VISUALIZZAZIONE ---
+            # --- INIZIO CORREZIONE VISUALIZZAZIONE (stessa logica del TXT) ---
+            self.report_output_browser.clear()
+            self.report_output_browser.setPlainText(self.current_report_content)
+
             file_url = QUrl.fromLocalFile(filename).toString()
             base_name = os.path.basename(filename)
             link_html = f"<hr><p style='color:green;'>Report PDF esportato: <a href='{file_url}'>{base_name}</a></p>"
-            report_html = self.current_report_content.replace('\n', '<br>')
-            self.report_output_browser.setHtml(report_html + link_html)
-            # --- FINE MODIFICA VISUALIZZAZIONE ---
+            self.report_output_browser.append(link_html)
+            # --- FINE CORREZIONE VISUALIZZAZIONE ---
 
         except Exception as e:
             QMessageBox.critical(self, "Errore Esportazione PDF", f"Impossibile generare il PDF:\n{e}")
@@ -6064,7 +6224,7 @@ class DashboardWidget(QWidget):
 
         # 1. Intestazione
         nome_utente = self.current_user_info.get('nome_completo', 'Utente') if self.current_user_info else 'Utente'
-        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.0, {nome_utente}</h2>")
+        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.2, {nome_utente}</h2>")
         header_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header_label)
 
@@ -6195,7 +6355,7 @@ class WelcomeScreen(QDialog):
     def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
         super().__init__(parent)
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.setWindowTitle("Benvenuto - Meridiana 1.0")
+        self.setWindowTitle("Benvenuto - Meridiana 1.2")
         self.setModal(True)
         self.setFixedSize(1024, 768)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -6229,7 +6389,7 @@ class WelcomeScreen(QDialog):
         main_layout.addLayout(logo_layout)
 
         # Titolo e Sottotitolo
-        title_label = QLabel("Meridiana 1.0"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
+        title_label = QLabel("Meridiana 1.2"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
         
         subtitle_label = QLabel("Gestionale Catasto Storico - Archivio di Stato di Savona"); subtitle_label.setFont(QFont("Segoe UI", 14)); subtitle_label.setAlignment(Qt.AlignCenter)

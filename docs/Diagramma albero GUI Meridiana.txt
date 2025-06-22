@@ -1,4 +1,4 @@
-Meridiana 1.0
+Meridiana 1.2
 └── 🗂️ Interfaccia Principale
     ├── 🏠 Home / Dashboard
     │   ├─ Visualizzazione Statistiche Rapide (Comuni, Partite, Possessori, Immobili)

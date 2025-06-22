@@ -216,6 +216,6 @@ Questo progetto è distribuito sotto licenza MIT. Vedi il file LICENSE per detta
 
 ---
 
-**Versione**: 1.0.0  
+**Versione**: 1.2.0  
 **Ultimo aggiornamento**: Giugno 2025  
 **Mantenuto da**: Team Sviluppo Catasto

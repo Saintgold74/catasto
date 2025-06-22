@@ -5502,7 +5502,7 @@ class EulaDialog(QDialog):
     """Dialogo per la visualizzazione e l'accettazione dell'EULA."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.0")
+        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.2")
         self.setMinimumSize(600, 500)
         self.setModal(True)
 

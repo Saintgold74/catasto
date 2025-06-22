@@ -946,30 +946,139 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore DB durante la creazione della partita: {e}", exc_info=True)
             raise DBMError(f"Errore imprevisto durante la creazione della partita: {e}") from e
-    def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = f"""
-            SELECT p.id, c.nome as comune_nome, p.cognome_nome, p.paternita, p.nome_completo, p.attivo,
-                   (SELECT COUNT(*) FROM {self.schema}.partita_possessore pp WHERE pp.possessore_id = p.id) as num_partite
-            FROM {self.schema}.possessore p JOIN {self.schema}.comune c ON p.comune_id = c.id
-            WHERE p.comune_id = %s
-        """
-        params: List[Union[int, str]] = [comune_id]
-        if filter_text:
-            query += " AND (p.nome_completo ILIKE %s OR p.cognome_nome ILIKE %s)"
-            params.extend([f"%{filter_text}%", f"%{filter_text}%"])
-        query += " ORDER BY p.nome_completo;"
+    
+
+    # In catasto_db_manager.py
+
+    def get_elenco_variazioni_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Recupera un elenco completo di variazioni, usando la vista aggiornata."""
+        query = f"SELECT * FROM {self.schema}.v_variazioni_complete"
+        params = []
+        if comune_id:
+            # Ora filtriamo direttamente sull'ID, più efficiente e sicuro
+            query += " WHERE partita_origine_comune_id = %s"
+            params.append(comune_id)
+
+        query += " ORDER BY data_variazione DESC;"
+
         try:
             with self._get_connection() as conn:
-                with conn.cursor(cursor_factory=DictCursor) as cur:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, params)
                     return [dict(row) for row in cur.fetchall()]
         except Exception as e:
-            self.logger.error(f"Errore in get_possessori_by_comune: {e}", exc_info=True)
+            raise DBMError(f"Impossibile recuperare l'elenco delle variazioni: {e}") from e
+    def get_report_consistenza_patrimoniale(self, comune_id: int) -> Dict[str, List[Dict]]:
+        """
+        Genera i dati per un report di consistenza patrimoniale per un dato comune.
+        Logica corretta: trova le proprietà nel comune e poi raggruppa per possessore.
+        """
+        if not comune_id:
+            raise DBDataError("È necessario specificare un comune per questo report.")
+
+        report_data = {}
+
+        # 1. Trova tutti i possessori unici che hanno partite nel comune specificato
+        query_possessori = f"""
+            SELECT DISTINCT pos.id, pos.nome_completo
+            FROM {self.schema}.possessore pos
+            JOIN {self.schema}.partita_possessore pp ON pos.id = pp.possessore_id
+            JOIN {self.schema}.partita p ON pp.partita_id = p.id
+            WHERE p.comune_id = %s AND pos.attivo = TRUE
+            ORDER BY pos.nome_completo;
+        """
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query_possessori, (comune_id,))
+                    possessori_nel_comune = [dict(row) for row in cur.fetchall()]
+
+            # 2. Per ogni possessore trovato, recupera i dettagli delle sue partite in quel comune
+            for p in possessori_nel_comune:
+                possessore_id = p['id']
+                possessore_nome = p['nome_completo']
+
+                # Questa funzione recupera tutte le partite di un possessore
+                tutte_le_partite = self.get_partite_per_possessore(possessore_id)
+
+                # Filtriamo in Python per mantenere solo quelle del comune richiesto
+                partite_nel_comune_selezionato = []
+                for partita in tutte_le_partite:
+                    # Dobbiamo unire i dati del comune per poter filtrare.
+                    # Modifichiamo get_partite_per_possessore per includere comune_id.
+                    if partita.get('comune_id') == comune_id:
+                        partite_nel_comune_selezionato.append(partita)
+
+                if partite_nel_comune_selezionato:
+                    report_data[possessore_nome] = partite_nel_comune_selezionato
+
+            return report_data
+
+        except Exception as e:
+            self.logger.error(f"Errore DB durante generazione report consistenza per comune ID {comune_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile generare il report di consistenza: {e}") from e
+
+
+    def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None, solo_con_partite: bool = False) -> List[Dict[str, Any]]:
+        """
+        Recupera i possessori per un dato comune, con filtri opzionali.
+        Se solo_con_partite è True, restituisce solo i possessori con almeno una partita associata.
+        """
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            raise DBDataError("ID comune non valido.")
+
+        params: List[Union[int, str]] = [comune_id]
+
+        # --- INIZIO CORREZIONE: Query modificata per conteggio e filtro partite ---
+        query_base = f"""
+            SELECT 
+                p.id, 
+                c.nome as comune_nome, 
+                p.cognome_nome, 
+                p.paternita, 
+                p.nome_completo, 
+                p.attivo,
+                COUNT(pp.partita_id) as num_partite
+            FROM {self.schema}.possessore p
+            JOIN {self.schema}.comune c ON p.comune_id = c.id
+            LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.possessore_id
+            WHERE p.comune_id = %s
+        """
+
+        where_clauses = []
+        if filter_text:
+            where_clauses.append("(p.nome_completo ILIKE %s OR p.cognome_nome ILIKE %s)")
+            params.extend([f"%{filter_text}%", f"%{filter_text}%"])
+
+        if where_clauses:
+            query_base += " AND " + " AND ".join(where_clauses)
+
+        # Raggruppiamo sempre per calcolare num_partite
+        query_base += " GROUP BY p.id, c.nome"
+
+        # Aggiungiamo il filtro HAVING se richiesto
+        if solo_con_partite:
+            query_base += " HAVING COUNT(pp.partita_id) > 0"
+
+        query = query_base + " ORDER BY p.nome_completo;"
+        # --- FINE CORREZIONE ---
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, tuple(params))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_possessori_by_comune: {e}", exc_info=True)
             raise DBMError("Impossibile recuperare i possessori.") from e
+    
+    
     def get_partite_per_possessore(self, possessore_id: int) -> List[Dict[str, Any]]:
             if not possessore_id > 0: raise DBDataError("ID possessore non valido.")
             query = f"""
-                SELECT p.id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, c.nome as comune_nome, pp.titolo, pp.quota
+                SELECT p.id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, 
+                    c.id as comune_id, c.nome as comune_nome, pp.titolo, pp.quota
                 FROM {self.schema}.partita p
                 JOIN {self.schema}.comune c ON p.comune_id = c.id
                 JOIN {self.schema}.partita_possessore pp ON p.id = pp.partita_id
@@ -983,10 +1092,56 @@ class CatastoDBManager:
             except Exception as e:
                 self.logger.error(f"Errore in get_partite_per_possessore: {e}", exc_info=True)
                 raise DBMError("Impossibile recuperare le partite per il possessore.") from e
-    # In catasto_db_manager.py
+    
 
-    # In catasto_db_manager.py, SOSTITUISCI il metodo get_localita_by_comune
+    def get_elenco_immobili_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Recupera un elenco completo di immobili per l'esportazione."""
+        query = f"""
+            SELECT 
+                i.id AS id_immobile, i.natura, i.classificazione, i.consistenza,
+                i.numero_piani, i.numero_vani, l.nome AS localita_nome, 
+                tl.nome AS localita_tipo, l.civico, p.numero_partita, 
+                p.suffisso_partita, c.nome AS comune_nome
+            FROM {self.schema}.immobile i
+            JOIN {self.schema}.partita p ON i.partita_id = p.id
+            JOIN {self.schema}.comune c ON p.comune_id = c.id
+            JOIN {self.schema}.localita l ON i.localita_id = l.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+        """
+        params = []
+        if comune_id:
+            query += " WHERE p.comune_id = %s"
+            params.append(comune_id)
+        query += " ORDER BY c.nome, p.numero_partita, l.nome, i.natura;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, params)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            raise DBMError(f"Impossibile recuperare l'elenco degli immobili: {e}") from e
 
+    def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Recupera un elenco completo di località per l'esportazione."""
+        query = f"""
+            SELECT l.id, l.nome, tl.nome AS tipo, l.civico, c.nome AS comune_nome
+            FROM {self.schema}.localita l
+            JOIN {self.schema}.comune c ON l.comune_id = c.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+        """
+        params = []
+        if comune_id:
+            query += " WHERE l.comune_id = %s"
+            params.append(comune_id)
+        query += " ORDER BY c.nome, l.nome;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, params)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            raise DBMError(f"Impossibile recuperare l'elenco delle località: {e}") from e
+    
     def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
         """Recupera località per comune_id, unendo il nome del tipo dalla nuova tabella."""
         if not isinstance(comune_id, int) or comune_id <= 0:

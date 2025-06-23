@@ -44,8 +44,9 @@ from gui_widgets import (
     RicercaAvanzataImmobiliWidget, InserimentoComuneWidget,
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
-    GestioneUtentiWidget, AuditLogViewerWidget, BackupRestoreWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,GestioneTipiLocalitaWidget , 
+    GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
+    RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
+    GestioneTipiLocalitaWidget , 
     DBConfigDialog,InserimentoPartitaWidget)
 from dialogs import CSVImportResultDialog,EulaDialog
 
@@ -311,7 +312,7 @@ class CatastoMainWindow(QMainWindow):
         self.statistiche_widget_ref: Optional[StatisticheWidget] = None
         self.gestione_utenti_widget_ref: Optional[GestioneUtentiWidget] = None
         self.audit_viewer_widget_ref: Optional[AuditLogViewerWidget] = None
-        self.backup_restore_widget_ref: Optional[BackupRestoreWidget] = None
+        self.backup_restore_widget_ref: Optional[BackupWidget] = None
         self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
         self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
@@ -735,7 +736,7 @@ class CatastoMainWindow(QMainWindow):
             self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager)
             self.sistema_sub_tabs.addTab(self.audit_viewer_widget_ref, "Log Audit")
 
-            self.backup_restore_widget_ref = BackupRestoreWidget(self.db_manager)
+            self.backup_restore_widget_ref = BackupWidget(self.db_manager)
             self.sistema_sub_tabs.addTab(self.backup_restore_widget_ref, "Backup/Ripristino")
 
             # Tooltip per i sotto-tab di sistema

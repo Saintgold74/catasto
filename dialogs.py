@@ -109,6 +109,7 @@ class DBConfigDialog(QDialog):
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         # --- FINE CORREZIONE ---
         self.setWindowTitle("Configurazione Connessione Database")
+        self.settings = QSettings()
         self.setModal(True)
         self.setMinimumWidth(450)
         
@@ -381,12 +382,20 @@ class DBConfigDialog(QDialog):
         else:
             self.settings.setValue(SETTINGS_DB_TYPE, "remote")
             host_to_save = self.host_edit.text().strip()
+        
         self.settings.setValue(SETTINGS_DB_HOST, host_to_save)
         self.settings.setValue(SETTINGS_DB_PORT, self.port_spinbox.value())
         self.settings.setValue(SETTINGS_DB_NAME, self.dbname_edit.text().strip())
         self.settings.setValue(SETTINGS_DB_USER, self.user_edit.text().strip())
-        self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
         
+        # --- CORREZIONE: Rimuovi o correggi la riga che fa riferimento a schema_edit ---
+        # Opzione 1: Se non serve lo schema, rimuovi questa riga:
+        # self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
+        
+        # Opzione 2: Se serve lo schema, usa un valore fisso:
+        self.settings.setValue(SETTINGS_DB_SCHEMA, "catasto")  # Valore fisso
+        
+        # --- FINE CORREZIONE ---
         
         # --- NUOVA LOGICA PER LA PASSWORD ---
         if self.save_password_check.isChecked():
@@ -400,12 +409,11 @@ class DBConfigDialog(QDialog):
         self.settings.sync()
         
         # AGGIUNGI UN LOG PER VERIFICARE COSA VIENE SALVATO
-        logging.getLogger("CatastoGUI").info(f"Salvando impostazioni: Type={self.db_type_combo.currentText()}, Host={host_to_save}, Port={self.port_spinbox.value()}, DBName={self.dbname_edit.text().strip()}, User={self.user_edit.text().strip()}, Schema={self.schema_edit.text().strip() or 'catasto'}")
-
+        # (Rimuovi o commenta la riga che fa riferimento a db_type_combo.currentText() 
+        # dato che ora usi radio button invece di combobox)
+        
         self.settings.sync() # Forza la scrittura su disco
         logging.getLogger("CatastoGUI").info(f"Impostazioni di connessione al database salvate (senza password) in: {self.settings.fileName()}")
-    # Metodo getter modificato per includere la password (opzionale)
-    # In dialogs.py, aggiungi questo metodo alla classe DBConfigDialog
 
     def _handle_emergency_restore(self):
         """Gestisce il flusso di ripristino di emergenza."""

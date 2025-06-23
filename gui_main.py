@@ -1512,7 +1512,6 @@ def run_gui_app():
         client_ip_address_gui = get_local_ip_address()
         gui_logger.info(f"Indirizzo IP locale identificato: {client_ip_address_gui}")
 
-
         settings = QSettings()
         current_style_file = settings.value("UI/CurrentStyle", "meridiana_style.qss", type=str)
         stylesheet = load_stylesheet(current_style_file)
@@ -1540,26 +1539,43 @@ def run_gui_app():
 
         # --- NUOVO FLUSSO DI AVVIO ---
 
-        # 1. TENTATIVO DI CONNESSIONE AUTOMATICA
+         # 1. TENTATIVO DI CONNESSIONE AUTOMATICA
         gui_logger.info("Tentativo di connessione automatica con le impostazioni salvate...")
+        
+        # --- CORREZIONE: Gestisci la password in modo più robusto ---
+        saved_password = settings.value(SETTINGS_DB_PASSWORD, "", type=str)
+        
+        # Se non c'è password salvata, prova a prenderla dal keyring
+        if not saved_password:
+            db_host = settings.value(SETTINGS_DB_HOST, "localhost", type=str)
+            db_user = settings.value(SETTINGS_DB_USER, "postgres", type=str)
+            saved_password = get_password_from_keyring(db_host, db_user)
+        
         saved_config = {
             "host": settings.value(SETTINGS_DB_HOST, "localhost", type=str),
             "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
             "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico", type=str),
             "user": settings.value(SETTINGS_DB_USER, "postgres", type=str),
-            "schema": settings.value(SETTINGS_DB_SCHEMA, "catasto", type=str),
-            "password": settings.value(SETTINGS_DB_PASSWORD, "", type=str) # Legge la password salvata
+            "password": saved_password or ""  # Assicurati che ci sia sempre una password (anche vuota)
         }
         
-        # Prova a connettere solo se sono presenti i dati essenziali
-        if saved_config["dbname"] and saved_config["user"]:
-            db_manager_gui = CatastoDBManager(**saved_config)
-            if db_manager_gui.initialize_main_pool():
-                main_window_instance.db_manager = db_manager_gui
-                main_window_instance.pool_initialized_successful = True
-                gui_logger.info("Connessione automatica riuscita.")
-            else:
-                db_manager_gui = None # Resetta se fallisce
+        # Prova a connettere solo se sono presenti i dati essenziali E la password
+        if saved_config["dbname"] and saved_config["user"] and saved_config["password"]:
+            try:
+                db_manager_gui = CatastoDBManager(**saved_config)
+                if db_manager_gui.initialize_main_pool():
+                    main_window_instance.db_manager = db_manager_gui
+                    main_window_instance.pool_initialized_successful = True
+                    gui_logger.info("Connessione automatica riuscita.")
+                else:
+                    db_manager_gui = None # Resetta se fallisce
+            except Exception as e:
+                gui_logger.warning(f"Errore durante la creazione di CatastoDBManager: {e}")
+                db_manager_gui = None
+        else:
+            gui_logger.info("Dati di connessione incompleti (manca password o altri parametri essenziali). Skip connessione automatica.")
+            db_manager_gui = None
+        # --- FINE CORREZIONE ---
         
         # 2. FALLBACK A CONFIGURAZIONE MANUALE se la connessione automatica è fallita
         if not db_manager_gui or not db_manager_gui.pool:
@@ -1575,13 +1591,37 @@ def run_gui_app():
                 db_name = settings.value("Database/DBName", "catasto_storico", type=str)
                 db_user = settings.value("Database/User", "postgres", type=str)
                 db_password = get_password_from_keyring(db_host, db_user)
-            # --- FINE MODIFICA ---
+                # --- FINE MODIFICA ---
+                
                 if config_dialog.exec_() != QDialog.Accepted:
                     gui_logger.info("Configurazione manuale annullata. Uscita.")
                     sys.exit(0)
 
                 current_config = config_dialog.get_config_values(include_password=True)
-                db_manager_gui = CatastoDBManager(**current_config)
+                
+                # --- CORREZIONE: Filtra solo i parametri supportati da CatastoDBManager ---
+                db_manager_params = {
+                    'host': current_config.get('host'),
+                    'port': current_config.get('port'), 
+                    'dbname': current_config.get('dbname'),
+                    'user': current_config.get('user'),
+                    'password': current_config.get('password', '')  # Assicurati che ci sia sempre una password
+                }
+                
+                # Rimuovi eventuali chiavi con valore None (ma mantieni password vuota se necessario)
+                db_manager_params = {k: v for k, v in db_manager_params.items() if v is not None}
+                
+                # Assicurati che password sia sempre presente
+                if 'password' not in db_manager_params:
+                    db_manager_params['password'] = ''
+                
+                try:
+                    db_manager_gui = CatastoDBManager(**db_manager_params)
+                except Exception as e:
+                    gui_logger.error(f"Errore creazione CatastoDBManager: {e}")
+                    QMessageBox.critical(None, "Errore Configurazione", f"Errore nella configurazione del database: {e}")
+                    continue  # Riprova il loop di configurazione
+                # --- FINE CORREZIONE ---
                 
                 if db_manager_gui.initialize_main_pool():
                     main_window_instance.db_manager = db_manager_gui
@@ -1593,9 +1633,11 @@ def run_gui_app():
                     error_details = db_manager_gui.get_last_connect_error_details() or {}
                     pgcode = error_details.get('pgcode')
                     pgerror_msg = error_details.get('pgerror')
-                    # (Qui la logica if/elif per mostrare l'errore specifico che abbiamo già scritto)
-                    if pgcode == '28P01': QMessageBox.critical(None, "Errore Autenticazione", "Password o utente errati."); #... etc
-                    else: QMessageBox.critical(None, "Errore Connessione", f"Impossibile connettersi.\n{pgerror_msg}")
+                    
+                    if pgcode == '28P01': 
+                        QMessageBox.critical(None, "Errore Autenticazione", "Password o utente errati.")
+                    else: 
+                        QMessageBox.critical(None, "Errore Connessione", f"Impossibile connettersi.\n{pgerror_msg}")
 
         # 3. SE LA CONNESSIONE (auto o manuale) è OK, PROCEDI CON IL LOGIN UTENTE
         # --- INIZIO MODIFICA ---

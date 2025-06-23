@@ -248,8 +248,8 @@ class CatastoDBManager:
         finally:
             if conn_maint:
                 conn_maint.close()
+# In catasto_db_manager.py, all'interno della classe CatastoDBManager
 
-    # Modifica _get_connection
     @contextmanager
     def _get_connection(self):
         """
@@ -262,21 +262,33 @@ class CatastoDBManager:
                 raise psycopg2.pool.PoolError("Il pool di connessioni non è inizializzato.")
             conn = self.pool.getconn()
             yield conn
-            conn.commit() # Esegui il commit delle operazioni andate a buon fine
+            # Il commit qui è implicito all'uscita del blocco 'with' senza eccezioni
+            # Non chiamare conn.commit() se le transazioni sono gestite dall'esterno
+            # (es. se autocommit è True per qualche operazione, o se il client gestisce i commit)
+            # Per transazioni implicite, `commit()` qui è appropriato.
+            # Se la connessione è stata usata per CALL PROCEDURE, spesso il commit è automatico.
+            # Se si tratta di DML classiche, serve un commit esplicito.
+            conn.commit() # Manteniamo questo per operazioni DML standard
         except psycopg2.pool.PoolError as pe:
             self.logger.error(f"Errore critico nell'ottenere una connessione dal pool: {pe}")
-            # Rilancia un'eccezione che può essere gestita più in alto
             raise psycopg2.OperationalError(f"Impossibile ottenere una connessione valida dal pool: {pe}")
         except Exception as e:
             if conn:
-                conn.rollback() # Annulla la transazione in caso di altri errori
+                try:
+                    conn.rollback() # Annulla la transazione in caso di altri errori
+                except psycopg2.Error as rollback_err:
+                    self.logger.error(f"Errore durante il rollback della connessione (potrebbe essere già chiusa): {rollback_err}", exc_info=True)
+                    # Se il rollback fallisce perché la connessione è già chiusa,
+                    # e l'errore originale era OperationalError (connessione persa),
+                    # è un segnale che il pool potrebbe essere corrotto.
+                    if isinstance(e, psycopg2.OperationalError):
+                        self.logger.critical("Errore operativo critico: il server ha chiuso la connessione. Il pool potrebbe essere invalido.", exc_info=True)
+                        self.close_pool() # Forziamo la chiusura del pool in questo caso critico
             self.logger.error(f"Errore durante l'uso della connessione: {e}", exc_info=True)
             raise # Rilancia l'eccezione originale
         finally:
-            # Questo blocco viene eseguito SEMPRE, garantendo il rilascio della connessione
             if conn:
                 self.pool.putconn(conn)
-
     
     def disconnect_pool_temporarily(self) -> bool:
         self.logger.info("Chiusura temporanea del pool di connessioni per operazione di ripristino...")

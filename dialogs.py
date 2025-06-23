@@ -144,8 +144,6 @@ class DBConfigDialog(QDialog):
         
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.button(QDialogButtonBox.Ok).setText("Testa e Salva")
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("Testa e Salva")
         buttons.accepted.connect(self._handle_save_and_connect)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -2398,6 +2396,7 @@ class ModificaPossessoreDialog(QDialog):
         self.db_manager = db_manager
         self.possessore_id = possessore_id
         self.possessore_data_originale = None
+        self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
         # Per l'audit, se vuoi confrontare i dati vecchi e nuovi
         # self.current_user_info = getattr(QApplication.instance().main_window, 'logged_in_user_info', None) # Modo per prendere utente
         # se main_window è accessibile
@@ -2426,6 +2425,14 @@ class ModificaPossessoreDialog(QDialog):
 
         self.paternita_edit = QLineEdit()
         form_layout.addRow("Paternità:", self.paternita_edit)
+        
+        # --- INIZIO NUOVA AGGIUNTA: Pulsante Genera Nome Completo ---
+        self.btn_genera_nome_completo = QPushButton("Genera Nome Completo")
+        # Collega il pulsante al nuovo metodo _genera_nome_completo
+        self.btn_genera_nome_completo.clicked.connect(self._genera_nome_completo)
+        # Aggiungi il pulsante al layout (es. sotto Paternità o tra i campi)
+        form_layout.addRow(self.btn_genera_nome_completo) 
+        # --- FINE NUOVA AGGIUNTA ---
 
         self.attivo_checkbox = QCheckBox("Possessore Attivo")
         form_layout.addRow(self.attivo_checkbox)
@@ -2462,6 +2469,25 @@ class ModificaPossessoreDialog(QDialog):
         layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
+        
+    # --- NUOVO METODO: per generare il nome completo ---
+    def _genera_nome_completo(self):
+        """
+        Genera il campo 'Nome Completo' dalla concatenazione di 'Cognome e Nome' e 'Paternità'.
+        """
+        cognome_nome = self.cognome_nome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+
+        if cognome_nome and paternita:
+            full_name = f"{cognome_nome} di {paternita}"
+        elif cognome_nome:
+            full_name = cognome_nome
+        else:
+            full_name = "" # O "N/D" a seconda delle preferenze
+
+        self.nome_completo_edit.setText(full_name)
+        self.logger.debug(f"Nome completo generato: '{full_name}'")
+    # --- FINE NUOVO METODO ---
 
     def _load_possessore_data(self):
         # Metodo da creare in CatastoDBManager: get_possessore_details(possessore_id)
@@ -2482,7 +2508,7 @@ class ModificaPossessoreDialog(QDialog):
         self.nome_completo_edit.setText(
             self.possessore_data_originale.get('nome_completo', ''))
         self.cognome_nome_edit.setText(self.possessore_data_originale.get(
-            'cognome_nome', ''))  # Campo cognome_nome
+            'cognome_nome', ''))
         self.paternita_edit.setText(
             self.possessore_data_originale.get('paternita', ''))
         self.attivo_checkbox.setChecked(

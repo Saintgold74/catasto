@@ -6648,7 +6648,7 @@ class WelcomeScreen(QDialog):
         logo_layout.addStretch(1)
         logo_label = QLabel()
         if self.logo_path and os.path.exists(self.logo_path):
-            pixmap = QPixmap(self.logo_path)
+            pixmap = QPixmap(str(self.logo_path))
             # Riduciamo leggermente le dimensioni massime per garantire più spazio
             scaled_pixmap = pixmap.scaled(750, 450, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             logo_label.setPixmap(scaled_pixmap)

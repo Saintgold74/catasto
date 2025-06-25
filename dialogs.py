@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QTextBrowser, QDialogButtonBox, QRadioButton)
 
 from PyQt5.QtGui import QPainter
-from app_paths import resource_path
+from app_paths import get_resource_path
 
 
 
@@ -564,7 +564,7 @@ class DocumentViewerDialog(QDialog):
             self.graphics_view.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
             self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag)
 
-            pixmap = QPixmap(self.file_path)
+            pixmap = QPixmap(str(self.file_path))
             if pixmap.isNull():
                 raise ValueError(f"Impossibile caricare immagine da: {self.file_path}")
 
@@ -5569,13 +5569,54 @@ class EulaDialog(QDialog):
     def _load_eula_text(self):
         """Carica il testo dell'EULA dal file resources/EULA.txt."""
         try:
-            eula_file_path = resource_path(os.path.join("resources", "EULA.txt"))
-            if os.path.exists(eula_file_path):
-                with open(eula_file_path, 'r', encoding='utf-8') as f:
+            # Lista di percorsi possibili per l'EULA
+            possible_paths = []
+            
+            # Percorso 1: Usando resource_path (originale)
+            try:
+                eula_path_1 = resource_path(os.path.join("resources", "EULA.txt"))
+                possible_paths.append(eula_path_1)
+            except:
+                pass
+            
+            # Percorso 2: Relativo all'eseguibile
+            if getattr(sys, 'frozen', False):
+                # Applicazione compilata
+                exe_dir = os.path.dirname(sys.executable)
+                eula_path_2 = os.path.join(exe_dir, "resources", "EULA.txt")
+                possible_paths.append(eula_path_2)
+                
+                # Percorso 3: Nella cartella _internal (PyInstaller)
+                eula_path_3 = os.path.join(exe_dir, "_internal", "resources", "EULA.txt")
+                possible_paths.append(eula_path_3)
+            
+            # Percorso 4: Relativo allo script principale
+            base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            eula_path_4 = os.path.join(base_dir, "resources", "EULA.txt")
+            possible_paths.append(eula_path_4)
+            
+            # Percorso 5: Directory corrente
+            eula_path_5 = os.path.join(os.getcwd(), "resources", "EULA.txt")
+            possible_paths.append(eula_path_5)
+            
+            # Cerca il primo percorso valido
+            found_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    found_path = path
+                    break
+            
+            if found_path:
+                with open(found_path, 'r', encoding='utf-8') as f:
                     eula_text = f.read()
                 self.text_browser.setMarkdown(eula_text.replace('\n', '  \n'))
             else:
-                self.text_browser.setText("ERRORE: File EULA.txt non trovato.")
+                # Se non trova il file, mostra un messaggio di errore con i percorsi tentati
+                error_msg = "ERRORE: File EULA.txt non trovato.\n\nPercorsi verificati:\n"
+                for i, path in enumerate(possible_paths[:3], 1):
+                    error_msg += f"{i}. {path}\n"
+                self.text_browser.setText(error_msg)
+                
         except Exception as e:
             self.text_browser.setText(f"Impossibile caricare il testo della licenza.\n\nErrore: {e}")
             

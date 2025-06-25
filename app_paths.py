@@ -1,104 +1,114 @@
 # app_paths.py
 
-import logging
 import sys
 import os
+import logging
 from pathlib import Path
 
-def resource_path(relative_path):
+# --- 1. GESTIONE PERCORSO BASE APPLICAZIONE (STATICO) ---
+
+def get_base_dir():
     """
-    Ottiene il percorso assoluto della risorsa, funziona sia in sviluppo che con PyInstaller.
+    Restituisce la directory base dell'applicazione (dove si trovano le risorse statiche).
+    Funziona sia in sviluppo che in un eseguibile creato da PyInstaller.
     """
-    try:
-        # PyInstaller crea una cartella temporanea e ci mette il percorso in _MEIPASS
-        base_path = Path(sys._MEIPASS)
-    except Exception:
-        # In sviluppo, usiamo il percorso del file corrente
-        base_path = Path(__file__).parent
-    return base_path / relative_path
-
-# --- DEFINIZIONE DEI PERCORSI PRINCIPALI ---
-
-# Directory principale del progetto
-BASE_DIR = Path(__file__).resolve().parent
-
-# Directory per i log
-LOGS_DIR = BASE_DIR / "logs"
-
-# Directory per gli allegati
-ALLEGATI_DIR = BASE_DIR / "allegati_catasto"
-
-# Directory per le esportazioni
-ESPORTAZIONI_DIR = BASE_DIR / "esportazioni"
-
-# Directory delle risorse (icone, stili, etc.)
-RESOURCES_DIR = BASE_DIR / "resources"
-
-# Percorso del file di stile QSS di default
-DEFAULT_STYLE_PATH = RESOURCES_DIR / "meridiana_style.qss"
-
-# Assicurati che le directory principali esistano all'avvio del modulo
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
-ESPORTAZIONI_DIR.mkdir(parents=True, exist_ok=True)
-def get_base_path():
-    """Ottiene il percorso base dell'applicazione."""
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        return sys._MEIPASS
+        # Se siamo in un eseguibile PyInstaller, la base è la cartella temporanea _MEIPASS
+        return Path(sys._MEIPASS)
     else:
-        return os.path.dirname(os.path.abspath(__file__))
+        # Altrimenti, in sviluppo, è la cartella dove si trova questo script
+        return Path(__file__).parent
 
-def resource_path(relative_path):
-    """Ottiene il percorso assoluto di una risorsa."""
-    base_path = get_base_path()
-    return os.path.join(base_path, relative_path)
+# Definiamo le directory statiche che non cambiano mai
+BASE_DIR = get_base_dir()
+RESOURCES_DIR = BASE_DIR / "resources"
+STYLES_DIR = BASE_DIR / "styles"
+DOCS_DIR = BASE_DIR / "docs"
 
-# --- INIZIO FUNZIONI SPOSTATE ---
 
-def get_available_styles() -> list:
-    """Scansiona la sottocartella 'styles' e restituisce una lista dei file .qss trovati."""
+# --- 2. GESTIONE PERCORSI DATI UTENTE (DINAMICI E SCRIVIBILI) ---
+
+def get_user_data_dir():
+    """
+    Restituisce un percorso scrivibile nella cartella dati dell'utente.
+    Es. Windows: C:\\Users\\NOMEUTENTE\\AppData\\Local\\Meridiana
+    """
+    local_app_data = os.getenv('LOCALAPPDATA')
+    if local_app_data:
+        # Percorso standard per i dati delle app su Windows
+        user_data_dir = Path(local_app_data) / "Meridiana"
+    else:
+        # Fallback per sistemi non-Windows
+        user_data_dir = Path.home() / ".meridiana"
+    
+    return user_data_dir
+
+# Definiamo le directory dinamiche
+APP_DATA_DIR = get_user_data_dir()
+ESPORTAZIONI_DIR = APP_DATA_DIR / "esportazioni"
+LOG_DIR = APP_DATA_DIR / "logs"
+
+# Creiamo fisicamente queste directory se non esistono.
+# Questa operazione è sicura perché APP_DATA_DIR è sempre scrivibile.
+ESPORTAZIONI_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# --- 3. FUNZIONI HELPER PER ACCEDERE AI PERCORSI (DA USARE NEL RESTO DELL'APP) ---
+
+def get_resource_path(relative_path: str) -> Path:
+    """
+    Ottiene il percorso assoluto di una risorsa nella cartella 'resources'.
+    Usa questa funzione per icone, loghi, EULA, etc.
+    """
+    return RESOURCES_DIR / relative_path
+
+def get_style_path(style_filename: str) -> Path:
+    """
+    Ottiene il percorso assoluto di un file di stile nella cartella 'styles'.
+    """
+    return STYLES_DIR / style_filename
+
+def get_log_file_path(log_filename: str = "meridiana.log") -> Path:
+    """
+    Ottiene il percorso assoluto per un file di log nella cartella dati utente.
+    """
+    return LOG_DIR / log_filename
+
+def get_available_styles() -> list[str]:
+    """
+    Scansiona la cartella degli stili e restituisce i nomi dei file .qss disponibili.
+    """
     logger = logging.getLogger(__name__)
+    if not STYLES_DIR.exists():
+        logger.warning(f"La cartella degli stili non esiste: {STYLES_DIR}")
+        return []
     try:
-        # Usa resource_path per essere compatibile con l'eseguibile
-        styles_dir = resource_path("styles")
-        if os.path.exists(styles_dir):
-            return [f for f in os.listdir(styles_dir) if f.endswith('.qss')]
-        else:
-            logger.warning(f"Cartella stili non trovata in: {styles_dir}")
-            return []
+        return [f.name for f in STYLES_DIR.iterdir() if f.is_file() and f.suffix == '.qss']
     except Exception as e:
-        logger.error(f"Errore nella scansione della cartella stili: {e}")
+        logger.error(f"Impossibile leggere la cartella degli stili: {e}")
         return []
 
 def load_stylesheet(filename: str) -> str:
-    """Carica un file di stylesheet usando il percorso corretto."""
+    """
+    Carica il contenuto di un file di stile.
+    """
     logger = logging.getLogger(__name__)
+    style_path = get_style_path(filename)
+    if not style_path.exists():
+        logger.warning(f"File di stile non trovato: {style_path}")
+        return ""
     try:
-        # La funzione resource_path costruisce già il percorso completo e corretto
-        style_path = resource_path(os.path.join('styles', filename))
-        logger.info(f"Tentativo di caricamento stylesheet da: {style_path}")
-        if os.path.exists(style_path):
-            with open(style_path, "r", encoding="utf-8") as f:
-                return f.read()
-        else:
-            logger.warning(f"File stylesheet non trovato al percorso: {style_path}")
-            return ""
+        with open(style_path, "r", encoding="utf-8") as f:
+            return f.read()
     except Exception as e:
-        logger.error(f"Errore critico durante il caricamento dello stylesheet '{filename}': {e}", exc_info=True)
+        logger.error(f"Impossibile caricare il file di stile '{filename}': {e}")
         return ""
 
+def get_logo_path() -> Path:
+    """Ritorna il percorso del file del logo."""
+    return get_resource_path("logo_meridiana.png")
 
-# --- FUNZIONI DI SUPPORTO SPECIFICHE ---
-
-def get_logo_path():
-    """Ritorna il percorso del logo principale dell'applicazione."""
-    return resource_path(os.path.join('resources', 'logo_meridiana.png'))
-
-def get_style_file(style_name):
-    """
-    Ritorna il percorso di un file di stile specifico dalla cartella 'styles'.
-
-    Args:
-        style_name: Nome del file di stile (es. 'blu_savoia.qss')
-    """
-    return resource_path(os.path.join('styles', style_name))
-
+# Per mantenere la retrocompatibilità con le chiamate `resource_path`
+# che potrebbero essere rimaste in giro, la rendiamo un alias di get_resource_path
+resource_path = get_resource_path

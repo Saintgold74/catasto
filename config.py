@@ -4,7 +4,7 @@ import logging,os
 from logging.handlers import RotatingFileHandler
 
 # Ora questo import è sicuro, perché app_paths è autonomo
-from app_paths import LOGS_DIR 
+from app_paths import LOG_DIR, get_log_file_path
 
 from PyQt5.QtCore import QStandardPaths, QCoreApplication
 

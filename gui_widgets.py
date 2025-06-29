@@ -6538,15 +6538,13 @@ class DashboardWidget(QWidget):
         actions_group = QGroupBox("Azioni Rapide")
         actions_layout = QVBoxLayout(actions_group)
         btn_new_prop = QPushButton("Registra Nuova Proprietà"); 
-        btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registrazione Proprietà"))
+        btn_new_prop.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento", "Reg. Proprietà"))
         btn_new_partita = QPushButton("Inserisci Nuova Partita"); 
-        btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Nuova Partita"))
-        # --- INIZIO MODIFICA ---
+        btn_new_partita.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento", "Partita"))
         btn_new_consult = QPushButton("Registra Consultazione")
-        btn_new_consult.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento e Gestione", "Registra Consultazione"))
-# --- FINE MODIFICA ---
+        btn_new_consult.clicked.connect(lambda: self.go_to_tab_signal.emit("Inserimento", "Reg. Consultazione"))
         btn_reports = QPushButton("Vai alla Reportistica"); 
-        btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Reportistica", ""))
+        btn_reports.clicked.connect(lambda: self.go_to_tab_signal.emit("Report", ""))
         # --- INIZIO MODIFICA: Pulsante visibile solo per admin ---
         if self.is_admin:
             actions_layout.addSpacing(15)

@@ -643,7 +643,7 @@ class CatastoMainWindow(QMainWindow):
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
             self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca")
 
-        # 4. Tab Inserimento e Gestione
+        # 4. Tab Inserimento
         inserimento_contenitore = QWidget()
         layout_inserimento = QVBoxLayout(inserimento_contenitore)
         utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
@@ -831,15 +831,15 @@ class CatastoMainWindow(QMainWindow):
         logging.getLogger("CatastoGUI").info(
             f"Nuova Partita ID {nuova_partita_id} (Comune ID {comune_id_partita}) creata. Passaggio al tab Operazioni.")
 
-        # Trova l'indice del tab principale "Inserimento e Gestione"
+        # Trova l'indice del tab principale "Inserimento"
         idx_tab_inserimento = -1
         for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == "Inserimento e Gestione":
+            if self.tabs.tabText(i) == "Inserimento":
                 idx_tab_inserimento = i
                 break
 
         if idx_tab_inserimento != -1:
-            # Vai al tab principale "Inserimento e Gestione"
+            # Vai al tab principale "Inserimento"
             self.tabs.setCurrentIndex(idx_tab_inserimento)
 
             # Ora, all'interno di questo tab, trova il sotto-tab "Operazioni su Partita"
@@ -867,7 +867,7 @@ class CatastoMainWindow(QMainWindow):
                     "'self.inserimento_sub_tabs' non trovato in CatastoMainWindow.")
         else:
             logging.getLogger("CatastoGUI").error(
-                "Impossibile trovare il tab principale 'Inserimento e Gestione'.")
+                "Impossibile trovare il tab principale 'Inserimento'.")
     @pyqtSlot(int)
     def handle_sub_tab_changed(self, index: int):
         """
@@ -969,7 +969,7 @@ class CatastoMainWindow(QMainWindow):
         # Consultazione e Modifica (Principale, Ricerca Partite, Ricerca Possessori, Ricerca Immobili Avanzata)
         consultazione_enabled = db_ready_for_normal_ops
 
-        # Inserimento e Gestione (Nuovo Comune, Nuovo Possessore, Nuova Località, Registrazione Proprietà, Operazioni Partita, Registra Consultazione)
+        # Inserimento (Nuovo Comune, Nuovo Possessore, Nuova Località, Registrazione Proprietà, Operazioni Partita, Registra Consultazione)
         inserimento_enabled = db_ready_for_normal_ops and (
             is_admin or is_archivista)
 
@@ -1002,11 +1002,11 @@ class CatastoMainWindow(QMainWindow):
             self.logger.debug(
                 f"Tab 'Consultazione e Modifica' abilitato: {consultazione_enabled}")
 
-        if "Inserimento e Gestione" in tab_indices:
+        if "Inserimento" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Inserimento e Gestione"], inserimento_enabled)
+                tab_indices["Inserimento"], inserimento_enabled)
             self.logger.debug(
-                f"Tab 'Inserimento e Gestione' abilitato: {inserimento_enabled}")
+                f"Tab 'Inserimento' abilitato: {inserimento_enabled}")
 
         if "Esportazioni" in tab_indices:
             self.tabs.setTabEnabled(

@@ -24,7 +24,7 @@ Meridiana 1.2
     │   ├─ Esporta Risultati in CSV / PDF
     │   └─ Apri Dettaglio (doppio click su un risultato)
     │
-    ├── 🗂️ Inserimento e Gestione
+    ├── 🗂️ Inserimento
     │   ├─ Nuovo Comune (CREATE)
     │   ├─ Nuovo Possessore (CREATE)
     │   ├─ Nuova Partita (CREATE)
